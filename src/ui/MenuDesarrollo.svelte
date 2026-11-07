@@ -24,6 +24,7 @@
   const ESCENAS: { valor: EscenaDesarrollo; texto: string }[] = [
     { valor: "simbolos", texto: "Revisión de símbolos" },
     ...CANTIDADES_BANCO.map((n) => ({ valor: n, texto: `Banco: ${n.toLocaleString("es-AR")} símbolos` })),
+    { valor: "vacia", texto: "Escena vacía" },
   ];
 
   const OPTIMIZACIONES: { clave: keyof OpcionesCapas; texto: string }[] = [

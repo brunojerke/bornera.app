@@ -8,7 +8,7 @@
   import { PX_POR_UNIDAD, type Punto } from "../render/camara";
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
   import { nivelDetalle } from "../render/detalle";
-  import type { Contenido } from "../render/escena";
+  import { Escena, type Contenido } from "../render/escena";
   import { MedidorRendimiento, type Resumen } from "../render/rendimiento";
   import { crearEscenaBanco } from "../render/banco";
   // TEMPORAL: escenas de prueba, hasta que el documento tenga componentes.
@@ -39,7 +39,9 @@
   let vista: Vista | null = null;
 
   function crearContenido(e: EscenaDesarrollo): Contenido {
-    return e === "simbolos" ? ESCENA_PRUEBA : crearEscenaBanco(e);
+    if (e === "simbolos") return ESCENA_PRUEBA;
+    if (e === "vacia") return new Escena([]);
+    return crearEscenaBanco(e);
   }
 
   function cambio() {

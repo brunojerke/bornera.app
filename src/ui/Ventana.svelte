@@ -7,6 +7,7 @@
   import PanelPropiedades from "./PanelPropiedades.svelte";
   import BarraEstado from "./BarraEstado.svelte";
   import type { EscenaDesarrollo, Modo } from "./tipos";
+  import { esAtajoBanco, siguienteEscenaBanco } from "./escenas";
   import type { Punto } from "../render/camara";
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
 
@@ -27,6 +28,12 @@
     if (e.key === "F3" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       e.preventDefault();
       if (!e.repeat) rendimiento = !rendimiento;
+    }
+    // Ctrl+Shift+B (oculto, también en la versión compilada): siguiente escena
+    // del banco de pruebas. Se anula el atajo del WebView (barra de favoritos).
+    if (esAtajoBanco(e)) {
+      e.preventDefault();
+      if (!e.repeat) escena = siguienteEscenaBanco(escena);
     }
   }
 </script>
