@@ -31,6 +31,7 @@
     { clave: "cache", texto: "Capa estática en mosaicos" },
     { clave: "recorte", texto: "Recorte por vista" },
     { clave: "nivelDetalle", texto: "Nivel de detalle" },
+    { clave: "cacheTextos", texto: "Caché de textos" },
   ];
 
   function elegir(valor: EscenaDesarrollo) {

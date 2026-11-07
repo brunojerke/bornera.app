@@ -12,6 +12,7 @@
 //   pantalla entera.
 // - Durante el zoom no se rehace nada: se escalan los mosaicos que ya están, y
 //   recién ESPERA_ZOOM_MS después del último cambio se rehacen nítidos.
+// - Los textos se copian de un caché de imágenes pre-renderizadas (textos.ts).
 //
 // Dinámica: selección, cable en curso, estado de simulación. Se dibuja en cada
 // cuadro, encima de la estática.
@@ -29,6 +30,7 @@ import { Grilla, type ColoresGrilla } from "./grilla";
 import { clave, Mosaicos, TAM_MOSAICO, type Mosaico } from "./mosaicos";
 import type { MedidaCuadro } from "./rendimiento";
 import type { Renderer } from "./renderer";
+import { CacheTextos } from "./textos";
 
 export interface Colores extends ColoresGrilla, ColoresContenido {
   /** Fondo del lienzo (los canvas son opacos). */
@@ -72,17 +74,21 @@ export interface OpcionesCapas {
   recorte: boolean;
   /** Omitir textos y bornes con zoom muy alejado. */
   nivelDetalle: boolean;
+  /** Copiar los textos de un caché de imágenes en vez de dibujarlos con fillText. */
+  cacheTextos: boolean;
 }
 
 export const OPCIONES_OPTIMIZADAS: Readonly<OpcionesCapas> = {
   cache: true,
   recorte: true,
   nivelDetalle: true,
+  cacheTextos: true,
 };
 export const OPCIONES_SIN_OPTIMIZAR: Readonly<OpcionesCapas> = {
   cache: false,
   recorte: false,
   nivelDetalle: false,
+  cacheTextos: false,
 };
 
 /** Dibuja la capa dinámica, en unidades de grilla. */
@@ -128,6 +134,7 @@ export class Capas {
   private readonly grillaPantalla: Grilla;
   private readonly grillaMosaicos: Grilla;
   private readonly mosaicos: Mosaicos;
+  private readonly textos: CacheTextos;
   /** Cuadros dibujados: marca cuándo se usó cada mosaico por última vez. */
   private cuadro = 0;
   /** Nivel de zoom (px físicos por unidad) del cuadro anterior, y cuándo cambió por última vez. */
@@ -150,6 +157,7 @@ export class Capas {
     this.renderer = new RendererCanvas(ctx);
     this.grillaPantalla = new Grilla(crearContexto);
     this.grillaMosaicos = new Grilla(crearContexto, COLUMNAS_GRILLA);
+    this.textos = new CacheTextos(crearContexto);
     this.mosaicos = new Mosaicos((): Mosaico => {
       const c = crearContexto(false);
       c.canvas.width = TAM_MOSAICO;
@@ -166,16 +174,21 @@ export class Capas {
     this._opciones = { ...o };
     this.invalidarEstatica();
     if (!o.cache) this.mosaicos.liberar();
+    if (!o.cacheTextos) this.textos.liberar();
   }
 
-  /** El contenido, los colores o las opciones cambiaron: rehacer la capa estática. */
+  /**
+   * El contenido, los colores o las opciones cambiaron: rehacer la capa
+   * estática. El caché de textos se conserva: las etiquetas suelen seguir
+   * siendo las mismas, y uno de otro color es otra entrada.
+   */
   invalidarEstatica(): void {
     this.mosaicos.vaciar();
   }
 
-  /** Bytes que ocupan los mosaicos (4 por píxel). */
+  /** Bytes que ocupan los mosaicos y el caché de textos (4 por píxel). */
   get memoriaCache(): number {
-    return this.mosaicos.memoria;
+    return this.mosaicos.memoria + this.textos.memoria;
   }
 
   /**
@@ -218,13 +231,13 @@ export class Capas {
       } else {
         const t = this.reloj();
         this.pintarVacio(ox, oy, W, H, k, dpr);
-        this.dibujarContenido(ctx, this.renderer, k, -ox, -oy, pantalla, dpr);
+        this.dibujarContenido(this.renderer, k, -ox, -oy, pantalla, dpr);
         medida.estatica = this.reloj() - t;
       }
 
       if (this.dinamico) {
         const r = this.renderer;
-        ctx.setTransform(k, 0, 0, k, -ox, -oy);
+        r.transformar(k, 0, 0, k, -ox, -oy);
         r.guardar();
         this.dinamico(r, { escala: camara.escala, colores: this.colores });
         r.restaurar();
@@ -239,9 +252,10 @@ export class Capas {
     return medida;
   }
 
-  /** Suelta la memoria de los mosaicos. */
+  /** Suelta la memoria de los mosaicos y del caché de textos. */
   liberarCache(): void {
     this.mosaicos.liberar();
+    this.textos.liberar();
   }
 
   private dibujarConMosaicos(
@@ -269,6 +283,7 @@ export class Capas {
         medida.esperar = Math.ceil(espera);
       } else {
         mos.cambiarNivel(k);
+        this.textos.vaciar(); // los textos de otro tamaño ya no sirven
       }
     }
 
@@ -350,26 +365,19 @@ export class Capas {
     c.setTransform(1, 0, 0, 1, 0, 0);
     this.pintarFondo(c, T, T);
     this.grillaMosaicos.dibujar(c, i * T, j * T, T, T, k, dpr, this.colores);
-    this.dibujarContenido(c, m.r, k, -i * T, -j * T, { x: (i * T) / k, y: (j * T) / k, ancho: T / k, alto: T / k }, dpr);
+    this.dibujarContenido(m.r, k, -i * T, -j * T, { x: (i * T) / k, y: (j * T) / k, ancho: T / k, alto: T / k }, dpr);
   }
 
   /**
-   * Origen y contenido en `c` (con su renderer `r`), con la transformación
-   * (k, 0, 0, k, tx, ty): unidades de grilla a px. `area` es la parte de la
-   * grilla que cubre.
+   * Origen y contenido, con la transformación (k, 0, 0, k, tx, ty): unidades
+   * de grilla a px del canvas de `r`. `area` es la parte de la grilla que cubre.
    */
-  private dibujarContenido(
-    c: CanvasRenderingContext2D,
-    r: RendererCanvas,
-    k: number,
-    tx: number,
-    ty: number,
-    area: Caja,
-    dpr: number,
-  ): void {
+  private dibujarContenido(r: RendererCanvas, k: number, tx: number, ty: number, area: Caja, dpr: number): void {
     const escala = k / dpr;
     const o = this._opciones;
-    c.setTransform(k, 0, 0, k, tx, ty);
+    if (this.textos.lleno) this.textos.vaciar();
+    r.textos = o.cacheTextos ? this.textos : null;
+    r.transformar(k, 0, 0, k, tx, ty);
 
     // Cruz chica en (0, 0) para orientarse (solo en el área que la toca).
     if (seTocan(area, CAJA_CRUZ)) {
@@ -390,6 +398,8 @@ export class Capas {
       });
       r.restaurar();
     }
+    r.volcarTextos();
+    r.textos = null;
   }
 
   /**

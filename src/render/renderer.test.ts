@@ -4,6 +4,7 @@ import { RendererCanvas } from "./canvas2d";
 import { contextoFalso as contextoConCanvas, fabricaFalsa, llamadasA, Path2DFalso } from "./falsos";
 import { Grilla, pasoGrilla, PASOS_POR_MAYOR, SEPARACION_MINIMA } from "./grilla";
 import { dibujarPrimitiva, type Renderer } from "./renderer";
+import { CacheTextos } from "./textos";
 
 /** Renderer falso que anota cada llamada. */
 function grabador(): { r: Renderer; llamadas: unknown[][] } {
@@ -69,6 +70,96 @@ describe("RendererCanvas", () => {
     expect(llamadas).toContainEqual(["scale", 0.005, 0.005]);
     expect(llamadas).toContainEqual(["=textAlign", "right"]);
     expect(llamadas).toContainEqual(["fillText", "A1", 0, 0]);
+  });
+});
+
+describe("RendererCanvas con caché de textos", () => {
+  function armar() {
+    const principal = contextoConCanvas(100, 100);
+    const r = new RendererCanvas(principal.ctx);
+    r.textos = new CacheTextos(fabricaFalsa().crear);
+    r.transformar(20, 0, 0, 20, 3, 7); // 20 px por unidad, corrido (3, 7)
+    r.estilo({ relleno: "#000" });
+    return { r, llamadas: principal.llamadas };
+  }
+
+  it("copia los textos derechos del caché recién al volcarlos, a píxel entero", () => {
+    const { r, llamadas } = armar();
+    r.texto(1, 2, "K1", 1, "izquierda");
+    r.texto(1, 2, "K1", 1, "derecha");
+    expect(llamadasA(llamadas, "fillText")).toEqual([]);
+    expect(llamadasA(llamadas, "drawImage")).toEqual([]);
+
+    r.volcarTextos();
+    const copias = llamadasA(llamadas, "drawImage");
+    expect(copias).toHaveLength(2);
+    const [izq, der] = copias as number[][];
+    // Las dos salen del mismo recorte; alineada a la derecha queda corrida su avance.
+    expect(izq!.slice(1, 5)).toEqual(der!.slice(1, 5));
+    for (const c of copias as number[][]) expect(Number.isInteger(c[5]) && Number.isInteger(c[6])).toBe(true);
+    expect(izq![5]! - der![5]!).toBeGreaterThan(0);
+    // Copia sin escalar (con la transformación identidad) y la repone después.
+    expect(izq![3]).toBe(izq![7]);
+    expect(llamadasA(llamadas, "setTransform").at(-1)).toEqual([20, 0, 0, 20, 3, 7]);
+  });
+
+  it("el anclaje cae donde caería con fillText (media unidad de error como mucho)", () => {
+    const { r, llamadas } = armar();
+    r.texto(1, 2, "K1", 1, "izquierda");
+    r.volcarTextos();
+    const textos = r.textos!;
+    const e = textos.obtener("K1", 20, "#000")!;
+    const [, , , , , dx, dy] = llamadasA(llamadas, "drawImage")[0] as number[];
+    expect(Math.abs(dx! + e.ax - (20 * 1 + 3))).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(dy! + e.ay - (20 * 2 + 7))).toBeLessThanOrEqual(0.5);
+  });
+
+  it("sigue la transformación: trasladar y escalar cambian el tamaño y el lugar del texto", () => {
+    const { r, llamadas } = armar();
+    r.guardar();
+    r.trasladar(10, 0);
+    r.escalar(2);
+    r.texto(0, 0, "A1", 0.5);
+    r.restaurar();
+    r.texto(0, 0, "A1", 0.5);
+    r.volcarTextos();
+    const [grande, chico] = llamadasA(llamadas, "drawImage") as number[][];
+    // Escalado ×2: letra de 20 px en vez de 10, más ancha.
+    expect(grande![3]).toBeGreaterThan(chico![3]!);
+    expect(grande![5]! - chico![5]!).toBeCloseTo(200, -1);
+  });
+
+  it("los textos girados o espejados se dibujan con fillText", () => {
+    const { r, llamadas } = armar();
+    r.guardar();
+    r.rotar(90);
+    r.texto(0, 0, "A1", 0.5);
+    r.restaurar();
+    r.guardar();
+    r.escalar(-1, 1);
+    r.texto(0, 0, "A1", 0.5);
+    r.restaurar();
+    // Girar y volver deja la matriz como estaba: de nuevo al caché.
+    r.guardar();
+    r.rotar(90);
+    r.rotar(-90);
+    r.restaurar();
+    r.texto(0, 0, "A1", 0.5);
+    r.volcarTextos();
+    expect(llamadasA(llamadas, "fillText")).toHaveLength(2);
+    expect(llamadasA(llamadas, "drawImage")).toHaveLength(1);
+  });
+
+  it("sin color de relleno conocido o sin caché, usa fillText", () => {
+    const principal = contextoConCanvas(100, 100);
+    const r = new RendererCanvas(principal.ctx);
+    r.textos = new CacheTextos(fabricaFalsa().crear);
+    r.texto(0, 0, "A1", 0.5);
+    r.estilo({ relleno: "#000" });
+    r.textos = null;
+    r.texto(0, 0, "A1", 0.5);
+    r.volcarTextos();
+    expect(llamadasA(principal.llamadas, "fillText")).toHaveLength(2);
   });
 });
 

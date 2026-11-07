@@ -311,6 +311,23 @@ describe("Capas: mosaicos", () => {
     expect(Math.abs((t[4] as number) + camara.x * K)).toBeLessThanOrEqual(0.5);
   });
 
+  it("los textos de los mosaicos salen del caché, salvo que se lo apague", () => {
+    const textos = (r: Renderer) => {
+      r.estilo({ relleno: "#000" });
+      r.texto(1, 1, "K1", 1);
+    };
+    const con = armar(0, textos);
+    con.terminar();
+    const tile = con.mosaicos()[0]!.llamadas;
+    expect(llamadasA(tile, "fillText")).toHaveLength(0);
+    expect(copias(tile).length).toBeGreaterThan(0);
+
+    const sin = armar(0, textos);
+    sin.capas.opciones = { ...OPCIONES_OPTIMIZADAS, cacheTextos: false };
+    sin.terminar();
+    expect(llamadasA(sin.mosaicos()[0]!.llamadas, "fillText")).toHaveLength(1);
+  });
+
   it("dibujados cuenta los componentes que tocan la pantalla", () => {
     const { capas, dibujar } = armar();
     expect(dibujar().dibujados).toBe(2);
