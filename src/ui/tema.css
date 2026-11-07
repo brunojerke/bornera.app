@@ -1,0 +1,113 @@
+/* Tema de Bornera: todos los colores salen de estas variables.
+   Claro por defecto; oscuro si el sistema lo pide. */
+
+:root {
+  color-scheme: light dark;
+
+  --fondo: #eef0f3;
+  --superficie: #ffffff;
+  --superficie-2: #f5f6f8;
+  --borde: #d5d9e0;
+  --texto: #1d2330;
+  --texto-suave: #5d6677;
+  --acento: #1f6feb;
+  --acento-texto: #ffffff;
+  --hover: #e3e7ee;
+  --foco: #1f6feb;
+  --lienzo: #fbfbfc;
+  --aviso: #c2410c;
+  --simular: #15803d;
+
+  --alto-barra: 40px;
+  --alto-estado: 24px;
+  --ancho-paleta: 200px;
+  --ancho-propiedades: 220px;
+  --ancho-plegado: 32px;
+  --radio: 6px;
+
+  --fuente: system-ui, -apple-system, "Segoe UI", Ubuntu, Cantarell, "Noto Sans", sans-serif;
+  --fuente-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #16191f;
+    --superficie: #1e222a;
+    --superficie-2: #252a33;
+    --borde: #343a46;
+    --texto: #e3e6eb;
+    --texto-suave: #98a1b0;
+    --acento: #4c8dff;
+    --acento-texto: #0b1220;
+    --hover: #2c323d;
+    --foco: #6ea4ff;
+    --lienzo: #111318;
+    --aviso: #fb923c;
+    --simular: #4ade80;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: var(--fuente);
+  font-size: 13px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* Barras de desplazamiento finas y con los colores del tema. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--borde) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 1px;
+}
+
+/* Botón de ícono, usado en barras y cabeceras de panel. */
+.boton-icono {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radio);
+  background: transparent;
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.boton-icono:hover {
+  background: var(--hover);
+}
+
+.boton-icono:disabled {
+  color: var(--texto-suave);
+  opacity: 0.5;
+  cursor: default;
+  background: transparent;
+}

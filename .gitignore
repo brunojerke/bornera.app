@@ -1,0 +1,41 @@
+# --- Node ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+coverage/
+.vitest/
+
+# --- SvelteKit / Vite ---
+/build
+/.svelte-kit
+/package
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# --- Rust ---
+# Cargo.lock se versiona: Bornera es una aplicación, no una librería.
+target/
+**/*.rs.bk
+*.pdb
+
+# --- Tauri ---
+# Esquemas generados para autocompletar capabilities.
+/src-tauri/gen/schemas
+
+# --- Entorno ---
+.env
+.env.*
+!.env.example
+
+# --- Sistema operativo y editores ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
