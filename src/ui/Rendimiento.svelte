@@ -1,7 +1,7 @@
 <script lang="ts">
   // Contador de rendimiento (F3), encima del lienzo. Solo muestra datos: los
   // mide el Lienzo. No tapa el mouse (pointer-events: none).
-  import type { Resumen } from "../render/rendimiento";
+  import { LIMITE_LENTO_MS, VENTANA_LENTOS_MS, type Resumen } from "../render/rendimiento";
 
   let {
     resumen,
@@ -17,6 +17,7 @@
 
   const ms = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const entero = new Intl.NumberFormat("es-AR");
+  const etiquetaLentos = `> ${LIMITE_LENTO_MS} ms (${VENTANA_LENTOS_MS / 1000} s)`;
 </script>
 
 <div class="rendimiento" aria-live="off">
@@ -26,6 +27,8 @@
   <b>{ms.format(resumen.ultimo)} ms</b>
   <span>Prom. / máx.</span>
   <b>{ms.format(resumen.promedio)} / {ms.format(resumen.maximo)} ms</b>
+  <span>{etiquetaLentos}</span>
+  <b class:alerta={resumen.lentos > 0}>{resumen.lentos} {resumen.lentos === 1 ? "cuadro" : "cuadros"}</b>
   <span>Capa estática</span>
   <b>{ms.format(resumen.estatica)} ms · {resumen.mosaicos} mosaicos/s</b>
   <span>Dibujados</span>
@@ -59,5 +62,9 @@
     font-weight: 600;
     color: var(--texto);
     text-align: right;
+  }
+
+  b.alerta {
+    color: var(--aviso);
   }
 </style>

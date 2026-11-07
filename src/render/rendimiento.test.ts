@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MedidorRendimiento, VENTANA_MS, type MedidaCuadro } from "./rendimiento";
+import { LIMITE_LENTO_MS, MedidorRendimiento, VENTANA_LENTOS_MS, VENTANA_MS, type MedidaCuadro } from "./rendimiento";
 
 function medida(total: number, mosaicos = 0): MedidaCuadro {
   return {
@@ -42,5 +42,19 @@ describe("MedidorRendimiento", () => {
     expect(r.estatica).toBe(3); // el último cuadro que rehízo mosaicos
     expect(r.dibujados).toBe(10);
     expect(r.componentes).toBe(100);
+  });
+
+  it(`cuenta los cuadros de más de ${LIMITE_LENTO_MS} ms de los últimos ${VENTANA_LENTOS_MS / 1000} s`, () => {
+    const m = new MedidorRendimiento();
+    m.registrar(0, medida(LIMITE_LENTO_MS + 5));
+    m.registrar(100, medida(LIMITE_LENTO_MS)); // justo en el límite: no es lento
+    m.registrar(2000, medida(40));
+    m.registrar(2016, medida(3));
+    expect(m.resumen(2100).lentos).toBe(2);
+    // Pasado un segundo ya no hay FPS, pero los lentos siguen contando hasta los 5 s.
+    expect(m.resumen(4000).fps).toBe(0);
+    expect(m.resumen(4000).lentos).toBe(2);
+    expect(m.resumen(VENTANA_LENTOS_MS + 1).lentos).toBe(1);
+    expect(m.resumen(2000 + VENTANA_LENTOS_MS).lentos).toBe(0);
   });
 });

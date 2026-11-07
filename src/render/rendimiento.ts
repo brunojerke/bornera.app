@@ -1,10 +1,16 @@
-// Medidor de rendimiento para el contador de F3: cuadros por segundo y tiempo
-// de dibujado. Como no hay bucle constante, los FPS son los
+// Medidor de rendimiento para el contador de F3: cuadros por segundo, tiempo
+// de dibujado y cuadros lentos. Como no hay bucle constante, los FPS son los
 // cuadros que se dibujaron en el último segundo: con el programa quieto, 0.
 // Sin dependencias del DOM: el tiempo lo pasa quien llama.
 
 /** Ventana de tiempo que se promedia, en ms. */
 export const VENTANA_MS = 1000;
+
+/** Un cuadro que tarda más que esto (ms) se nota como un tirón. */
+export const LIMITE_LENTO_MS = 16;
+
+/** Ventana en la que se cuentan los cuadros lentos, en ms. */
+export const VENTANA_LENTOS_MS = 5000;
 
 export interface MedidaCuadro {
   /** Tiempo de CPU del cuadro completo, en ms (incluye los mosaicos que se rehicieron). */
@@ -35,6 +41,8 @@ export interface Resumen {
   /** Promedio y máximo del último segundo, en ms (0 si no hubo cuadros). */
   promedio: number;
   maximo: number;
+  /** Cuadros de más de LIMITE_LENTO_MS en los últimos VENTANA_LENTOS_MS. */
+  lentos: number;
   /** Último tiempo de rehacer mosaicos (o la capa estática entera) en un cuadro, en ms. */
   estatica: number;
   /** Mosaicos rehechos en el último segundo. */
@@ -60,18 +68,21 @@ const MEDIDA_VACIA: MedidaCuadro = {
 
 export class MedidorRendimiento {
   private registros: Registro[] = [];
+  /** Instantes de los cuadros lentos de la ventana larga. */
+  private lentos: number[] = [];
   private ultima: MedidaCuadro = MEDIDA_VACIA;
   private ultimaEstatica = 0;
 
   /** Anota un cuadro dibujado en el instante `t` (ms). */
   registrar(t: number, medida: MedidaCuadro): void {
     this.registros.push({ t, medida });
+    if (medida.total > LIMITE_LENTO_MS) this.lentos.push(t);
     this.ultima = medida;
     if (medida.estatica > 0) this.ultimaEstatica = medida.estatica;
     this.descartarViejos(t);
   }
 
-  /** Resumen del último segundo, visto desde el instante `t` (ms). */
+  /** Resumen visto desde el instante `t` (ms). */
   resumen(t: number): Resumen {
     this.descartarViejos(t);
     const r = this.registros;
@@ -88,6 +99,7 @@ export class MedidorRendimiento {
       ultimo: this.ultima.total,
       promedio: r.length ? suma / r.length : 0,
       maximo,
+      lentos: this.lentos.length,
       estatica: this.ultimaEstatica,
       mosaicos,
       dibujados: this.ultima.dibujados,
@@ -97,6 +109,7 @@ export class MedidorRendimiento {
 
   private descartarViejos(t: number): void {
     descartarHasta(this.registros, (x) => x.t <= t - VENTANA_MS);
+    descartarHasta(this.lentos, (x) => x <= t - VENTANA_LENTOS_MS);
   }
 }
 

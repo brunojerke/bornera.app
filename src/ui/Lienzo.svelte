@@ -65,8 +65,9 @@
   }
 
   // ── Contador de rendimiento ──────────────────────────────────────────────
-  // Se actualiza 4 veces por segundo mientras haya cuadros, y una última vez
-  // cuando ya pasó un segundo sin dibujar (FPS en 0). Sin cuadros, sin timer.
+  // Se actualiza 4 veces por segundo mientras haya cuadros o queden cuadros
+  // lentos en la ventana de 5 s, y una última vez cuando ya no hay ninguno de
+  // los dos (FPS y lentos en 0). Sin cuadros recientes, sin timer.
 
   const medidor = new MedidorRendimiento();
   let resumen = $state<Resumen>(medidor.resumen(0));
@@ -77,7 +78,7 @@
     temporizador = 0;
     resumen = medidor.resumen(performance.now());
     memoriaCache = vista?.memoriaCache ?? 0;
-    if (rendimiento && resumen.fps > 0) programarResumen();
+    if (rendimiento && (resumen.fps > 0 || resumen.lentos > 0)) programarResumen();
   }
 
   function programarResumen() {
