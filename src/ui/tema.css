@@ -15,6 +15,11 @@
   --hover: #e3e7ee;
   --foco: #1f6feb;
   --lienzo: #fbfbfc;
+  --grilla: #c9ced8;
+  --grilla-mayor: #9aa2b1;
+  --grilla-origen: #7a8395;
+  --simbolo: #1d2330;
+  --borne: #d9480f;
   --aviso: #c2410c;
   --simular: #15803d;
 
@@ -42,6 +47,11 @@
     --hover: #2c323d;
     --foco: #6ea4ff;
     --lienzo: #111318;
+    --grilla: #2c313b;
+    --grilla-mayor: #4a5262;
+    --grilla-origen: #6b7488;
+    --simbolo: #e3e6eb;
+    --borne: #ff8a4c;
     --aviso: #fb923c;
     --simular: #4ade80;
   }

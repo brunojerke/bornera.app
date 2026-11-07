@@ -110,4 +110,10 @@ export type DefinicionSimbolo = Comportamiento & {
   tamano: { ancho: number; alto: number };
   primitivas: Primitiva[];
   bornes: Borne[];
+  /**
+   * De qué lado de las conexiones van los nombres de los bornes, en coordenadas
+   * locales (gira y se espeja con el símbolo). Por defecto, "izquierda".
+   * Sirve para alejarlos de partes del dibujo, como el tope de un contacto NC.
+   */
+  ladoNombresBornes?: Direccion;
 };

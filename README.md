@@ -20,6 +20,7 @@ Otros comandos:
 ```sh
 npm test            # tests
 npm run check       # chequeo de tipos
+npm run bench       # tiempos de dibujado con 100, 500 y 2000 símbolos (necesita Chrome, Chromium o Edge)
 npm run tauri build # genera el instalador
 ```
 

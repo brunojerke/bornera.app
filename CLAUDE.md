@@ -20,6 +20,7 @@ Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en 
 - `npm run dev`          solo el frontend en el navegador (http://localhost:1420), sin Tauri
 - `npm test`             tests una vez (Vitest), incluida la regla de imports de `src/core`
 - `npm run test:watch`   tests en modo vigilancia
+- `npm run bench`        banco de dibujado (100/500/2000 símbolos) en un Chrome/Edge headless, sin abrir la ventana
 - `npm run check`        chequeo de tipos completo (svelte-check + `check:core`)
 - `npm run check:core`   chequeo de tipos de `src/core` sin la librería DOM
 - `npm run check:watch`  svelte-check en modo vigilancia

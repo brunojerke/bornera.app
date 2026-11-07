@@ -11,9 +11,31 @@
   import Scan from "@lucide/svelte/icons/scan";
   import Pencil from "@lucide/svelte/icons/pencil";
   import Play from "@lucide/svelte/icons/play";
-  import type { Modo } from "./tipos";
+  import MenuDesarrollo from "./MenuDesarrollo.svelte";
+  import type { OpcionesCapas } from "../render/capas";
+  import type { EscenaDesarrollo, Modo } from "./tipos";
 
-  let { modo = $bindable("editar") }: { modo?: Modo } = $props();
+  let {
+    modo = $bindable("editar"),
+    zoom = 1,
+    onacercar,
+    onalejar,
+    onencuadrar,
+    escena = $bindable("simbolos"),
+    rendimiento = $bindable(false),
+    opciones = $bindable(),
+  }: {
+    modo?: Modo;
+    /** Zoom actual (1 = 100 %). */
+    zoom?: number;
+    onacercar?: () => void;
+    onalejar?: () => void;
+    onencuadrar?: () => void;
+    /** Menú de desarrollo (solo en `npm run dev` / `tauri dev`). */
+    escena?: EscenaDesarrollo;
+    rendimiento?: boolean;
+    opciones: OpcionesCapas;
+  } = $props();
 
   const TAM = 18;
 </script>
@@ -34,13 +56,21 @@
   </div>
 
   <div class="grupo" role="group" aria-label="Zoom">
-    <button class="boton-icono" title="Alejar" aria-label="Alejar"><ZoomOut size={TAM} /></button>
-    <span class="zoom" aria-label="Zoom actual">100 %</span>
-    <button class="boton-icono" title="Acercar" aria-label="Acercar"><ZoomIn size={TAM} /></button>
-    <button class="boton-icono" title="Encuadrar todo (F)" aria-label="Encuadrar todo"><Scan size={TAM} /></button>
+    <button class="boton-icono" title="Alejar" aria-label="Alejar" onclick={onalejar}><ZoomOut size={TAM} /></button>
+    <span class="zoom" aria-label="Zoom actual">{Math.round(zoom * 100)} %</span>
+    <button class="boton-icono" title="Acercar" aria-label="Acercar" onclick={onacercar}><ZoomIn size={TAM} /></button>
+    <button class="boton-icono" title="Encuadrar todo (F)" aria-label="Encuadrar todo" onclick={onencuadrar}>
+      <Scan size={TAM} />
+    </button>
   </div>
 
   <div class="espacio"></div>
+
+  {#if import.meta.env.DEV}
+    <div class="grupo-final">
+      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones />
+    </div>
+  {/if}
 
   <div class="modo" role="group" aria-label="Modo (F5)" title="Alternar modo (F5)">
     <button class:activo={modo === "editar"} aria-pressed={modo === "editar"} onclick={() => (modo = "editar")}>
@@ -92,6 +122,10 @@
 
   .espacio {
     flex: 1;
+  }
+
+  .grupo-final {
+    margin-right: 6px;
   }
 
   .modo {

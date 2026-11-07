@@ -1,17 +1,19 @@
 <script lang="ts">
   // Barra de estado inferior: modo, coordenadas, zoom y avisos.
-  // Los valores son fijos hasta que exista el lienzo con navegación.
   import type { Modo } from "./tipos";
+  import type { Punto } from "../render/camara";
 
-  let { modo }: { modo: Modo } = $props();
+  let { modo, zoom, cursor }: { modo: Modo; zoom: number; cursor: Punto | null } = $props();
 </script>
 
 <footer class="estado">
   <span class="modo" class:simulando={modo === "simular"}>
     {modo === "editar" ? "Edición" : "Simulación"}
   </span>
-  <span class="dato">X 0 · Y 0</span>
-  <span class="dato">Zoom 100 %</span>
+  <span class="dato">
+    {cursor ? `X ${Math.round(cursor.x)} · Y ${Math.round(cursor.y)}` : "X – · Y –"}
+  </span>
+  <span class="dato">Zoom {Math.round(zoom * 100)} %</span>
   <span class="espacio"></span>
   <span class="avisos">Sin avisos</span>
 </footer>
