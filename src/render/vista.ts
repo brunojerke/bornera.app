@@ -78,6 +78,14 @@ export class Vista {
   }
 
   /**
+   * Cambió lo que se dibuja dentro de `caja` (unidades de grilla): rehacer
+   * solo esa parte de la capa estática.
+   */
+  invalidarRegion(caja: Caja): void {
+    if (this.capas.invalidarRegion(caja)) this.invalidar();
+  }
+
+  /**
    * Pide un redibujo para el próximo cuadro (si no hay uno ya pedido). Si solo
    * se movió la cámara o cambió la capa dinámica, la estática se reusa.
    */

@@ -12,6 +12,9 @@
 //   pantalla entera.
 // - Durante el zoom no se rehace nada: se escalan los mosaicos que ya están, y
 //   recién ESPERA_ZOOM_MS después del último cambio se rehacen nítidos.
+// - Al editar se invalida solo la región que cambió (`invalidarRegion`): los
+//   mosaicos que la tocan quedan sucios, se siguen mostrando y se rehacen
+//   antes que cualquier otro.
 // - Los textos se copian de un caché de imágenes pre-renderizadas (textos.ts).
 //
 // Dinámica: selección, cable en curso, estado de simulación. Se dibuja en cada
@@ -22,7 +25,7 @@
 // No conoce el DOM salvo para crear canvas fuera de pantalla; eso y el reloj
 // se pueden inyectar (los tests usan falsos).
 
-import { seTocan, type Camara, type Caja } from "./camara";
+import { ampliarCaja, seTocan, type Camara, type Caja } from "./camara";
 import { RendererCanvas } from "./canvas2d";
 import { DETALLE_COMPLETO, nivelDetalle } from "./detalle";
 import type { ColoresContenido, Contenido } from "./escena";
@@ -109,6 +112,11 @@ export function contextoNuevo(transparente: boolean): CanvasRenderingContext2D {
 /** Reloj en ms para medir el presupuesto de cada cuadro (los tests usan uno falso). */
 export type Reloj = () => number;
 
+/** Prioridad (menor, antes) de un mosaico visible sucio, de uno visible que falta y de uno del margen. */
+const PRIORIDAD_SUCIO = -1e6;
+const PRIORIDAD_FALTA = 0;
+const PRIORIDAD_MARGEN = 1e6;
+
 /** Mosaico que falta, con su prioridad (menor, antes). */
 interface Pendiente {
   i: number;
@@ -164,7 +172,7 @@ export class Capas {
       const c = crearContexto(false);
       c.canvas.width = TAM_MOSAICO;
       c.canvas.height = TAM_MOSAICO;
-      return { ctx: c, r: new RendererCanvas(c), k: NaN, i: 0, j: 0, usado: 0 };
+      return { ctx: c, r: new RendererCanvas(c), k: NaN, i: 0, j: 0, usado: 0, sucio: false };
     });
     this.sonda = crearContexto(true);
     this.sonda.canvas.width = 1;
@@ -189,6 +197,37 @@ export class Capas {
    */
   invalidarEstatica(): void {
     this.mosaicos.vaciar();
+  }
+
+  /**
+   * Cambió lo que se dibuja dentro de `caja` (unidades de grilla; la caja de
+   * dibujo vieja unida a la nueva). Solo se rehacen los mosaicos que la tocan,
+   * primero que nada; mientras tanto se siguen viendo como estaban. Los de
+   * otros niveles de zoom que la tocan se descartan.
+   * Devuelve true si hace falta un cuadro para ponerse al día.
+   */
+  invalidarRegion(caja: Caja): boolean {
+    // Sin caché, cada cuadro dibuja todo: alcanza con pedir uno.
+    if (!this._opciones.cache) return true;
+    const mos = this.mosaicos;
+    if (!mos.hayAlgo) return false;
+    let n = 0;
+    const k = mos.k;
+    if (!Number.isNaN(k)) {
+      // Un píxel físico de más por lado: el suavizado de los bordes del trazo.
+      const m = 1 / k;
+      const T = TAM_MOSAICO;
+      n += mos.marcarSucios(
+        Math.floor(((caja.x - m) * k) / T),
+        Math.floor(((caja.y - m) * k) / T),
+        Math.floor(((caja.x + caja.ancho + m) * k) / T),
+        Math.floor(((caja.y + caja.alto + m) * k) / T),
+      );
+    }
+    // Los viejos son de cualquier nivel: una unidad de grilla de margen es
+    // siempre más de un píxel físico (con el zoom mínimo, 1 unidad = 2 px).
+    n += mos.descartarViejosEn(ampliarCaja(caja, 1));
+    return n > 0;
   }
 
   /** Bytes que ocupan los mosaicos y el caché de textos (4 por píxel). */
@@ -305,9 +344,11 @@ export class Capas {
   }
 
   /**
-   * Rehace los mosaicos que faltan de la pantalla y su margen, los visibles
-   * primero y del centro hacia afuera, hasta gastar el presupuesto (al menos
-   * uno por cuadro). Devuelve cuántos quedan.
+   * Rehace los mosaicos que faltan o están sucios en la pantalla y su margen:
+   * primero los visibles sucios (lo que se acaba de editar), después los
+   * visibles que faltan y al final el margen; cada grupo del centro hacia
+   * afuera. Sigue hasta gastar el presupuesto (al menos uno por cuadro).
+   * Devuelve cuántos quedan.
    */
   private rehacerMosaicos(
     ox: number,
@@ -340,10 +381,11 @@ export class Capas {
         const m = mos.actuales.get(clave(i, j));
         if (m) {
           m.usado = this.cuadro;
-          continue;
+          if (!m.sucio) continue;
         }
         const fuera = i < vi0 || i > vi1 || j < vj0 || j > vj1;
-        pendientes.push({ i, j, prioridad: (fuera ? 1e6 : 0) + (i - ci) ** 2 + (j - cj) ** 2 });
+        const base = fuera ? PRIORIDAD_MARGEN : m ? PRIORIDAD_SUCIO : PRIORIDAD_FALTA;
+        pendientes.push({ i, j, prioridad: base + (i - ci) ** 2 + (j - cj) ** 2 });
       }
     }
     if (pendientes.length === 0) return 0;

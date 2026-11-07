@@ -5,9 +5,11 @@
 // [i·T, (i+1)·T) × [j·T, (j+1)·T).
 //
 // Este módulo solo guarda: qué mosaicos hay y de qué nivel, cuáles descartar
-// cuando hay demasiados, y los canvas libres para reusar (crear un canvas es
-// caro; reusarlo, no). Qué se dibuja en cada uno lo decide Capas.
+// cuando hay demasiados, cuáles quedaron desactualizados (sucios) y los canvas
+// libres para reusar (crear un canvas es caro; reusarlo, no). Qué se dibuja en
+// cada uno lo decide Capas.
 
+import type { Caja } from "./camara";
 import type { RendererCanvas } from "./canvas2d";
 
 /** Lado de un mosaico, en px físicos. */
@@ -29,6 +31,12 @@ export interface Mosaico {
   j: number;
   /** Último cuadro en que se mostró o hizo falta: se descartan primero los que hace más que no. */
   usado: number;
+  /**
+   * Lo que muestra quedó desactualizado (cambió algo del contenido que lo
+   * toca). Se sigue mostrando hasta que se rehace: mejor un cuadro con lo
+   * anterior que un hueco con la grilla vacía.
+   */
+  sucio: boolean;
 }
 
 /** Clave de un mosaico dentro de su nivel. */
@@ -66,16 +74,62 @@ export class Mosaicos {
     return this.actuales.size > 0 || this.viejos.length > 0;
   }
 
-  /** Pasa a otro nivel: los mosaicos actuales quedan como viejos. */
+  /**
+   * Pasa a otro nivel: los mosaicos actuales quedan como viejos, salvo los
+   * sucios (mostrarían, escalado, algo que ya no está).
+   */
   cambiarNivel(k: number): void {
-    for (const m of this.actuales.values()) this.viejos.push(m);
+    for (const m of this.actuales.values()) (m.sucio ? this.libres : this.viejos).push(m);
     this.actuales.clear();
+    this.recortarLibres();
     this.k = k;
   }
 
   /**
+   * Marca sucios los mosaicos del nivel actual en las columnas i0..i1 y las
+   * filas j0..j1. Devuelve cuántos marcó (los que no existen no cuentan:
+   * cuando hagan falta, se dibujan con el contenido nuevo).
+   */
+  marcarSucios(i0: number, j0: number, i1: number, j1: number): number {
+    let n = 0;
+    // Hay pocos mosaicos (los de la pantalla y su margen): recorrerlos es más
+    // barato que buscar cada lugar del rango, que puede ser enorme.
+    for (const m of this.actuales.values()) {
+      if (m.i >= i0 && m.i <= i1 && m.j >= j0 && m.j <= j1) {
+        m.sucio = true;
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /**
+   * Descarta los mosaicos de niveles anteriores que tocan `caja` (en unidades
+   * de grilla): su contenido quedó desactualizado. Devuelve cuántos descartó.
+   */
+  descartarViejosEn(caja: Caja): number {
+    const T = TAM_MOSAICO;
+    const x1 = caja.x + caja.ancho;
+    const y1 = caja.y + caja.alto;
+    let n = 0;
+    for (let i = this.viejos.length - 1; i >= 0; i--) {
+      const m = this.viejos[i]!;
+      const lado = T / m.k;
+      const mx = m.i * lado;
+      const my = m.j * lado;
+      if (mx < x1 && mx + lado > caja.x && my < y1 && my + lado > caja.y) {
+        this.libres.push(...this.viejos.splice(i, 1));
+        n++;
+      }
+    }
+    if (n) this.recortarLibres();
+    return n;
+  }
+
+  /**
    * Un canvas para dibujar el mosaico (i, j) del nivel actual, que queda
-   * registrado (y reemplaza al que hubiera). Usa uno libre; si no hay, crea
+   * registrado (y reemplaza al que hubiera) y limpio: quien lo pide lo va a
+   * dibujar entero. Si ya existía, es el mismo. Si no, usa uno libre; si no hay, crea
    * uno mientras no haya más de `maximo`; si no, descarta el que hace más que
    * no se usa (nunca uno usado en el cuadro `cuadro`).
    */
@@ -88,6 +142,7 @@ export class Mosaicos {
     m.i = i;
     m.j = j;
     m.usado = cuadro;
+    m.sucio = false;
     this.actuales.set(c, m);
     return m;
   }

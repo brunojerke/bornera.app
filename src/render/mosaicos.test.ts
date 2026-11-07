@@ -13,6 +13,7 @@ function armar() {
       i: 0,
       j: 0,
       usado: 0,
+      sucio: false,
     };
     creados.push(m);
     return m;
@@ -79,6 +80,48 @@ describe("Mosaicos", () => {
     mos.tomar(1, 0, 7, 1);
     expect(creados).toHaveLength(2);
     expect(mos.actuales.size).toBe(2);
+  });
+
+  it("marca sucios solo los mosaicos del rango, y tomar los deja limpios", () => {
+    const { mos } = armar();
+    mos.cambiarNivel(20);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) mos.tomar(i, j, 1, MUCHOS);
+    expect(mos.marcarSucios(1, 0, 2, 0)).toBe(2);
+    const sucios = [...mos.actuales.values()].filter((m) => m.sucio).map((m) => clave(m.i, m.j));
+    expect(sucios.sort()).toEqual([clave(1, 0), clave(2, 0)]);
+    // Un rango sin mosaicos no marca nada.
+    expect(mos.marcarSucios(100, 100, 200, 200)).toBe(0);
+    // Rehacerlo es tomar el mismo canvas, que queda limpio.
+    const m = mos.actuales.get(clave(1, 0))!;
+    expect(mos.tomar(1, 0, 2, MUCHOS)).toBe(m);
+    expect(m.sucio).toBe(false);
+  });
+
+  it("al cambiar de nivel, los sucios no quedan como viejos", () => {
+    const { mos } = armar();
+    mos.cambiarNivel(20);
+    const limpio = mos.tomar(0, 0, 1, MUCHOS);
+    mos.tomar(1, 0, 1, MUCHOS);
+    mos.marcarSucios(1, 0, 1, 0);
+    mos.cambiarNivel(10);
+    expect(mos.viejos).toEqual([limpio]);
+  });
+
+  it("descarta los viejos que tocan una caja de grilla y conserva el resto", () => {
+    const { mos } = armar();
+    // Nivel 20: cada mosaico cubre 12,8 unidades.
+    mos.cambiarNivel(20);
+    const a = mos.tomar(0, 0, 1, MUCHOS); // [0, 12,8) × [0, 12,8)
+    const b = mos.tomar(1, 0, 1, MUCHOS); // [12,8, 25,6) × [0, 12,8)
+    const c = mos.tomar(0, 1, 1, MUCHOS); // [0, 12,8) × [12,8, 25,6)
+    mos.cambiarNivel(40);
+    expect(mos.descartarViejosEn({ x: 13, y: 2, ancho: 1, alto: 1 })).toBe(1);
+    expect(mos.viejos).toEqual([a, c]);
+    // Una caja lejos no toca nada.
+    expect(mos.descartarViejosEn({ x: 100, y: 100, ancho: 1, alto: 1 })).toBe(0);
+    expect(mos.viejos).toEqual([a, c]);
+    // Los descartados quedan para reusar.
+    expect(mos.tomar(5, 5, 2, MUCHOS)).toBe(b);
   });
 
   it("guarda pocos canvas sueltos y suelta la memoria del resto", () => {

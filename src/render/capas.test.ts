@@ -290,6 +290,130 @@ describe("Capas: mosaicos", () => {
     expect(principal.llamadas.some((x) => x[0] === "clip")).toBe(true);
   });
 
+  describe("invalidarRegion", () => {
+    /** Mosaicos (i, j) que dibujó el contenido, en orden. */
+    const dibujados = (infos: InfoDibujo[]) =>
+      infos.map((i) => [Math.round((i.visible.x * K) / T), Math.round((i.visible.y * K) / T)]);
+
+    it("una región dentro de un mosaico rehace solo ese, en el mismo cuadro", () => {
+      const { capas, contenido, dibujar, terminar, mosaicos } = armar();
+      terminar();
+      const creados = mosaicos().length;
+      contenido.infos.length = 0;
+      // (2, 2)–(5, 5) en grilla = 40–100 px: dentro del mosaico (0, 0).
+      expect(capas.invalidarRegion({ x: 2, y: 2, ancho: 3, alto: 3 })).toBe(true);
+      const m = dibujar();
+      expect(m.mosaicos).toBe(1);
+      expect(m.pendiente).toBe(false);
+      expect(dibujados(contenido.infos)).toEqual([[0, 0]]);
+      // Mismo canvas, sin crear otros.
+      expect(mosaicos().length).toBe(creados);
+      // El cuadro siguiente ya no rehace nada.
+      contenido.infos.length = 0;
+      expect(dibujar().mosaicos).toBe(0);
+      expect(contenido.infos).toHaveLength(0);
+    });
+
+    it("una región en la esquina de cuatro mosaicos rehace los cuatro", () => {
+      const { capas, contenido, dibujar, terminar } = armar();
+      terminar();
+      contenido.infos.length = 0;
+      // 12,8 unidades = 256 px: la esquina común de (0, 0), (1, 0), (0, 1) y (1, 1).
+      capas.invalidarRegion({ x: 12, y: 12, ancho: 2, alto: 2 });
+      expect(dibujar().mosaicos).toBe(4);
+      expect(dibujados(contenido.infos).map(([i, j]) => `${i},${j}`).sort()).toEqual(["0,0", "0,1", "1,0", "1,1"]);
+    });
+
+    it("cuenta el píxel de suavizado del borde: una caja que termina justo en el borde toca al vecino", () => {
+      const { capas, dibujar, terminar } = armar();
+      terminar();
+      // Termina en x = 12,8 (256 px): con 1 px de más, toca la columna 1.
+      capas.invalidarRegion({ x: 10, y: 2, ancho: 2.8, alto: 1 });
+      expect(dibujar().mosaicos).toBe(2);
+    });
+
+    it("los sucios se siguen mostrando: no aparece la grilla vacía", () => {
+      // Cada mosaico tarda 10 ms: con 4 sucios, no entran todos en un cuadro.
+      const { principal, capas, dibujar, avanzar, terminar } = armar(10);
+      terminar();
+      capas.invalidarRegion({ x: 12, y: 12, ancho: 2, alto: 2 });
+      avanzar(16);
+      principal.llamadas.length = 0;
+      const m = dibujar();
+      expect(m.mosaicos).toBe(1);
+      expect(m.pendiente).toBe(true);
+      // Ni recorte para huecos ni fondo pintado: los 12 visibles se copian, sucios o no.
+      expect(llamadasA(principal.llamadas, "clip")).toHaveLength(0);
+      expect(llamadasA(principal.llamadas, "fillRect")).toHaveLength(0);
+      expect(copias(principal.llamadas)).toHaveLength(VISIBLES);
+    });
+
+    it("los sucios visibles van antes que los que faltan", () => {
+      const { capas, contenido, camara, dibujar, terminar } = armar(10);
+      terminar();
+      // Aparece la columna 4 (falta) y a la vez se edita en el mosaico (2, 1).
+      camara.desplazar(-300, 0);
+      capas.invalidarRegion({ x: 30, y: 15, ancho: 1, alto: 1 });
+      contenido.infos.length = 0;
+      dibujar();
+      expect(dibujados(contenido.infos)[0]).toEqual([2, 1]);
+    });
+
+    it("descarta los mosaicos de otro nivel que tocan la región", () => {
+      const { principal, capas, camara, dibujar, avanzar, terminar } = armar(10);
+      terminar();
+      camara.zoomEn(2, W / 2, H / 2);
+      dibujar();
+      avanzar(ESPERA_ZOOM_MS);
+      dibujar(); // nivel nuevo: uno hecho, el resto con los viejos escalados
+      const escalados = () => {
+        principal.llamadas.length = 0;
+        avanzar(16);
+        dibujar();
+        return copias(principal.llamadas).filter((c) => c[3] !== undefined).length;
+      };
+      const antes = escalados();
+      // Toda la pantalla vieja: no queda ningún viejo para escalar.
+      expect(capas.invalidarRegion({ x: -100, y: -100, ancho: 200, alto: 200 })).toBe(true);
+      expect(antes).toBeGreaterThan(0);
+      expect(escalados()).toBe(0);
+    });
+
+    it("una región lejos de todo lo dibujado no rehace nada ni pide cuadro", () => {
+      const { capas, contenido, dibujar, terminar } = armar();
+      terminar();
+      contenido.infos.length = 0;
+      expect(capas.invalidarRegion({ x: 5000, y: 5000, ancho: 3, alto: 3 })).toBe(false);
+      const m = dibujar();
+      expect(m.mosaicos).toBe(0);
+      expect(m.pendiente).toBe(false);
+    });
+
+    it("antes del primer cuadro no hay nada que invalidar", () => {
+      const { capas } = armar();
+      expect(capas.invalidarRegion({ x: 0, y: 0, ancho: 1, alto: 1 })).toBe(false);
+    });
+
+    it("sin caché siempre pide cuadro (cada cuadro dibuja todo)", () => {
+      const { capas } = armar();
+      capas.opciones = { ...OPCIONES_SIN_OPTIMIZAR };
+      expect(capas.invalidarRegion({ x: 5000, y: 5000, ancho: 1, alto: 1 })).toBe(true);
+    });
+
+    it("durante el zoom los sucios esperan y se rehacen nítidos al detenerse", () => {
+      const { capas, camara, dibujar, avanzar, terminar } = armar();
+      terminar();
+      camara.zoomEn(2, W / 2, H / 2);
+      dibujar();
+      capas.invalidarRegion({ x: 2, y: 2, ancho: 1, alto: 1 });
+      const m = dibujar();
+      expect(m.mosaicos).toBe(0);
+      expect(m.esperar).toBeGreaterThan(0);
+      avanzar(ESPERA_ZOOM_MS);
+      expect(dibujar().mosaicos).toBeGreaterThan(0);
+    });
+  });
+
   it("la memoria tiene un tope aunque se recorra mucho", () => {
     const { capas, camara, terminar } = armar();
     for (let i = 0; i < 30; i++) {
