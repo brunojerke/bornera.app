@@ -1,0 +1,81 @@
+# Al empujar un tag v* (por ejemplo v0.1.0) compila los instaladores de
+# Linux (.AppImage y .deb) y Windows (.msi) y los sube a un Release en
+# borrador. El borrador se revisa y se publica a mano desde GitHub.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # Crea el borrador una sola vez, antes de compilar. Si cada plataforma lo
+  # creara por su cuenta, al correr en paralelo podrían quedar dos borradores.
+  crear-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.crear.outputs.release_id }}
+    steps:
+      - name: Crear Release en borrador
+        id: crear
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          id=$(gh api "repos/${{ github.repository }}/releases" \
+            -f tag_name="$TAG" \
+            -f name="Bornera $TAG" \
+            -f body="Instaladores de Bornera $TAG para Linux y Windows." \
+            -F draft=true \
+            --jq .id)
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
+  compilar:
+    needs: crear-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 y no latest: el AppImage hereda la glibc del sistema donde se
+          # compila, y una más vieja abre en más distribuciones (y netbooks).
+          - plataforma: ubuntu-22.04
+            paquetes: appimage,deb
+          - plataforma: windows-latest
+            paquetes: msi
+    runs-on: ${{ matrix.plataforma }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias del sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Correr tests
+        run: npm test
+
+      - name: Compilar y subir instaladores
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.crear-release.outputs.release_id }}
+          args: --bundles ${{ matrix.paquetes }}
