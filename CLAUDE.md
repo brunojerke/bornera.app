@@ -13,6 +13,7 @@ Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en 
 - Redibujar solo ante cambios; nunca un bucle constante.
 - Interfaz en Svelte 5; el lienzo es Canvas 2D propio, sin librerías de dibujo.
 - Código y comentarios en español.
+- Identificadores en código y claves/valores del formato `.brn` sin ñ ni tildes (`tamano`, `proteccion`, `manual_momentaneo`). Los textos visibles para el usuario sí llevan ortografía correcta ("Protección", "Tamaño").
 
 ## Comandos
 - `npm run tauri dev`    app de escritorio con recarga en caliente (abre la ventana)
