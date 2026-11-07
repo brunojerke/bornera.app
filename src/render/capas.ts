@@ -1,19 +1,30 @@
-// Capas de dibujo de un cuadro:
-// - Estática: grilla, origen y componentes. Se dibuja en un canvas fuera de
-//   pantalla y se reusa mientras no cambie el contenido ni el zoom. El caché
-//   cubre la pantalla más un margen hacia cada lado, así desplazar la vista
-//   es copiar una imagen corrida, sin redibujar nada, hasta salir del margen.
-// - Dinámica: selección, cable en curso, estado de simulación. Se dibuja en
-//   cada cuadro, encima de la estática.
-// Los canvas son opacos (sin transparencia): copiar el caché es copiar
+// Capas de dibujo de un cuadro.
+//
+// Estática: grilla, origen y componentes. Se guarda en mosaicos de
+// TAM_MOSAICO px (mosaicos.ts): canvas fuera de pantalla que en cada cuadro
+// se copian a la pantalla.
+// - Desplazar la vista es copiar mosaicos: solo se dibujan los que aparecen,
+//   y de antemano los de un margen alrededor de la pantalla.
+// - Los mosaicos se rehacen de a poco, con un presupuesto de PRESUPUESTO_MS
+//   por cuadro; los que no entran quedan para los cuadros siguientes.
+//   Mientras tanto se ve la versión anterior escalada (de otro nivel de zoom)
+//   o un mosaico vacío con la grilla. Así ningún cuadro carga con rehacer la
+//   pantalla entera.
+//
+// Dinámica: selección, cable en curso, estado de simulación. Se dibuja en cada
+// cuadro, encima de la estática.
+//
+// Los canvas son opacos (sin transparencia): copiar un mosaico es copiar
 // píxeles, sin mezclar, y la pantalla no hace falta borrarla.
-// No conoce el DOM salvo para crear canvas fuera de pantalla (inyectable).
+// No conoce el DOM salvo para crear canvas fuera de pantalla; eso y el reloj
+// se pueden inyectar (los tests usan falsos).
 
-import { Camara, type Caja } from "./camara";
+import { seTocan, type Camara, type Caja } from "./camara";
 import { RendererCanvas } from "./canvas2d";
 import { DETALLE_COMPLETO, nivelDetalle } from "./detalle";
 import type { ColoresContenido, Contenido } from "./escena";
 import { Grilla, type ColoresGrilla } from "./grilla";
+import { clave, Mosaicos, TAM_MOSAICO, type Mosaico } from "./mosaicos";
 import type { MedidaCuadro } from "./rendimiento";
 import type { Renderer } from "./renderer";
 
@@ -23,21 +34,51 @@ export interface Colores extends ColoresGrilla, ColoresContenido {
   origen: string;
 }
 
-/** Margen del caché hacia cada lado, en fracción del tamaño de la pantalla. */
-export const MARGEN_CACHE = 0.25;
+/**
+ * Tiempo para rehacer mosaicos en cada cuadro, en ms. Con lo que cuesta
+ * copiarlos a la pantalla, el cuadro entero no debería pasar de 16 ms.
+ */
+export const PRESUPUESTO_MS = 8;
+
+/**
+ * Lo que puede tardar un cuadro entero, en ms (un poco menos de 16, por las
+ * dudas). Si copiar a la pantalla tarda mucho (máquina lenta, mosaicos
+ * escalados), el presupuesto para rehacer mosaicos se achica para no pasarse.
+ */
+export const OBJETIVO_CUADRO_MS = 14;
+
+/** Margen alrededor de la pantalla que se dibuja de antemano, en px físicos. */
+export const MARGEN_PX = 128;
+
+/** Mosaicos que se guardan como máximo, en proporción a los que cubren pantalla y margen. */
+const HOLGURA_MOSAICOS = 1.25;
+
+/** Columnas de mosaicos cuyas tiras de grilla se guardan (sobra para una pantalla de 4K). */
+const COLUMNAS_GRILLA = 24;
+
+/** Alrededor de la cruz del origen, con lugar para el grosor de su trazo (unidades). */
+const CAJA_CRUZ: Caja = { x: -1.5, y: -1.5, ancho: 3, alto: 3 };
 
 /** Optimizaciones activas. Apagarlas sirve para medir cuánto aporta cada una. */
 export interface OpcionesCapas {
-  /** Cachear la capa estática (si no, se redibuja en cada cuadro). */
+  /** Guardar la capa estática en mosaicos (si no, se redibuja entera en cada cuadro). */
   cache: boolean;
-  /** Dibujar solo lo que toca la vista. */
+  /** Dibujar solo lo que toca cada mosaico (o la pantalla). */
   recorte: boolean;
   /** Omitir textos y bornes con zoom muy alejado. */
   nivelDetalle: boolean;
 }
 
-export const OPCIONES_OPTIMIZADAS: Readonly<OpcionesCapas> = { cache: true, recorte: true, nivelDetalle: true };
-export const OPCIONES_SIN_OPTIMIZAR: Readonly<OpcionesCapas> = { cache: false, recorte: false, nivelDetalle: false };
+export const OPCIONES_OPTIMIZADAS: Readonly<OpcionesCapas> = {
+  cache: true,
+  recorte: true,
+  nivelDetalle: true,
+};
+export const OPCIONES_SIN_OPTIMIZAR: Readonly<OpcionesCapas> = {
+  cache: false,
+  recorte: false,
+  nivelDetalle: false,
+};
 
 /** Dibuja la capa dinámica, en unidades de grilla. */
 export type DibujarDinamico = (r: Renderer, info: { escala: number; colores: Colores }) => void;
@@ -54,12 +95,14 @@ export function contextoNuevo(transparente: boolean): CanvasRenderingContext2D {
   return ctx;
 }
 
-/** Con qué cámara y tamaño se armó el caché. */
-interface EstadoCache {
-  k: number;
-  dpr: number;
-  ancho: number;
-  alto: number;
+/** Reloj en ms para medir el presupuesto de cada cuadro (los tests usan uno falso). */
+export type Reloj = () => number;
+
+/** Mosaico que falta, con su prioridad (menor, antes). */
+interface Pendiente {
+  i: number;
+  j: number;
+  prioridad: number;
 }
 
 export class Capas {
@@ -76,20 +119,35 @@ export class Capas {
 
   private _opciones: OpcionesCapas = { ...OPCIONES_OPTIMIZADAS };
   private readonly renderer: RendererCanvas;
-  private readonly grilla: Grilla;
-  private cacheCtx: CanvasRenderingContext2D | null = null;
-  private cacheRenderer: RendererCanvas | null = null;
-  /** Cámara del caché: su esquina superior izquierda es el píxel (0, 0) del caché. */
-  private readonly camaraCache = new Camara();
-  private estadoCache: EstadoCache | null = null;
-  private dibujados = 0;
+  /** Una grilla para la pantalla y otra para los mosaicos: sus tiras tienen distinto ancho. */
+  private readonly grillaPantalla: Grilla;
+  private readonly grillaMosaicos: Grilla;
+  private readonly mosaicos: Mosaicos;
+  /** Cuadros dibujados: marca cuándo se usó cada mosaico por última vez. */
+  private cuadro = 0;
+  /** Lo que tarda un mosaico y lo que tarda componer la pantalla, promediados. */
+  private estimadoMosaico = 1;
+  private estimadoComposicion = 0;
+  /** Máximo de mosaicos a guardar; depende del tamaño de la pantalla. */
+  private maximoMosaicos = 0;
+  private readonly pendientes: Pendiente[] = [];
+  /** Esquinas en pantalla de los mosaicos visibles que faltan (x, y seguidos). */
+  private readonly faltan: number[] = [];
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
-    private readonly crearContexto: CrearContexto = contextoNuevo,
+    crearContexto: CrearContexto = contextoNuevo,
+    private readonly reloj: Reloj = () => performance.now(),
   ) {
     this.renderer = new RendererCanvas(ctx);
-    this.grilla = new Grilla(crearContexto);
+    this.grillaPantalla = new Grilla(crearContexto);
+    this.grillaMosaicos = new Grilla(crearContexto, COLUMNAS_GRILLA);
+    this.mosaicos = new Mosaicos((): Mosaico => {
+      const c = crearContexto(false);
+      c.canvas.width = TAM_MOSAICO;
+      c.canvas.height = TAM_MOSAICO;
+      return { ctx: c, r: new RendererCanvas(c), k: NaN, i: 0, j: 0, usado: 0 };
+    });
   }
 
   get opciones(): Readonly<OpcionesCapas> {
@@ -99,18 +157,17 @@ export class Capas {
   set opciones(o: OpcionesCapas) {
     this._opciones = { ...o };
     this.invalidarEstatica();
-    if (!o.cache) this.liberarCache();
+    if (!o.cache) this.mosaicos.liberar();
   }
 
   /** El contenido, los colores o las opciones cambiaron: rehacer la capa estática. */
   invalidarEstatica(): void {
-    this.estadoCache = null;
+    this.mosaicos.vaciar();
   }
 
-  /** Bytes que ocupa el caché (4 por píxel). */
+  /** Bytes que ocupan los mosaicos (4 por píxel). */
   get memoriaCache(): number {
-    const c = this.cacheCtx?.canvas;
-    return c ? c.width * c.height * 4 : 0;
+    return this.mosaicos.memoria;
   }
 
   /**
@@ -119,151 +176,264 @@ export class Capas {
    * `ancho` y `alto` en px CSS; `dpr` es el devicePixelRatio.
    */
   dibujar(camara: Camara, ancho: number, alto: number, dpr: number): MedidaCuadro {
-    const t0 = performance.now();
+    const t0 = this.reloj();
     const { ctx } = this;
     const W = ctx.canvas.width;
     const H = ctx.canvas.height;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Cambiar el tamaño de un canvas reinicia su estado: se repone en cada cuadro.
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const medida: MedidaCuadro = {
+      total: 0,
+      mosaicos: 0,
+      estatica: 0,
+      pendiente: false,
+      dibujados: 0,
+      componentes: this.contenido?.cantidad ?? 0,
+    };
 
-    let estatica = 0;
-    let reconstruida = false;
     if (ancho <= 0 || alto <= 0) {
-      this.pintarFondo(ctx);
+      this.pintarFondo(ctx, W, H);
     } else {
       const k = camara.escala * dpr;
-      // Origen de la capa estática en la grilla y dónde cae en la pantalla
-      // (px físicos, enteros: copiar a medio píxel la desenfocaría).
-      let ox = camara.x;
-      let oy = camara.y;
-      let sx = 0;
-      let sy = 0;
+      // Esquina de la pantalla en px globales del nivel k, entera: los
+      // mosaicos se copian a píxel entero (a medio píxel se desenfocarían).
+      const ox = Math.round(camara.x * k);
+      const oy = Math.round(camara.y * k);
+      const pantalla: Caja = { x: ox / k, y: oy / k, ancho: W / k, alto: H / k };
 
       if (this._opciones.cache) {
-        const mx = Math.round(W * MARGEN_CACHE);
-        const my = Math.round(H * MARGEN_CACHE);
-        const cache = this.asegurarCache(W + 2 * mx, H + 2 * my);
-        const cam = this.camaraCache;
-        sx = Math.round((cam.x - camara.x) * k);
-        sy = Math.round((cam.y - camara.y) * k);
-        const e = this.estadoCache;
-        const vigente =
-          e !== null &&
-          e.k === k &&
-          e.dpr === dpr &&
-          e.ancho === cache.canvas.width &&
-          e.alto === cache.canvas.height &&
-          sx <= 0 &&
-          sy <= 0 &&
-          sx + e.ancho >= W &&
-          sy + e.alto >= H;
-        if (!vigente) {
-          cam.zoom = camara.zoom;
-          cam.x = camara.x - mx / k;
-          cam.y = camara.y - my / k;
-          sx = -mx;
-          sy = -my;
-          const r = (this.cacheRenderer ??= new RendererCanvas(cache));
-          estatica = this.dibujarEstatica(cache, r, cam, cache.canvas.width / dpr, cache.canvas.height / dpr, dpr);
-          reconstruida = true;
-          this.estadoCache = { k, dpr, ancho: cache.canvas.width, alto: cache.canvas.height };
-        }
-        ox = cam.x;
-        oy = cam.y;
-        ctx.drawImage(cache.canvas, sx, sy);
+        this.dibujarConMosaicos(camara, k, ox, oy, W, H, dpr, medida);
       } else {
-        estatica = this.dibujarEstatica(ctx, this.renderer, camara, ancho, alto, dpr);
-        reconstruida = true;
+        const t = this.reloj();
+        this.pintarVacio(ox, oy, W, H, k, dpr);
+        this.dibujarContenido(ctx, this.renderer, k, -ox, -oy, pantalla, dpr);
+        medida.estatica = this.reloj() - t;
       }
 
       if (this.dinamico) {
-        ctx.setTransform(k, 0, 0, k, sx - ox * k, sy - oy * k);
-        this.prepararContexto(ctx);
-        this.renderer.guardar();
-        this.dinamico(this.renderer, { escala: camara.escala, colores: this.colores });
-        this.renderer.restaurar();
+        const r = this.renderer;
+        ctx.setTransform(k, 0, 0, k, -ox, -oy);
+        r.guardar();
+        this.dinamico(r, { escala: camara.escala, colores: this.colores });
+        r.restaurar();
+      }
+
+      if (this.contenido) {
+        medida.dibujados = this._opciones.recorte ? this.contenido.contar(pantalla) : this.contenido.cantidad;
       }
     }
 
-    return {
-      total: performance.now() - t0,
-      reconstruida,
-      estatica,
-      dibujados: this.dibujados,
-      componentes: this.contenido?.cantidad ?? 0,
-    };
+    medida.total = this.reloj() - t0;
+    return medida;
   }
 
-  /** Suelta el caché (la memoria del canvas fuera de pantalla). */
+  /** Suelta la memoria de los mosaicos. */
   liberarCache(): void {
-    if (this.cacheCtx) {
-      this.cacheCtx.canvas.width = 0;
-      this.cacheCtx.canvas.height = 0;
-    }
-    this.cacheCtx = null;
-    this.cacheRenderer = null;
-    this.estadoCache = null;
+    this.mosaicos.liberar();
   }
 
-  /** Crea el caché o le cambia el tamaño (cambiar el tamaño de un canvas lo borra). */
-  private asegurarCache(ancho: number, alto: number): CanvasRenderingContext2D {
-    const ctx = (this.cacheCtx ??= this.crearContexto(false));
-    if (ctx.canvas.width !== ancho || ctx.canvas.height !== alto) {
-      ctx.canvas.width = ancho;
-      ctx.canvas.height = alto;
-      this.estadoCache = null;
-    }
-    return ctx;
-  }
-
-  private pintarFondo(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = this.colores.fondo;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
-
-  /** Cambiar el tamaño de un canvas reinicia su estado: se repone en cada dibujo. */
-  private prepararContexto(ctx: CanvasRenderingContext2D): void {
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-  }
-
-  /** Grilla, origen y contenido. Devuelve el tiempo que tardó, en ms. */
-  private dibujarEstatica(
-    ctx: CanvasRenderingContext2D,
-    r: Renderer,
-    cam: Camara,
-    ancho: number,
-    alto: number,
+  private dibujarConMosaicos(
+    camara: Camara,
+    k: number,
+    ox: number,
+    oy: number,
+    W: number,
+    H: number,
     dpr: number,
+    medida: MedidaCuadro,
+  ): void {
+    this.cuadro++;
+    const mos = this.mosaicos;
+    // Otro nivel de zoom: los mosaicos de antes quedan como viejos.
+    if (k !== mos.k) mos.cambiarNivel(k);
+    const tm = this.reloj();
+    const quedan = this.rehacerMosaicos(ox, oy, W, H, k, dpr, medida);
+    if (medida.mosaicos > 0) medida.estatica = this.reloj() - tm;
+    medida.pendiente = quedan > 0;
+
+    const t = this.reloj();
+    this.componer(camara, k, ox, oy, W, H, dpr);
+    this.estimadoComposicion = 0.7 * this.estimadoComposicion + 0.3 * (this.reloj() - t);
+  }
+
+  /**
+   * Rehace los mosaicos que faltan de la pantalla y su margen, los visibles
+   * primero y del centro hacia afuera, hasta gastar el presupuesto (al menos
+   * uno por cuadro). Devuelve cuántos quedan.
+   */
+  private rehacerMosaicos(
+    ox: number,
+    oy: number,
+    W: number,
+    H: number,
+    k: number,
+    dpr: number,
+    medida: MedidaCuadro,
   ): number {
-    const t0 = performance.now();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.pintarFondo(ctx);
-    this.prepararContexto(ctx);
-    this.grilla.dibujar(ctx, cam, ancho, alto, dpr, this.colores);
+    const T = TAM_MOSAICO;
+    const mos = this.mosaicos;
+    const vi0 = Math.floor(ox / T);
+    const vi1 = Math.floor((ox + W - 1) / T);
+    const vj0 = Math.floor(oy / T);
+    const vj1 = Math.floor((oy + H - 1) / T);
+    const mi0 = Math.floor((ox - MARGEN_PX) / T);
+    const mi1 = Math.floor((ox + W - 1 + MARGEN_PX) / T);
+    const mj0 = Math.floor((oy - MARGEN_PX) / T);
+    const mj1 = Math.floor((oy + H - 1 + MARGEN_PX) / T);
+    this.maximoMosaicos = Math.ceil((mi1 - mi0 + 1) * (mj1 - mj0 + 1) * HOLGURA_MOSAICOS);
 
-    // De acá en adelante, todo se dibuja en unidades de grilla.
-    const k = cam.escala * dpr;
-    ctx.setTransform(k, 0, 0, k, -cam.x * k, -cam.y * k);
+    // Centro de la pantalla, en mosaicos.
+    const ci = (ox + W / 2) / T - 0.5;
+    const cj = (oy + H / 2) / T - 0.5;
+    const pendientes = this.pendientes;
+    pendientes.length = 0;
+    for (let j = mj0; j <= mj1; j++) {
+      for (let i = mi0; i <= mi1; i++) {
+        const m = mos.actuales.get(clave(i, j));
+        if (m) {
+          m.usado = this.cuadro;
+          continue;
+        }
+        const fuera = i < vi0 || i > vi1 || j < vj0 || j > vj1;
+        pendientes.push({ i, j, prioridad: (fuera ? 1e6 : 0) + (i - ci) ** 2 + (j - cj) ** 2 });
+      }
+    }
+    if (pendientes.length === 0) return 0;
+    pendientes.sort((a, b) => a.prioridad - b.prioridad);
 
-    // Cruz chica en (0, 0) para orientarse.
-    r.guardar();
-    r.estilo({ trazo: this.colores.origen, grosor: 1.5 / cam.escala });
-    r.linea(-0.5, 0, 0.5, 0);
-    r.linea(0, -0.5, 0, 0.5);
-    r.restaurar();
+    const presupuesto = Math.min(PRESUPUESTO_MS, OBJETIVO_CUADRO_MS - this.estimadoComposicion);
+    const t0 = this.reloj();
+    let hechos = 0;
+    for (const p of pendientes) {
+      if (hechos > 0 && this.reloj() - t0 + this.estimadoMosaico > presupuesto) break;
+      const t = this.reloj();
+      this.dibujarMosaico(p.i, p.j, k, dpr);
+      this.estimadoMosaico = 0.7 * this.estimadoMosaico + 0.3 * (this.reloj() - t);
+      hechos++;
+    }
+    medida.mosaicos = hechos;
+    return pendientes.length - hechos;
+  }
 
-    this.dibujados = 0;
-    if (this.contenido) {
-      const o = this._opciones;
+  private dibujarMosaico(i: number, j: number, k: number, dpr: number): void {
+    const T = TAM_MOSAICO;
+    const m = this.mosaicos.tomar(i, j, this.cuadro, this.maximoMosaicos);
+    const c = m.ctx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    this.pintarFondo(c, T, T);
+    this.grillaMosaicos.dibujar(c, i * T, j * T, T, T, k, dpr, this.colores);
+    this.dibujarContenido(c, m.r, k, -i * T, -j * T, { x: (i * T) / k, y: (j * T) / k, ancho: T / k, alto: T / k }, dpr);
+  }
+
+  /**
+   * Origen y contenido en `c` (con su renderer `r`), con la transformación
+   * (k, 0, 0, k, tx, ty): unidades de grilla a px. `area` es la parte de la
+   * grilla que cubre.
+   */
+  private dibujarContenido(
+    c: CanvasRenderingContext2D,
+    r: RendererCanvas,
+    k: number,
+    tx: number,
+    ty: number,
+    area: Caja,
+    dpr: number,
+  ): void {
+    const escala = k / dpr;
+    const o = this._opciones;
+    c.setTransform(k, 0, 0, k, tx, ty);
+
+    // Cruz chica en (0, 0) para orientarse (solo en el área que la toca).
+    if (seTocan(area, CAJA_CRUZ)) {
       r.guardar();
-      this.dibujados = this.contenido.dibujar(r, {
-        escala: cam.escala,
+      r.estilo({ trazo: this.colores.origen, grosor: 1.5 / escala });
+      r.linea(-0.5, 0, 0.5, 0);
+      r.linea(0, -0.5, 0, 0.5);
+      r.restaurar();
+    }
+
+    if (this.contenido) {
+      r.guardar();
+      this.contenido.dibujar(r, {
+        escala,
         colores: this.colores,
-        visible: o.recorte ? cam.visible(ancho, alto) : TODO,
-        detalle: o.nivelDetalle ? nivelDetalle(cam.escala) : { ...DETALLE_COMPLETO },
+        visible: o.recorte ? area : TODO,
+        detalle: o.nivelDetalle ? nivelDetalle(escala) : { ...DETALLE_COMPLETO },
       });
       r.restaurar();
     }
-    return performance.now() - t0;
+  }
+
+  /**
+   * Copia los mosaicos a la pantalla. Los del nivel de la cámara van a píxel
+   * entero; donde faltan, mosaico vacío con la grilla y encima lo que haya de
+   * otros niveles, escalado.
+   */
+  private componer(camara: Camara, k: number, ox: number, oy: number, W: number, H: number, dpr: number): void {
+    const T = TAM_MOSAICO;
+    const { ctx } = this;
+    const mos = this.mosaicos;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const faltan = this.faltan;
+    faltan.length = 0;
+    const i1 = Math.floor((ox + W - 1) / T);
+    const j1 = Math.floor((oy + H - 1) / T);
+    for (let j = Math.floor(oy / T); j <= j1; j++) {
+      for (let i = Math.floor(ox / T); i <= i1; i++) {
+        const m = mos.actuales.get(clave(i, j));
+        if (m) {
+          ctx.drawImage(m.ctx.canvas, i * T - ox, j * T - oy);
+          m.usado = this.cuadro;
+        } else {
+          faltan.push(i * T - ox, j * T - oy);
+        }
+      }
+    }
+
+    if (faltan.length === 0) {
+      // El nivel actual ya cubre la pantalla: los viejos no hacen más falta.
+      if (mos.viejos.length) mos.soltarViejos();
+      return;
+    }
+    ctx.save();
+    ctx.beginPath();
+    for (let n = 0; n < faltan.length; n += 2) ctx.rect(faltan[n]!, faltan[n + 1]!, T, T);
+    ctx.clip();
+    this.pintarVacio(ox, oy, W, H, k, dpr);
+    this.dibujarEscalados(mos.viejos, camara, k, W, H);
+    ctx.restore();
+  }
+
+  /** Copia mosaicos de otro nivel a la escala de la cámara (los que tocan la pantalla). */
+  private dibujarEscalados(lista: Iterable<Mosaico>, camara: Camara, k: number, W: number, H: number): void {
+    const T = TAM_MOSAICO;
+    const { ctx } = this;
+    const bx = camara.x * k;
+    const by = camara.y * k;
+    for (const m of lista) {
+      const f = (T * k) / m.k;
+      // Bordes redondeados a píxel entero: mosaicos vecinos no dejan costuras.
+      const x0 = Math.round(m.i * f - bx);
+      const x1 = Math.round((m.i + 1) * f - bx);
+      const y0 = Math.round(m.j * f - by);
+      const y1 = Math.round((m.j + 1) * f - by);
+      if (x1 <= Math.max(0, x0) || y1 <= Math.max(0, y0) || x0 >= W || y0 >= H) continue;
+      ctx.drawImage(m.ctx.canvas, x0, y0, x1 - x0, y1 - y0);
+      m.usado = this.cuadro;
+    }
+  }
+
+  /** Fondo y grilla de toda la pantalla: lo que se ve donde todavía no hay mosaico. */
+  private pintarVacio(ox: number, oy: number, W: number, H: number, k: number, dpr: number): void {
+    this.pintarFondo(this.ctx, W, H);
+    this.grillaPantalla.dibujar(this.ctx, ox, oy, W, H, k, dpr, this.colores);
+  }
+
+  private pintarFondo(ctx: CanvasRenderingContext2D, ancho: number, alto: number): void {
+    ctx.fillStyle = this.colores.fondo;
+    ctx.fillRect(0, 0, ancho, alto);
   }
 }

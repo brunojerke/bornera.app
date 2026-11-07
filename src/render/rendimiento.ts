@@ -1,19 +1,21 @@
 // Medidor de rendimiento para el contador de F3: cuadros por segundo y tiempo
-// de dibujado. Como no hay bucle constante, los FPS son los cuadros que se
-// dibujaron en el último segundo: con el programa quieto, 0.
+// de dibujado. Como no hay bucle constante, los FPS son los
+// cuadros que se dibujaron en el último segundo: con el programa quieto, 0.
 // Sin dependencias del DOM: el tiempo lo pasa quien llama.
 
 /** Ventana de tiempo que se promedia, en ms. */
 export const VENTANA_MS = 1000;
 
 export interface MedidaCuadro {
-  /** Tiempo de CPU del cuadro completo, en ms (incluye la capa estática si se rehízo). */
+  /** Tiempo de CPU del cuadro completo, en ms (incluye los mosaicos que se rehicieron). */
   total: number;
-  /** Se rehízo la capa estática en este cuadro (si no, se reusó la del caché). */
-  reconstruida: boolean;
-  /** Tiempo de rehacer la capa estática, en ms; 0 si se reusó. */
+  /** Mosaicos de la capa estática que se rehicieron en este cuadro (0: solo se copiaron). */
+  mosaicos: number;
+  /** Tiempo de rehacer esos mosaicos (o la capa estática entera, sin caché), en ms. */
   estatica: number;
-  /** Componentes dibujados en la capa estática la última vez que se rehízo. */
+  /** Quedan mosaicos por rehacer: hace falta otro cuadro enseguida. */
+  pendiente: boolean;
+  /** Componentes que tocan la pantalla. */
   dibujados: number;
   /** Componentes en la escena. */
   componentes: number;
@@ -27,10 +29,10 @@ export interface Resumen {
   /** Promedio y máximo del último segundo, en ms (0 si no hubo cuadros). */
   promedio: number;
   maximo: number;
-  /** Último tiempo de rehacer la capa estática, en ms. */
+  /** Último tiempo de rehacer mosaicos (o la capa estática entera) en un cuadro, en ms. */
   estatica: number;
-  /** Cuadros del último segundo que rehicieron la capa estática. */
-  reconstrucciones: number;
+  /** Mosaicos rehechos en el último segundo. */
+  mosaicos: number;
   dibujados: number;
   componentes: number;
 }
@@ -40,16 +42,25 @@ interface Registro {
   medida: MedidaCuadro;
 }
 
+const MEDIDA_VACIA: MedidaCuadro = {
+  total: 0,
+  mosaicos: 0,
+  estatica: 0,
+  pendiente: false,
+  dibujados: 0,
+  componentes: 0,
+};
+
 export class MedidorRendimiento {
   private registros: Registro[] = [];
-  private ultima: MedidaCuadro = { total: 0, reconstruida: false, estatica: 0, dibujados: 0, componentes: 0 };
+  private ultima: MedidaCuadro = MEDIDA_VACIA;
   private ultimaEstatica = 0;
 
   /** Anota un cuadro dibujado en el instante `t` (ms). */
   registrar(t: number, medida: MedidaCuadro): void {
     this.registros.push({ t, medida });
     this.ultima = medida;
-    if (medida.reconstruida) this.ultimaEstatica = medida.estatica;
+    if (medida.estatica > 0) this.ultimaEstatica = medida.estatica;
     this.descartarViejos(t);
   }
 
@@ -59,11 +70,11 @@ export class MedidorRendimiento {
     const r = this.registros;
     let suma = 0;
     let maximo = 0;
-    let reconstrucciones = 0;
+    let mosaicos = 0;
     for (const { medida } of r) {
       suma += medida.total;
       if (medida.total > maximo) maximo = medida.total;
-      if (medida.reconstruida) reconstrucciones++;
+      mosaicos += medida.mosaicos;
     }
     return {
       fps: r.length,
@@ -71,16 +82,20 @@ export class MedidorRendimiento {
       promedio: r.length ? suma / r.length : 0,
       maximo,
       estatica: this.ultimaEstatica,
-      reconstrucciones,
+      mosaicos,
       dibujados: this.ultima.dibujados,
       componentes: this.ultima.componentes,
     };
   }
 
   private descartarViejos(t: number): void {
-    const limite = t - VENTANA_MS;
-    let i = 0;
-    while (i < this.registros.length && this.registros[i]!.t <= limite) i++;
-    if (i > 0) this.registros.splice(0, i);
+    descartarHasta(this.registros, (x) => x.t <= t - VENTANA_MS);
   }
+}
+
+/** Saca del principio de la lista (ordenada por tiempo) los que cumplen `viejo`. */
+function descartarHasta<T>(lista: T[], viejo: (x: T) => boolean): void {
+  let i = 0;
+  while (i < lista.length && viejo(lista[i]!)) i++;
+  if (i > 0) lista.splice(0, i);
 }

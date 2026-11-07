@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { MedidorRendimiento, VENTANA_MS, type MedidaCuadro } from "./rendimiento";
 
-function medida(total: number, reconstruida = false): MedidaCuadro {
-  return { total, reconstruida, estatica: reconstruida ? total : 0, dibujados: 10, componentes: 100 };
+function medida(total: number, mosaicos = 0): MedidaCuadro {
+  return {
+    total,
+    mosaicos,
+    estatica: mosaicos ? total : 0,
+    pendiente: false,
+    dibujados: 10,
+    componentes: 100,
+  };
 }
 
 describe("MedidorRendimiento", () => {
@@ -22,16 +29,16 @@ describe("MedidorRendimiento", () => {
     expect(m.resumen(5000).ultimo).toBe(3);
   });
 
-  it("promedia, toma el máximo y cuenta las reconstrucciones de la capa estática", () => {
+  it("promedia, toma el máximo y suma los mosaicos rehechos", () => {
     const m = new MedidorRendimiento();
-    m.registrar(0, medida(10, true));
+    m.registrar(0, medida(10, 4));
     m.registrar(16, medida(2));
-    m.registrar(32, medida(3));
+    m.registrar(32, medida(3, 1));
     const r = m.resumen(40);
     expect(r.promedio).toBe(5);
     expect(r.maximo).toBe(10);
-    expect(r.reconstrucciones).toBe(1);
-    expect(r.estatica).toBe(10);
+    expect(r.mosaicos).toBe(5);
+    expect(r.estatica).toBe(3); // el último cuadro que rehízo mosaicos
     expect(r.dibujados).toBe(10);
     expect(r.componentes).toBe(100);
   });

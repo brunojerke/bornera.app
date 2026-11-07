@@ -35,6 +35,8 @@ export interface Contenido {
   readonly cantidad: number;
   /** Dibuja lo que toca `info.visible`. Devuelve cuántos componentes dibujó. */
   dibujar(r: Renderer, info: InfoDibujo): number;
+  /** Cuántos componentes tocan `vista` (para el contador de rendimiento). */
+  contar(vista: Caja): number;
 }
 
 /** IEC 60617 pide líneas de 0,25 mm (0,1 unidad), pero en pantalla nunca menos de 1 px. */
@@ -96,6 +98,10 @@ export class Escena implements Contenido {
       }
     }
     return n;
+  }
+
+  contar(vista: Caja): number {
+    return this.recortar(vista);
   }
 
   /** Índices de los componentes que tocan `vista` (para tests y herramientas). */

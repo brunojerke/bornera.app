@@ -6,7 +6,7 @@
 
 import { CANTIDADES_BANCO, crearEscenaBanco } from "../../src/render/banco";
 import { Camara } from "../../src/render/camara";
-import { Capas, MARGEN_CACHE, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, type OpcionesCapas } from "../../src/render/capas";
+import { Capas, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, type OpcionesCapas } from "../../src/render/capas";
 import type { Escena } from "../../src/render/escena";
 
 /** Pantalla típica de netbook. */
@@ -82,6 +82,9 @@ function contexto(canvas = document.createElement("canvas")): CanvasRenderingCon
   return ctx;
 }
 
+/** Lo máximo que ocupó el caché de la capa estática, en MB. */
+let cacheMB = 0;
+
 function percentil(ordenados: number[], p: number): number {
   return ordenados[Math.min(ordenados.length - 1, Math.floor(p * ordenados.length))]!;
 }
@@ -112,6 +115,7 @@ function medir(
     if (i >= CALENTAMIENTO) tiempos.push(t);
     dibujados = m.dibujados;
   }
+  cacheMB = Math.max(cacheMB, capas.memoriaCache / 2 ** 20);
   capas.liberarCache();
   canvas.width = canvas.height = 0;
   tiempos.sort((a, b) => a - b);
@@ -143,9 +147,6 @@ async function correr(): Promise<void> {
     memoria: [],
   };
 
-  // Mismo cálculo que Capas: pantalla más el margen hacia cada lado.
-  const lado = (px: number) => px + 2 * Math.round(px * MARGEN_CACHE);
-  const cacheMB = (lado(ANCHO * DPR) * lado(ALTO * DPR) * 4) / 2 ** 20;
 
   for (const n of CANTIDADES_BANCO) {
     const escena = crearEscenaBanco(n);

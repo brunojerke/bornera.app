@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Primitiva } from "../core/symbols";
 import { RendererCanvas } from "./canvas2d";
-import { pasoGrilla, PASOS_POR_MAYOR, SEPARACION_MINIMA } from "./grilla";
+import { contextoFalso as contextoConCanvas, fabricaFalsa, llamadasA, Path2DFalso } from "./falsos";
+import { Grilla, pasoGrilla, PASOS_POR_MAYOR, SEPARACION_MINIMA } from "./grilla";
 import { dibujarPrimitiva, type Renderer } from "./renderer";
 
 /** Renderer falso que anota cada llamada. */
@@ -68,6 +69,58 @@ describe("RendererCanvas", () => {
     expect(llamadas).toContainEqual(["scale", 0.005, 0.005]);
     expect(llamadas).toContainEqual(["=textAlign", "right"]);
     expect(llamadas).toContainEqual(["fillText", "A1", 0, 0]);
+  });
+});
+
+describe("Grilla", () => {
+  beforeEach(() => vi.stubGlobal("Path2D", Path2DFalso));
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Puntos que dibuja un área, en px globales: [x, y, tamaño]. */
+  function puntos(g: Grilla, fabrica: ReturnType<typeof fabricaFalsa>, x0: number, y0: number, ancho: number, alto: number, k: number) {
+    const destino = contextoConCanvas(ancho, alto);
+    g.dibujar(destino.ctx, x0, y0, ancho, alto, k, 1, { punto: "#ccc", mayor: "#999" });
+    // Cada fila es una copia de una tira; cada tira, un Path2D de cuadraditos.
+    const tiras = new Map<unknown, [number, number][]>();
+    for (const t of fabrica.transparentes) {
+      const rects = llamadasA(t.llamadas, "fill").flatMap(([p]) =>
+        (p as Path2DFalso).llamadas.map((l) => [l[1] as number, l[4] as number] as [number, number]),
+      );
+      tiras.set(t.canvas, rects);
+    }
+    const resultado = new Set<string>();
+    for (const [tira, , y] of llamadasA(destino.llamadas, "drawImage") as [unknown, number, number][]) {
+      for (const [x, tam] of tiras.get(tira) ?? []) {
+        // Solo lo que cae dentro del área.
+        if (x + tam > 0 && x < ancho && y + 2 > 0 && y < alto) resultado.add(`${x + x0},${y + y0},${tam}`);
+      }
+    }
+    return resultado;
+  }
+
+  it("dos áreas vecinas ponen cada punto donde lo pondría una sola área grande", () => {
+    const k = 13.7; // px por unidad: los puntos no caen en píxeles enteros
+    const f1 = fabricaFalsa();
+    const todo = puntos(new Grilla(f1.crear), f1, -300, 40, 512, 256, k);
+    const f2 = fabricaFalsa();
+    const g = new Grilla(f2.crear, 4);
+    const izquierda = puntos(g, f2, -300, 40, 256, 256, k);
+    const derecha = puntos(g, f2, -44, 40, 256, 256, k);
+    expect(new Set([...izquierda, ...derecha])).toEqual(todo);
+    expect(todo.size).toBeGreaterThan(100);
+  });
+
+  it("arma las tiras una vez por columna y las reusa en las áreas de abajo", () => {
+    const f = fabricaFalsa();
+    const g = new Grilla(f.crear, 4);
+    const colores = { punto: "#ccc", mayor: "#999" };
+    const destino = contextoConCanvas(256, 256);
+    g.dibujar(destino.ctx, 0, 0, 256, 256, 20, 1, colores);
+    g.dibujar(destino.ctx, 0, 256, 256, 256, 20, 1, colores);
+    g.dibujar(destino.ctx, 256, 0, 256, 256, 20, 1, colores);
+    expect(f.transparentes).toHaveLength(4); // dos tiras por columna
+    const rellenos = f.transparentes.flatMap((t) => llamadasA(t.llamadas, "fill"));
+    expect(rellenos).toHaveLength(2 * 3); // menor: 1 relleno, mayor: 2; por columna
   });
 });
 

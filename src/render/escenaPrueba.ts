@@ -57,4 +57,6 @@ export const ESCENA_PRUEBA: Contenido = {
     }
     return simbolos.dibujar(r, info);
   },
+
+  contar: (vista: Caja) => simbolos.contar(vista),
 };

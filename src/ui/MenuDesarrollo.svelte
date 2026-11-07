@@ -28,7 +28,7 @@
   ];
 
   const OPTIMIZACIONES: { clave: keyof OpcionesCapas; texto: string }[] = [
-    { clave: "cache", texto: "Caché de la capa estática" },
+    { clave: "cache", texto: "Capa estática en mosaicos" },
     { clave: "recorte", texto: "Recorte por vista" },
     { clave: "nivelDetalle", texto: "Nivel de detalle" },
   ];

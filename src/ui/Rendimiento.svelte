@@ -27,7 +27,7 @@
   <span>Prom. / máx.</span>
   <b>{ms.format(resumen.promedio)} / {ms.format(resumen.maximo)} ms</b>
   <span>Capa estática</span>
-  <b>{ms.format(resumen.estatica)} ms · {resumen.reconstrucciones}/s</b>
+  <b>{ms.format(resumen.estatica)} ms · {resumen.mosaicos} mosaicos/s</b>
   <span>Dibujados</span>
   <b>{entero.format(resumen.dibujados)} de {entero.format(resumen.componentes)}</b>
   <span>Detalle</span>

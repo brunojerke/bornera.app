@@ -3,6 +3,9 @@
 // - Redibuja solo cuando se pide con `invalidar()`, en el próximo
 //   requestAnimationFrame; varios pedidos en el mismo cuadro se juntan en uno.
 //   Sin cambios no hay ningún cuadro pendiente: CPU en cero.
+// - Además, las capas pueden pedir otro cuadro si quedan mosaicos por rehacer
+//   (se rehacen de a poco). Es trabajo con fin: cuando todo está al día, no se
+//   pide nada más.
 
 import { Camara, type Caja } from "./camara";
 import { Capas, type OpcionesCapas } from "./capas";
@@ -99,8 +102,7 @@ export class Vista {
   }
 
   destruir(): void {
-    if (this.cuadroPendiente) cancelAnimationFrame(this.cuadroPendiente);
-    this.cuadroPendiente = 0;
+    this.cancelarPendiente();
     for (const limpiar of this.limpiezas) limpiar();
     this.capas.liberarCache();
   }
@@ -108,6 +110,7 @@ export class Vista {
   private dibujar(): void {
     const medida = this.capas.dibujar(this.camara, this.ancho, this.alto, this.dpr);
     this.alDibujar?.(medida);
+    if (medida.pendiente) this.invalidar();
   }
 
   private ajustar(anchoFisico: number, altoFisico: number, ancho: number, alto: number): void {
