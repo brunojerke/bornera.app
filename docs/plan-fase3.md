@@ -47,6 +47,7 @@ Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fas
   - 2000 cajas al azar: `enCaja` y `enPunto` dan lo mismo que la búsqueda lineal.
   - `actualizar` mueve la caja y la consulta en la posición vieja ya no lo devuelve.
   - Banco: escenario nuevo "editar" (mover 1 símbolo 20 veces en 2000). Cuadro máximo <16 ms y como mucho 4 mosaicos por cambio. Los escenarios existentes no empeoran más de 10 %.
+- **Hecho (2026-11-07):** el índice quedó en `src/render/indiceEspacial.ts` (la escena lo necesita y `render` no puede importar de `editor`). El banco usa `EscenaEditable` en todos los escenarios. Contra 0.1.2, por cuadro igual y 0 cuadros lentos. Por gesto, el ruido de la PC (±45 %) no deja confirmar el 10 %: queda para la netbook con F3.
 
 ---
 

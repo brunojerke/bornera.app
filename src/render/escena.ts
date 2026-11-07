@@ -109,26 +109,38 @@ export class Escena implements Contenido {
     return Array.from(this.visibles.subarray(0, this.recortar(vista)));
   }
 
-  dibujar(r: Renderer, { escala, colores, visible, detalle }: InfoDibujo): number {
-    const n = this.recortar(visible);
-    const g = grosorLinea(escala);
-    const { componentes, visibles } = this;
-
-    // Primero todos los símbolos, después todas las marcas: así el estilo
-    // cambia dos veces por cuadro y no dos veces por componente.
-    r.estilo({ trazo: colores.simbolo, relleno: colores.simbolo, grosor: g });
-    for (let i = 0; i < n; i++) {
-      const c = componentes[visibles[i]!]!;
-      dibujarSimbolo(r, c.def, c, { etiqueta: c.etiqueta, textos: detalle.textos });
-    }
-
-    if (this.marcarBornes && detalle.bornes) {
-      r.estilo({ trazo: colores.borne, relleno: colores.borne, grosor: g });
-      for (let i = 0; i < n; i++) {
-        const c = componentes[visibles[i]!]!;
-        dibujarMarcasBornes(r, c.def, c);
-      }
-    }
+  dibujar(r: Renderer, info: InfoDibujo): number {
+    const n = this.recortar(info.visible);
+    dibujarComponentes(r, info, this.componentes, this.visibles, n, this.marcarBornes);
     return n;
+  }
+}
+
+/**
+ * Dibuja los componentes `componentes[indices[0..n)]`. Primero todos los
+ * símbolos, después todas las marcas: así el estilo cambia dos veces por
+ * cuadro y no dos veces por componente.
+ */
+export function dibujarComponentes(
+  r: Renderer,
+  { escala, colores, detalle }: InfoDibujo,
+  componentes: readonly (ComponenteEscena | null)[],
+  indices: ArrayLike<number>,
+  n: number,
+  marcarBornes: boolean,
+): void {
+  const g = grosorLinea(escala);
+  r.estilo({ trazo: colores.simbolo, relleno: colores.simbolo, grosor: g });
+  for (let i = 0; i < n; i++) {
+    const c = componentes[indices[i]!]!;
+    dibujarSimbolo(r, c.def, c, { etiqueta: c.etiqueta, textos: detalle.textos });
+  }
+
+  if (marcarBornes && detalle.bornes) {
+    r.estilo({ trazo: colores.borne, relleno: colores.borne, grosor: g });
+    for (let i = 0; i < n; i++) {
+      const c = componentes[indices[i]!]!;
+      dibujarMarcasBornes(r, c.def, c);
+    }
   }
 }

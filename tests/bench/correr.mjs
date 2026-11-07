@@ -95,12 +95,13 @@ function informe(r, sinGpu) {
     "Tiempo por cuadro en ms, incluye rasterizar. Lentos = cuadros de más de 16 ms (⚠ si hay alguno).",
   );
   lineas.push("Por gesto = suma de todos los cuadros de un gesto, hasta quedar nítido.");
+  lineas.push("Mosaicos máx. = mosaicos rehechos en un solo cuadro, como máximo.");
 
   const modos = [...new Set(r.mediciones.map((m) => m.modo))];
   for (const modo of modos) {
     lineas.push("");
     if (modos.length > 1) lineas.push(`── ${modo} ──`);
-    const filas = [["Símbolos", "Escenario", "Cuadros", "Mediana", "p95", "Máx.", "Lentos", "Por gesto"]];
+    const filas = [["Símbolos", "Escenario", "Cuadros", "Mediana", "p95", "Máx.", "Lentos", "Por gesto", "Mosaicos máx."]];
     let anterior = null;
     for (const m of r.mediciones.filter((x) => x.modo === modo)) {
       filas.push([
@@ -112,6 +113,7 @@ function informe(r, sinGpu) {
         ms.format(m.maximo),
         `${m.lentos}${m.lentos > 0 ? " ⚠" : "  "}`,
         ms.format(m.porGesto),
+        m.mosaicosMax === undefined ? "–" : String(m.mosaicosMax),
       ]);
       anterior = m.componentes;
     }

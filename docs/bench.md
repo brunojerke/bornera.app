@@ -17,6 +17,53 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 
+## Escena editable con índice espacial (fase 3, T2) — 2026-11-07
+
+Cambios:
+
+- **Escena editable** (`escenaEditable.ts`): componentes que se agregan, se quitan y se mueven por id; cada cambio devuelve la caja afectada para `Capas.invalidarRegion` (T1). El banco la usa en todos los escenarios: mide lo que va a dibujar el editor.
+- **Índice espacial** (`indiceEspacial.ts`): grilla de hash de celdas de 16 unidades para el recorte (y, más adelante, para elegir bajo el mouse). Si la consulta abarca más celdas que elementos, barre todo.
+- **Escenarios nuevos**: *Editar al 100 %* y *Editar al 31 %*: el componente del centro se corre una unidad, ida y vuelta, 20 cuadros seguidos, invalidando solo su región. Columna nueva **Mosaicos máx.**: mosaicos rehechos en un solo cuadro.
+
+Misma PC y navegador que antes. **0.1.2** = tag `v0.1.2` (con su propio banco, sin los escenarios nuevos); **T2** = este cambio. Corridas intercaladas, **mediana de 5**.
+
+| Símbolos | Escenario | 0.1.2: cuadro | Lentos | Por gesto | T2: cuadro | Lentos | Por gesto | Δ por gesto | Mosaicos máx. |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100 | Rehacer al 100 % | 8,4 / 9,0 / 9,0 | 0 | 11,7 | 8,6 / 9,3 / 9,8 | 0 | 12,9 | +10 % | 32 |
+|  | Rehacer al 31 % | 8,6 / 9,2 / 9,4 | 0 | 12,0 | 8,6 / 9,2 / 9,7 | 0 | 10,9 | −9 % | 40 |
+|  | Encuadrar (F) | 6,3 / 8,4 / 8,4 | 0 | 9,6 | 4,2 / 9,3 / 9,3 | 0 | 9,7 | +1 % | 35 |
+|  | Zoom con la rueda | 2,8 / 8,3 / 9,4 | 0 | 29,3 | 3,0 / 8,4 / 9,3 | 0 | 31,9 | +9 % | 40 |
+|  | Desplazar al 100 % | 0,3 / 0,4 / 0,5 | 0 | 6,7 | 0,3 / 0,5 / 0,5 | 0 | 8,2 | +22 % | 0 |
+|  | Arrastre al 31 % | 0,3 / 0,7 / 1,1 | 0 | 38,2 | 0,3 / 0,7 / 1,4 | 0 | 35,0 | −8 % | 7 |
+|  | Editar al 100 % | – | – | – | 0,9 / 1,4 / 1,8 | 0 | 18,5 | nuevo | 4 |
+|  | Editar al 31 % | – | – | – | 2,0 / 3,2 / 3,7 | 0 | 42,6 | nuevo | 4 |
+| 500 | Rehacer al 100 % | 8,5 / 8,9 / 9,0 | 0 | 11,6 | 8,5 / 9,0 / 9,2 | 0 | 12,3 | +6 % | 32 |
+|  | Rehacer al 31 % | 8,6 / 9,1 / 9,3 | 0 | 18,9 | 8,6 / 9,4 / 9,8 | 0 | 21,5 | +14 % | 20 |
+|  | Encuadrar (F) | 5,3 / 6,8 / 6,8 | 0 | 7,2 | 5,5 / 9,7 / 9,7 | 0 | 9,0 | +25 % | 35 |
+|  | Zoom con la rueda | 3,3 / 9,3 / 10,0 | 0 | 53,6 | 3,0 / 9,1 / 9,6 | 0 | 40,5 | −24 % | 23 |
+|  | Desplazar al 100 % | 0,4 / 0,7 / 0,9 | 0 | 9,5 | 0,5 / 1,2 / 1,6 | 0 | 13,8 | +45 % | 0 |
+|  | Arrastre al 31 % | 0,3 / 0,6 / 1,2 | 0 | 34,3 | 0,4 / 0,9 / 1,5 | 0 | 44,4 | +29 % | 7 |
+|  | Editar al 100 % | – | – | – | 0,7 / 1,0 / 1,7 | 0 | 13,5 | nuevo | 1 |
+|  | Editar al 31 % | – | – | – | 0,9 / 1,5 / 2,2 | 0 | 17,9 | nuevo | 1 |
+| 2000 | Rehacer al 100 % | 8,5 / 8,9 / 8,9 | 0 | 12,5 | 8,5 / 9,2 / 9,3 | 0 | 15,7 | +26 % | 30 |
+|  | Rehacer al 31 % | 8,5 / 9,0 / 9,2 | 0 | 32,3 | 8,4 / 9,3 / 9,7 | 0 | 30,3 | −6 % | 16 |
+|  | Encuadrar (F) | 5,4 / 9,4 / 9,6 | 0 | 16,0 | 5,3 / 9,0 / 9,3 | 0 | 15,2 | −5 % | 28 |
+|  | Zoom con la rueda | 3,5 / 9,2 / 10,1 | 0 | 56,2 | 3,4 / 9,1 / 9,7 | 0 | 49,6 | −12 % | 14 |
+|  | Desplazar al 100 % | 0,3 / 0,6 / 1,1 | 0 | 7,5 | 0,2 / 0,6 / 0,7 | 0 | 7,2 | −4 % | 0 |
+|  | Arrastre al 31 % | 0,3 / 2,4 / 4,8 | 0 | 44,6 | 0,3 / 2,8 / 6,0 | 0 | 55,5 | +25 % | 8 |
+|  | Editar al 100 % | – | – | – | 0,4 / 0,7 / 1,3 | 0 | 8,5 | nuevo | 1 |
+|  | Editar al 31 % | – | – | – | 0,7 / 1,5 / 2,2 | 0 | 18,6 | nuevo | 1 |
+
+Memoria: heap JS con la escena armada 1,6 · 2,4 · 2,8 MB (antes 1,5 · 2,1 · 2,3). Caché, máximo 13,5 MB (igual).
+
+Observaciones:
+
+- **Editar**: como mucho 4 mosaicos por cambio (con 100 símbolos los componentes del centro caen en una esquina de mosaicos; con 500 y 2000, 1), cuadro máximo 3,7 ms, ningún cuadro lento. Mover un símbolo cuesta 0,4–2 ms por cuadro, contra 8–9 ms de rehacer la vista.
+- **Ningún cuadro lento** en ningún escenario; mediana y p95 por cuadro iguales a 0.1.2 (±0,5 ms).
+- **Por gesto**, las diferencias van de −24 % a +45 % en las dos direcciones, y dentro de una misma celda las 5 corridas varían hasta 3 veces (arrastre con 2000: 0.1.2 42–80 ms, T2 39–146 ms). *Desplazar al 100 %* con 500 da +45 % y no dibuja ningún mosaico: lo único que cambió en ese camino es contar los visibles, que ahora es más rápido. Con este ruido, el banco no puede confirmar ni descartar un 10 %. Microbanco en Node: el recorte por índice tarda 0,3–1 µs por mosaico contra 5–8 µs barriendo, y contar la pantalla 5 µs en los dos.
+- Primer intento: contar la pantalla en cada cuadro armaba y **ordenaba** la lista de visibles (cientos al 31 %). Se cambió por un conteo sin lista; el arrastre con 2000 había dado el doble en 3 de 3 corridas.
+- **Pendiente:** confirmar en la netbook con F3 (Ctrl+Shift+B), donde el ruido es menor que el efecto que se busca.
+
 ## Mosaicos, zoom diferido y caché de textos — 2026-11-07
 
 Motivo: medición en la netbook (WebKitGTK, versión compilada, escena de 2000):

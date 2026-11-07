@@ -12,10 +12,10 @@
 // si no, solo se mediría cuánto tarda en anotar las órdenes de dibujo, no en
 // dibujarlas. (Los mosaicos ya los rasteriza Capas al terminar cada uno.)
 
-import { CANTIDADES_BANCO, crearEscenaBanco } from "../../src/render/banco";
+import { CANTIDADES_BANCO, crearEscenaBanco, idBanco } from "../../src/render/banco";
 import { Camara } from "../../src/render/camara";
 import { Capas, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, type OpcionesCapas } from "../../src/render/capas";
-import type { Escena } from "../../src/render/escena";
+import type { EscenaEditable as Escena } from "../../src/render/escenaEditable";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 
 /** Pantalla típica de netbook. */
@@ -51,6 +51,8 @@ export interface Medicion {
   porGesto: number;
   /** Bytes máximos de caché durante el escenario. */
   cache: number;
+  /** Mosaicos rehechos en un solo cuadro, como máximo. */
+  mosaicosMax: number;
 }
 
 export interface Resultado {
@@ -88,6 +90,38 @@ function alBordeIzquierdo(c: Camara, e: Escena, zoom: number): void {
   const k = e.caja!;
   c.zoom = zoom;
   c.centrar(k.x + ANCHO / 2 / c.escala, k.y + k.alto / 2, ANCHO, ALTO);
+}
+
+/** Componente más cercano al centro de la escena: el que se edita (uno por escena). */
+const editados = new WeakMap<Escena, string>();
+function editado(e: Escena): string {
+  let id = editados.get(e);
+  if (id === undefined) {
+    const k = e.caja!;
+    const cx = k.x + k.ancho / 2;
+    const cy = k.y + k.alto / 2;
+    let mejor = Infinity;
+    for (let i = 0; i < e.cantidad; i++) {
+      const c = e.obtener(idBanco(i))!;
+      const d = (c.x - cx) ** 2 + (c.y - cy) ** 2;
+      if (d < mejor) {
+        mejor = d;
+        id = idBanco(i);
+      }
+    }
+    editados.set(e, id!);
+  }
+  return id!;
+}
+
+/**
+ * Edición: el componente del centro se corre una unidad, ida y vuelta, en
+ * cada cuadro del gesto. Solo se invalida su región, como en el editor.
+ */
+function editar(_: Camara, capas: Capas, e: Escena, i: number): void {
+  const id = editado(e);
+  const c = e.obtener(id)!;
+  capas.invalidarRegion(e.actualizar(id, { ...c, x: c.x + (i % 2 ? -1 : 1) }));
 }
 
 const ESCENARIOS: Escenario[] = [
@@ -141,6 +175,21 @@ const ESCENARIOS: Escenario[] = [
     paso: (c) => c.desplazar(-16, -3),
     repeticiones: 2,
   },
+  {
+    // Mover un símbolo 20 veces seguidas con la vista quieta.
+    nombre: "Editar al 100 %",
+    preparar: (c, e) => centrar(c, e, 1),
+    cuadros: 20,
+    paso: editar,
+    repeticiones: 3,
+  },
+  {
+    nombre: "Editar al 31 %",
+    preparar: (c, e) => centrar(c, e, ZOOM_TEXTOS),
+    cuadros: 20,
+    paso: editar,
+    repeticiones: 3,
+  },
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {
@@ -173,6 +222,8 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
 
   let t = 0;
   let cache = 0;
+  let mosaicosMax = 0;
+  let midiendo = false;
   /** Dibuja un cuadro en el instante simulado `t`; devuelve la medida y el tiempo real. */
   const cuadro = (): [MedidaCuadro, number] => {
     const t0 = performance.now();
@@ -180,6 +231,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     ctx.getImageData(0, 0, 1, 1); // fuerza el rasterizado
     const ms = performance.now() - t0;
     cache = Math.max(cache, capas.memoriaCache);
+    if (midiendo) mosaicosMax = Math.max(mosaicosMax, m.mosaicos);
     return [m, ms];
   };
   /** Cuadros que la app pediría sola después de un gesto, hasta quedar nítida. */
@@ -202,12 +254,19 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
       tiempos.push(ms);
       total += ms;
     };
+    midiendo = false;
     if (escenario.reiniciar) {
       escenario.reiniciar(camara, escena);
       t += CUADRO;
       cola(cuadro()[0], () => {});
       t += 1000; // pausa entre gestos
+    } else if (rep === 0) {
+      // Sin reinicio, la primera vista se deja nítida antes del calentamiento,
+      // así el máximo de mosaicos mide solo el gesto.
+      t += CUADRO;
+      cola(cuadro()[0], () => {});
     }
+    midiendo = medido;
     let m: MedidaCuadro | null = null;
     for (let i = 0; i < escenario.cuadros; i++) {
       escenario.paso(camara, capas, escena, i);
@@ -229,6 +288,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     lentos: tiempos.filter((x) => x > LIMITE_MS).length,
     porGesto: total / escenario.repeticiones,
     cache,
+    mosaicosMax,
   };
 }
 

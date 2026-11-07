@@ -3,7 +3,8 @@
 // exactamente la misma escena y los tiempos se pueden comparar.
 
 import { SIMBOLOS, type Rotacion } from "../core/symbols";
-import { Escena, type ComponenteEscena } from "./escena";
+import type { ComponenteEscena } from "./escena";
+import { EscenaEditable } from "./escenaEditable";
 
 /** Tamaños de escena del banco, como pide la arquitectura. */
 export const CANTIDADES_BANCO = [100, 500, 2000] as const;
@@ -63,6 +64,10 @@ export function generarBanco(cantidad: number, semilla = 1): ComponenteEscena[] 
   });
 }
 
-export function crearEscenaBanco(cantidad: number, semilla = 1): Escena {
-  return new Escena(generarBanco(cantidad, semilla));
+/** Id de cada componente del banco: "b0", "b1"… */
+export const idBanco = (i: number) => `b${i}`;
+
+/** La escena del banco, editable como la del editor (es lo que se quiere medir). */
+export function crearEscenaBanco(cantidad: number, semilla = 1): EscenaEditable {
+  return new EscenaEditable(generarBanco(cantidad, semilla).map((c, i) => [idBanco(i), c]));
 }
