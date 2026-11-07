@@ -1,30 +1,56 @@
 // Banco de dibujado: corre dentro del navegador headless que abre correr.mjs.
 // Dibuja las escenas de 100, 500 y 2000 símbolos con las mismas Capas que usa
-// la app, con y sin optimizaciones, y manda los tiempos al script por POST.
-// Cada medición fuerza el rasterizado (getImageData de un píxel): si no, solo
-// se mediría cuánto tarda en anotar las órdenes de dibujo, no en dibujarlas.
+// la app y manda los tiempos al script por POST.
+//
+// Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
+// repite varias veces. Un gesto son cuadros seguidos, uno cada 16,7 ms, y
+// después la "cola": los cuadros que la app sigue pidiendo sola hasta quedar
+// nítida (mosaicos pendientes o la espera tras el zoom). El reloj es simulado:
+// las esperas no se duermen, se saltan.
+//
+// Cada cuadro fuerza el rasterizado de la pantalla (getImageData de un píxel):
+// si no, solo se mediría cuánto tarda en anotar las órdenes de dibujo, no en
+// dibujarlas. (Los mosaicos ya los rasteriza Capas al terminar cada uno.)
 
 import { CANTIDADES_BANCO, crearEscenaBanco } from "../../src/render/banco";
 import { Camara } from "../../src/render/camara";
 import { Capas, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, type OpcionesCapas } from "../../src/render/capas";
 import type { Escena } from "../../src/render/escena";
+import type { MedidaCuadro } from "../../src/render/rendimiento";
 
 /** Pantalla típica de netbook. */
 const ANCHO = 1366;
 const ALTO = 768;
 const DPR = 1;
-const CALENTAMIENTO = 3;
-const REPETICIONES = 25;
+/** Un cuadro a 60 FPS, en ms (el reloj simulado avanza esto por cuadro). */
+const CUADRO = 1000 / 60;
+/** Un cuadro que tarda más que esto se nota como tirón. */
+const LIMITE_MS = 16;
+/** Un paso de la rueda (deltaY 100 con la sensibilidad de la navegación). */
+const PASO_RUEDA = Math.exp(-100 * 0.0015);
+/** Zoom con textos (escala 6,2 ≥ 6): el peor caso medido en la netbook. */
+const ZOOM_TEXTOS = 0.31;
+/** Tope de cuadros de una cola, por si algo nunca queda nítido. */
+const MAX_COLA = 500;
+
+export type Modo = "optimizado" | "sin caché de textos" | "sin optimizar";
 
 export interface Medicion {
   componentes: number;
   escenario: string;
-  modo: "optimizado" | "sin optimizar";
+  modo: Modo;
+  /** Cuadros medidos (gesto más cola, en todas las repeticiones). */
+  cuadros: number;
   /** ms por cuadro. */
   mediana: number;
   p95: number;
-  /** Componentes dibujados en la capa estática. */
-  dibujados: number;
+  maximo: number;
+  /** Cuadros que tardaron más de LIMITE_MS. */
+  lentos: number;
+  /** ms de dibujo por gesto, sumando todos sus cuadros (hasta quedar nítido). */
+  porGesto: number;
+  /** Bytes máximos de caché durante el escenario. */
+  cache: number;
 }
 
 export interface Resultado {
@@ -34,15 +60,21 @@ export interface Resultado {
   dpr: number;
   mediciones: Medicion[];
   /** MB de heap JS con cada escena armada (null si el navegador no lo informa). */
-  memoria: { componentes: number; heapMB: number | null; cacheMB: number }[];
+  memoria: { componentes: number; heapMB: number | null }[];
 }
 
 interface Escenario {
   nombre: string;
-  /** Pone la cámara antes de medir. */
+  /** Cámara inicial del escenario. */
   preparar(c: Camara, e: Escena): void;
-  /** Antes de cada cuadro: mueve la cámara o invalida el caché. */
-  paso(c: Camara, capas: Capas, i: number): void;
+  /** Antes de cada repetición (sin medir): vuelve la cámara al punto de partida. */
+  reiniciar?(c: Camara, e: Escena): void;
+  /** Cuadros del gesto. */
+  cuadros: number;
+  /** Antes de cada cuadro del gesto: mueve la cámara o invalida la capa estática. */
+  paso(c: Camara, capas: Capas, e: Escena, i: number): void;
+  /** Repeticiones medidas (hay una más de calentamiento). */
+  repeticiones: number;
 }
 
 function centrar(c: Camara, e: Escena, zoom: number): void {
@@ -51,29 +83,71 @@ function centrar(c: Camara, e: Escena, zoom: number): void {
   c.centrar(k.x + k.ancho / 2, k.y + k.alto / 2, ANCHO, ALTO);
 }
 
+/** Al zoom dado, con el borde izquierdo de la escena en el borde izquierdo de la pantalla. */
+function alBordeIzquierdo(c: Camara, e: Escena, zoom: number): void {
+  const k = e.caja!;
+  c.zoom = zoom;
+  c.centrar(k.x + ANCHO / 2 / c.escala, k.y + k.alto / 2, ANCHO, ALTO);
+}
+
 const ESCENARIOS: Escenario[] = [
   {
-    nombre: "Vista al 100 %",
+    // Contenido nuevo (o colores) con la vista quieta: rehacer todo lo visible.
+    nombre: "Rehacer al 100 %",
     preparar: (c, e) => centrar(c, e, 1),
+    cuadros: 1,
     paso: (_, capas) => capas.invalidarEstatica(),
+    repeticiones: 12,
   },
   {
-    nombre: "Acercado al 400 %",
-    preparar: (c, e) => centrar(c, e, 4),
+    nombre: "Rehacer al 31 %",
+    preparar: (c, e) => centrar(c, e, ZOOM_TEXTOS),
+    cuadros: 1,
     paso: (_, capas) => capas.invalidarEstatica(),
+    repeticiones: 12,
   },
   {
-    nombre: "Encuadrado (F)",
-    preparar: (c, e) => c.encuadrar(e.caja!, ANCHO, ALTO),
-    paso: (_, capas) => capas.invalidarEstatica(),
+    // Tecla F desde el 100 %: un salto de zoom.
+    nombre: "Encuadrar (F)",
+    preparar: (c, e) => centrar(c, e, 1),
+    reiniciar: (c, e) => centrar(c, e, 1),
+    cuadros: 1,
+    paso: (c, _, e) => c.encuadrar(e.caja!, ANCHO, ALTO),
+    repeticiones: 8,
   },
   {
-    // Ida y vuelta de a 6 px, como un arrastre: no sale del margen del caché.
+    // Ocho pasos de rueda seguidos hacia afuera, del 100 % al 30 % (con textos).
+    nombre: "Zoom con la rueda",
+    preparar: (c, e) => centrar(c, e, 1),
+    reiniciar: (c, e) => centrar(c, e, 1),
+    cuadros: 8,
+    paso: (c) => c.zoomEn(c.zoom * PASO_RUEDA, ANCHO / 2, ALTO / 2),
+    repeticiones: 6,
+  },
+  {
+    // Ida y vuelta de a 6 px: no sale de lo ya dibujado.
     nombre: "Desplazar al 100 %",
     preparar: (c, e) => centrar(c, e, 1),
-    paso: (c, _, i) => c.desplazar(i % 2 ? -6 : 6, 3 * (i % 2 ? -1 : 1)),
+    cuadros: 25,
+    paso: (c, _, __, i) => c.desplazar(i % 2 ? -6 : 6, 3 * (i % 2 ? -1 : 1)),
+    repeticiones: 3,
+  },
+  {
+    // Arrastre largo de 16 px por cuadro (960 px/s): sale una y otra vez de lo dibujado.
+    nombre: "Arrastre al 31 %",
+    preparar: (c, e) => alBordeIzquierdo(c, e, ZOOM_TEXTOS),
+    reiniciar: (c, e) => alBordeIzquierdo(c, e, ZOOM_TEXTOS),
+    cuadros: 100,
+    paso: (c) => c.desplazar(-16, -3),
+    repeticiones: 2,
   },
 ];
+
+const OPCIONES: Record<Modo, OpcionesCapas> = {
+  optimizado: { ...OPCIONES_OPTIMIZADAS },
+  "sin caché de textos": { ...OPCIONES_OPTIMIZADAS, cacheTextos: false },
+  "sin optimizar": { ...OPCIONES_SIN_OPTIMIZAR },
+};
 
 function contexto(canvas = document.createElement("canvas")): CanvasRenderingContext2D {
   // Opaco, como el lienzo de la app.
@@ -82,18 +156,11 @@ function contexto(canvas = document.createElement("canvas")): CanvasRenderingCon
   return ctx;
 }
 
-/** Lo máximo que ocupó el caché de la capa estática, en MB. */
-let cacheMB = 0;
-
 function percentil(ordenados: number[], p: number): number {
   return ordenados[Math.min(ordenados.length - 1, Math.floor(p * ordenados.length))]!;
 }
 
-function medir(
-  escena: Escena,
-  escenario: Escenario,
-  opciones: OpcionesCapas,
-): Pick<Medicion, "mediana" | "p95" | "dibujados"> {
+function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): Omit<Medicion, "componentes" | "escenario" | "modo"> {
   const canvas = document.createElement("canvas");
   canvas.width = ANCHO * DPR;
   canvas.height = ALTO * DPR;
@@ -104,22 +171,65 @@ function medir(
   const camara = new Camara();
   escenario.preparar(camara, escena);
 
-  const tiempos: number[] = [];
-  let dibujados = 0;
-  for (let i = 0; i < CALENTAMIENTO + REPETICIONES; i++) {
-    escenario.paso(camara, capas, i);
+  let t = 0;
+  let cache = 0;
+  /** Dibuja un cuadro en el instante simulado `t`; devuelve la medida y el tiempo real. */
+  const cuadro = (): [MedidaCuadro, number] => {
     const t0 = performance.now();
-    const m = capas.dibujar(camara, ANCHO, ALTO, DPR);
+    const m = capas.dibujar(camara, ANCHO, ALTO, DPR, t);
     ctx.getImageData(0, 0, 1, 1); // fuerza el rasterizado
-    const t = performance.now() - t0;
-    if (i >= CALENTAMIENTO) tiempos.push(t);
-    dibujados = m.dibujados;
+    const ms = performance.now() - t0;
+    cache = Math.max(cache, capas.memoriaCache);
+    return [m, ms];
+  };
+  /** Cuadros que la app pediría sola después de un gesto, hasta quedar nítida. */
+  const cola = (m: MedidaCuadro, anotar: (ms: number) => void) => {
+    for (let n = 0; n < MAX_COLA && (m.pendiente || m.esperar > 0); n++) {
+      // Con espera (zoom recién terminado), el próximo cuadro llega cuando vence el temporizador.
+      t += m.pendiente ? CUADRO : m.esperar;
+      const [m2, ms] = cuadro();
+      anotar(ms);
+      m = m2;
+    }
+  };
+
+  const tiempos: number[] = [];
+  let total = 0;
+  for (let rep = 0; rep <= escenario.repeticiones; rep++) {
+    const medido = rep > 0; // la primera es de calentamiento
+    const anotar = (ms: number) => {
+      if (!medido) return;
+      tiempos.push(ms);
+      total += ms;
+    };
+    if (escenario.reiniciar) {
+      escenario.reiniciar(camara, escena);
+      t += CUADRO;
+      cola(cuadro()[0], () => {});
+      t += 1000; // pausa entre gestos
+    }
+    let m: MedidaCuadro | null = null;
+    for (let i = 0; i < escenario.cuadros; i++) {
+      escenario.paso(camara, capas, escena, i);
+      t += CUADRO;
+      const [m2, ms] = cuadro();
+      anotar(ms);
+      m = m2;
+    }
+    if (m) cola(m, anotar);
   }
-  cacheMB = Math.max(cacheMB, capas.memoriaCache / 2 ** 20);
   capas.liberarCache();
   canvas.width = canvas.height = 0;
   tiempos.sort((a, b) => a - b);
-  return { mediana: percentil(tiempos, 0.5), p95: percentil(tiempos, 0.95), dibujados };
+  return {
+    cuadros: tiempos.length,
+    mediana: percentil(tiempos, 0.5),
+    p95: percentil(tiempos, 0.95),
+    maximo: tiempos.at(-1) ?? 0,
+    lentos: tiempos.filter((x) => x > LIMITE_MS).length,
+    porGesto: total / escenario.repeticiones,
+    cache,
+  };
 }
 
 /** Heap JS en MB, después de recolectar basura si el navegador lo permite. */
@@ -138,6 +248,8 @@ const respirar = () => new Promise((r) => setTimeout(r, 0));
 
 async function correr(): Promise<void> {
   const estado = document.getElementById("estado")!;
+  const comparar = new URLSearchParams(location.search).has("comparar");
+  const modos: Modo[] = comparar ? ["optimizado", "sin caché de textos", "sin optimizar"] : ["optimizado"];
   const resultado: Resultado = {
     navegador: navigator.userAgent,
     ancho: ANCHO,
@@ -147,19 +259,20 @@ async function correr(): Promise<void> {
     memoria: [],
   };
 
-
   for (const n of CANTIDADES_BANCO) {
     const escena = crearEscenaBanco(n);
-    resultado.memoria.push({ componentes: n, heapMB: heapMB(), cacheMB });
+    resultado.memoria.push({ componentes: n, heapMB: heapMB() });
 
     for (const escenario of ESCENARIOS) {
-      for (const [modo, opciones] of [
-        ["optimizado", OPCIONES_OPTIMIZADAS],
-        ["sin optimizar", OPCIONES_SIN_OPTIMIZAR],
-      ] as const) {
+      for (const modo of modos) {
         estado.textContent = `${n} componentes · ${escenario.nombre} · ${modo}`;
         await respirar();
-        resultado.mediciones.push({ componentes: n, escenario: escenario.nombre, modo, ...medir(escena, escenario, opciones) });
+        resultado.mediciones.push({
+          componentes: n,
+          escenario: escenario.nombre,
+          modo,
+          ...medir(escena, escenario, OPCIONES[modo]),
+        });
       }
     }
   }

@@ -7,6 +7,8 @@
 //   --navegador=RUTA   ejecutable a usar (o variable BORNERA_NAVEGADOR)
 //   --gpu              no desactivar la GPU (por defecto se rasteriza por
 //                      software, más parecido a una netbook)
+//   --comparar         mide también sin caché de textos y sin ninguna
+//                      optimización (tarda el triple)
 //   --json             imprime el resultado crudo en JSON
 
 import { spawn } from "node:child_process";
@@ -18,9 +20,9 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
-const LIMITE_MS = 5 * 60 * 1000;
-/** Presupuesto de un cuadro a 60 FPS. */
-const CUADRO_60 = 1000 / 60;
+const LIMITE_MS = 10 * 60 * 1000;
+/** Un cuadro que tarda más que esto se nota como tirón. */
+const CUADRO_LENTO = 16;
 
 const args = process.argv.slice(2);
 const opcion = (nombre) => args.find((a) => a.startsWith(`--${nombre}=`))?.split("=").slice(1).join("=");
@@ -89,33 +91,39 @@ function informe(r, sinGpu) {
     `Banco de dibujado · lienzo ${r.ancho}×${r.alto} · dpr ${r.dpr} · ${motor} · ` +
       (sinGpu ? "rasterizado por software" : "con GPU"),
   );
-  lineas.push("Tiempo por cuadro (mediana / p95, incluye rasterizar). ⚠ = p95 sobre 16,7 ms (menos de 60 FPS).");
-  lineas.push("");
+  lineas.push(
+    "Tiempo por cuadro en ms, incluye rasterizar. Lentos = cuadros de más de 16 ms (⚠ si hay alguno).",
+  );
+  lineas.push("Por gesto = suma de todos los cuadros de un gesto, hasta quedar nítido.");
 
-  const filas = [["Símbolos", "Escenario", "Dibujados", "Optimizado", "Sin optimizar", "Mejora"]];
-  const clave = (m) => `${m.componentes}|${m.escenario}`;
-  const sinOpt = new Map(r.mediciones.filter((m) => m.modo === "sin optimizar").map((m) => [clave(m), m]));
-  let anterior = null;
-  for (const m of r.mediciones.filter((x) => x.modo === "optimizado")) {
-    const s = sinOpt.get(clave(m));
-    const celda = (x) => `${ms.format(x.mediana)} / ${ms.format(x.p95)} ms${x.p95 > CUADRO_60 ? " ⚠" : "  "}`;
-    filas.push([
-      m.componentes === anterior ? "" : String(m.componentes),
-      m.escenario,
-      `${m.dibujados}/${m.componentes}`,
-      celda(m),
-      s ? celda(s) : "–",
-      s ? `${ms.format(s.mediana / Math.max(m.mediana, 0.01))}×` : "–",
-    ]);
-    anterior = m.componentes;
+  const modos = [...new Set(r.mediciones.map((m) => m.modo))];
+  for (const modo of modos) {
+    lineas.push("");
+    if (modos.length > 1) lineas.push(`── ${modo} ──`);
+    const filas = [["Símbolos", "Escenario", "Cuadros", "Mediana", "p95", "Máx.", "Lentos", "Por gesto"]];
+    let anterior = null;
+    for (const m of r.mediciones.filter((x) => x.modo === modo)) {
+      filas.push([
+        m.componentes === anterior ? "" : String(m.componentes),
+        m.escenario,
+        String(m.cuadros),
+        ms.format(m.mediana),
+        ms.format(m.p95),
+        ms.format(m.maximo),
+        `${m.lentos}${m.lentos > 0 ? " ⚠" : "  "}`,
+        ms.format(m.porGesto),
+      ]);
+      anterior = m.componentes;
+    }
+    lineas.push(tabla(filas));
   }
-  lineas.push(tabla(filas));
   lineas.push("");
   const heap = r.memoria
     .map((m) => `${m.componentes}: ${m.heapMB === null ? "–" : `${mb.format(m.heapMB)} MB`}`)
     .join(" · ");
   lineas.push(`Heap JS con la escena armada: ${heap}`);
-  lineas.push(`Caché de la capa estática: ${mb.format(r.memoria[0]?.cacheMB ?? 0)} MB`);
+  const cache = Math.max(...r.mediciones.filter((m) => m.modo === modos[0]).map((m) => m.cache ?? 0));
+  lineas.push(`Caché (capa estática y textos), máximo: ${mb.format(cache / 2 ** 20)} MB`);
   return lineas.join("\n");
 }
 
@@ -152,8 +160,9 @@ async function main() {
     ],
   });
   await servidor.listen();
-  const url = servidor.resolvedUrls?.local[0];
-  if (!url) throw new Error("Vite no informó la dirección del servidor.");
+  const raiz = servidor.resolvedUrls?.local[0];
+  if (!raiz) throw new Error("Vite no informó la dirección del servidor.");
+  const url = bandera("comparar") ? `${raiz}?comparar` : raiz;
 
   const perfil = mkdtempSync(join(tmpdir(), "bornera-bench-"));
   const banderas = [
@@ -170,7 +179,7 @@ async function main() {
     ...(sinGpu ? ["--disable-gpu"] : []),
     url,
   ];
-  console.error(`Navegador: ${ejecutable}\nMidiendo 100, 500 y 2000 símbolos… (puede tardar un minuto)`);
+  console.error(`Navegador: ${ejecutable}\nMidiendo 100, 500 y 2000 símbolos… (puede tardar unos minutos)`);
   const navegador = spawn(ejecutable, banderas, { stdio: "ignore" });
   const salida = once(navegador, "exit");
 
