@@ -3,9 +3,10 @@
 // - Redibuja solo cuando se pide con `invalidar()`, en el próximo
 //   requestAnimationFrame; varios pedidos en el mismo cuadro se juntan en uno.
 //   Sin cambios no hay ningún cuadro pendiente: CPU en cero.
-// - Además, las capas pueden pedir otro cuadro si quedan mosaicos por rehacer
-//   (se rehacen de a poco). Es trabajo con fin: cuando todo está al día, no se
-//   pide nada más.
+// - Además, las capas pueden pedir más cuadros: enseguida, si quedan mosaicos
+//   por rehacer (se rehacen de a poco), o tras una espera, cuando el zoom se
+//   detiene y la imagen escalada tiene que quedar nítida. Es trabajo con fin:
+//   cuando todo está al día, no se pide nada más.
 
 import { Camara, type Caja } from "./camara";
 import { Capas, type OpcionesCapas } from "./capas";
@@ -27,6 +28,8 @@ export class Vista {
   private iniciada = false;
   private readonly capas: Capas;
   private cuadroPendiente = 0;
+  /** Temporizador del redibujo nítido después del zoom. */
+  private espera = 0;
   private readonly limpiezas: (() => void)[] = [];
 
   constructor(
@@ -103,14 +106,25 @@ export class Vista {
 
   destruir(): void {
     this.cancelarPendiente();
+    clearTimeout(this.espera);
+    this.espera = 0;
     for (const limpiar of this.limpiezas) limpiar();
     this.capas.liberarCache();
   }
 
   private dibujar(): void {
-    const medida = this.capas.dibujar(this.camara, this.ancho, this.alto, this.dpr);
+    const medida = this.capas.dibujar(this.camara, this.ancho, this.alto, this.dpr, performance.now());
     this.alDibujar?.(medida);
-    if (medida.pendiente) this.invalidar();
+    if (medida.pendiente) {
+      this.invalidar();
+    } else if (medida.esperar > 0) {
+      // Cada paso del zoom reinicia la espera: se rehace nítido al detenerse.
+      clearTimeout(this.espera);
+      this.espera = window.setTimeout(() => {
+        this.espera = 0;
+        this.invalidar();
+      }, Math.ceil(medida.esperar));
+    }
   }
 
   private ajustar(anchoFisico: number, altoFisico: number, ancho: number, alto: number): void {

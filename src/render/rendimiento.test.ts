@@ -7,6 +7,7 @@ function medida(total: number, mosaicos = 0): MedidaCuadro {
     mosaicos,
     estatica: mosaicos ? total : 0,
     pendiente: false,
+    esperar: 0,
     dibujados: 10,
     componentes: 100,
   };

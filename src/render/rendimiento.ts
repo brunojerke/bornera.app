@@ -15,6 +15,12 @@ export interface MedidaCuadro {
   estatica: number;
   /** Quedan mosaicos por rehacer: hace falta otro cuadro enseguida. */
   pendiente: boolean;
+  /**
+   * Si es mayor que 0, hay que volver a dibujar dentro de tantos ms: el zoom
+   * se está moviendo (la imagen está escalada) y después de esa espera se
+   * rehace nítida. 0 si no hay nada que esperar.
+   */
+  esperar: number;
   /** Componentes que tocan la pantalla. */
   dibujados: number;
   /** Componentes en la escena. */
@@ -47,6 +53,7 @@ const MEDIDA_VACIA: MedidaCuadro = {
   mosaicos: 0,
   estatica: 0,
   pendiente: false,
+  esperar: 0,
   dibujados: 0,
   componentes: 0,
 };

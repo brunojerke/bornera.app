@@ -10,6 +10,8 @@
 //   Mientras tanto se ve la versión anterior escalada (de otro nivel de zoom)
 //   o un mosaico vacío con la grilla. Así ningún cuadro carga con rehacer la
 //   pantalla entera.
+// - Durante el zoom no se rehace nada: se escalan los mosaicos que ya están, y
+//   recién ESPERA_ZOOM_MS después del último cambio se rehacen nítidos.
 //
 // Dinámica: selección, cable en curso, estado de simulación. Se dibuja en cada
 // cuadro, encima de la estática.
@@ -46,6 +48,9 @@ export const PRESUPUESTO_MS = 8;
  * escalados), el presupuesto para rehacer mosaicos se achica para no pasarse.
  */
 export const OBJETIVO_CUADRO_MS = 14;
+
+/** Después del último cambio de zoom, cuánto esperar para rehacer nítido (ms). */
+export const ESPERA_ZOOM_MS = 150;
 
 /** Margen alrededor de la pantalla que se dibuja de antemano, en px físicos. */
 export const MARGEN_PX = 128;
@@ -125,6 +130,9 @@ export class Capas {
   private readonly mosaicos: Mosaicos;
   /** Cuadros dibujados: marca cuándo se usó cada mosaico por última vez. */
   private cuadro = 0;
+  /** Nivel de zoom (px físicos por unidad) del cuadro anterior, y cuándo cambió por última vez. */
+  private kAnterior = NaN;
+  private cambioZoom = -Infinity;
   /** Lo que tarda un mosaico y lo que tarda componer la pantalla, promediados. */
   private estimadoMosaico = 1;
   private estimadoComposicion = 0;
@@ -173,9 +181,10 @@ export class Capas {
   /**
    * Dibuja un cuadro en el canvas principal, que ya debe tener su tamaño físico
    * y ser opaco (`getContext("2d", { alpha: false })`).
-   * `ancho` y `alto` en px CSS; `dpr` es el devicePixelRatio.
+   * `ancho` y `alto` en px CSS; `dpr` es el devicePixelRatio; `ahora`, el
+   * instante del cuadro en ms (para saber cuándo se detuvo el zoom).
    */
-  dibujar(camara: Camara, ancho: number, alto: number, dpr: number): MedidaCuadro {
+  dibujar(camara: Camara, ancho: number, alto: number, dpr: number, ahora = this.reloj()): MedidaCuadro {
     const t0 = this.reloj();
     const { ctx } = this;
     const W = ctx.canvas.width;
@@ -189,6 +198,7 @@ export class Capas {
       mosaicos: 0,
       estatica: 0,
       pendiente: false,
+      esperar: 0,
       dibujados: 0,
       componentes: this.contenido?.cantidad ?? 0,
     };
@@ -204,7 +214,7 @@ export class Capas {
       const pantalla: Caja = { x: ox / k, y: oy / k, ancho: W / k, alto: H / k };
 
       if (this._opciones.cache) {
-        this.dibujarConMosaicos(camara, k, ox, oy, W, H, dpr, medida);
+        this.dibujarConMosaicos(camara, k, ox, oy, W, H, dpr, ahora, medida);
       } else {
         const t = this.reloj();
         this.pintarVacio(ox, oy, W, H, k, dpr);
@@ -242,16 +252,32 @@ export class Capas {
     W: number,
     H: number,
     dpr: number,
+    ahora: number,
     medida: MedidaCuadro,
   ): void {
     this.cuadro++;
     const mos = this.mosaicos;
-    // Otro nivel de zoom: los mosaicos de antes quedan como viejos.
-    if (k !== mos.k) mos.cambiarNivel(k);
-    const tm = this.reloj();
-    const quedan = this.rehacerMosaicos(ox, oy, W, H, k, dpr, medida);
-    if (medida.mosaicos > 0) medida.estatica = this.reloj() - tm;
-    medida.pendiente = quedan > 0;
+    if (k !== this.kAnterior && !Number.isNaN(this.kAnterior)) this.cambioZoom = ahora;
+    this.kAnterior = k;
+
+    if (k !== mos.k) {
+      // Zoom en curso: se escala lo que hay hasta que pase la espera. Si no
+      // hay nada que escalar, no tiene sentido esperar. Menos de 1 ms no se
+      // espera (y evita esperas eternas de 1e-14 por redondeo).
+      const espera = ESPERA_ZOOM_MS - (ahora - this.cambioZoom);
+      if (espera >= 1 && mos.hayAlgo) {
+        medida.esperar = Math.ceil(espera);
+      } else {
+        mos.cambiarNivel(k);
+      }
+    }
+
+    if (k === mos.k) {
+      const t = this.reloj();
+      const quedan = this.rehacerMosaicos(ox, oy, W, H, k, dpr, medida);
+      if (medida.mosaicos > 0) medida.estatica = this.reloj() - t;
+      medida.pendiente = quedan > 0;
+    }
 
     const t = this.reloj();
     this.componer(camara, k, ox, oy, W, H, dpr);
@@ -369,13 +395,22 @@ export class Capas {
   /**
    * Copia los mosaicos a la pantalla. Los del nivel de la cámara van a píxel
    * entero; donde faltan, mosaico vacío con la grilla y encima lo que haya de
-   * otros niveles, escalado.
+   * otros niveles, escalado. Con el zoom en curso, todo va escalado.
    */
   private componer(camara: Camara, k: number, ox: number, oy: number, W: number, H: number, dpr: number): void {
     const T = TAM_MOSAICO;
     const { ctx } = this;
     const mos = this.mosaicos;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    if (k !== mos.k) {
+      if (!this.cubreLaPantalla(camara, k, W, H)) {
+        this.pintarVacio(ox, oy, W, H, k, dpr);
+        this.dibujarEscalados(mos.viejos, camara, k, W, H);
+      }
+      this.dibujarEscalados(mos.actuales.values(), camara, k, W, H);
+      return;
+    }
 
     const faltan = this.faltan;
     faltan.length = 0;
@@ -407,7 +442,12 @@ export class Capas {
     ctx.restore();
   }
 
-  /** Copia mosaicos de otro nivel a la escala de la cámara (los que tocan la pantalla). */
+  /**
+   * Copia mosaicos de otro nivel a la escala de la cámara (los que tocan la
+   * pantalla). Al agrandarlos no se suavizan: por software cuesta hasta cinco
+   * veces menos, y la imagen dura lo que dura el zoom. Al achicarlos sí: sin
+   * suavizado, las líneas finas aparecen y desaparecen.
+   */
   private dibujarEscalados(lista: Iterable<Mosaico>, camara: Camara, k: number, W: number, H: number): void {
     const T = TAM_MOSAICO;
     const { ctx } = this;
@@ -415,6 +455,7 @@ export class Capas {
     const by = camara.y * k;
     for (const m of lista) {
       const f = (T * k) / m.k;
+      ctx.imageSmoothingEnabled = k < m.k;
       // Bordes redondeados a píxel entero: mosaicos vecinos no dejan costuras.
       const x0 = Math.round(m.i * f - bx);
       const x1 = Math.round((m.i + 1) * f - bx);
@@ -424,6 +465,26 @@ export class Capas {
       ctx.drawImage(m.ctx.canvas, x0, y0, x1 - x0, y1 - y0);
       m.usado = this.cuadro;
     }
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  /** True si los mosaicos del nivel actual cubren toda la pantalla vista con zoom k. */
+  private cubreLaPantalla(camara: Camara, k: number, W: number, H: number): boolean {
+    const T = TAM_MOSAICO;
+    const { actuales, k: kn } = this.mosaicos;
+    if (actuales.size === 0) return false;
+    const f = kn / k;
+    const x0 = camara.x * kn;
+    const y0 = camara.y * kn;
+    const i0 = Math.floor(x0 / T);
+    const i1 = Math.ceil((x0 + W * f) / T) - 1;
+    const j0 = Math.floor(y0 / T);
+    const j1 = Math.ceil((y0 + H * f) / T) - 1;
+    if ((i1 - i0 + 1) * (j1 - j0 + 1) > actuales.size) return false;
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) if (!actuales.has(clave(i, j))) return false;
+    }
+    return true;
   }
 
   /** Fondo y grilla de toda la pantalla: lo que se ve donde todavía no hay mosaico. */

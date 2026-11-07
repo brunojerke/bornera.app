@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Camara } from "./camara";
-import { Capas, MARGEN_PX, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, PRESUPUESTO_MS } from "./capas";
+import { Capas, ESPERA_ZOOM_MS, MARGEN_PX, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, PRESUPUESTO_MS } from "./capas";
 import type { Contenido, InfoDibujo } from "./escena";
 import { contextoFalso, fabricaFalsa, llamadasA, Path2DFalso } from "./falsos";
 import { BYTES_MOSAICO, RESERVA_LIBRES, TAM_MOSAICO } from "./mosaicos";
@@ -49,13 +49,13 @@ function armar(costo = 0, alDibujar: (r: Renderer) => void = () => {}, costoCopi
   });
   capas.contenido = contenido;
   const camara = new Camara();
-  const dibujar = () => capas.dibujar(camara, W, H, 1);
+  const dibujar = () => capas.dibujar(camara, W, H, 1, ahora);
   const avanzar = (ms: number) => void (ahora += ms);
   /** Dibuja cuadros (uno cada 16 ms) hasta que no quede nada pendiente; devuelve cuántos. */
   const terminar = () => {
     let n = 0;
-    for (let m = dibujar(); m.pendiente; n++) {
-      avanzar(16);
+    for (let m = dibujar(); m.pendiente || m.esperar > 0; n++) {
+      avanzar(m.pendiente ? 16 : m.esperar);
       m = dibujar();
       if (n > 1000) throw new Error("no termina nunca");
     }
@@ -157,10 +157,55 @@ describe("Capas: mosaicos", () => {
     expect(contenido.infos.every((i) => Math.round((i.visible.x * K) / T) === 4)).toBe(true);
   });
 
+  it("durante el zoom no rehace nada: escala lo que hay, y lo rehace nítido al detenerse", () => {
+    const { principal, camara, dibujar, avanzar, terminar } = armar();
+    terminar();
+    principal.llamadas.length = 0;
+
+    camara.zoomEn(2, W / 2, H / 2);
+    let m = dibujar();
+    expect(m.mosaicos).toBe(0);
+    expect(m.esperar).toBe(ESPERA_ZOOM_MS);
+    // Los mosaicos de antes, al doble de tamaño.
+    const escaladas = copias(principal.llamadas).filter((c) => c[3] !== undefined);
+    expect(escaladas.length).toBeGreaterThan(0);
+    for (const [, , , ancho, alto] of escaladas) {
+      expect(Math.abs(ancho! - 2 * T)).toBeLessThanOrEqual(1);
+      expect(Math.abs(alto! - 2 * T)).toBeLessThanOrEqual(1);
+    }
+
+    // Otro paso de rueda reinicia la espera.
+    avanzar(100);
+    camara.zoomEn(2.5, W / 2, H / 2);
+    expect(dibujar().esperar).toBe(ESPERA_ZOOM_MS);
+    avanzar(100);
+    m = dibujar();
+    expect(m.mosaicos).toBe(0);
+    expect(m.esperar).toBe(ESPERA_ZOOM_MS - 100);
+
+    // Pasada la espera, se rehace con el zoom nuevo.
+    avanzar(ESPERA_ZOOM_MS - 100);
+    m = dibujar();
+    expect(m.mosaicos).toBeGreaterThan(0);
+    expect(m.esperar).toBe(0);
+  });
+
+  it("si no hay nada que escalar, no espera aunque el zoom cambie", () => {
+    const { capas, camara, dibujar, terminar } = armar();
+    terminar();
+    camara.zoomEn(2, 0, 0);
+    capas.invalidarEstatica();
+    const m = dibujar();
+    expect(m.esperar).toBe(0);
+    expect(m.mosaicos).toBeGreaterThan(0);
+  });
+
   it("donde falta un mosaico se ve la grilla y, encima, el nivel anterior escalado", () => {
-    const { principal, fabrica, camara, dibujar, terminar } = armar(10);
+    const { principal, fabrica, camara, dibujar, avanzar, terminar } = armar(10);
     terminar();
     camara.zoomEn(2, W / 2, H / 2);
+    dibujar();
+    avanzar(ESPERA_ZOOM_MS);
     principal.llamadas.length = 0;
     const m = dibujar();
     expect(m.mosaicos).toBe(1); // tarda 10 ms: uno por cuadro
@@ -199,10 +244,29 @@ describe("Capas: mosaicos", () => {
     expect(lento).toBeGreaterThanOrEqual(1); // al menos uno por cuadro
   });
 
+  it("al agrandar los mosaicos escalados no los suaviza; al achicarlos, sí", () => {
+    const suavizado = (factor: number) => {
+      const { principal, camara, dibujar, terminar } = armar();
+      terminar();
+      principal.llamadas.length = 0;
+      camara.zoomEn(factor, W / 2, H / 2);
+      dibujar();
+      const valores = principal.llamadas.filter((l) => l[0] === "=imageSmoothingEnabled").map((l) => l[1]);
+      expect(valores.at(-1)).toBe(true); // queda como estaba
+      return valores.slice(0, -1);
+    };
+    const alAgrandar = suavizado(2);
+    expect(alAgrandar.length).toBeGreaterThan(0);
+    expect(alAgrandar.every((v) => v === false)).toBe(true);
+    expect(suavizado(0.5).every((v) => v === true)).toBe(true);
+  });
+
   it("cuando el nivel nuevo cubre la pantalla, suelta los mosaicos viejos", () => {
-    const { capas, camara, terminar } = armar();
+    const { capas, camara, dibujar, avanzar, terminar } = armar();
     terminar();
     camara.zoomEn(2, W / 2, H / 2);
+    dibujar();
+    avanzar(ESPERA_ZOOM_MS);
     terminar();
     // Solo quedan los del nivel nuevo (y unos pocos canvas para reusar).
     const k = 2 * K;
