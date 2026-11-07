@@ -36,6 +36,8 @@ Thumbs.db
 desktop.ini
 .idea/
 *.swp
+# Configuración de Obsidian si se abre docs/ como vault.
+docs/.obsidian/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
