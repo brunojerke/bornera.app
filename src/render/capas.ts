@@ -135,6 +135,8 @@ export class Capas {
   private readonly grillaMosaicos: Grilla;
   private readonly mosaicos: Mosaicos;
   private readonly textos: CacheTextos;
+  /** Canvas de 1×1 para forzar el rasterizado de cada mosaico (ver `rasterizar`). */
+  private readonly sonda: CanvasRenderingContext2D;
   /** Cuadros dibujados: marca cuándo se usó cada mosaico por última vez. */
   private cuadro = 0;
   /** Nivel de zoom (px físicos por unidad) del cuadro anterior, y cuándo cambió por última vez. */
@@ -164,6 +166,9 @@ export class Capas {
       c.canvas.height = TAM_MOSAICO;
       return { ctx: c, r: new RendererCanvas(c), k: NaN, i: 0, j: 0, usado: 0 };
     });
+    this.sonda = crearContexto(true);
+    this.sonda.canvas.width = 1;
+    this.sonda.canvas.height = 1;
   }
 
   get opciones(): Readonly<OpcionesCapas> {
@@ -366,6 +371,20 @@ export class Capas {
     this.pintarFondo(c, T, T);
     this.grillaMosaicos.dibujar(c, i * T, j * T, T, T, k, dpr, this.colores);
     this.dibujarContenido(m.r, k, -i * T, -j * T, { x: (i * T) / k, y: (j * T) / k, ancho: T / k, alto: T / k }, dpr);
+    this.rasterizar(c);
+  }
+
+  /**
+   * Obliga a rasterizar el mosaico ya mismo. Algunos motores (Chromium sin
+   * GPU) solo anotan las órdenes de dibujo y las ejecutan después, cuando el
+   * canvas se copia: el presupuesto mediría solo el anotado y el dibujo real
+   * caería todo junto en un cuadro. Copiar un píxel del mosaico obliga a
+   * ejecutarlas ahora; borrar la copia enseguida suelta la referencia al
+   * mosaico. En los motores que dibujan en el momento no cuesta casi nada.
+   */
+  private rasterizar(c: CanvasRenderingContext2D): void {
+    this.sonda.drawImage(c.canvas, 0, 0, 1, 1, 0, 0, 1, 1);
+    this.sonda.clearRect(0, 0, 1, 1);
   }
 
   /**

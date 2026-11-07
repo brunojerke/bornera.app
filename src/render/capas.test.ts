@@ -109,8 +109,8 @@ describe("Capas: mosaicos", () => {
     expect(m.pendiente).toBe(false);
   });
 
-  it("cada mosaico cubre su parte de la grilla", () => {
-    const { contenido, terminar, mosaicos } = armar();
+  it("cada mosaico cubre su parte de la grilla y se rasteriza al terminarlo", () => {
+    const { contenido, fabrica, terminar, mosaicos } = armar();
     terminar();
     for (const info of contenido.infos) {
       expect(info.visible.ancho).toBeCloseTo(T / K);
@@ -118,6 +118,11 @@ describe("Capas: mosaicos", () => {
       expect(info.detalle).toEqual({ textos: true, bornes: true });
     }
     for (const m of mosaicos()) expect(m.canvas).toEqual({ width: T, height: T });
+    // Una copia de un píxel por mosaico al canvas de 1×1, y se borra enseguida.
+    const sonda = fabrica.transparentes.find((t) => t.canvas.width === 1)!;
+    const sondeos = copias(sonda.llamadas);
+    expect(sondeos).toHaveLength(CON_MARGEN);
+    expect(llamadasA(sonda.llamadas, "clearRect")).toHaveLength(CON_MARGEN);
   });
 
   it("desplazar dentro de lo dibujado solo copia mosaicos, a píxel entero", () => {
