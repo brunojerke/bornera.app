@@ -5,7 +5,7 @@ Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en 
 
 ## Reglas
 - `src/core` no puede importar nada del DOM ni de las otras capas (`ui/`, `editor/`, `render/`), ni de Svelte. Las dependencias van en un solo sentido, hacia el núcleo.
-- Todo cambio al documento pasa por un Comando (deshacer/rehacer).
+- Todo cambio al documento pasa por un Comando (deshacer/rehacer). Única excepción: `generarId` sube `Documento.contadores` fuera de un Comando, porque el contador solo sube y no se deshace; si deshacer lo bajara, un id ya usado por el historial o por un cable se volvería a dar. Se llama al construir el comando, no al aplicarlo.
 - Coordenadas siempre en unidades de grilla, nunca en píxeles.
 - Cada símbolo nuevo: definición + test de bornes.
 - Cada cambio en `sim/`: correr los circuitos de referencia (`npm test`).
