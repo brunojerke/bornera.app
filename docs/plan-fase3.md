@@ -68,6 +68,7 @@ Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fas
   - Colocar → deshacer → rehacer: el componente tiene el mismo id. Lo mismo para Borrar → deshacer → rehacer.
   - Colocar, Mover, deshacer los dos, rehacer los dos: el Mover encuentra su componente.
   - Rotar (90, 180, 270, con y sin espejado, de a uno y en grupo con centro fraccionario): **todos los bornes** de los componentes rotados quedan en coordenadas enteras (posición + `transformarBornes`). Si el centro del grupo cae en media unidad, el centro se redondea antes de rotar, para que eso no pase.
+- **Hecho (2026-11-08):** `src/core/model/comandos.ts` y `historial.ts`. Redondear el centro con `Math.round` corría el grupo (4 × +90 lo movía hasta 4 unidades); se rota sobre el centro exacto y, si ancho y alto tienen paridad distinta, se corre (+½, −½) con ancho impar y (−½, +½) con ancho par: girar y volver deja el grupo igual, también con negativos. `Espejar` es espejo horizontal en pantalla (`rot → 360 − rot`). Cada comando arma un `Map` id→componente por llamada. `Cambio` = `{ componentes }`; T12 suma `cables`.
 
 ### T5. Símbolo: fuente monofásica
 - **Qué:** `FUENTE_MONOFASICA` con bornes L y N, comportamiento `fuente` y categoría `fuentes`, en `biblioteca.ts`. Es lo único que falta para la marcha-parada.

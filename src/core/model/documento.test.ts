@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Borrar, colocar as comandoColocar } from "./comandos";
 import {
   buscarComponente,
   crearDocumento,
@@ -10,11 +11,11 @@ import {
 
 const meta = { titulo: "Marcha-parada", autor: "Bruno Jerke", fecha: "2026-11-07" };
 
-/** Coloca un componente con id nuevo en la hoja indicada (los comandos llegan en T4). */
+/** Coloca un componente con id nuevo en la hoja indicada, con el comando Colocar. */
 function colocar(doc: Documento, tipo: string, hoja = 0): Componente {
-  const c: Componente = { id: generarId(doc), tipo, x: 0, y: 0, rot: 0, espejado: false, etiqueta: "", params: {} };
-  doc.hojas[hoja]!.componentes.push(c);
-  return c;
+  const cmd = comandoColocar(doc, { tipo, x: 0, y: 0, rot: 0, espejado: false, etiqueta: "", params: {} }, hoja);
+  cmd.aplicar(doc);
+  return buscarComponente(doc, cmd.id)!;
 }
 
 describe("crearDocumento", () => {
@@ -69,8 +70,7 @@ describe("generarId", () => {
     const doc = crearDocumento(meta);
     colocar(doc, "pulsador.na");
     const ultimo = colocar(doc, "pulsador.nc");
-    const hoja = doc.hojas[0]!;
-    hoja.componentes = hoja.componentes.filter((c) => c.id !== ultimo.id);
+    new Borrar([ultimo.id]).aplicar(doc);
     expect(colocar(doc, "pulsador.nc").id).not.toBe(ultimo.id);
   });
 
