@@ -5,6 +5,7 @@ import {
   buscarSimbolo,
   CONTACTO_AUXILIAR_NA,
   discontinua,
+  FUENTE_MONOFASICA,
   LAMPARA,
   PULSADOR_NA,
   PULSADOR_NC,
@@ -18,6 +19,7 @@ const ROTACIONES: Rotacion[] = [0, 90, 180, 270];
 
 /** Bornes esperados: [arriba, abajo], siempre en (0, −2) y (0, 2). */
 const ESPERADOS: [DefinicionSimbolo, string, string][] = [
+  [FUENTE_MONOFASICA, "L", "N"],
   [PULSADOR_NA, "13", "14"],
   [PULSADOR_NC, "11", "12"],
   [BOBINA_CONTACTOR, "A1", "A2"],
@@ -50,8 +52,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los cinco símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(5);
+  it("tiene los seis símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(6);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -119,6 +121,7 @@ describe("biblioteca de símbolos", () => {
     expect(CONTACTO_AUXILIAR_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "bobina" });
     expect(BOBINA_CONTACTOR.elemento).toBe("bobina");
     expect(LAMPARA).toMatchObject({ elemento: "carga", categoria: "senalizacion" });
+    expect(FUENTE_MONOFASICA).toMatchObject({ elemento: "fuente", categoria: "fuentes" });
   });
 });
 

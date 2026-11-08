@@ -57,6 +57,7 @@ Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fas
 - **Qué:** `Hoja.componentes: Componente[]` con `{ id, tipo, x, y, rot, espejado, etiqueta, params }`, tal como el `.brn` del plan (sin ñ ni tildes en las claves). `Hoja.cables` vacío por ahora. Más funciones de consulta: `buscarComponente` y `generarId`.
 - **Terminado cuando:** el documento puede tener componentes y `crearDocumento` sigue andando.
 - **Prueba:** `documento.test.ts`: crear, buscar e ids únicos. `check:core` pasa.
+- **Hecho (2026-11-08):** se agrega `espejado`. `generarId` usa `Documento.contadores` (uno por prefijo, solo sube y se guarda en el `.brn`): un id borrado nunca se reutiliza. `Cable` queda solo con `id` hasta T12.
 
 ### T4. Comandos e historial
 - **Qué:** la interfaz `Comando { aplicar(doc): Cambio; deshacer(doc): Cambio }`. `Cambio` lista los ids tocados, para que la vista sepa qué invalidar. `Historial` ilimitado con `ejecutar`, `deshacer`, `rehacer` y `agrupar` (varios comandos = un solo paso de deshacer). Ejecutar algo nuevo borra lo que había para rehacer.
@@ -72,6 +73,7 @@ Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fas
 - **Qué:** `FUENTE_MONOFASICA` con bornes L y N, comportamiento `fuente` y categoría `fuentes`, en `biblioteca.ts`. Es lo único que falta para la marcha-parada.
 - **Terminado cuando:** aparece en `SIMBOLOS` y pasa `validar`.
 - **Prueba:** test de bornes en `biblioteca.test.ts`, con el mismo patrón que los otros 5.
+- **Hecho (2026-11-08):** tipo `fuente.monofasica`, 2×4, círculo con onda; L (0,−2) arriba y N (0,2) abajo.
 
 ---
 

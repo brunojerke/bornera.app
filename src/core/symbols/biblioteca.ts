@@ -181,8 +181,36 @@ export const LAMPARA: DefinicionSimbolo = {
   ],
 };
 
+/** Radio del círculo de la fuente. */
+const R_FUENTE = 0.75;
+
+/** Fuente monofásica de alterna: círculo con una onda (~), L arriba y N abajo. */
+export const FUENTE_MONOFASICA: DefinicionSimbolo = {
+  tipo: "fuente.monofasica",
+  nombre: "Fuente monofásica",
+  categoria: "fuentes",
+  elemento: "fuente",
+  tamano: { ancho: 2, alto: 4 },
+  primitivas: [
+    ...conexiones(R_FUENTE),
+    { forma: "circulo", cx: 0, cy: 0, r: R_FUENTE },
+    // Onda: dos medios ciclos con líneas cortas (no hay primitiva de curva).
+    linea(-0.45, 0, -0.3, -0.18),
+    linea(-0.3, -0.18, -0.15, -0.18),
+    linea(-0.15, -0.18, 0, 0),
+    linea(0, 0, 0.15, 0.18),
+    linea(0.15, 0.18, 0.3, 0.18),
+    linea(0.3, 0.18, 0.45, 0),
+  ],
+  bornes: [
+    { nombre: "L", x: 0, y: -2, direccion: "arriba" },
+    { nombre: "N", x: 0, y: 2, direccion: "abajo" },
+  ],
+};
+
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
+  FUENTE_MONOFASICA,
   PULSADOR_NA,
   PULSADOR_NC,
   BOBINA_CONTACTOR,
