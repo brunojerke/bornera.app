@@ -9,7 +9,7 @@
 //   cuando todo está al día, no se pide nada más.
 
 import { Camara, type Caja } from "./camara";
-import { Capas, type OpcionesCapas } from "./capas";
+import { Capas, type DibujarDinamico, type OpcionesCapas } from "./capas";
 import type { Contenido } from "./escena";
 import type { MedidaCuadro } from "./rendimiento";
 
@@ -54,6 +54,12 @@ export class Vista {
   set contenido(c: Contenido | null) {
     this.capas.contenido = c;
     this.invalidarContenido();
+  }
+
+  /** Lo que se dibuja en la capa dinámica, encima de la estática, en cada cuadro. */
+  set dinamico(f: DibujarDinamico | null) {
+    this.capas.dinamico = f;
+    this.invalidar();
   }
 
   get opciones(): Readonly<OpcionesCapas> {
@@ -220,6 +226,7 @@ export class Vista {
       origen: leer("--grilla-origen", antes.origen),
       simbolo: leer("--simbolo", antes.simbolo),
       borne: leer("--borne", antes.borne),
+      acento: leer("--acento", antes.acento),
     };
   }
 }

@@ -16,6 +16,8 @@
   let propiedadesAbierto = $state(false);
   let zoom = $state(1);
   let cursor = $state<Punto | null>(null);
+  /** Tipo del símbolo que se está colocando (para resaltarlo en la paleta). */
+  let colocando = $state<string | null>(null);
   let lienzo: ReturnType<typeof Lienzo>;
 
   // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
@@ -53,8 +55,13 @@
     bind:opciones
   />
   <main class="centro">
-    <Paleta bind:abierta={paletaAbierta} />
-    <Lienzo bind:this={lienzo} bind:zoom bind:cursor {escena} {rendimiento} {opciones} />
+    <Paleta
+      bind:abierta={paletaAbierta}
+      activo={colocando}
+      desactivada={escena !== "documento"}
+      onelegir={(def, e) => lienzo.iniciarColocar(def, e)}
+    />
+    <Lienzo bind:this={lienzo} bind:zoom bind:cursor bind:colocando {escena} {rendimiento} {opciones} />
     <PanelPropiedades bind:abierto={propiedadesAbierto} />
   </main>
   <BarraEstado {modo} {zoom} {cursor} />

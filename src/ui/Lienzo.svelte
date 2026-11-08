@@ -6,6 +6,8 @@
   import { untrack } from "svelte";
   import { Vista, PASO_ZOOM } from "../render/vista";
   import { conectarNavegacion } from "../editor/navegacion";
+  import { conectarHerramientas, type Herramientas } from "../editor/punteros";
+  import type { DefinicionSimbolo } from "../core/symbols";
   import { PX_POR_UNIDAD, type Punto } from "../render/camara";
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
   import { nivelDetalle } from "../render/detalle";
@@ -21,6 +23,7 @@
   let {
     zoom = $bindable(1),
     cursor = $bindable(null),
+    colocando = $bindable(null),
     escena = "documento",
     rendimiento = false,
     opciones = OPCIONES_OPTIMIZADAS,
@@ -29,6 +32,8 @@
     zoom?: number;
     /** Posición del mouse en unidades de grilla; null fuera del lienzo. */
     cursor?: Punto | null;
+    /** Tipo del símbolo que se está colocando; null si no hay herramienta. Solo lectura desde afuera. */
+    colocando?: string | null;
     /** Qué se dibuja: el documento o una escena de prueba. */
     escena?: EscenaDesarrollo;
     /** Muestra el contador de rendimiento (F3). */
@@ -43,9 +48,10 @@
   // El editor dura lo que dura el lienzo: cambiar a una escena de prueba y
   // volver no pierde el documento ni su historial.
   const editor = new Editor();
+  editor.alCambiarHerramienta = () => (colocando = editor.herramienta?.def.tipo ?? null);
+  let herramientas: Herramientas | null = null;
 
-  // Desarrollo: ejecutar comandos desde la consola hasta que haya herramientas
-  // (T7). Por ejemplo:
+  // Desarrollo: ejecutar comandos desde la consola. Por ejemplo:
   //   const { editor, comandos: c } = bornera;
   //   editor.ejecutar(c.colocar(editor.documento, { tipo: "contactor.bobina",
   //     x: 0, y: 0, rot: 0, espejado: false, etiqueta: "K1", params: {} }));
@@ -71,6 +77,11 @@
 
   export function alejar() {
     if (vista?.zoomAlCentro(1 / PASO_ZOOM)) cambio();
+  }
+
+  /** Empieza a colocar un símbolo desde un pointerdown en la paleta. */
+  export function iniciarColocar(def: DefinicionSimbolo, e: PointerEvent) {
+    herramientas?.desdePaleta(def, e);
   }
 
   export function encuadrar() {
@@ -128,7 +139,13 @@
       alEncuadrar: encuadrar,
       alMoverCursor: (p) => (cursor = p),
     });
+    // Después de la navegación: lo que ella consume llega con defaultPrevented.
+    const h = conectarHerramientas(canvas, { camara: v.camara, editor });
+    herramientas = h;
+    v.dinamico = editor.dibujarDinamico;
     return () => {
+      h.desconectar();
+      herramientas = null;
       desconectar();
       editor.vista = null;
       v.destruir();
@@ -147,6 +164,7 @@
       const primera = escenaActual === null;
       escenaActual = e;
       if (primera) return; // la Vista ya se creó con esta escena
+      if (e !== "documento") editor.cancelarHerramienta();
       vista.contenido = crearContenido(e);
       editor.vista = e === "documento" ? vista : null;
       encuadrar();

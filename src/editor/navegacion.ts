@@ -20,7 +20,7 @@ export interface OpcionesNavegacion {
 }
 
 /** True si la tecla la está recibiendo un campo donde se escribe. */
-function esCampoEditable(destino: EventTarget | null): boolean {
+export function esCampoEditable(destino: EventTarget | null): boolean {
   if (!(destino instanceof HTMLElement)) return false;
   return destino.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(destino.tagName);
 }

@@ -39,6 +39,8 @@ export interface Colores extends ColoresGrilla, ColoresContenido {
   /** Fondo del lienzo (los canvas son opacos). */
   fondo: string;
   origen: string;
+  /** Lo que se está editando en la capa dinámica (vista previa al colocar). */
+  acento: string;
 }
 
 /**
@@ -134,6 +136,7 @@ export class Capas {
     origen: "#999",
     simbolo: "#000",
     borne: "#c00",
+    acento: "#06f",
   };
 
   private _opciones: OpcionesCapas = { ...OPCIONES_OPTIMIZADAS };

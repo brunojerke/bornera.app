@@ -6,14 +6,23 @@
 // componentes desde el documento, y la caja afectada (vieja ∪ nueva) se pasa a
 // `invalidarRegion`: solo se rehacen los mosaicos que tocan el cambio, nunca la
 // pantalla entera.
+//
+// También tiene la herramienta activa (por ahora, Colocar): ejecuta lo que
+// devuelve y dibuja su vista previa en la capa dinámica.
 
 import { type Cambio, type Comando } from "../core/model/comandos";
 import { crearDocumento, type Componente, type Documento } from "../core/model/documento";
 import { Historial } from "../core/model/historial";
 import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
-import type { ComponenteEscena } from "../render/escena";
+import type { Colores } from "../render/capas";
+import { nivelDetalle } from "../render/detalle";
+import { grosorLinea, type ComponenteEscena } from "../render/escena";
 import { EscenaEditable } from "../render/escenaEditable";
+import type { Renderer } from "../render/renderer";
+import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
+import { HerramientaColocar, type ModoColocar } from "./herramientas/colocar";
+import type { Resultado } from "./herramientas/tipos";
 
 /**
  * Lo que se dibuja para un componente cuyo tipo no está en la biblioteca (por
@@ -38,6 +47,8 @@ export const SIMBOLO_DESCONOCIDO: DefinicionSimbolo = {
 export interface DestinoVista {
   /** Rehacer solo la parte de la capa estática que toca `caja` (unidades de grilla). */
   invalidarRegion(caja: Caja): void;
+  /** Pedir un cuadro: cambió solo la capa dinámica. */
+  invalidar(): void;
 }
 
 /** Documento vacío para arrancar la app, con la fecha de hoy. */
@@ -50,6 +61,10 @@ export class Editor {
   readonly escena = new EscenaEditable();
   /** Vista que muestra la escena; null si no se está mostrando (no hay nada que invalidar). */
   vista: DestinoVista | null = null;
+  /** Herramienta activa; null si no hay ninguna. */
+  herramienta: HerramientaColocar | null = null;
+  /** Se avisa cuando empieza o termina una herramienta (para la paleta). */
+  alCambiarHerramienta: (() => void) | null = null;
   private readonly desconocidos = new Set<string>();
 
   constructor(
@@ -93,6 +108,44 @@ export class Editor {
     const cambio = this.historial.rehacer();
     return cambio && this.reflejar(cambio);
   }
+
+  /** Empieza a colocar un símbolo de la paleta. Sin vista no hace nada. */
+  iniciarColocar(def: DefinicionSimbolo, modo: ModoColocar): HerramientaColocar | null {
+    if (!this.vista) return null;
+    this.herramienta = new HerramientaColocar(def, modo, this.documento, this.hoja);
+    this.alCambiarHerramienta?.();
+    return this.herramienta;
+  }
+
+  /** Termina la herramienta activa sin hacer nada (Esc, cambio de escena). */
+  cancelarHerramienta(): void {
+    if (this.herramienta) this.aplicar(this.herramienta.cancelar());
+  }
+
+  /** Hace lo que pidió la herramienta: ejecutar su comando, redibujar, terminar. */
+  aplicar(r: Resultado): void {
+    if (r.comando) this.ejecutar(r.comando);
+    if (r.terminar && this.herramienta) {
+      this.herramienta = null;
+      this.alCambiarHerramienta?.();
+    }
+    if (r.redibujar || r.terminar) this.vista?.invalidar();
+  }
+
+  /**
+   * Capa dinámica: la vista previa de la herramienta, con el color de acento.
+   * Es un símbolo por cuadro y no toca la capa estática.
+   */
+  readonly dibujarDinamico = (r: Renderer, info: { escala: number; colores: Colores }): void => {
+    const p = this.herramienta?.previa;
+    if (!p) return;
+    const c = { x: p.x, y: p.y, rotacion: 0 as const, espejado: false };
+    const color = info.colores.acento;
+    r.estilo({ trazo: color, relleno: color, grosor: grosorLinea(info.escala) });
+    const detalle = nivelDetalle(info.escala);
+    dibujarSimbolo(r, p.def, c, { textos: detalle.textos });
+    if (detalle.bornes) dibujarMarcasBornes(r, p.def, c);
+  };
 
   private componentesHoja(): readonly Componente[] {
     return this.documento.hojas[this.hoja]?.componentes ?? [];

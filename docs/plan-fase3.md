@@ -92,6 +92,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Qué:** `Paleta.svelte` sale de `SIMBOLOS`, agrupada por categoría. Al arrastrar desde la paleta o hacer clic y después clic en el lienzo, se ve una vista previa en la capa dinámica, ajustada a la grilla. Al soltar se ejecuta `Colocar`. Esc cancela.
 - **Terminado cuando:** se pueden colocar los 6 símbolos con ajuste a la grilla.
 - **Prueba:** test de la herramienta: una secuencia de eventos produce un `Colocar` en coordenadas enteras, y Esc no produce nada. Prueba manual en 1024×600.
+- **Hecho (2026-11-08):** `src/editor/herramientas/colocar.ts` (pura) y `src/editor/punteros.ts` (DOM). El arrastre desde la paleta usa Pointer Events, no el drag & drop de HTML: en Tauri sobre Windows la ventana lo intercepta (`dragDropEnabled`). Apretar sin moverse más de 4 px es clic: la herramienta queda activa para colocar varios iguales; Esc, botón derecho o clic otra vez en el ítem la terminan. La previa (color `--acento`) pide un cuadro solo al cambiar de punto de grilla y nunca invalida mosaicos. El buscador filtra sin tildes ni mayúsculas; las categorías vacías no se muestran. Etiqueta vacía al colocar hasta el etiquetado automático. Prueba de humo con Edge headless a 1024×600 (CDP): 6 arrastres, clic-clic, Esc y soltar fuera.
 
 ### T8. Selección
 - **Qué:** clic sobre un componente (con `enPunto` del índice), Mayús+clic para sumar y quitar, rectángulo arrastrando en vacío (con `enCaja`), y Esc o clic en vacío para deseleccionar. Resaltado en la capa dinámica. El panel de propiedades se abre al seleccionar.
@@ -105,6 +106,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 
 ### T10. Rotar, espejar, borrar y deshacer en la interfaz
 - **Qué:** R rota, M espeja y Supr borra la selección. Ctrl+Z / Ctrl+Y y los botones de la barra superior, que se desactivan si no hay nada para deshacer o rehacer. Ninguno se dispara mientras se escribe en un campo (reusar `esCampoEditable` de `navegacion.ts`).
+  - R y M también rotan/espejan la vista previa mientras se coloca.
 - **Terminado cuando:** todo se puede deshacer y rehacer desde el teclado y los botones.
 - **Prueba:** test del mapa de atajos a comandos y prueba manual.
 

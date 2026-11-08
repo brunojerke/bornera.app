@@ -1,33 +1,31 @@
 <script lang="ts">
-  // Paleta de componentes (izquierda), plegable. Todavía sin arrastrar ni buscar.
+  // Paleta de componentes (izquierda), plegable. Sale de la biblioteca de
+  // símbolos, agrupada por categoría. Apretar un ítem empieza a colocarlo:
+  // arrastrando hasta el lienzo, o clic y después clic en el lienzo.
   import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
   import PanelLeftOpen from "@lucide/svelte/icons/panel-left-open";
   import Search from "@lucide/svelte/icons/search";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import { SIMBOLOS, type DefinicionSimbolo } from "../core/symbols";
+  import { agruparSimbolos } from "./paleta";
 
-  let { abierta = $bindable(true) }: { abierta?: boolean } = $props();
+  let {
+    abierta = $bindable(true),
+    activo = null,
+    desactivada = false,
+    onelegir,
+  }: {
+    abierta?: boolean;
+    /** Tipo del símbolo que se está colocando (se resalta). */
+    activo?: string | null;
+    /** No se puede colocar (el lienzo muestra una escena de prueba). */
+    desactivada?: boolean;
+    /** Se apretó un ítem: empieza a colocarse. */
+    onelegir?: (def: DefinicionSimbolo, e: PointerEvent) => void;
+  } = $props();
 
-  // Provisorio: cuando exista la biblioteca de símbolos (src/core/symbols),
-  // esta lista va a salir de ahí.
-  const categorias: { nombre: string; items: string[] }[] = [
-    { nombre: "Fuentes", items: ["Fuente monofásica", "Fuente trifásica", "Fuente CC 24 V"] },
-    {
-      nombre: "Mando",
-      items: [
-        "Pulsador NA",
-        "Pulsador NC",
-        "Interruptor / selector",
-        "Bobina de contactor",
-        "Contacto auxiliar NA",
-        "Contacto auxiliar NC",
-      ],
-    },
-    {
-      nombre: "Potencia",
-      items: ["Contactos principales", "Relé térmico", "Fusible", "Motor trifásico", "Motor monofásico"],
-    },
-    { nombre: "Señalización", items: ["Lámpara"] },
-  ];
+  let filtro = $state("");
+  const grupos = $derived(agruparSimbolos(SIMBOLOS, filtro));
 </script>
 
 <aside class="panel" class:plegado={!abierta} aria-label="Paleta de componentes">
@@ -47,19 +45,32 @@
 
     <label class="buscador">
       <Search size={14} />
-      <input type="search" placeholder="Buscar…" aria-label="Buscar componente" />
+      <input type="search" placeholder="Buscar…" aria-label="Buscar componente" bind:value={filtro} />
     </label>
 
     <div class="lista">
-      {#each categorias as categoria (categoria.nombre)}
+      {#each grupos as grupo (grupo.id)}
         <details open>
-          <summary><ChevronRight size={14} class="flecha" />{categoria.nombre}</summary>
+          <summary><ChevronRight size={14} class="flecha" />{grupo.nombre}</summary>
           <ul>
-            {#each categoria.items as item (item)}
-              <li><button class="item">{item}</button></li>
+            {#each grupo.simbolos as def (def.tipo)}
+              <li>
+                <button
+                  class="item"
+                  class:activo={activo === def.tipo}
+                  aria-pressed={activo === def.tipo}
+                  disabled={desactivada}
+                  title={desactivada ? "Volvé al documento para colocar" : "Arrastrar al lienzo, o clic y clic en el lienzo"}
+                  onpointerdown={(e) => onelegir?.(def, e)}
+                >
+                  {def.nombre}
+                </button>
+              </li>
             {/each}
           </ul>
         </details>
+      {:else}
+        <p class="vacio">Ningún componente coincide.</p>
       {/each}
     </div>
   {:else}
@@ -183,7 +194,22 @@
     cursor: grab;
   }
 
-  .item:hover {
+  .item:hover:not(:disabled) {
     background: var(--hover);
+  }
+
+  .item.activo {
+    background: var(--acento);
+    color: var(--acento-texto);
+  }
+
+  .item:disabled {
+    color: var(--texto-suave);
+    cursor: default;
+  }
+
+  .vacio {
+    margin: 8px;
+    color: var(--texto-suave);
   }
 </style>

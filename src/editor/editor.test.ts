@@ -3,15 +3,23 @@ import { Borrar, CambiarEtiqueta, colocar, Mover } from "../core/model/comandos"
 import type { Componente } from "../core/model/documento";
 import { buscarSimbolo, SIMBOLOS, validarDefinicion } from "../core/symbols";
 import { unirCajas, type Caja } from "../render/camara";
+import type { Colores } from "../render/capas";
+import type { Renderer } from "../render/renderer";
 import { cajaDibujo } from "../render/simbolo";
+import type { EventoHerramienta } from "./herramientas/tipos";
 import { documentoNuevo, Editor, SIMBOLO_DESCONOCIDO, type DestinoVista } from "./editor";
 
 /** Vista falsa: anota cada región invalidada y si se pidió rehacer todo. */
 class VistaFalsa implements DestinoVista {
   regiones: Caja[] = [];
   enteras = 0;
+  /** Cuadros pedidos solo para la capa dinámica. */
+  cuadros = 0;
   invalidarRegion(caja: Caja): void {
     this.regiones.push(caja);
+  }
+  invalidar(): void {
+    this.cuadros++;
   }
   /** La Vista real tiene esto; el editor nunca lo tiene que llamar. */
   invalidarContenido(): void {
@@ -164,5 +172,85 @@ describe("Editor", () => {
     expect(editor.escena.cantidad).toBe(1);
     expect(editor.escena.obtener("c1")).toMatchObject({ x: 7, y: 8 });
     expect(editor.escena.obtener("c2")).toBeUndefined();
+  });
+});
+
+const ev = (x: number, y: number): EventoHerramienta => ({ x, y, boton: 0, botones: 0, mayus: false, ctrl: false });
+
+/** Renderer falso: anota el nombre de cada llamada y el último estilo. */
+function rendererFalso(): { r: Renderer; llamadas: string[]; estilos: unknown[] } {
+  const llamadas: string[] = [];
+  const estilos: unknown[] = [];
+  const r = new Proxy({} as Renderer, {
+    get: (_, nombre) => (...args: unknown[]) => {
+      llamadas.push(String(nombre));
+      if (nombre === "estilo") estilos.push(args[0]);
+    },
+  });
+  return { r, llamadas, estilos };
+}
+
+const COLORES = { acento: "#06f" } as Colores;
+
+describe("Editor con la herramienta Colocar", () => {
+  it("la vista previa solo pide cuadros; colocar invalida solo la caja del símbolo", () => {
+    const { editor, vista } = armar();
+    const def = buscarSimbolo("contactor.bobina")!;
+    const avisos = vi.fn();
+    editor.alCambiarHerramienta = avisos;
+    const h = editor.iniciarColocar(def, "clic")!;
+    expect(avisos).toHaveBeenCalledTimes(1);
+
+    for (let i = 0; i < 30; i++) editor.aplicar(h.mover(ev(2 + i * 0.1, 3)));
+    expect(vista.regiones).toEqual([]); // moverse no toca la capa estática
+    expect(vista.cuadros).toBe(4); // 2, 3, 4 y 5: un cuadro por punto de grilla
+
+    editor.aplicar(h.presionar(ev(4.9, 3.2)));
+    expect(vista.regiones).toEqual([cajaDe({ ...datos(5, 3), etiqueta: "" })]);
+    expect(vista.enteras).toBe(0);
+    expect(editor.herramienta).toBe(h); // en modo clic sigue activa
+
+    editor.deshacer();
+    expect(vista.regiones).toHaveLength(2);
+    expect(vista.regiones[1]).toEqual(vista.regiones[0]);
+  });
+
+  it("Esc termina sin cambiar el documento ni la capa estática", () => {
+    const { editor, vista } = armar();
+    const avisos = vi.fn();
+    editor.alCambiarHerramienta = avisos;
+    editor.aplicar(editor.iniciarColocar(SIMBOLOS[0]!, "clic")!.mover(ev(1, 1)));
+    editor.cancelarHerramienta();
+    expect(editor.herramienta).toBeNull();
+    expect(avisos).toHaveBeenCalledTimes(2);
+    expect(vista.regiones).toEqual([]);
+    expect(editor.puedeDeshacer).toBe(false);
+    expect(editor.documento.hojas[0]!.componentes).toEqual([]);
+  });
+
+  it("soltar un arrastre coloca y termina la herramienta", () => {
+    const { editor } = armar();
+    const h = editor.iniciarColocar(SIMBOLOS[0]!, "arrastre")!;
+    editor.aplicar(h.soltar(ev(-2.2, 7.7)));
+    expect(editor.herramienta).toBeNull();
+    expect(editor.documento.hojas[0]!.componentes[0]).toMatchObject({ tipo: SIMBOLOS[0]!.tipo, x: -2, y: 8 });
+  });
+
+  it("sin vista no se puede colocar", () => {
+    const editor = new Editor(documentoNuevo());
+    expect(editor.iniciarColocar(SIMBOLOS[0]!, "clic")).toBeNull();
+    expect(editor.herramienta).toBeNull();
+  });
+
+  it("la capa dinámica dibuja la vista previa con el color de acento, y nada sin herramienta", () => {
+    const { editor } = armar();
+    const f = rendererFalso();
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES });
+    expect(f.llamadas).toEqual([]);
+
+    editor.aplicar(editor.iniciarColocar(SIMBOLOS[0]!, "clic")!.mover(ev(0, 0)));
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES });
+    expect(f.estilos[0]).toMatchObject({ trazo: "#06f", relleno: "#06f" });
+    expect(f.llamadas).toContain("simbolo");
   });
 });
