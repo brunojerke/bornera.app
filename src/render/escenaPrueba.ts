@@ -37,7 +37,7 @@ const componentes: ComponenteEscena[] = SIMBOLOS.flatMap((def, fila) =>
     y: fila * PASO_Y,
     rotacion,
     espejado: false,
-    etiqueta: ETIQUETAS[def.tipo],
+    etiqueta: ETIQUETAS[def.tipo] ?? def.etiquetaInicial,
   })),
 );
 

@@ -5,8 +5,9 @@ import {
   buscarSimbolo,
   CONTACTO_AUXILIAR_NA,
   discontinua,
-  FUENTE_MONOFASICA,
+  FASE,
   LAMPARA,
+  NEUTRO,
   PULSADOR_NA,
   PULSADOR_NC,
   SIMBOLOS,
@@ -17,9 +18,8 @@ import { validarDefinicion } from "./validar";
 
 const ROTACIONES: Rotacion[] = [0, 90, 180, 270];
 
-/** Bornes esperados: [arriba, abajo], siempre en (0, −2) y (0, 2). */
+/** Bornes esperados de los símbolos de dos bornes: [arriba, abajo], siempre en (0, −2) y (0, 2). */
 const ESPERADOS: [DefinicionSimbolo, string, string][] = [
-  [FUENTE_MONOFASICA, "L", "N"],
   [PULSADOR_NA, "13", "14"],
   [PULSADOR_NC, "11", "12"],
   [BOBINA_CONTACTOR, "A1", "A2"],
@@ -52,8 +52,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los seis símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(6);
+  it("tiene los siete símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(7);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -121,7 +121,33 @@ describe("biblioteca de símbolos", () => {
     expect(CONTACTO_AUXILIAR_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "bobina" });
     expect(BOBINA_CONTACTOR.elemento).toBe("bobina");
     expect(LAMPARA).toMatchObject({ elemento: "carga", categoria: "senalizacion" });
-    expect(FUENTE_MONOFASICA).toMatchObject({ elemento: "fuente", categoria: "fuentes" });
+  });
+});
+
+describe("alimentaciones: fase y neutro", () => {
+  it("la fase tiene un solo borne L, que sale hacia abajo", () => {
+    expect(FASE.bornes).toEqual([{ nombre: "L", x: 0, y: 1, direccion: "abajo" }]);
+  });
+
+  it("el neutro tiene un solo borne N, que sale hacia arriba", () => {
+    expect(NEUTRO.bornes).toEqual([{ nombre: "N", x: 0, y: -1, direccion: "arriba" }]);
+  });
+
+  it.each([
+    [FASE, "L"],
+    [NEUTRO, "N"],
+  ] as const)("%# es una fuente, va en Fuentes y se coloca con la etiqueta %s", (s, etiqueta) => {
+    expect(s).toMatchObject({ elemento: "fuente", categoria: "fuentes", etiquetaInicial: etiqueta });
+    // Su nombre visible es la etiqueta: el del borne no se dibuja.
+    expect(s.mostrarNombresBornes).toBe(false);
+  });
+
+  it("son los primeros de la biblioteca", () => {
+    expect(SIMBOLOS.slice(0, 2)).toEqual([FASE, NEUTRO]);
+  });
+
+  it("los demás símbolos dibujan los nombres de sus bornes", () => {
+    for (const s of SIMBOLOS.slice(2)) expect(s.mostrarNombresBornes).toBeUndefined();
   });
 });
 

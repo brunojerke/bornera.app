@@ -191,7 +191,7 @@ export function dibujarSimbolo(
     r.texto(c.x + q.x, c.y + q.y, p.texto, p.alto, alinearTexto(p, c));
   }
 
-  if (opciones.nombresBornes ?? true) {
+  if ((opciones.nombresBornes ?? true) && def.mostrarNombresBornes !== false) {
     const lado = transformarDireccion(def.ladoNombresBornes ?? "izquierda", c);
     for (const b of transformarBornes(def.bornes, c)) {
       const n = posicionNombreBorne(b.x, b.y, b.direccion, lado);

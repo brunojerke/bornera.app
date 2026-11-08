@@ -98,6 +98,17 @@ describe("HerramientaColocar, modo clic", () => {
   });
 });
 
+describe("etiqueta al colocar", () => {
+  it("la fase entra como L y el neutro como N; los demás, sin etiqueta", () => {
+    const d = doc();
+    const historial = new Historial(d);
+    for (const tipo of ["fuente.fase", "fuente.neutro", "contactor.bobina"]) {
+      historial.ejecutar(new HerramientaColocar(buscarSimbolo(tipo)!, "arrastre", d).soltar(ev(0, 0)).comando!);
+    }
+    expect(d.hojas[0]!.componentes.map((c) => c.etiqueta)).toEqual(["L", "N", ""]);
+  });
+});
+
 describe("HerramientaColocar, modo arrastre", () => {
   it("soltar sobre el lienzo da un Colocar y termina", () => {
     const d = doc();
@@ -132,9 +143,9 @@ describe("HerramientaColocar, modo arrastre", () => {
   });
 });
 
-describe("los 6 símbolos de la biblioteca", () => {
+describe("los 7 símbolos de la biblioteca", () => {
   it("se colocan con ajuste a la grilla", () => {
-    expect(SIMBOLOS).toHaveLength(6);
+    expect(SIMBOLOS).toHaveLength(7);
     const d = doc();
     const historial = new Historial(d);
     SIMBOLOS.forEach((def, i) => {

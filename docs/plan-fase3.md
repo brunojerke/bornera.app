@@ -75,6 +75,7 @@ Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fas
 - **Terminado cuando:** aparece en `SIMBOLOS` y pasa `validar`.
 - **Prueba:** test de bornes en `biblioteca.test.ts`, con el mismo patrón que los otros 5.
 - **Hecho (2026-11-08):** tipo `fuente.monofasica`, 2×4, círculo con onda; L (0,−2) arriba y N (0,2) abajo.
+- **Reemplazada (2026-11-08, después de T7):** como en CADe_SIMU, la fuente pasa a ser dos símbolos sueltos de un borne, en Fuentes. `FASE` (`fuente.fase`, "Fase (L)", 2×2): barra arriba y borne `L` en (0, 1) hacia abajo. `NEUTRO` (`fuente.neutro`, "Neutro (N)", 2×2): barra abajo y borne `N` en (0, −1) hacia arriba. La etiqueta es el nombre de la red (se coloca con "L" o "N" por `etiquetaInicial` y se edita: L1, L2, L3). No dibujan el nombre del borne (`mostrarNombresBornes: false`): se vería dos veces. Ver "Etiquetas de red" en [Para la fase 4](#para-la-fase-4).
 
 ---
 
@@ -168,7 +169,8 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 
 ### T15. Aceptación: marcha-parada
 - **Qué:**
-  - Test automático en `src/core`: armar la marcha-parada solo con comandos (fuente, S0 NC, S1 NA, K1 13-14 en paralelo con S1, bobina K1, lámpara H1) y verificar la conectividad esperada por bornes. Ese mismo documento queda como base para `tests/circuitos/` en la fase 4.
+  - Test automático en `src/core`: armar la marcha-parada solo con comandos (Fase "L" arriba, S0 NC, S1 NA, K1 13-14 en paralelo con S1, bobina K1, lámpara H1 en paralelo con la bobina, Neutro "N" abajo) y verificar la conectividad esperada por bornes, por cables.
+  - La bobina y la lámpara pueden ir a dos Neutro "N" distintos sin cable entre ellos: el test anota qué redes se unirían por nombre (base para la fase 4), sin simular. Ese mismo documento queda como base para `tests/circuitos/` en la fase 4.
   - El test también la guarda y la abre (T15a) y compara.
   - Prueba manual: dibujarla a mano en la netbook, guardarla, cerrar la app y volver a abrirla.
   - `npm run bench` y medición F3.
@@ -183,6 +185,20 @@ Están en la sección "Editor" del plan, pero el criterio de la fase no los pide
 - validaciones en vivo (bornes y cables sueltos en naranja).
 
 Propuesta: hacerlos después de T15, como T16–T19, antes de abrir la fase 4.
+
+---
+
+## Para la fase 4
+
+### Etiquetas de red
+- Las alimentaciones con el **mismo nombre de red** quedan conectadas entre sí aunque no haya cable, como etiquetas de red. El nombre se compara **sin espacios a los lados y en mayúsculas**: "l1 " y "L1" son la misma red.
+- En `Fase` y `Neutro`, el nombre de red de su único borne es la **etiqueta del componente**.
+- En la simulación: se unen en el paso 1 (netlist, union-find). El nombre es también el potencial del paso 3: L, L1, L2, L3 son fases y N es neutro. El paso 4 marca cortocircuito si una red recibe dos fases distintas, o fase y neutro (por ejemplo, una Fase con etiqueta "N").
+- **Validación:** avisar si un documento mezcla "L" con "L1", "L2" o "L3" (casi siempre es un error: la fase monofásica no está unida a ninguna de las trifásicas). Es un aviso, no un error.
+
+### Fuentes trifásicas (cuando se agreguen los símbolos de potencia)
+- Tres variantes: L1-L2-L3, L1-L2-L3-N y L1-L2-L3-N-PE. **Cada borne se une a la red con su mismo nombre** (el borne L2 a la red "L2", el PE a la red "PE").
+- Por eso la regla de etiquetas de red es **por borne**, no solo por componente: cada borne de alimentación tiene un nombre de red. En `Fase`/`Neutro` sale de la etiqueta del componente; en la trifásica, del nombre del borne. La netlist une todos los bornes con el mismo nombre de red (normalizado igual).
 
 ---
 

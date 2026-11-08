@@ -143,7 +143,7 @@ export class Editor {
     const color = info.colores.acento;
     r.estilo({ trazo: color, relleno: color, grosor: grosorLinea(info.escala) });
     const detalle = nivelDetalle(info.escala);
-    dibujarSimbolo(r, p.def, c, { textos: detalle.textos });
+    dibujarSimbolo(r, p.def, c, { textos: detalle.textos, etiqueta: p.def.etiquetaInicial });
     if (detalle.bornes) dibujarMarcasBornes(r, p.def, c);
   };
 

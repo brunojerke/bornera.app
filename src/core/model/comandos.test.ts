@@ -36,7 +36,7 @@ function docCon(posiciones: readonly (readonly [number, number])[]): Documento {
   return doc;
 }
 
-/** Los 6 símbolos, uno de cada uno, con params para ver que se copian. */
+/** Los 7 símbolos, uno de cada uno, con params para ver que se copian. */
 function docBase(): Documento {
   const doc = docCon(SIMBOLOS.map((_, i) => [i * 4, (i % 3) * 5] as const));
   doc.hojas[0]!.componentes[0]!.params = { tension: "230" };
@@ -171,9 +171,9 @@ describe("ids estables", () => {
     cmd.aplicar(doc);
     expect(buscarComponente(doc, "c3")).toBeUndefined();
     cmd.deshacer(doc);
-    expect(ids(doc)).toEqual(["c1", "c2", "c3", "c4", "c5", "c6"]);
+    expect(ids(doc)).toEqual(["c1", "c2", "c3", "c4", "c5", "c6", "c7"]);
     cmd.aplicar(doc);
-    expect(ids(doc)).toEqual(["c1", "c2", "c4", "c5", "c6"]);
+    expect(ids(doc)).toEqual(["c1", "c2", "c4", "c5", "c6", "c7"]);
   });
 
   it("Borrar varios, en varias hojas, devuelve cada uno a su hoja y a su orden", () => {
@@ -182,9 +182,9 @@ describe("ids estables", () => {
     colocar(doc, datos("pulsador.na", 0, 0), 1).aplicar(doc);
     colocar(doc, datos("pulsador.nc", 0, 4), 1).aplicar(doc);
     const antes = copia(doc);
-    const cmd = new Borrar(["c8", "c4", "c1", "c6", "c7"]);
+    const cmd = new Borrar(["c9", "c4", "c1", "c6", "c8"]);
     cmd.aplicar(doc);
-    expect(doc.hojas.map((h) => h.componentes.map((c) => c.id))).toEqual([["c2", "c3", "c5"], []]);
+    expect(doc.hojas.map((h) => h.componentes.map((c) => c.id))).toEqual([["c2", "c3", "c5", "c7"], []]);
     cmd.deshacer(doc);
     expect(doc).toEqual(antes);
   });
@@ -199,7 +199,7 @@ const GRUPOS: [string, [number, number][]][] = [
   ["impar×impar", [[0, 0], [3, 5], [1, 2]]],
   ["impar×par", [[0, 0], [3, 0], [1, 4]]],
   ["par×impar", [[0, 0], [2, 3], [1, 1]]],
-  ["impar×par, los 6 símbolos", [[0, 0], [3, 0], [1, 4], [2, 2], [0, 4], [3, 1]]],
+  ["impar×par, los 7 símbolos", [[0, 0], [3, 0], [1, 4], [2, 2], [0, 4], [3, 1], [1, 1]]],
 ];
 
 /** Desplazamientos: positivos, negativos y de paridad distinta. */

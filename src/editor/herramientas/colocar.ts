@@ -106,12 +106,16 @@ export class HerramientaColocar {
     return true;
   }
 
-  /** El id se fija acá (generarId), al construir el comando, como piden los comandos. */
+  /**
+   * El id se fija acá (generarId), al construir el comando, como piden los
+   * comandos. La etiqueta es la inicial del símbolo (la fase entra como "L").
+   */
   private comando() {
     const p = this.punto!;
+    const etiqueta = this.def.etiquetaInicial ?? "";
     return colocar(
       this.doc,
-      { tipo: this.def.tipo, x: p.x, y: p.y, rot: 0, espejado: false, etiqueta: "", params: {} },
+      { tipo: this.def.tipo, x: p.x, y: p.y, rot: 0, espejado: false, etiqueta, params: {} },
       this.hoja,
     );
   }

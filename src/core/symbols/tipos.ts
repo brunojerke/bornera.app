@@ -116,4 +116,14 @@ export type DefinicionSimbolo = Comportamiento & {
    * Sirve para alejarlos de partes del dibujo, como el tope de un contacto NC.
    */
   ladoNombresBornes?: Direccion;
+  /**
+   * Etiqueta con la que se coloca (por ejemplo "L" en la fase). Sin ella, el
+   * componente se coloca sin etiqueta.
+   */
+  etiquetaInicial?: string;
+  /**
+   * Dibujar los nombres de los bornes. Por defecto, sí. La fase y el neutro no
+   * los dibujan: su nombre visible es la etiqueta, y si no se vería dos veces.
+   */
+  mostrarNombresBornes?: boolean;
 };

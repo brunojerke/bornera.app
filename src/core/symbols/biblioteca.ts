@@ -1,6 +1,7 @@
 // Biblioteca de símbolos, según IEC 60617, como datos.
 // Convención de dibujo: el símbolo se define vertical (circuito de arriba hacia
 // abajo), con el primer borne arriba y el segundo abajo, y el centro en (0, 0).
+// Las alimentaciones (fase y neutro) tienen un solo borne.
 // Escala: 1 unidad de grilla = 2,5 mm, así un contacto de 4 unidades mide 10 mm.
 
 import type { DefinicionSimbolo, Linea, Primitiva } from "./tipos";
@@ -181,36 +182,45 @@ export const LAMPARA: DefinicionSimbolo = {
   ],
 };
 
-/** Radio del círculo de la fuente. */
-const R_FUENTE = 0.75;
+// ── Alimentaciones ─────────────────────────────────────────────────────────
+// Fase y neutro van sueltos, como en CADe_SIMU: la fase arriba del esquema y
+// el neutro abajo. Su etiqueta (L, L1, N…) es el nombre de la red: en la
+// simulación, las alimentaciones con la misma etiqueta (sin espacios a los
+// lados y en mayúsculas) quedan conectadas aunque no haya cable entre ellas.
 
-/** Fuente monofásica de alterna: círculo con una onda (~), L arriba y N abajo. */
-export const FUENTE_MONOFASICA: DefinicionSimbolo = {
-  tipo: "fuente.monofasica",
-  nombre: "Fuente monofásica",
+/** Medio ancho de la barra de alimentación. */
+const MEDIA_BARRA = 0.75;
+
+/** Fase: barra arriba y un borne que sale hacia abajo. La etiqueta se edita (L1, L2, L3). */
+export const FASE: DefinicionSimbolo = {
+  tipo: "fuente.fase",
+  nombre: "Fase (L)",
   categoria: "fuentes",
   elemento: "fuente",
-  tamano: { ancho: 2, alto: 4 },
-  primitivas: [
-    ...conexiones(R_FUENTE),
-    { forma: "circulo", cx: 0, cy: 0, r: R_FUENTE },
-    // Onda: dos medios ciclos con líneas cortas (no hay primitiva de curva).
-    linea(-0.45, 0, -0.3, -0.18),
-    linea(-0.3, -0.18, -0.15, -0.18),
-    linea(-0.15, -0.18, 0, 0),
-    linea(0, 0, 0.15, 0.18),
-    linea(0.15, 0.18, 0.3, 0.18),
-    linea(0.3, 0.18, 0.45, 0),
-  ],
-  bornes: [
-    { nombre: "L", x: 0, y: -2, direccion: "arriba" },
-    { nombre: "N", x: 0, y: 2, direccion: "abajo" },
-  ],
+  tamano: { ancho: 2, alto: 2 },
+  primitivas: [linea(-MEDIA_BARRA, -0.5, MEDIA_BARRA, -0.5), linea(0, -0.5, 0, 1)],
+  bornes: [{ nombre: "L", x: 0, y: 1, direccion: "abajo" }],
+  etiquetaInicial: "L",
+  mostrarNombresBornes: false,
+};
+
+/** Neutro: barra abajo y un borne que sale hacia arriba. */
+export const NEUTRO: DefinicionSimbolo = {
+  tipo: "fuente.neutro",
+  nombre: "Neutro (N)",
+  categoria: "fuentes",
+  elemento: "fuente",
+  tamano: { ancho: 2, alto: 2 },
+  primitivas: [linea(-MEDIA_BARRA, 0.5, MEDIA_BARRA, 0.5), linea(0, -1, 0, 0.5)],
+  bornes: [{ nombre: "N", x: 0, y: -1, direccion: "arriba" }],
+  etiquetaInicial: "N",
+  mostrarNombresBornes: false,
 };
 
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
-  FUENTE_MONOFASICA,
+  FASE,
+  NEUTRO,
   PULSADOR_NA,
   PULSADOR_NC,
   BOBINA_CONTACTOR,

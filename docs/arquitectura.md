@@ -21,7 +21,8 @@ La primera versión cubre circuitos de mando y potencia básicos: alcanza para m
 
 | Componente | Bornes | Comportamiento en simulación |
 | --- | --- | --- |
-| Fuente monofásica | L, N | Referencia de fase y neutro |
+| Fase (L) | L | Alimentación suelta; su etiqueta (L, L1, L2, L3) es el nombre de la red |
+| Neutro (N) | N | Alimentación suelta; su etiqueta (N) es el nombre de la red |
 | Fuente trifásica | L1, L2, L3, N | Tres fases con secuencia definida |
 | Fuente de CC 24 V | +, − | Para mandos en baja tensión |
 | Cable y unión | — | Conductor ideal; la unión (punto) se crea sola al empalmar |
@@ -92,7 +93,7 @@ Simulación **lógica por conectividad**, no analógica: alcanza para automatism
 
 **Algoritmo de cada recálculo:**
 
-1. **Armar la netlist:** se agrupan en "redes" todos los bornes unidos por cables (estructura union-find). Se hace una vez al entrar a simulación.
+1. **Armar la netlist:** se agrupan en "redes" todos los bornes unidos por cables (estructura union-find). Además, los bornes de alimentación con el mismo nombre de red (sin espacios a los lados y en mayúsculas) se unen aunque no haya cable, como etiquetas de red: en Fase y Neutro el nombre es la etiqueta del componente; en una fuente trifásica, el nombre de cada borne. Se hace una vez al entrar a simulación.
 2. **Unir por contactos cerrados:** cada contacto, pulsador o fusible que conduce une sus dos redes. Las cargas (bobinas, lámparas, motores) nunca unen redes: son los "cortes" del circuito.
 3. **Propagar potenciales:** cada red queda marcada con las fuentes que la alcanzan (L, N, L1, L2, L3, +, −).
 4. **Detectar cortocircuito:** si una misma red recibe L y N, o dos fases distintas, se marca el cortocircuito, se funde el fusible aguas arriba (si hay) o se detiene la simulación con aviso.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BOBINA_CONTACTOR, LAMPARA, PULSADOR_NA, PULSADOR_NC, type DefinicionSimbolo } from "../core/symbols";
+import { BOBINA_CONTACTOR, FASE, LAMPARA, PULSADOR_NA, PULSADOR_NC, type DefinicionSimbolo } from "../core/symbols";
 import { RendererCanvas, trazadoSimbolo } from "./canvas2d";
 import type { Renderer } from "./renderer";
 import {
@@ -43,6 +43,13 @@ describe("dibujarSimbolo", () => {
       ["simbolo", BOBINA_CONTACTOR],
       ["restaurar"],
     ]);
+  });
+
+  it("la fase no escribe el nombre de su borne, solo la etiqueta", () => {
+    const { r, llamadas } = grabador();
+    dibujarSimbolo(r, FASE, { x: 0, y: 0, rotacion: 0, espejado: false }, { etiqueta: "L1" });
+    const textos = llamadas.filter((l) => l[0] === "texto").map((l) => l[3]);
+    expect(textos).toEqual(["L1"]);
   });
 
   it("sin rotar ni espejar no agrega transformaciones de más", () => {
