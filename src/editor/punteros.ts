@@ -32,7 +32,12 @@ export { UMBRAL_ARRASTRE_PX };
 export interface OpcionesHerramientas {
   camara: Camara;
   editor: Editor;
-  /** Si los atajos de edición valen ahora (no en modo Simular). Por defecto, sí. */
+  /**
+   * Si se edita ahora (no en modo Simular). Por defecto, sí. En Simular ni
+   * los atajos ni el puntero llegan a las herramientas: clic, rectángulo y
+   * arrastre no cambian la selección ni el documento. La navegación (rueda,
+   * botón del medio, espacio) va aparte y sigue andando.
+   */
   atajosActivos?: () => boolean;
 }
 
@@ -72,6 +77,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   /** Último puntero sobre el lienzo (px de la ventana); null si salió. */
   let ultimo: { clientX: number; clientY: number; buttons: number } | null = null;
 
+  const editando = () => op.atajosActivos?.() !== false;
+
   const evento = (e: Pick<PointerEvent, "clientX" | "clientY" | "button" | "buttons" | "shiftKey" | "ctrlKey">): EventoHerramienta => {
     const r = canvas.getBoundingClientRect();
     const p = camara.aGrilla(e.clientX - r.left, e.clientY - r.top);
@@ -107,14 +114,14 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   const alMover = (e: PointerEvent) => {
     ultimo = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
-    if (arrastrando) return;
+    if (arrastrando || !editando()) return;
     editor.aplicar(editor.activa.mover(evento(e)));
     actualizarCursor(); // "move" mientras se arrastra la selección
   };
 
   const alPresionar = (e: PointerEvent) => {
     soltarFocoDeCampo();
-    if (arrastrando || e.defaultPrevented || e.button === 1) return;
+    if (arrastrando || e.defaultPrevented || e.button === 1 || !editando()) return;
     e.preventDefault();
     if (e.button === 0) canvas.setPointerCapture(e.pointerId);
     editor.aplicar(editor.activa.presionar(evento(e)));
@@ -122,21 +129,21 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   const alSoltar = (e: PointerEvent) => {
     // El arrastre desde la paleta se suelta por su cuenta (en window).
-    if (arrastrando || e.button !== 0) return;
+    if (arrastrando || e.button !== 0 || !editando()) return;
     // Con el puntero capturado, el soltar llega aunque sea afuera: la herramienta cable no fija nada ahí.
     editor.aplicar(editor.activa.soltar({ ...evento(e), fuera: !sobreLienzo(e) }));
     actualizarCursor();
   };
 
   const alCortar = () => {
-    if (arrastrando) return;
+    if (arrastrando || !editando()) return;
     editor.aplicar(editor.activa.soltar(null));
     actualizarCursor();
   };
 
   const alSalir = () => {
     ultimo = null;
-    if (!arrastrando) editor.aplicar(editor.activa.salir());
+    if (!arrastrando && editando()) editor.aplicar(editor.activa.salir());
   };
 
   // Con una herramienta activa, el botón derecho la termina: sin menú del navegador.
@@ -177,7 +184,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   }
 
   function desdePaleta(def: DefinicionSimbolo, e: PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !editando()) return;
     e.preventDefault(); // sin selección de texto ni foco al arrastrar
     soltarFocoDeCampo();
     terminarArrastre();
@@ -238,7 +245,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   return {
     desdePaleta,
     refrescar() {
-      if (arrastrando || !ultimo || !editor.cable) return;
+      if (arrastrando || !ultimo || !editor.cable || !editando()) return;
       editor.aplicar(editor.activa.mover(evento({ ...ultimo, button: 0, shiftKey: false, ctrlKey: false })));
     },
     desconectar() {
