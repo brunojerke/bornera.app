@@ -175,7 +175,7 @@ describe("Editor", () => {
   });
 });
 
-const ev = (x: number, y: number): EventoHerramienta => ({ x, y, boton: 0, botones: 0, mayus: false, ctrl: false });
+const ev = (x: number, y: number): EventoHerramienta => ({ x, y, boton: 0, botones: 0, mayus: false, ctrl: false, escala: 20 });
 
 /** Renderer falso: anota el nombre de cada llamada y el último estilo. */
 function rendererFalso(): { r: Renderer; llamadas: string[]; estilos: unknown[] } {
@@ -191,6 +191,8 @@ function rendererFalso(): { r: Renderer; llamadas: string[]; estilos: unknown[] 
 }
 
 const COLORES = { acento: "#06f" } as Colores;
+/** Toda la grilla a la vista. */
+const TODO: Caja = { x: -1e6, y: -1e6, ancho: 2e6, alto: 2e6 };
 
 describe("Editor con la herramienta Colocar", () => {
   it("la vista previa solo pide cuadros; colocar invalida solo la caja del símbolo", () => {
@@ -245,12 +247,126 @@ describe("Editor con la herramienta Colocar", () => {
   it("la capa dinámica dibuja la vista previa con el color de acento, y nada sin herramienta", () => {
     const { editor } = armar();
     const f = rendererFalso();
-    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES });
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, visible: TODO });
     expect(f.llamadas).toEqual([]);
 
     editor.aplicar(editor.iniciarColocar(SIMBOLOS[0]!, "clic")!.mover(ev(0, 0)));
-    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES });
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, visible: TODO });
     expect(f.estilos[0]).toMatchObject({ trazo: "#06f", relleno: "#06f" });
     expect(f.llamadas).toContain("simbolo");
+  });
+});
+
+describe("Editor: selección", () => {
+  it("seleccionar no invalida mosaicos: solo pide un cuadro y avisa", () => {
+    const { editor, vista } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    vista.regiones = [];
+    vista.cuadros = 0;
+    const aviso = vi.fn();
+    editor.alCambiarSeleccion = aviso;
+
+    editor.aplicar(editor.activa.presionar(ev(0, 0)));
+    editor.aplicar(editor.activa.soltar(ev(0, 0)));
+    expect([...editor.seleccion]).toEqual([cmd.id]);
+    expect(aviso).toHaveBeenCalledTimes(1);
+    expect(vista.regiones).toEqual([]);
+    expect(vista.enteras).toBe(0);
+    expect(vista.cuadros).toBeGreaterThan(0);
+
+    // Clic en vacío: deselecciona, tampoco invalida.
+    editor.aplicar(editor.activa.presionar(ev(50, 50)));
+    editor.aplicar(editor.activa.soltar(ev(50, 50)));
+    expect(editor.seleccion.size).toBe(0);
+    expect(vista.regiones).toEqual([]);
+  });
+
+  it("deshacer un Colocar saca su id de la selección; rehacer no lo vuelve a seleccionar", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(a);
+    const b = colocar(editor.documento, datos(10, 0, "K2"));
+    editor.ejecutar(b);
+    editor.seleccionarIds([a.id, b.id]);
+    const aviso = vi.fn();
+    editor.alCambiarSeleccion = aviso;
+
+    editor.deshacer();
+    expect([...editor.seleccion]).toEqual([a.id]);
+    expect(aviso).toHaveBeenCalled();
+    editor.rehacer();
+    expect([...editor.seleccion]).toEqual([a.id]);
+  });
+
+  it("Borrar lo seleccionado lo saca de la selección", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(a);
+    editor.seleccionarIds([a.id]);
+    editor.ejecutar(new Borrar([a.id]));
+    expect(editor.seleccion.size).toBe(0);
+  });
+
+  it("mover algo seleccionado avisa (el panel lo muestra) y no lo deselecciona", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(a);
+    editor.seleccionarIds([a.id]);
+    const aviso = vi.fn();
+    editor.alCambiarSeleccion = aviso;
+    editor.ejecutar(new Mover([a.id], 3, 0));
+    expect(aviso).toHaveBeenCalledTimes(1);
+    expect([...editor.seleccion]).toEqual([a.id]);
+  });
+
+  it("seleccionarIds ignora ids que no están y no avisa si no cambia nada", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(a);
+    const aviso = vi.fn();
+    editor.alCambiarSeleccion = aviso;
+    editor.seleccionarIds(["c999"]);
+    expect(editor.seleccion.size).toBe(0);
+    expect(aviso).not.toHaveBeenCalled();
+    editor.seleccionarIds([a.id]);
+    editor.seleccionarIds([a.id]);
+    expect(aviso).toHaveBeenCalledTimes(1);
+  });
+
+  it("el resumen da los datos con uno y la cantidad con varios", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, { ...datos(0, 0), rot: 90, espejado: true });
+    editor.ejecutar(a);
+    const b = colocar(editor.documento, datos(10, 0, "K2"));
+    editor.ejecutar(b);
+    expect(editor.resumenSeleccion()).toEqual({ cantidad: 0, unico: null });
+    editor.seleccionarIds([a.id]);
+    expect(editor.resumenSeleccion()).toEqual({
+      cantidad: 1,
+      unico: { id: a.id, nombre: buscarSimbolo("contactor.bobina")!.nombre, etiqueta: "K1", rot: 90, espejado: true },
+    });
+    editor.seleccionarIds([a.id, b.id]);
+    expect(editor.resumenSeleccion()).toEqual({ cantidad: 2, unico: null });
+  });
+
+  it("la capa dinámica resalta solo los seleccionados visibles", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(a);
+    const b = colocar(editor.documento, datos(500, 0, "K2"));
+    editor.ejecutar(b);
+    editor.seleccionarIds([a.id, b.id]);
+    const f = rendererFalso();
+    let dibujados = -1;
+    const r = new Proxy(f.r, {
+      get: (obj, nombre, recv) =>
+        nombre === "rectangulos" ? (_: ArrayLike<number>, n: number) => (dibujados = n) : Reflect.get(obj, nombre, recv),
+    });
+    editor.dibujarDinamico(r, { escala: 20, colores: COLORES, visible: { x: -20, y: -20, ancho: 40, alto: 40 } });
+    // Un solo trazo, con un recuadro: el de 'b' está fuera de pantalla.
+    expect(dibujados).toBe(1);
+    expect(f.llamadas.filter((l) => l === "rectangulo")).toHaveLength(0);
+    expect(f.estilos[0]).toMatchObject({ trazo: "#06f" });
   });
 });

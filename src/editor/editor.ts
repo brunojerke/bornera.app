@@ -7,22 +7,29 @@
 // `invalidarRegion`: solo se rehacen los mosaicos que tocan el cambio, nunca la
 // pantalla entera.
 //
-// También tiene la herramienta activa (por ahora, Colocar): ejecuta lo que
-// devuelve y dibuja su vista previa en la capa dinámica.
+// También tiene la herramienta activa (Colocar, o Seleccionar cuando no hay
+// otra): ejecuta lo que devuelve y dibuja en la capa dinámica su vista previa,
+// el resaltado de la selección y el rectángulo de selección.
+//
+// La selección (ids) es estado de la interfaz, no del documento: no pasa por
+// comandos ni se deshace. Seleccionar no invalida ningún mosaico: el resaltado
+// va solo en la capa dinámica.
 
 import { type Cambio, type Comando } from "../core/model/comandos";
-import { crearDocumento, type Componente, type Documento } from "../core/model/documento";
+import { buscarComponente, crearDocumento, type Componente, type Documento } from "../core/model/documento";
 import { Historial } from "../core/model/historial";
 import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
-import type { Colores } from "../render/capas";
+import type { InfoDinamico } from "../render/capas";
 import { nivelDetalle } from "../render/detalle";
 import { grosorLinea, type ComponenteEscena } from "../render/escena";
 import { EscenaEditable } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
+import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
 import { HerramientaColocar, type ModoColocar } from "./herramientas/colocar";
-import type { Resultado } from "./herramientas/tipos";
+import { HerramientaSeleccionar } from "./herramientas/seleccionar";
+import type { Herramienta, Resultado } from "./herramientas/tipos";
 
 /**
  * Lo que se dibuja para un componente cuyo tipo no está en la biblioteca (por
@@ -51,6 +58,22 @@ export interface DestinoVista {
   invalidar(): void;
 }
 
+/** Lo que el panel de propiedades muestra de la selección. */
+export interface ResumenSeleccion {
+  cantidad: number;
+  /** Con un solo componente seleccionado, sus datos; si no, null. */
+  unico: {
+    id: string;
+    /** Nombre del símbolo, para mostrar ("Bobina de contactor"). */
+    nombre: string;
+    etiqueta: string;
+    rot: number;
+    espejado: boolean;
+  } | null;
+}
+
+export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unico: null });
+
 /** Documento vacío para arrancar la app, con la fecha de hoy. */
 export function documentoNuevo(): Documento {
   return crearDocumento({ titulo: "Sin título", autor: "", fecha: new Date().toISOString().slice(0, 10) });
@@ -61,10 +84,18 @@ export class Editor {
   readonly escena = new EscenaEditable();
   /** Vista que muestra la escena; null si no se está mostrando (no hay nada que invalidar). */
   vista: DestinoVista | null = null;
-  /** Herramienta activa; null si no hay ninguna. */
+  /** Herramienta elegida (Colocar); null si no hay ninguna y está la de selección. */
   herramienta: HerramientaColocar | null = null;
   /** Se avisa cuando empieza o termina una herramienta (para la paleta). */
   alCambiarHerramienta: (() => void) | null = null;
+  /**
+   * Se avisa cuando cambia la selección o algo de lo seleccionado (para el
+   * panel de propiedades).
+   */
+  alCambiarSeleccion: (() => void) | null = null;
+  /** La herramienta que está cuando no hay otra. */
+  readonly seleccionar: HerramientaSeleccionar;
+  private _seleccion: ReadonlySet<string> = new Set();
   private readonly desconocidos = new Set<string>();
 
   constructor(
@@ -74,6 +105,42 @@ export class Editor {
   ) {
     this.historial = new Historial(documento);
     for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
+    this.seleccionar = new HerramientaSeleccionar(this.escena, () => this._seleccion);
+  }
+
+  /** La herramienta que recibe los eventos: la elegida, o la de selección. */
+  get activa(): Herramienta {
+    return this.herramienta ?? this.seleccionar;
+  }
+
+  /** Ids seleccionados. */
+  get seleccion(): ReadonlySet<string> {
+    return this._seleccion;
+  }
+
+  /**
+   * Cambia la selección. Los ids que no están en la hoja se ignoran. Solo
+   * pide un cuadro (la capa dinámica): la estática no cambia.
+   */
+  seleccionarIds(ids: Iterable<string>): void {
+    const nueva = new Set<string>();
+    for (const id of ids) if (this.escena.obtener(id)) nueva.add(id);
+    const actual = this._seleccion;
+    if (nueva.size === actual.size && [...nueva].every((id) => actual.has(id))) return;
+    this._seleccion = nueva;
+    this.alCambiarSeleccion?.();
+    this.vista?.invalidar();
+  }
+
+  /** Resumen de la selección para el panel de propiedades. */
+  resumenSeleccion(): ResumenSeleccion {
+    const cantidad = this._seleccion.size;
+    if (cantidad !== 1) return cantidad === 0 ? SIN_SELECCION : { cantidad, unico: null };
+    const [id] = this._seleccion;
+    const c = buscarComponente(this.documento, id!);
+    if (!c) return { cantidad, unico: null };
+    const nombre = (buscarSimbolo(c.tipo) ?? SIMBOLO_DESCONOCIDO).nombre;
+    return { cantidad, unico: { id: c.id, nombre, etiqueta: c.etiqueta, rot: c.rot, espejado: c.espejado } };
   }
 
   /** Tipos de símbolo del documento que no están en la biblioteca (se dibujan con SIMBOLO_DESCONOCIDO). */
@@ -122,9 +189,10 @@ export class Editor {
     if (this.herramienta) this.aplicar(this.herramienta.cancelar());
   }
 
-  /** Hace lo que pidió la herramienta: ejecutar su comando, redibujar, terminar. */
+  /** Hace lo que pidió la herramienta: ejecutar su comando, cambiar la selección, redibujar, terminar. */
   aplicar(r: Resultado): void {
     if (r.comando) this.ejecutar(r.comando);
+    if (r.seleccion) this.seleccionarIds(r.seleccion);
     if (r.terminar && this.herramienta) {
       this.herramienta = null;
       this.alCambiarHerramienta?.();
@@ -133,10 +201,14 @@ export class Editor {
   }
 
   /**
-   * Capa dinámica: la vista previa de la herramienta, con el color de acento.
-   * Es un símbolo por cuadro y no toca la capa estática.
+   * Capa dinámica, con el color de acento: el resaltado de la selección, el
+   * rectángulo de selección y la vista previa de Colocar. No toca la capa
+   * estática.
    */
-  readonly dibujarDinamico = (r: Renderer, info: { escala: number; colores: Colores }): void => {
+  readonly dibujarDinamico = (r: Renderer, info: InfoDinamico): void => {
+    if (this._seleccion.size > 0) dibujarSeleccion(r, info, this.escena, this._seleccion);
+    const rect = this.seleccionar.rectangulo;
+    if (rect) dibujarRectangulo(r, info, rect);
     const p = this.herramienta?.previa;
     if (!p) return;
     const c = { x: p.x, y: p.y, rotacion: 0 as const, espejado: false };
@@ -177,10 +249,27 @@ export class Editor {
     const actuales = new Map<string, Componente>();
     for (const c of this.componentesHoja()) if (ids.has(c.id)) actuales.set(c.id, c);
 
+    let tocaSeleccion = false;
+    let quitados: string[] | null = null;
     for (const id of ids) {
       const c = actuales.get(id);
       const caja = c ? this.escena.actualizar(id, this.aEscena(c)) : this.escena.quitar(id);
       if (caja) this.vista?.invalidarRegion(caja);
+      if (this._seleccion.has(id)) {
+        tocaSeleccion = true;
+        if (!c) (quitados ??= []).push(id);
+      }
+    }
+    // Lo seleccionado que ya no está (se borró, o se deshizo su Colocar) sale de la selección.
+    if (quitados) {
+      const nueva = new Set(this._seleccion);
+      for (const id of quitados) nueva.delete(id);
+      this._seleccion = nueva;
+    }
+    if (tocaSeleccion) {
+      this.alCambiarSeleccion?.();
+      // El resaltado se mueve con el componente, aunque su región no esté en pantalla.
+      this.vista?.invalidar();
     }
     return cambio;
   }

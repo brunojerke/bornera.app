@@ -14,8 +14,15 @@
 
 import { CANTIDADES_BANCO, crearEscenaBanco, idBanco } from "../../src/render/banco";
 import { Camara } from "../../src/render/camara";
-import { Capas, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, type OpcionesCapas } from "../../src/render/capas";
+import {
+  Capas,
+  OPCIONES_OPTIMIZADAS,
+  OPCIONES_SIN_OPTIMIZAR,
+  type DibujarDinamico,
+  type OpcionesCapas,
+} from "../../src/render/capas";
 import type { EscenaEditable as Escena } from "../../src/render/escenaEditable";
+import { dibujarSeleccion } from "../../src/render/resaltado";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 
 /** Pantalla típica de netbook. */
@@ -77,6 +84,8 @@ interface Escenario {
   paso(c: Camara, capas: Capas, e: Escena, i: number): void;
   /** Repeticiones medidas (hay una más de calentamiento). */
   repeticiones: number;
+  /** Capa dinámica del escenario (por ejemplo, el resaltado de la selección). */
+  dinamico?(e: Escena): DibujarDinamico;
 }
 
 function centrar(c: Camara, e: Escena, zoom: number): void {
@@ -122,6 +131,28 @@ function editar(_: Camara, capas: Capas, e: Escena, i: number): void {
   const id = editado(e);
   const c = e.obtener(id)!;
   capas.invalidarRegion(e.actualizar(id, { ...c, x: c.x + (i % 2 ? -1 : 1) }));
+}
+
+/**
+ * Selección del banco: la arman los escenarios de selección y la dibuja su
+ * capa dinámica, igual que el editor (rectángulos, solo los visibles).
+ */
+let seleccion = new Set<string>();
+const resaltar = (e: Escena): DibujarDinamico => (r, info) => dibujarSeleccion(r, info, e, seleccion);
+
+/**
+ * Selección: en cada cuadro, alternando, un rectángulo que toca toda la
+ * pantalla (todo lo visible queda seleccionado) y un clic en el centro.
+ * Como en el editor, no se invalida ningún mosaico.
+ */
+function seleccionar(c: Camara, _: Capas, e: Escena, i: number): void {
+  const v = c.visible(ANCHO, ALTO);
+  if (i % 2 === 0) {
+    seleccion = new Set(e.idsEnCaja(v, "toca"));
+  } else {
+    const id = e.idEnPunto(v.x + v.ancho / 2, v.y + v.alto / 2, 3 / c.escala);
+    seleccion = new Set(id ? [id] : []);
+  }
 }
 
 const ESCENARIOS: Escenario[] = [
@@ -190,6 +221,31 @@ const ESCENARIOS: Escenario[] = [
     paso: editar,
     repeticiones: 3,
   },
+  {
+    // Clic y rectángulo, 20 veces seguidas, con el resaltado en la capa dinámica.
+    nombre: "Seleccionar al 31 %",
+    preparar: (c, e) => {
+      seleccion = new Set();
+      centrar(c, e, ZOOM_TEXTOS);
+    },
+    cuadros: 20,
+    paso: seleccionar,
+    repeticiones: 3,
+    dinamico: resaltar,
+  },
+  {
+    // El peor caso de la capa dinámica: todo seleccionado mientras se arrastra la vista.
+    nombre: "Arrastre con todo seleccionado al 31 %",
+    preparar: (c, e) => {
+      seleccion = new Set(e.idsEnCaja(e.caja!, "contiene"));
+      alBordeIzquierdo(c, e, ZOOM_TEXTOS);
+    },
+    reiniciar: (c, e) => alBordeIzquierdo(c, e, ZOOM_TEXTOS),
+    cuadros: 100,
+    paso: (c) => c.desplazar(-16, -3),
+    repeticiones: 2,
+    dinamico: resaltar,
+  },
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {
@@ -217,6 +273,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
   const capas = new Capas(ctx);
   capas.contenido = escena;
   capas.opciones = { ...opciones };
+  capas.dinamico = escenario.dinamico?.(escena) ?? null;
   const camara = new Camara();
   escenario.preparar(camara, escena);
 

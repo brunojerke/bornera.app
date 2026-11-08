@@ -13,7 +13,7 @@
 import { colocar } from "../../core/model/comandos";
 import type { Documento } from "../../core/model/documento";
 import type { DefinicionSimbolo } from "../../core/symbols";
-import { NADA, type EventoHerramienta, type Resultado } from "./tipos";
+import { NADA, type EventoHerramienta, type Herramienta, type Resultado } from "./tipos";
 
 export type ModoColocar = "clic" | "arrastre";
 
@@ -29,7 +29,7 @@ export function ajustarAGrilla(v: number): number {
   return Math.round(v) || 0;
 }
 
-export class HerramientaColocar {
+export class HerramientaColocar implements Herramienta {
   /** Punto de grilla bajo el mouse; null si el mouse no está sobre el lienzo. */
   private punto: { x: number; y: number } | null = null;
 

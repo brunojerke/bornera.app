@@ -1,21 +1,23 @@
 // Despachador de punteros: lleva los eventos del lienzo (y del arrastre que
-// empieza en la paleta) a la herramienta activa del Editor, ya pasados a
-// unidades de grilla. La cámara la sigue manejando navegacion.ts, que se
+// empieza en la paleta) a la herramienta activa del Editor (Colocar, o
+// Seleccionar si no hay otra), ya pasados a unidades de grilla. La cámara la sigue manejando navegacion.ts, que se
 // conecta antes: lo que ella consume (botón del medio, espacio + arrastrar)
 // llega con `defaultPrevented` y acá se ignora.
 //
 // El arrastre desde la paleta usa Pointer Events y no el drag & drop de HTML:
 // en Tauri sobre Windows, la ventana intercepta el drag & drop del WebView
 // (`dragDropEnabled`) y no llegaría al lienzo.
+//
+// Con el botón izquierdo apretado sobre el lienzo, el puntero se captura: el
+// rectángulo de selección sigue al mouse y termina aunque se suelte afuera.
 
 import type { DefinicionSimbolo } from "../core/symbols";
 import type { Camara } from "../render/camara";
 import type { Editor } from "./editor";
-import type { EventoHerramienta } from "./herramientas/tipos";
+import { UMBRAL_ARRASTRE_PX, type EventoHerramienta } from "./herramientas/tipos";
 import { esCampoEditable } from "./navegacion";
 
-/** Movimiento, en px CSS, a partir del cual apretar en la paleta es arrastrar y no clic. */
-export const UMBRAL_ARRASTRE_PX = 4;
+export { UMBRAL_ARRASTRE_PX };
 
 export interface OpcionesHerramientas {
   camara: Camara;
@@ -37,7 +39,15 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   const evento = (e: PointerEvent): EventoHerramienta => {
     const r = canvas.getBoundingClientRect();
     const p = camara.aGrilla(e.clientX - r.left, e.clientY - r.top);
-    return { x: p.x, y: p.y, boton: e.button, botones: e.buttons, mayus: e.shiftKey, ctrl: e.ctrlKey };
+    return {
+      x: p.x,
+      y: p.y,
+      boton: e.button,
+      botones: e.buttons,
+      mayus: e.shiftKey,
+      ctrl: e.ctrlKey,
+      escala: camara.escala,
+    };
   };
 
   const sobreLienzo = (e: PointerEvent): boolean => {
@@ -58,20 +68,28 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   const alMover = (e: PointerEvent) => {
-    const h = editor.herramienta;
-    if (h && !arrastrando) editor.aplicar(h.mover(evento(e)));
+    if (!arrastrando) editor.aplicar(editor.activa.mover(evento(e)));
   };
 
   const alPresionar = (e: PointerEvent) => {
-    const h = editor.herramienta;
-    if (!h || arrastrando || e.defaultPrevented || e.button === 1) return;
+    if (arrastrando || e.defaultPrevented || e.button === 1) return;
     e.preventDefault();
-    editor.aplicar(h.presionar(evento(e)));
+    if (e.button === 0) canvas.setPointerCapture(e.pointerId);
+    editor.aplicar(editor.activa.presionar(evento(e)));
+  };
+
+  const alSoltar = (e: PointerEvent) => {
+    // El arrastre desde la paleta se suelta por su cuenta (en window).
+    if (arrastrando || e.button !== 0) return;
+    editor.aplicar(editor.activa.soltar(evento(e)));
+  };
+
+  const alCortar = () => {
+    if (!arrastrando) editor.aplicar(editor.activa.soltar(null));
   };
 
   const alSalir = () => {
-    const h = editor.herramienta;
-    if (h && !arrastrando) editor.aplicar(h.salir());
+    if (!arrastrando) editor.aplicar(editor.activa.salir());
   };
 
   // Con una herramienta activa, el botón derecho la termina: sin menú del navegador.
@@ -79,11 +97,16 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     if (editor.herramienta) e.preventDefault();
   };
 
+  // Esc: termina la herramienta; sin herramienta, corta el rectángulo o deselecciona.
   const alTecla = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || !editor.herramienta || esCampoEditable(e.target)) return;
+    if (e.key !== "Escape" || esCampoEditable(e.target)) return;
     e.preventDefault();
-    terminarArrastre();
-    editor.cancelarHerramienta();
+    if (editor.herramienta) {
+      terminarArrastre();
+      editor.cancelarHerramienta();
+    } else {
+      editor.aplicar(editor.seleccionar.cancelar());
+    }
   };
 
   function terminarArrastre() {
@@ -144,6 +167,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   canvas.addEventListener("pointermove", alMover);
   canvas.addEventListener("pointerdown", alPresionar);
+  canvas.addEventListener("pointerup", alSoltar);
+  canvas.addEventListener("pointercancel", alCortar);
   canvas.addEventListener("pointerleave", alSalir);
   canvas.addEventListener("contextmenu", alMenu);
   window.addEventListener("keydown", alTecla);
@@ -157,6 +182,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
       actualizarCursor();
       canvas.removeEventListener("pointermove", alMover);
       canvas.removeEventListener("pointerdown", alPresionar);
+      canvas.removeEventListener("pointerup", alSoltar);
+      canvas.removeEventListener("pointercancel", alCortar);
       canvas.removeEventListener("pointerleave", alSalir);
       canvas.removeEventListener("contextmenu", alMenu);
       window.removeEventListener("keydown", alTecla);

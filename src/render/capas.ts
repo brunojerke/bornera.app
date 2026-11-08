@@ -96,8 +96,17 @@ export const OPCIONES_SIN_OPTIMIZAR: Readonly<OpcionesCapas> = {
   cacheTextos: false,
 };
 
+/** Lo que la capa dinámica sabe del cuadro. */
+export interface InfoDinamico {
+  /** Píxeles CSS por unidad de grilla. */
+  escala: number;
+  colores: Colores;
+  /** Parte de la grilla en pantalla: lo que no la toca no hace falta dibujarlo. */
+  visible: Caja;
+}
+
 /** Dibuja la capa dinámica, en unidades de grilla. */
-export type DibujarDinamico = (r: Renderer, info: { escala: number; colores: Colores }) => void;
+export type DibujarDinamico = (r: Renderer, info: InfoDinamico) => void;
 
 /** Caja que contiene todo: sin recorte. */
 const TODO: Caja = { x: -1e9, y: -1e9, ancho: 2e9, alto: 2e9 };
@@ -286,7 +295,7 @@ export class Capas {
         const r = this.renderer;
         r.transformar(k, 0, 0, k, -ox, -oy);
         r.guardar();
-        this.dinamico(r, { escala: camara.escala, colores: this.colores });
+        this.dinamico(r, { escala: camara.escala, colores: this.colores, visible: pantalla });
         r.restaurar();
       }
 

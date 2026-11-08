@@ -17,6 +17,7 @@ const ev = (x: number, y: number, boton = 0): EventoHerramienta => ({
   botones: 0,
   mayus: false,
   ctrl: false,
+  escala: 20,
 });
 
 describe("ajustarAGrilla", () => {

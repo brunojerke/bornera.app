@@ -10,10 +10,15 @@
   import { esAtajoBanco, siguienteEscenaBanco } from "./escenas";
   import type { Punto } from "../render/camara";
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
+  import { SIN_SELECCION, type ResumenSeleccion } from "../editor/editor";
+  import { abrirAlSeleccionar } from "./propiedades";
 
   let modo = $state<Modo>("editar");
   let paletaAbierta = $state(true);
   let propiedadesAbierto = $state(false);
+  /** El usuario plegó el panel con el botón: no se vuelve a abrir solo. */
+  let propiedadesPlegadoPorUsuario = false;
+  let seleccion = $state<ResumenSeleccion>(SIN_SELECCION);
   let zoom = $state(1);
   let cursor = $state<Punto | null>(null);
   /** Tipo del símbolo que se está colocando (para resaltarlo en la paleta). */
@@ -25,6 +30,11 @@
   let escena = $state<EscenaDesarrollo>("documento");
   let rendimiento = $state(false);
   let opciones = $state<OpcionesCapas>({ ...OPCIONES_OPTIMIZADAS });
+
+  function alCambiarSeleccion(r: ResumenSeleccion) {
+    if (abrirAlSeleccionar(seleccion.cantidad, r.cantidad, propiedadesPlegadoPorUsuario)) propiedadesAbierto = true;
+    seleccion = r;
+  }
 
   function alTecla(e: KeyboardEvent) {
     // F3: contador de rendimiento (y que el navegador no abra "Buscar").
@@ -61,8 +71,21 @@
       desactivada={escena !== "documento"}
       onelegir={(def, e) => lienzo.iniciarColocar(def, e)}
     />
-    <Lienzo bind:this={lienzo} bind:zoom bind:cursor bind:colocando {escena} {rendimiento} {opciones} />
-    <PanelPropiedades bind:abierto={propiedadesAbierto} />
+    <Lienzo
+      bind:this={lienzo}
+      bind:zoom
+      bind:cursor
+      bind:colocando
+      {escena}
+      {rendimiento}
+      {opciones}
+      onseleccion={alCambiarSeleccion}
+    />
+    <PanelPropiedades
+      bind:abierto={propiedadesAbierto}
+      {seleccion}
+      onalternar={(abierto) => (propiedadesPlegadoPorUsuario = !abierto)}
+    />
   </main>
   <BarraEstado {modo} {zoom} {cursor} />
 </div>

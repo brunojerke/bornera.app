@@ -1,11 +1,28 @@
 <script lang="ts">
-  // Panel de propiedades (derecha), plegable. Más adelante se abre solo
-  // al seleccionar un elemento; por ahora arranca plegado.
+  // Panel de propiedades (derecha), plegable. Se abre solo al seleccionar,
+  // salvo que el usuario lo haya plegado (lo decide Ventana). Por ahora los
+  // datos son solo para leer: editarlos es T11.
   import PanelRightClose from "@lucide/svelte/icons/panel-right-close";
   import PanelRightOpen from "@lucide/svelte/icons/panel-right-open";
   import MousePointer2 from "@lucide/svelte/icons/mouse-pointer-2";
+  import { SIN_SELECCION, type ResumenSeleccion } from "../editor/editor";
+  import { textoCantidad } from "./propiedades";
 
-  let { abierto = $bindable(false) }: { abierto?: boolean } = $props();
+  let {
+    abierto = $bindable(false),
+    seleccion = SIN_SELECCION,
+    onalternar,
+  }: {
+    abierto?: boolean;
+    seleccion?: ResumenSeleccion;
+    /** El usuario lo abrió o lo plegó con el botón. */
+    onalternar?: (abierto: boolean) => void;
+  } = $props();
+
+  function alternar(valor: boolean) {
+    abierto = valor;
+    onalternar?.(valor);
+  }
 </script>
 
 <aside class="panel" class:plegado={!abierto} aria-label="Propiedades">
@@ -17,24 +34,44 @@
         title="Plegar propiedades"
         aria-label="Plegar propiedades"
         aria-expanded="true"
-        onclick={() => (abierto = false)}
+        onclick={() => alternar(false)}
       >
         <PanelRightClose size={16} />
       </button>
     </div>
 
-    <div class="vacio">
-      <MousePointer2 size={22} />
-      <p>Nada seleccionado</p>
-      <p class="pista">Seleccioná un componente para ver su etiqueta, tensión y rotación.</p>
-    </div>
+    {#if seleccion.unico}
+      {@const c = seleccion.unico}
+      <div class="datos">
+        <p class="nombre">{c.nombre}</p>
+        <dl>
+          <dt>Etiqueta</dt>
+          <dd>{c.etiqueta || "—"}</dd>
+          <dt>Rotación</dt>
+          <dd>{c.rot}°</dd>
+          <dt>Espejado</dt>
+          <dd>{c.espejado ? "Sí" : "No"}</dd>
+        </dl>
+      </div>
+    {:else if seleccion.cantidad > 1}
+      <div class="vacio">
+        <MousePointer2 size={22} />
+        <p>{textoCantidad(seleccion.cantidad)}</p>
+      </div>
+    {:else}
+      <div class="vacio">
+        <MousePointer2 size={22} />
+        <p>Nada seleccionado</p>
+        <p class="pista">Seleccioná un componente para ver su etiqueta, tensión y rotación.</p>
+      </div>
+    {/if}
   {:else}
     <button
       class="boton-icono"
       title="Mostrar propiedades"
       aria-label="Mostrar propiedades"
       aria-expanded="false"
-      onclick={() => (abierto = true)}
+      onclick={() => alternar(true)}
     >
       <PanelRightOpen size={16} />
     </button>
@@ -87,5 +124,30 @@
 
   .pista {
     font-size: 12px;
+  }
+
+  .datos {
+    padding: 4px 10px 12px;
+  }
+
+  .nombre {
+    margin: 0 0 8px;
+    font-weight: 600;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    margin: 0;
+  }
+
+  dt {
+    color: var(--texto-suave);
+  }
+
+  dd {
+    margin: 0;
+    font-family: var(--fuente-mono);
   }
 </style>

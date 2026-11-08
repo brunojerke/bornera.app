@@ -13,9 +13,9 @@
   import { nivelDetalle } from "../render/detalle";
   import { Escena, type Contenido } from "../render/escena";
   import { MedidorRendimiento, type Resumen } from "../render/rendimiento";
-  import { crearEscenaBanco } from "../render/banco";
   import { ESCENA_PRUEBA } from "../render/escenaPrueba";
-  import { Editor } from "../editor/editor";
+  import { Editor, SIN_SELECCION, type ResumenSeleccion } from "../editor/editor";
+  import { documentoBanco } from "../editor/banco";
   import * as comandos from "../core/model/comandos";
   import Rendimiento from "./Rendimiento.svelte";
   import type { EscenaDesarrollo } from "./tipos";
@@ -27,6 +27,7 @@
     escena = "documento",
     rendimiento = false,
     opciones = OPCIONES_OPTIMIZADAS,
+    onseleccion,
   }: {
     /** Zoom actual (1 = 100 %). Solo lectura desde afuera. */
     zoom?: number;
@@ -40,29 +41,63 @@
     rendimiento?: boolean;
     /** Optimizaciones activas (para compararlas). */
     opciones?: Readonly<OpcionesCapas>;
+    /** Cambió la selección o algo seleccionado. */
+    onseleccion?: (resumen: ResumenSeleccion) => void;
   } = $props();
 
   let canvas: HTMLCanvasElement;
   let vista: Vista | null = null;
 
-  // El editor dura lo que dura el lienzo: cambiar a una escena de prueba y
-  // volver no pierde el documento ni su historial.
-  const editor = new Editor();
-  editor.alCambiarHerramienta = () => (colocando = editor.herramienta?.def.tipo ?? null);
+  // El editor del documento dura lo que dura el lienzo: cambiar a una escena
+  // de prueba y volver no pierde el documento ni su historial. Las escenas del
+  // banco (100, 500, 2000) se abren en un editor aparte, que se descarta al
+  // salir: así se puede seleccionar con 2000 símbolos sin tocar el documento.
+  const editorDocumento = new Editor();
+  /** El editor de lo que se muestra; null en las escenas que no se editan. */
+  let editor: Editor | null = editorDocumento;
   let herramientas: Herramientas | null = null;
+
+  function editorPara(e: EscenaDesarrollo): Editor | null {
+    if (e === "documento") return editorDocumento;
+    if (typeof e === "number") return new Editor(documentoBanco(e));
+    return null;
+  }
+
+  /** Conecta el editor `ed` a la vista: herramientas, capa dinámica y avisos. */
+  function conectarEditor(v: Vista, ed: Editor | null) {
+    herramientas?.desconectar();
+    herramientas = null;
+    if (editor && editor !== ed) {
+      editor.vista = null;
+      editor.alCambiarHerramienta = null;
+      editor.alCambiarSeleccion = null;
+    }
+    editor = ed;
+    v.dinamico = ed?.dibujarDinamico ?? null;
+    colocando = null;
+    onseleccion?.(ed?.resumenSeleccion() ?? SIN_SELECCION);
+    if (!ed) return;
+    ed.vista = v;
+    ed.alCambiarHerramienta = () => (colocando = ed.herramienta?.def.tipo ?? null);
+    ed.alCambiarSeleccion = () => onseleccion?.(ed.resumenSeleccion());
+    // Después de la navegación: lo que ella consume llega con defaultPrevented.
+    herramientas = conectarHerramientas(canvas, { camara: v.camara, editor: ed });
+  }
 
   // Desarrollo: ejecutar comandos desde la consola. Por ejemplo:
   //   const { editor, comandos: c } = bornera;
   //   editor.ejecutar(c.colocar(editor.documento, { tipo: "contactor.bobina",
   //     x: 0, y: 0, rot: 0, espejado: false, etiqueta: "K1", params: {} }));
   //   editor.deshacer();
-  if (import.meta.env.DEV) (globalThis as Record<string, unknown>).bornera = { editor, comandos };
+  // `bornera.activo()` da el editor de lo que se muestra (el del banco, en esas escenas).
+  if (import.meta.env.DEV) {
+    (globalThis as Record<string, unknown>).bornera = { editor: editorDocumento, comandos, activo: () => editor };
+  }
 
-  function crearContenido(e: EscenaDesarrollo): Contenido {
-    if (e === "documento") return editor.escena;
+  function crearContenido(e: EscenaDesarrollo, ed: Editor | null): Contenido {
+    if (ed) return ed.escena;
     if (e === "simbolos") return ESCENA_PRUEBA;
-    if (e === "vacia") return new Escena([]);
-    return crearEscenaBanco(e);
+    return new Escena([]);
   }
 
   function cambio() {
@@ -125,10 +160,9 @@
 
   $effect(() => {
     const e = untrack(() => escena);
-    const v = new Vista(canvas, crearContenido(e));
+    const ed = editorPara(e);
+    const v = new Vista(canvas, crearContenido(e, ed));
     vista = v;
-    // Solo con el documento a la vista sus cambios invalidan regiones.
-    editor.vista = e === "documento" ? v : null;
     v.alDibujar = (m) => {
       medidor.registrar(performance.now(), m);
       if (rendimiento) programarResumen();
@@ -139,15 +173,12 @@
       alEncuadrar: encuadrar,
       alMoverCursor: (p) => (cursor = p),
     });
-    // Después de la navegación: lo que ella consume llega con defaultPrevented.
-    const h = conectarHerramientas(canvas, { camara: v.camara, editor });
-    herramientas = h;
-    v.dinamico = editor.dibujarDinamico;
+    untrack(() => conectarEditor(v, ed));
     return () => {
-      h.desconectar();
+      herramientas?.desconectar();
       herramientas = null;
       desconectar();
-      editor.vista = null;
+      if (editor) editor.vista = null;
       v.destruir();
       vista = null;
       clearTimeout(temporizador);
@@ -164,9 +195,10 @@
       const primera = escenaActual === null;
       escenaActual = e;
       if (primera) return; // la Vista ya se creó con esta escena
-      if (e !== "documento") editor.cancelarHerramienta();
-      vista.contenido = crearContenido(e);
-      editor.vista = e === "documento" ? vista : null;
+      // Desconectar las herramientas termina la que estaba (Colocar) sin colocar.
+      const ed = editorPara(e);
+      vista.contenido = crearContenido(e, ed);
+      conectarEditor(vista, ed);
       encuadrar();
     });
   });

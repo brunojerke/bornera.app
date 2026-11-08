@@ -78,15 +78,27 @@ export function cajaDibujo(def: DefinicionSimbolo, c: Colocacion, etiqueta?: str
   let y0 = s.y - MARGEN_TEXTOS;
   const x1 = s.x + s.ancho + MARGEN_TEXTOS;
   const y1 = s.y + s.alto + MARGEN_TEXTOS;
-  if (etiqueta) {
-    const e = posicionEtiqueta(def, c);
-    const ancho = anchoTexto(etiqueta, ALTO_ETIQUETA);
-    // Derecha: el texto termina en e.x. Centro: se reparte a los dos lados.
-    const izquierda = c.x + e.x - (e.alineacion === "derecha" ? ancho : ancho / 2);
-    x0 = Math.min(x0, izquierda);
-    y0 = Math.min(y0, c.y + e.y - ALTO_ETIQUETA);
+  const e = cajaEtiqueta(def, c, etiqueta);
+  if (e) {
+    x0 = Math.min(x0, e.x);
+    // Medio alto de letra más de margen arriba, por las dudas.
+    y0 = Math.min(y0, e.y - ALTO_ETIQUETA / 2);
   }
   return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
+}
+
+/**
+ * Caja que ocupa el texto de la etiqueta (centrado en vertical sobre su
+ * posición, con el ancho aproximado por exceso); null si no hay etiqueta.
+ * Sirve para elegir el componente haciendo clic sobre su etiqueta.
+ */
+export function cajaEtiqueta(def: DefinicionSimbolo, c: Colocacion, etiqueta?: string): Caja | null {
+  if (!etiqueta) return null;
+  const e = posicionEtiqueta(def, c);
+  const ancho = anchoTexto(etiqueta, ALTO_ETIQUETA);
+  // Derecha: el texto termina en e.x. Centro: se reparte a los dos lados.
+  const izquierda = c.x + e.x - (e.alineacion === "derecha" ? ancho : ancho / 2);
+  return { x: izquierda, y: c.y + e.y - ALTO_ETIQUETA / 2, ancho, alto: ALTO_ETIQUETA };
 }
 
 /** Largo del trazo que marca hacia dónde sale el cable de un borne. */

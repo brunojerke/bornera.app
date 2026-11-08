@@ -149,6 +149,28 @@ export class RendererCanvas implements Renderer {
     else this.ctx.strokeRect(x, y, ancho, alto);
   }
 
+  rectangulos(cajas: ArrayLike<number>, n: number): void {
+    if (n === 0) return;
+    const c = this.ctx;
+    // Cada contorno es un marco relleno (rectángulo de afuera menos el de
+    // adentro, con la regla par-impar), con el color del trazo. Rellenar es
+    // mucho más barato que trazar con antialiasing cuando son cientos.
+    const g = c.lineWidth / 2;
+    c.beginPath();
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      const x = cajas[j]!;
+      const y = cajas[j + 1]!;
+      const w = cajas[j + 2]!;
+      const h = cajas[j + 3]!;
+      c.rect(x - g, y - g, w + 2 * g, h + 2 * g);
+      if (w > 2 * g && h > 2 * g) c.rect(x + g, y + g, w - 2 * g, h - 2 * g);
+    }
+    const relleno = c.fillStyle;
+    c.fillStyle = c.strokeStyle;
+    c.fill("evenodd");
+    c.fillStyle = relleno;
+  }
+
   texto(x: number, y: number, texto: string, alto: number, alineacion: Alineacion = "izquierda"): void {
     const m = this.m;
     // Con caché, si el texto queda derecho y sin deformar: se anota para copiarlo.

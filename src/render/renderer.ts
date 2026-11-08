@@ -25,6 +25,12 @@ export interface Renderer {
   arco(cx: number, cy: number, r: number, desde: number, hasta: number): void;
   circulo(cx: number, cy: number, r: number, relleno?: boolean): void;
   rectangulo(x: number, y: number, ancho: number, alto: number, relleno?: boolean): void;
+  /**
+   * Contorno de `n` rectángulos en un solo trazo. `cajas` tiene x, y, ancho,
+   * alto seguidos. Para muchos a la vez (el resaltado de la selección):
+   * trazarlos de a uno cuesta un trazo por rectángulo.
+   */
+  rectangulos(cajas: ArrayLike<number>, n: number): void;
   /** `y` es el centro vertical del texto; `alto` es el alto de la letra. */
   texto(x: number, y: number, texto: string, alto: number, alineacion?: Alineacion): void;
   /**

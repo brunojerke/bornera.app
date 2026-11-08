@@ -15,6 +15,8 @@ export interface EventoHerramienta {
   botones: number;
   mayus: boolean;
   ctrl: boolean;
+  /** Píxeles CSS por unidad de grilla: para pasar distancias de pantalla a la grilla. */
+  escala: number;
 }
 
 /** Lo que pide una herramienta después de cada evento. */
@@ -25,7 +27,26 @@ export interface Resultado {
   redibujar: boolean;
   /** La herramienta terminó: el editor vuelve a no tener herramienta. */
   terminar?: boolean;
+  /** Selección nueva (ids). Es estado de la interfaz, no del documento: no se deshace. */
+  seleccion?: ReadonlySet<string>;
 }
+
+/** Lo que recibe una herramienta. Cada método devuelve qué hacer. */
+export interface Herramienta {
+  /** Botón apretado sobre el lienzo. */
+  presionar(ev: EventoHerramienta): Resultado;
+  /** El mouse se movió sobre el lienzo (o, durante un gesto, en cualquier lado). */
+  mover(ev: EventoHerramienta): Resultado;
+  /** Botón soltado; null si el gesto se cortó (pointercancel). */
+  soltar(ev: EventoHerramienta | null): Resultado;
+  /** El mouse salió del lienzo. */
+  salir(): Resultado;
+  /** Esc. */
+  cancelar(): Resultado;
+}
+
+/** Movimiento, en px CSS, a partir del cual apretar y mover es arrastrar y no clic. */
+export const UMBRAL_ARRASTRE_PX = 4;
 
 /** Nada que hacer. */
 export const NADA: Resultado = Object.freeze({ redibujar: false });
