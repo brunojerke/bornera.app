@@ -100,4 +100,37 @@ export default async function (p, comprobar) {
     (await p.evaluar(`bornera.activo().seleccion.size === 1 && !bornera.activo().escena.oculto("${c.id}")`)) === true,
   );
   await p.captura("2000");
+
+  // Diagnóstico de la alpha.2: el menú tiene la sección y la prueba automática
+  // (corta: 300 ms por combinación) da la tabla y deja todo como estaba.
+  await p.evaluar(`document.querySelector('button[aria-label="Menú de desarrollo"]').click()`);
+  await esperar(50);
+  const menu = await p.evaluar(`document.querySelector('[role="menu"]')?.innerText ?? ""`);
+  comprobar(
+    "el menú tiene el diagnóstico del arrastre",
+    menu.toLowerCase().includes("arrastre (diagnóstico)") && menu.includes("Sin dibujar arrastrados (base)") && menu.includes("Prueba automática"),
+    JSON.stringify(menu.slice(-300)),
+  );
+  await p.esc();
+  const docAntes = await p.evaluar(`JSON.stringify(bornera.activo().documento)`);
+  const tabla = await p.evaluar(`bornera.diagnosticarArrastre({ duracionMs: 300 })`);
+  const filas = tabla.split("\n").filter((l) => /^\| \d+ %/.test(l));
+  comprobar("la prueba automática da 12 filas (2 zooms × 6 combinaciones)", filas.length === 12, `${filas.length} filas`);
+  comprobar(
+    "cada fila tuvo cuadros, y con caché hubo aciertos",
+    filas.every((f) => Number(f.split("|")[3]) > 3) && /\| [1-9]\d* \/ 0 \|$/.test(filas[5]),
+    filas[5],
+  );
+  comprobar("la prueba no cambia el documento", (await p.evaluar(`JSON.stringify(bornera.activo().documento)`)) === docAntes);
+  comprobar(
+    "la prueba deja el arrastre y las opciones como estaban",
+    await p.evaluar(`!bornera.activo().arrastrando && bornera.activo().diagnostico.modo === "auto" && !bornera.activo().diagnostico.sonda`),
+  );
+
+  // F3 muestra la capa dinámica medida con la sonda.
+  await p.tecla("F3", "F3", 114);
+  await esperar(300);
+  const f3 = await p.evaluar(`document.querySelector(".rendimiento")?.innerText ?? ""`);
+  comprobar("F3 muestra la capa dinámica", f3.includes("Capa dinámica"), f3.replace(/\s+/g, " "));
+  await p.tecla("F3", "F3", 114);
 }

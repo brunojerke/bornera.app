@@ -457,6 +457,65 @@ describe("Capas: mosaicos", () => {
     expect(llamadasA(sin.mosaicos()[0]!.llamadas, "fillText")).toHaveLength(1);
   });
 
+  it("la capa dinámica copia los textos del caché solo con su interruptor (apagado por defecto)", () => {
+    const textoDinamico = (r: Renderer) => {
+      r.estilo({ relleno: "#000" });
+      r.texto(1, 1, "K1", 1);
+    };
+    const fillTextDinamicos = (sinCache: boolean, cacheDinamica: boolean) => {
+      const a = armar(0, textoDinamico); // los mosaicos ya dejaron "K1" en el caché
+      a.capas.opciones = { ...OPCIONES_OPTIMIZADAS, cacheTextos: !sinCache, cacheTextosDinamica: cacheDinamica };
+      a.terminar();
+      a.capas.dinamico = textoDinamico;
+      a.principal.llamadas.length = 0;
+      a.dibujar();
+      return { fillText: llamadasA(a.principal.llamadas, "fillText").length, uso: { ...a.capas.textosDinamica } };
+    };
+    expect(OPCIONES_OPTIMIZADAS.cacheTextosDinamica).toBe(false);
+    expect(fillTextDinamicos(false, false)).toEqual({ fillText: 1, uso: { aciertos: 0, fallos: 0 } });
+    expect(fillTextDinamicos(false, true)).toEqual({ fillText: 0, uso: { aciertos: 1, fallos: 0 } });
+    // Sin el caché general, el interruptor de la dinámica no alcanza.
+    expect(fillTextDinamicos(true, true).fillText).toBe(1);
+  });
+
+  it("durante un zoom en curso la dinámica no usa el caché (los tamaños no coinciden)", () => {
+    const { principal, capas, camara, dibujar, terminar } = armar(0, (r) => {
+      r.estilo({ relleno: "#000" });
+      r.texto(1, 1, "K1", 1);
+    });
+    capas.opciones = { ...OPCIONES_OPTIMIZADAS, cacheTextosDinamica: true };
+    terminar();
+    capas.dinamico = (r) => {
+      r.estilo({ relleno: "#000" });
+      r.texto(1, 1, "K1", 1);
+    };
+    camara.zoomEn(1.3, 0, 0);
+    principal.llamadas.length = 0;
+    expect(dibujar().esperar).toBeGreaterThan(0); // zoom en curso
+    expect(llamadasA(principal.llamadas, "fillText")).toHaveLength(1);
+  });
+
+  it("medir fuerza el rasterizado antes y después y anota lo que tardó en la medida", () => {
+    const a = armar();
+    a.terminar();
+    let medido = -1;
+    a.capas.dinamico = (_, info) => {
+      medido = info.medir(() => a.avanzar(4)); // lo medido "tarda" 4 ms
+    };
+    const sonda = a.fabrica.transparentes.find((c) => c.canvas.width === 1 && c.canvas.height === 1)!;
+    sonda.llamadas.length = 0;
+    const m = a.dibujar();
+    expect(medido).toBe(4);
+    expect(m.dinamica).toBe(4);
+    // Dos copias de 1 px de la pantalla a la sonda: antes y después.
+    expect(copias(sonda.llamadas).filter(([c]) => c === a.principal.canvas)).toHaveLength(2);
+    // Sin medir, la sonda no se toca y la medida queda en 0.
+    a.capas.dinamico = () => {};
+    sonda.llamadas.length = 0;
+    expect(a.dibujar().dinamica).toBe(0);
+    expect(copias(sonda.llamadas).filter(([c]) => c === a.principal.canvas)).toHaveLength(0);
+  });
+
   it("dibujados cuenta los componentes que tocan la pantalla", () => {
     const { capas, dibujar } = armar();
     expect(dibujar().dibujados).toBe(2);

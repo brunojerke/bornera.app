@@ -31,6 +31,8 @@
   <b class:alerta={resumen.lentos > 0}>{resumen.lentos} {resumen.lentos === 1 ? "cuadro" : "cuadros"}</b>
   <span>Capa estática</span>
   <b>{ms.format(resumen.estatica)} ms · {resumen.mosaicos} mosaicos/s</b>
+  <span>Capa dinámica</span>
+  <b>{resumen.dinamica === null ? "– (sonda apagada)" : `${ms.format(resumen.dinamica)} ms (sonda)`}</b>
   <span>Dibujados</span>
   <b>{entero.format(resumen.dibujados)} de {entero.format(resumen.componentes)}</b>
   <span>Detalle</span>

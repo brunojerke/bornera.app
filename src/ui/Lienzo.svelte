@@ -14,7 +14,10 @@
   import { Escena, type Contenido } from "../render/escena";
   import { MedidorRendimiento, type Resumen } from "../render/rendimiento";
   import { ESCENA_PRUEBA } from "../render/escenaPrueba";
-  import { Editor, SIN_SELECCION, type ResumenSeleccion } from "../editor/editor";
+  import { Editor, SIN_SELECCION, type DiagnosticoArrastre, type ResumenSeleccion } from "../editor/editor";
+  import { probarArrastre, type OpcionesDiagnostico } from "./diagnosticoArrastre";
+  import { ARRASTRADOS_DIAGNOSTICO, DURACION_DIAGNOSTICO_MS, tablaDiagnostico } from "./diagnostico";
+  import { VERSION } from "./version";
   import { documentoBanco } from "../editor/banco";
   import * as comandos from "../core/model/comandos";
   import Rendimiento from "./Rendimiento.svelte";
@@ -27,6 +30,7 @@
     escena = "documento",
     rendimiento = false,
     opciones = OPCIONES_OPTIMIZADAS,
+    diagnostico = { modo: "auto", sonda: false },
     onseleccion,
   }: {
     /** Zoom actual (1 = 100 %). Solo lectura desde afuera. */
@@ -41,6 +45,8 @@
     rendimiento?: boolean;
     /** Optimizaciones activas (para compararlas). */
     opciones?: Readonly<OpcionesCapas>;
+    /** Diagnóstico del arrastre (menú de desarrollo). */
+    diagnostico?: Readonly<DiagnosticoArrastre>;
     /** Cambió la selección o algo seleccionado. */
     onseleccion?: (resumen: ResumenSeleccion) => void;
   } = $props();
@@ -73,6 +79,7 @@
       editor.alCambiarSeleccion = null;
     }
     editor = ed;
+    if (ed) ed.diagnostico = { ...untrack(() => diagnostico) };
     v.dinamico = ed?.dibujarDinamico ?? null;
     colocando = null;
     onseleccion?.(ed?.resumenSeleccion() ?? SIN_SELECCION);
@@ -91,7 +98,37 @@
   //   editor.deshacer();
   // `bornera.activo()` da el editor de lo que se muestra (el del banco, en esas escenas).
   if (import.meta.env.DEV) {
-    (globalThis as Record<string, unknown>).bornera = { editor: editorDocumento, comandos, activo: () => editor };
+    (globalThis as Record<string, unknown>).bornera = {
+      editor: editorDocumento,
+      comandos,
+      activo: () => editor,
+      diagnosticarArrastre,
+    };
+  }
+
+  /**
+   * Prueba automática del arrastre (diagnóstico de la alpha.2) sobre lo que
+   * se muestra (la escena de 2000). Devuelve la tabla en Markdown.
+   */
+  export async function diagnosticarArrastre(op: OpcionesDiagnostico = {}): Promise<string> {
+    const v = vista;
+    const ed = editor;
+    if (!v || !ed) throw new Error("No hay una escena editable a la vista.");
+    ed.cancelarHerramienta();
+    const resultados = await probarArrastre(v, ed, op);
+    return tablaDiagnostico(
+      {
+        version: VERSION,
+        navegador: navigator.userAgent,
+        ancho: v.ancho,
+        alto: v.alto,
+        dpr: window.devicePixelRatio || 1,
+        fecha: new Date().toISOString().slice(0, 16).replace("T", " "),
+        arrastrados: Math.min(ARRASTRADOS_DIAGNOSTICO, ed.escena.cantidad),
+        duracionMs: op.duracionMs ?? DURACION_DIAGNOSTICO_MS,
+      },
+      resultados,
+    );
   }
 
   function crearContenido(e: EscenaDesarrollo, ed: Editor | null): Contenido {
@@ -207,6 +244,14 @@
     const o = { ...opciones };
     untrack(() => {
       if (vista) vista.opciones = o;
+    });
+  });
+
+  $effect(() => {
+    const d = { ...diagnostico };
+    untrack(() => {
+      if (editor) editor.diagnostico = d;
+      vista?.invalidar();
     });
   });
 </script>

@@ -72,6 +72,11 @@ export class Vista {
     this.invalidar();
   }
 
+  /** Aciertos y fallos acumulados del caché de textos en la capa dinámica (diagnóstico). */
+  get textosDinamica(): Readonly<{ aciertos: number; fallos: number }> {
+    return this.capas.textosDinamica;
+  }
+
   /** Bytes del caché de la capa estática. */
   get memoriaCache(): number {
     return this.capas.memoriaCache;

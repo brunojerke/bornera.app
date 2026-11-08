@@ -62,6 +62,11 @@ export interface Medicion {
   cache: number;
   /** Mosaicos rehechos en un solo cuadro, como máximo. */
   mosaicosMax: number;
+  /**
+   * Caché de textos en la capa dinámica, en las repeticiones medidas: el
+   * primer cuadro de cada gesto y el resto. Solo en los escenarios que lo piden.
+   */
+  textos?: { primero: UsoTextos; resto: UsoTextos };
 }
 
 export interface Resultado {
@@ -88,6 +93,14 @@ interface Escenario {
   repeticiones: number;
   /** Capa dinámica del escenario (por ejemplo, el resaltado de la selección). */
   dinamico?(e: Escena): DibujarDinamico;
+  /** Informar aciertos y fallos del caché de textos de la capa dinámica. */
+  textos?: boolean;
+}
+
+/** Aciertos y fallos del caché de textos de la capa dinámica. */
+export interface UsoTextos {
+  aciertos: number;
+  fallos: number;
 }
 
 function centrar(c: Camara, e: Escena, zoom: number): void {
@@ -187,15 +200,34 @@ function moverArrastrando(_: Camara, capas: Capas, e: Escena, i: number): void {
     arrastre.activo = false;
   }
 }
-const dibujarArrastre = (e: Escena): DibujarDinamico => (r, info) => {
+/** Capa dinámica de un arrastre: completos hasta `limite` visibles, contornos con más. */
+const arrastrarCon = (limite: number) => (e: Escena): DibujarDinamico => (r, info) => {
   if (!arrastre.activo) {
     dibujarSeleccion(r, info, e, seleccion);
     return;
   }
   const { dx, dy } = arrastre;
-  e.dibujarDesplazados(r, { ...info, detalle: nivelDetalle(info.escala) }, seleccion, dx, dy, LIMITE_ARRASTRE_COMPLETO);
+  e.dibujarDesplazados(r, { ...info, detalle: nivelDetalle(info.escala) }, seleccion, dx, dy, limite);
   dibujarSeleccion(r, info, e, seleccion, dx, dy);
 };
+const dibujarArrastre = arrastrarCon(LIMITE_ARRASTRE_COMPLETO);
+
+/** Zoom del caso medido en la netbook (58–73 %): textos y bornes, unos 40 visibles arrastrados. */
+const ZOOM_ARRASTRE = 0.58;
+const ARRASTRADOS = 40;
+
+/** Los `n` componentes más cercanos al centro de la escena que están enteros en pantalla. */
+function cercanosAlCentro(c: Camara, e: Escena, n: number): Set<string> {
+  const v = c.visible(ANCHO, ALTO);
+  const cx = v.x + v.ancho / 2;
+  const cy = v.y + v.alto / 2;
+  const ids = e.idsEnCaja(v, "contiene");
+  const d = (id: string) => {
+    const k = e.obtener(id)!;
+    return (k.x - cx) ** 2 + (k.y - cy) ** 2;
+  };
+  return new Set(ids.sort((a, b) => d(a) - d(b)).slice(0, n));
+}
 
 const ESCENARIOS: Escenario[] = [
   {
@@ -314,6 +346,33 @@ const ESCENARIOS: Escenario[] = [
     repeticiones: 3,
     dinamico: dibujarArrastre,
   },
+  {
+    // El caso que dio tirones en la netbook: unos 40 arrastrados dibujados
+    // completos (con textos y bornes), forzados sin límite.
+    nombre: "Arrastrar 40 completos al 58 %",
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_ARRASTRE);
+      seleccion = cercanosAlCentro(c, e, ARRASTRADOS);
+    },
+    cuadros: CUADROS_ARRASTRE,
+    paso: moverArrastrando,
+    repeticiones: 3,
+    dinamico: arrastrarCon(Infinity),
+    textos: true,
+  },
+  {
+    // Referencia: los mismos 40 en contornos. La diferencia con el anterior
+    // es lo que cuesta dibujarlos completos.
+    nombre: "Arrastrar 40 en contornos al 58 %",
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_ARRASTRE);
+      seleccion = cercanosAlCentro(c, e, ARRASTRADOS);
+    },
+    cuadros: CUADROS_ARRASTRE,
+    paso: moverArrastrando,
+    repeticiones: 3,
+    dinamico: arrastrarCon(0),
+  },
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {
@@ -372,6 +431,13 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
 
   const tiempos: number[] = [];
   let total = 0;
+  const usoPrimero = { aciertos: 0, fallos: 0 };
+  const usoResto = { aciertos: 0, fallos: 0 };
+  /** Suma a `uso` lo que pidió la capa dinámica desde `antes`. */
+  const sumarTextos = (uso: UsoTextos, antes: UsoTextos) => {
+    uso.aciertos += capas.textosDinamica.aciertos - antes.aciertos;
+    uso.fallos += capas.textosDinamica.fallos - antes.fallos;
+  };
   for (let rep = 0; rep <= escenario.repeticiones; rep++) {
     const medido = rep > 0; // la primera es de calentamiento
     const anotar = (ms: number) => {
@@ -396,11 +462,15 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     for (let i = 0; i < escenario.cuadros; i++) {
       escenario.paso(camara, capas, escena, i);
       t += CUADRO;
+      const antes = { ...capas.textosDinamica };
       const [m2, ms] = cuadro();
+      if (medido) sumarTextos(i === 0 ? usoPrimero : usoResto, antes);
       anotar(ms);
       m = m2;
     }
+    const antes = { ...capas.textosDinamica };
     if (m) cola(m, anotar);
+    if (medido) sumarTextos(usoResto, antes);
   }
   capas.liberarCache();
   canvas.width = canvas.height = 0;
@@ -414,6 +484,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     porGesto: total / escenario.repeticiones,
     cache,
     mosaicosMax,
+    ...(escenario.textos ? { textos: { primero: usoPrimero, resto: usoResto } } : {}),
   };
 }
 

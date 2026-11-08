@@ -10,6 +10,7 @@ function medida(total: number, mosaicos = 0): MedidaCuadro {
     esperar: 0,
     dibujados: 10,
     componentes: 100,
+    dinamica: 0,
   };
 }
 
@@ -56,5 +57,14 @@ describe("MedidorRendimiento", () => {
     expect(m.resumen(4000).lentos).toBe(2);
     expect(m.resumen(VENTANA_LENTOS_MS + 1).lentos).toBe(1);
     expect(m.resumen(2000 + VENTANA_LENTOS_MS).lentos).toBe(0);
+  });
+
+  it("la capa dinámica muestra la última medición con sonda (null si nunca se midió)", () => {
+    const m = new MedidorRendimiento();
+    m.registrar(0, medida(5));
+    expect(m.resumen(0).dinamica).toBeNull();
+    m.registrar(16, { ...medida(5), dinamica: 3.2 });
+    m.registrar(33, medida(5)); // un cuadro sin medir no la borra
+    expect(m.resumen(33).dinamica).toBe(3.2);
   });
 });

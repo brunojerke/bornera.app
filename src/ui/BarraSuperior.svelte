@@ -13,7 +13,9 @@
   import Play from "@lucide/svelte/icons/play";
   import MenuDesarrollo from "./MenuDesarrollo.svelte";
   import type { OpcionesCapas } from "../render/capas";
+  import type { DiagnosticoArrastre } from "../editor/editor";
   import type { EscenaDesarrollo, Modo } from "./tipos";
+  import { ES_PRERELEASE } from "./version";
 
   let {
     modo = $bindable("editar"),
@@ -24,6 +26,8 @@
     escena = $bindable("documento"),
     rendimiento = $bindable(false),
     opciones = $bindable(),
+    diagnostico = $bindable(),
+    onprobararrastre,
   }: {
     modo?: Modo;
     /** Zoom actual (1 = 100 %). */
@@ -31,10 +35,12 @@
     onacercar?: () => void;
     onalejar?: () => void;
     onencuadrar?: () => void;
-    /** Menú de desarrollo (solo en `npm run dev` / `tauri dev`). */
+    /** Menú de desarrollo (en `npm run dev` / `tauri dev` y en las prereleases). */
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
     opciones: OpcionesCapas;
+    diagnostico: DiagnosticoArrastre;
+    onprobararrastre?: () => void;
   } = $props();
 
   const TAM = 18;
@@ -66,9 +72,9 @@
 
   <div class="espacio"></div>
 
-  {#if import.meta.env.DEV}
+  {#if import.meta.env.DEV || ES_PRERELEASE}
     <div class="grupo-final">
-      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones />
+      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} />
     </div>
   {/if}
 

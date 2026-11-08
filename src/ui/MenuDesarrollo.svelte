@@ -1,22 +1,43 @@
 <script lang="ts">
-  // Menú de desarrollo (solo en `npm run dev` / `tauri dev`): elegir la escena
-  // de prueba, ver el contador de rendimiento (F3) y apagar optimizaciones
-  // para comparar cuánto aporta cada una.
+  // Menú de desarrollo (en `npm run dev` / `tauri dev` y en las prereleases):
+  // elegir la escena de prueba, ver el contador de rendimiento (F3), apagar
+  // optimizaciones para comparar cuánto aporta cada una y diagnosticar el
+  // arrastre (alpha.2).
   import Wrench from "@lucide/svelte/icons/wrench";
   import Check from "@lucide/svelte/icons/check";
   import { CANTIDADES_BANCO } from "../render/banco";
   import type { OpcionesCapas } from "../render/capas";
+  import type { DiagnosticoArrastre, ModoArrastreDiagnostico } from "../editor/editor";
   import type { EscenaDesarrollo } from "./tipos";
 
   let {
     escena = $bindable("documento"),
     rendimiento = $bindable(false),
     opciones = $bindable(),
+    diagnostico = $bindable(),
+    onprobararrastre,
   }: {
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
     opciones: OpcionesCapas;
+    diagnostico: DiagnosticoArrastre;
+    /** Prueba automática del arrastre (abre la escena de 2000). */
+    onprobararrastre?: () => void;
   } = $props();
+
+  const MODOS_ARRASTRE: { valor: ModoArrastreDiagnostico; texto: string }[] = [
+    { valor: "auto", texto: "Automático (completos hasta 200)" },
+    { valor: "completos", texto: "Completos" },
+    { valor: "sinTextos", texto: "Completos sin textos" },
+    { valor: "sinTextosNiBornes", texto: "Completos sin textos ni bornes" },
+    { valor: "contornos", texto: "Contornos" },
+    { valor: "nada", texto: "Sin dibujar arrastrados (base)" },
+  ];
+
+  function probar() {
+    abierto = false;
+    onprobararrastre?.();
+  }
 
   let abierto = $state(false);
   let raiz: HTMLDivElement;
@@ -94,6 +115,39 @@
           {o.texto}
         </button>
       {/each}
+
+      <div class="separador"></div>
+      <div class="titulo">Arrastre (diagnóstico)</div>
+      <button
+        role="menuitemcheckbox"
+        aria-checked={opciones.cacheTextosDinamica}
+        onclick={() => alternar("cacheTextosDinamica")}
+      >
+        <span class="marca">{#if opciones.cacheTextosDinamica}<Check size={14} />{/if}</span>
+        Caché de textos al arrastrar
+      </button>
+      {#each MODOS_ARRASTRE as m (m.valor)}
+        <button
+          role="menuitemradio"
+          aria-checked={diagnostico.modo === m.valor}
+          onclick={() => (diagnostico = { ...diagnostico, modo: m.valor })}
+        >
+          <span class="marca">{#if diagnostico.modo === m.valor}<Check size={14} />{/if}</span>
+          {m.texto}
+        </button>
+      {/each}
+      <button
+        role="menuitemcheckbox"
+        aria-checked={diagnostico.sonda}
+        onclick={() => (diagnostico = { ...diagnostico, sonda: !diagnostico.sonda })}
+      >
+        <span class="marca">{#if diagnostico.sonda}<Check size={14} />{/if}</span>
+        Medir la dinámica (sonda)
+      </button>
+      <button role="menuitem" onclick={probar}>
+        <span class="marca"></span>
+        Prueba automática…
+      </button>
     </div>
   {/if}
 </div>
@@ -113,6 +167,9 @@
     right: 0;
     z-index: 10;
     min-width: 230px;
+    /* A 1024×600 no entra entero: se desplaza. */
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
     padding: 4px;
     background: var(--superficie);
     border: 1px solid var(--borde);

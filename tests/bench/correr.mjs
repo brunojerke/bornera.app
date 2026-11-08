@@ -80,6 +80,18 @@ function informe(r, sinGpu) {
     }
     lineas.push(tabla(filas));
   }
+
+  // Caché de textos de la capa dinámica, en los escenarios que lo informan.
+  const conTextos = r.mediciones.filter((m) => m.textos);
+  if (conTextos.length > 0) {
+    lineas.push("");
+    lineas.push("Caché de textos en la capa dinámica (aciertos / fallos), primer cuadro de cada gesto y resto:");
+    const filas = [["Símbolos", "Escenario", "Modo", "Primer cuadro", "Resto"]];
+    const par = (u) => `${u.aciertos} / ${u.fallos}`;
+    for (const m of conTextos) filas.push([String(m.componentes), m.escenario, m.modo, par(m.textos.primero), par(m.textos.resto)]);
+    lineas.push(tabla(filas));
+  }
+
   lineas.push("");
   const heap = r.memoria
     .map((m) => `${m.componentes}: ${m.heapMB === null ? "–" : `${mb.format(m.heapMB)} MB`}`)

@@ -81,6 +81,11 @@ export interface OpcionesCapas {
   nivelDetalle: boolean;
   /** Copiar los textos de un caché de imágenes en vez de dibujarlos con fillText. */
   cacheTextos: boolean;
+  /**
+   * Diagnóstico (alpha.2): la capa dinámica también copia los textos del
+   * caché (hace falta `cacheTextos`). Apagado hasta medirlo en la netbook.
+   */
+  cacheTextosDinamica: boolean;
 }
 
 export const OPCIONES_OPTIMIZADAS: Readonly<OpcionesCapas> = {
@@ -88,12 +93,14 @@ export const OPCIONES_OPTIMIZADAS: Readonly<OpcionesCapas> = {
   recorte: true,
   nivelDetalle: true,
   cacheTextos: true,
+  cacheTextosDinamica: false,
 };
 export const OPCIONES_SIN_OPTIMIZAR: Readonly<OpcionesCapas> = {
   cache: false,
   recorte: false,
   nivelDetalle: false,
   cacheTextos: false,
+  cacheTextosDinamica: false,
 };
 
 /** Lo que la capa dinámica sabe del cuadro. */
@@ -103,6 +110,13 @@ export interface InfoDinamico {
   colores: Colores;
   /** Parte de la grilla en pantalla: lo que no la toca no hace falta dibujarlo. */
   visible: Caja;
+  /**
+   * Dibuja con `dibujar` y devuelve cuánto tardó de verdad, en ms: fuerza el
+   * rasterizado antes (lo pendiente no cuenta) y después (Chromium dibuja
+   * diferido: sin eso solo se mediría el anotado de las órdenes). Cuesta dos
+   * copias de 1 px: usarlo solo en los cuadros que se quieren medir.
+   */
+  medir(dibujar: () => void): number;
 }
 
 /** Dibuja la capa dinámica, en unidades de grilla. */
@@ -247,6 +261,9 @@ export class Capas {
     return n > 0;
   }
 
+  /** Aciertos y fallos del caché de textos pedidos por la capa dinámica, acumulados (para el banco). */
+  readonly textosDinamica = { aciertos: 0, fallos: 0 };
+
   /** Bytes que ocupan los mosaicos y el caché de textos (4 por píxel). */
   get memoriaCache(): number {
     return this.mosaicos.memoria + this.textos.memoria;
@@ -275,6 +292,7 @@ export class Capas {
       esperar: 0,
       dibujados: 0,
       componentes: this.contenido?.cantidad ?? 0,
+      dinamica: 0,
     };
 
     if (ancho <= 0 || alto <= 0) {
@@ -299,10 +317,33 @@ export class Capas {
       if (this.dinamico) {
         const t = this.reloj();
         const r = this.renderer;
+        // Los textos de la dinámica (lo que se arrastra, la vista previa) salen
+        // del mismo caché que los mosaicos: casi siempre ya están, porque los
+        // mosaicos los dibujaron antes. Durante un zoom en curso no: el tamaño
+        // no coincide y lo llenaría de tamaños intermedios. Si está lleno no se
+        // vacía acá (lo vacía el próximo mosaico): esos textos van con fillText.
+        const o = this._opciones;
+        const conCache = o.cacheTextos && o.cacheTextosDinamica && (!o.cache || k === this.mosaicos.k);
+        r.textos = conCache ? this.textos : null;
+        const { aciertos, fallos } = this.textos;
         r.transformar(k, 0, 0, k, -ox, -oy);
         r.guardar();
-        this.dinamico(r, { escala: camara.escala, colores: this.colores, visible: pantalla });
+        const medir = (dibujar: () => void): number => {
+          this.rasterizar(ctx);
+          const t1 = this.reloj();
+          dibujar();
+          r.volcarTextos(); // los textos copiados también cuentan
+          this.rasterizar(ctx);
+          const ms = this.reloj() - t1;
+          medida.dinamica += ms;
+          return ms;
+        };
+        this.dinamico(r, { escala: camara.escala, colores: this.colores, visible: pantalla, medir });
         r.restaurar();
+        r.volcarTextos();
+        r.textos = null;
+        this.textosDinamica.aciertos += this.textos.aciertos - aciertos;
+        this.textosDinamica.fallos += this.textos.fallos - fallos;
         this.estimadoDinamico = 0.7 * this.estimadoDinamico + 0.3 * (this.reloj() - t);
       }
 
@@ -442,6 +483,12 @@ export class Capas {
    * caería todo junto en un cuadro. Copiar un píxel del mosaico obliga a
    * ejecutarlas ahora; borrar la copia enseguida suelta la referencia al
    * mosaico. En los motores que dibujan en el momento no cuesta casi nada.
+   *
+   * No usa getImageData: en Chromium, leer píxeles seguido de un canvas puede
+   * hacer que deje de acelerarlo por GPU (la heurística de "willReadFrequently")
+   * y degradar todo el dibujo después. Una copia con drawImage no cuenta como
+   * lectura para esa heurística. Con GPU, igual obliga a esperar a que la GPU
+   * termine: por eso la capa dinámica solo se mide por muestreo (`medir`).
    */
   private rasterizar(c: CanvasRenderingContext2D): void {
     this.sonda.drawImage(c.canvas, 0, 0, 1, 1, 0, 0, 1, 1);

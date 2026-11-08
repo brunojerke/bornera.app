@@ -10,8 +10,10 @@
   import { esAtajoBanco, siguienteEscenaBanco } from "./escenas";
   import type { Punto } from "../render/camara";
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
-  import { SIN_SELECCION, type ResumenSeleccion } from "../editor/editor";
+  import { SIN_SELECCION, type DiagnosticoArrastre, type ResumenSeleccion } from "../editor/editor";
   import { abrirAlSeleccionar } from "./propiedades";
+  import { tick } from "svelte";
+  import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
 
   let modo = $state<Modo>("editar");
   let paletaAbierta = $state(true);
@@ -30,6 +32,29 @@
   let escena = $state<EscenaDesarrollo>("documento");
   let rendimiento = $state(false);
   let opciones = $state<OpcionesCapas>({ ...OPCIONES_OPTIMIZADAS });
+  let diagnostico = $state<DiagnosticoArrastre>({ modo: "auto", sonda: false });
+
+  /** Prueba automática del arrastre: estado del diálogo (null: cerrado). */
+  let prueba = $state<{ corriendo: boolean; texto: string } | null>(null);
+
+  async function probarArrastre() {
+    if (prueba?.corriendo) return;
+    prueba = { corriendo: true, texto: "Abriendo la escena de 2000…" };
+    try {
+      escena = 2000;
+      await tick();
+      // Dos cuadros: la escena nueva ya está conectada y dibujada.
+      for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(r));
+      const tabla = await lienzo.diagnosticarArrastre({
+        progreso: (t) => {
+          if (prueba) prueba.texto = `Midiendo: ${t}…`;
+        },
+      });
+      prueba = { corriendo: false, texto: tabla };
+    } catch (e) {
+      prueba = { corriendo: false, texto: `La prueba falló: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
 
   function alCambiarSeleccion(r: ResumenSeleccion) {
     if (abrirAlSeleccionar(seleccion.cantidad, r.cantidad, propiedadesPlegadoPorUsuario)) propiedadesAbierto = true;
@@ -63,6 +88,8 @@
     bind:escena
     bind:rendimiento
     bind:opciones
+    bind:diagnostico
+    onprobararrastre={probarArrastre}
   />
   <main class="centro">
     <Paleta
@@ -79,6 +106,7 @@
       {escena}
       {rendimiento}
       {opciones}
+      {diagnostico}
       onseleccion={alCambiarSeleccion}
     />
     <PanelPropiedades
@@ -89,6 +117,10 @@
   </main>
   <BarraEstado {modo} {zoom} {cursor} />
 </div>
+
+{#if prueba}
+  <DialogoDiagnostico corriendo={prueba.corriendo} texto={prueba.texto} oncerrar={() => (prueba = null)} />
+{/if}
 
 <style>
   .ventana {

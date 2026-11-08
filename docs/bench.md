@@ -17,6 +17,25 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 
+## Arrastrar 40 completos (diagnóstico, alpha.2) — 2026-11-08
+
+Para reproducir los tirones de la netbook (40 arrastrados completos al 58–73 %):
+
+- **Escenarios nuevos**: *Arrastrar 40 completos al 58 %* (los 40 más cercanos al centro, completos sin límite) y *Arrastrar 40 en contornos al 58 %* (referencia: la diferencia es lo que cuesta dibujarlos completos). El primero informa los aciertos y fallos del caché de textos de la capa dinámica, en el primer cuadro de cada gesto y en el resto.
+- La capa dinámica puede copiar los textos del caché (`cacheTextosDinamica`), **apagado por defecto** hasta medirlo en la netbook.
+
+Dos corridas con `--comparar` en la PC (mediana por cuadro, ms), con el caché de la dinámica prendido a mano para comparar:
+
+| Símbolos | Completos con caché | Completos sin caché | Contornos |
+|---:|---:|---:|---:|
+| 2000 | 1,9 · 2,2 | 1,8 · 2,4 | 0,8–1,2 |
+| 500 | 1,9 · 1,7 | 2,2 · 2,3 | 0,7–1,4 |
+| 100 | 1,9 · 2,6 | 2,3 · 2,9 | 0,7–1,1 |
+
+- Dibujar los 40 completos cuesta 1–1,5 ms por cuadro; el caché de textos ahorra 0–0,4 ms de eso (dentro del ruido con 2000). En la PC los textos **no** son la causa principal.
+- Caché: 260 aciertos y 0 fallos en el primer cuadro y 7487 aciertos y 0 fallos en el resto (unos 87 textos por cuadro).
+- La PC no reproduce la netbook (2 ms contra 18–22 ms por cuadro): la medición que decide es la prueba automática del menú de desarrollo en la netbook.
+
 ## Mover arrastrando (fase 3, T9) — 2026-11-08
 
 Cambios:

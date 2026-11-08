@@ -88,6 +88,32 @@ export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unic
  */
 export const LIMITE_ARRASTRE_COMPLETO = 200;
 
+/**
+ * Diagnóstico del arrastre (alpha.2, menú de desarrollo): cómo se dibujan los
+ * arrastrados, para medir en la netbook qué parte del costo es cada cosa.
+ * - "auto": lo normal (completos hasta LIMITE_ARRASTRE_COMPLETO visibles).
+ * - "completos", "sinTextos", "sinTextosNiBornes": completos sin límite, con
+ *   menos detalle.
+ * - "contornos": solo el contorno del cuerpo.
+ * - "nada": la capa dinámica queda vacía (ni arrastrados ni resaltado). El
+ *   arrastre y la composición siguen: es la base.
+ */
+export type ModoArrastreDiagnostico = "auto" | "completos" | "sinTextos" | "sinTextosNiBornes" | "contornos" | "nada";
+
+export interface DiagnosticoArrastre {
+  modo: ModoArrastreDiagnostico;
+  /** Medir con la sonda (`InfoDinamico.medir`) los cuadros de muestra del arrastre. */
+  sonda: boolean;
+}
+
+/**
+ * Cuadros de un arrastre que se miden con la sonda: los 3 primeros y después
+ * 1 cada 15 (el 17, el 32…). Medir todos contaminaría lo que se mide.
+ */
+export function esCuadroDeMuestra(i: number): boolean {
+  return i < 3 || (i - 2) % 15 === 0;
+}
+
 /** Documento vacío para arrancar la app, con la fecha de hoy. */
 export function documentoNuevo(): Documento {
   return crearDocumento({ titulo: "Sin título", autor: "", fecha: new Date().toISOString().slice(0, 10) });
@@ -112,6 +138,12 @@ export class Editor {
   private _seleccion: ReadonlySet<string> = new Set();
   /** Lo que se está arrastrando (oculto en la capa estática); null si no hay arrastre. */
   private arrastrados: ReadonlySet<string> | null = null;
+  /** Diagnóstico del arrastre (menú de desarrollo). */
+  diagnostico: DiagnosticoArrastre = { modo: "auto", sonda: false };
+  /** Cuadros dibujados del arrastre en curso (para elegir los de muestra). */
+  private cuadrosArrastre = 0;
+  /** Mediciones con la sonda (ms), desde la última vez que se leyeron con `tomarMuestras`. */
+  private muestras: number[] = [];
   private readonly desconocidos = new Set<string>();
 
   constructor(
@@ -234,10 +266,18 @@ export class Editor {
     if (r.redibujar || r.terminar) this.vista?.invalidar();
   }
 
+  /** Devuelve las mediciones de la sonda juntadas hasta ahora y empieza de cero. */
+  tomarMuestras(): number[] {
+    const m = this.muestras;
+    this.muestras = [];
+    return m;
+  }
+
   /** Saca los arrastrados de la capa estática: cada uno invalida su caja. */
   private empezarArrastre(ids: ReadonlySet<string>): void {
     if (this.arrastrados) this.terminarArrastre();
     this.arrastrados = ids;
+    this.cuadrosArrastre = 0;
     for (const id of ids) {
       const k = this.escena.ocultar(id);
       if (k) this.vista?.invalidarRegion(k);
@@ -263,8 +303,17 @@ export class Editor {
   readonly dibujarDinamico = (r: Renderer, info: InfoDinamico): void => {
     const a = this.arrastrados && this.seleccionar.arrastre;
     if (a) {
-      const datos = { ...info, detalle: nivelDetalle(info.escala) };
-      this.escena.dibujarDesplazados(r, datos, a.ids, a.dx, a.dy, LIMITE_ARRASTRE_COMPLETO);
+      const { modo, sonda } = this.diagnostico;
+      if (modo === "nada") return; // base: la capa dinámica vacía
+      const detalle = nivelDetalle(info.escala);
+      if (modo === "sinTextos" || modo === "sinTextosNiBornes") detalle.textos = false;
+      if (modo === "sinTextosNiBornes") detalle.bornes = false;
+      const limite = modo === "auto" ? LIMITE_ARRASTRE_COMPLETO : modo === "contornos" ? 0 : Infinity;
+      const datos = { ...info, detalle };
+      const dibujar = () => this.escena.dibujarDesplazados(r, datos, a.ids, a.dx, a.dy, limite);
+      if (sonda && esCuadroDeMuestra(this.cuadrosArrastre)) this.muestras.push(info.medir(dibujar));
+      else dibujar();
+      this.cuadrosArrastre++;
       dibujarSeleccion(r, info, this.escena, this._seleccion, a.dx, a.dy);
     } else if (this._seleccion.size > 0) {
       dibujarSeleccion(r, info, this.escena, this._seleccion);

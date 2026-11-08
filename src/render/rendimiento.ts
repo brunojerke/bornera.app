@@ -31,6 +31,11 @@ export interface MedidaCuadro {
   dibujados: number;
   /** Componentes en la escena. */
   componentes: number;
+  /**
+   * Lo que tardó de verdad la parte medida de la capa dinámica (con la sonda,
+   * `InfoDinamico.medir`), en ms; 0 si en este cuadro no se midió.
+   */
+  dinamica: number;
 }
 
 export interface Resumen {
@@ -49,6 +54,8 @@ export interface Resumen {
   mosaicos: number;
   dibujados: number;
   componentes: number;
+  /** Última medición de la capa dinámica con la sonda, en ms; null si nunca se midió. */
+  dinamica: number | null;
 }
 
 interface Registro {
@@ -64,6 +71,7 @@ const MEDIDA_VACIA: MedidaCuadro = {
   esperar: 0,
   dibujados: 0,
   componentes: 0,
+  dinamica: 0,
 };
 
 export class MedidorRendimiento {
@@ -72,6 +80,7 @@ export class MedidorRendimiento {
   private lentos: number[] = [];
   private ultima: MedidaCuadro = MEDIDA_VACIA;
   private ultimaEstatica = 0;
+  private ultimaDinamica: number | null = null;
 
   /** Anota un cuadro dibujado en el instante `t` (ms). */
   registrar(t: number, medida: MedidaCuadro): void {
@@ -79,6 +88,7 @@ export class MedidorRendimiento {
     if (medida.total > LIMITE_LENTO_MS) this.lentos.push(t);
     this.ultima = medida;
     if (medida.estatica > 0) this.ultimaEstatica = medida.estatica;
+    if (medida.dinamica > 0) this.ultimaDinamica = medida.dinamica;
     this.descartarViejos(t);
   }
 
@@ -104,6 +114,7 @@ export class MedidorRendimiento {
       mosaicos,
       dibujados: this.ultima.dibujados,
       componentes: this.ultima.componentes,
+      dinamica: this.ultimaDinamica,
     };
   }
 

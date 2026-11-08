@@ -7,7 +7,14 @@ import type { Colores } from "../render/capas";
 import type { Renderer } from "../render/renderer";
 import { cajaDibujo } from "../render/simbolo";
 import type { EventoHerramienta } from "./herramientas/tipos";
-import { documentoNuevo, Editor, SIMBOLO_DESCONOCIDO, type DestinoVista } from "./editor";
+import {
+  documentoNuevo,
+  Editor,
+  esCuadroDeMuestra,
+  SIMBOLO_DESCONOCIDO,
+  type DestinoVista,
+  type ModoArrastreDiagnostico,
+} from "./editor";
 
 /** Vista falsa: anota cada región invalidada y si se pidió rehacer todo. */
 class VistaFalsa implements DestinoVista {
@@ -212,6 +219,11 @@ function rendererFalso(): { r: Renderer; llamadas: string[]; estilos: unknown[] 
 }
 
 const COLORES = { acento: "#06f" } as Colores;
+/** `medir` de la capa dinámica: dibuja y dice que tardó 7 ms (sin sonda de verdad). */
+const MEDIR = (dibujar: () => void): number => {
+  dibujar();
+  return 7;
+};
 /** Toda la grilla a la vista. */
 const TODO: Caja = { x: -1e6, y: -1e6, ancho: 2e6, alto: 2e6 };
 
@@ -268,11 +280,11 @@ describe("Editor con la herramienta Colocar", () => {
   it("la capa dinámica dibuja la vista previa con el color de acento, y nada sin herramienta", () => {
     const { editor } = armar();
     const f = rendererFalso();
-    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, visible: TODO });
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, medir: MEDIR, visible: TODO });
     expect(f.llamadas).toEqual([]);
 
     editor.aplicar(editor.iniciarColocar(SIMBOLOS[0]!, "clic")!.mover(ev(0, 0)));
-    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, visible: TODO });
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, medir: MEDIR, visible: TODO });
     expect(f.estilos[0]).toMatchObject({ trazo: "#06f", relleno: "#06f" });
     expect(f.llamadas).toContain("simbolo");
   });
@@ -384,7 +396,7 @@ describe("Editor: selección", () => {
       get: (obj, nombre, recv) =>
         nombre === "rectangulos" ? (_: ArrayLike<number>, n: number) => (dibujados = n) : Reflect.get(obj, nombre, recv),
     });
-    editor.dibujarDinamico(r, { escala: 20, colores: COLORES, visible: { x: -20, y: -20, ancho: 40, alto: 40 } });
+    editor.dibujarDinamico(r, { escala: 20, colores: COLORES, medir: MEDIR, visible: { x: -20, y: -20, ancho: 40, alto: 40 } });
     // Un solo trazo, con un recuadro: el de 'b' está fuera de pantalla.
     expect(dibujados).toBe(1);
     expect(f.llamadas.filter((l) => l === "rectangulo")).toHaveLength(0);
@@ -510,7 +522,7 @@ describe("Editor: mover arrastrando", () => {
   it("la capa dinámica dibuja lo arrastrado corrido, con su resaltado", () => {
     const { editor } = conUno();
     const f = rendererFalso();
-    const pantalla = { visible: { x: 40, y: -20, ancho: 40, alto: 40 }, escala: 20, colores: COLORES };
+    const pantalla = { visible: { x: 40, y: -20, ancho: 40, alto: 40 }, escala: 20, colores: COLORES, medir: MEDIR };
     editor.dibujarDinamico(f.r, pantalla);
     expect(f.llamadas).toEqual([]); // el componente está en 0, fuera de pantalla
 
@@ -519,5 +531,82 @@ describe("Editor: mover arrastrando", () => {
     editor.dibujarDinamico(f.r, pantalla);
     expect(f.llamadas).toContain("trasladar");
     expect(f.llamadas).toContain("rectangulos"); // el resaltado, corrido hasta la pantalla
+  });
+});
+
+describe("Editor: diagnóstico del arrastre (alpha.2)", () => {
+  /** Un componente arrastrándose, y lo que dibuja la capa dinámica en un cuadro con ese modo. */
+  function dibujarCon(modo: ModoArrastreDiagnostico) {
+    const { editor } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    editor.seleccionarIds([cmd.id]);
+    editor.diagnostico = { modo, sonda: false };
+    editor.aplicar(editor.activa.presionar(ev(0, 0)));
+    editor.aplicar(editor.activa.mover(ev(3, 0)));
+    const f = rendererFalso();
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, medir: MEDIR, visible: TODO });
+    return f.llamadas;
+  }
+
+  it("cada modo dibuja lo suyo", () => {
+    const completos = dibujarCon("completos");
+    expect(completos).toContain("texto");
+    expect(completos).toContain("circulo");
+    expect(dibujarCon("auto")).toEqual(completos); // 1 arrastrado: por debajo del límite
+
+    const sinTextos = dibujarCon("sinTextos");
+    expect(sinTextos).not.toContain("texto");
+    expect(sinTextos).toContain("circulo");
+
+    const sinNada = dibujarCon("sinTextosNiBornes");
+    expect(sinNada).not.toContain("texto");
+    expect(sinNada).not.toContain("circulo");
+    expect(sinNada).toContain("simbolo");
+
+    // Contornos: el cuerpo y el resaltado, dos rellenos de rectángulos, sin el símbolo.
+    const contornos = dibujarCon("contornos");
+    expect(contornos.filter((l) => l === "rectangulos")).toHaveLength(2);
+    expect(contornos).not.toContain("simbolo");
+
+    // Base: la capa dinámica vacía, ni el resaltado.
+    expect(dibujarCon("nada")).toEqual([]);
+  });
+
+  it("los cuadros de muestra son los 3 primeros y después 1 cada 15", () => {
+    const muestras = Array.from({ length: 50 }, (_, i) => i).filter(esCuadroDeMuestra);
+    expect(muestras).toEqual([0, 1, 2, 17, 32, 47]);
+  });
+
+  it("con la sonda, mide solo los cuadros de muestra; sin la sonda, ninguno", () => {
+    const { editor } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    editor.seleccionarIds([cmd.id]);
+    const medidos: number[] = [];
+    let cuadro = 0;
+    const medir = (dibujar: () => void) => {
+      medidos.push(cuadro);
+      dibujar();
+      return 2.5;
+    };
+    const info = { escala: 20, colores: COLORES, medir, visible: TODO };
+
+    for (const sonda of [false, true]) {
+      editor.diagnostico = { modo: "completos", sonda };
+      medidos.length = 0;
+      editor.aplicar(editor.activa.presionar(ev(0, 0)));
+      editor.aplicar(editor.activa.mover(ev(3, 0)));
+      for (cuadro = 0; cuadro < 20; cuadro++) editor.dibujarDinamico(rendererFalso().r, info);
+      editor.aplicar(editor.seleccionar.cancelar());
+      if (sonda) {
+        expect(medidos).toEqual([0, 1, 2, 17]);
+        expect(editor.tomarMuestras()).toEqual([2.5, 2.5, 2.5, 2.5]);
+        expect(editor.tomarMuestras()).toEqual([]); // se vacía al leerlas
+      } else {
+        expect(medidos).toEqual([]);
+        expect(editor.tomarMuestras()).toEqual([]);
+      }
+    }
   });
 });

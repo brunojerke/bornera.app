@@ -84,6 +84,12 @@ interface Estante {
 export class CacheTextos {
   /** Alguna entrada no entró: hay que vaciar antes de seguir cacheando. */
   lleno = false;
+  /**
+   * Pedidos que ya estaban (aciertos) y que no (fallos: se dibujaron en el
+   * atlas o no entraron). Acumulados desde que se creó; solo para medir.
+   */
+  aciertos = 0;
+  fallos = 0;
   private paginas: Pagina[] = [];
   /** Último estante abierto de cada alto. */
   private readonly estantes = new Map<number, Estante>();
@@ -116,7 +122,11 @@ export class CacheTextos {
     let porTexto = porTamano.get(px);
     if (!porTexto) porTamano.set(px, (porTexto = new Map()));
     const guardada = porTexto.get(texto);
-    if (guardada) return guardada;
+    if (guardada) {
+      this.aciertos++;
+      return guardada;
+    }
+    this.fallos++;
     if (this.lleno) return null;
 
     const nueva = this.dibujar(texto, px, color);
