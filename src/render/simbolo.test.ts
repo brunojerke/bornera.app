@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BOBINA_CONTACTOR, FASE, LAMPARA, PULSADOR_NA, PULSADOR_NC, type DefinicionSimbolo } from "../core/symbols";
+import { BOBINA_CONTACTOR, FASE, LAMPARA, NEUTRO, PULSADOR_NA, PULSADOR_NC, type DefinicionSimbolo } from "../core/symbols";
 import { RendererCanvas, trazadoSimbolo } from "./canvas2d";
 import type { Renderer } from "./renderer";
 import {
   ALTO_BORNE,
   ALTO_ETIQUETA,
+  anchoTexto,
+  cajaDibujo,
+  cajaEtiqueta,
   cajaSimbolo,
   dibujarSimbolo,
   posicionEtiqueta,
@@ -212,5 +215,28 @@ describe("caché de Path2D", () => {
     expect(trazos[0]![1]).toBe(trazos[1]![1]);
     expect(trazos[0]![1]).toBe(trazadoSimbolo(def).trazo);
     expect(llamadas.some((l) => l[0] === "fill")).toBe(false);
+  });
+});
+
+describe("fase y neutro: la caja de dibujo cubre la etiqueta", () => {
+  // El índice espacial y la invalidación de mosaicos usan cajaDibujo: si la
+  // etiqueta (a la izquierda del círculo) quedara afuera, al mover quedarían restos.
+  const dentro = (a: { x: number; y: number; ancho: number; alto: number }, b: typeof a) =>
+    a.x >= b.x && a.y >= b.y && a.x + a.ancho <= b.x + b.ancho && a.y + a.alto <= b.y + b.alto;
+
+  it.each([
+    [FASE, "L"],
+    [FASE, "L1"],
+    [FASE, "L123"],
+    [NEUTRO, "N"],
+  ] as const)("%# con la etiqueta %s", (def, etiqueta) => {
+    for (const rotacion of [0, 90, 180, 270] as const) {
+      const c = { x: 7, y: -3, rotacion, espejado: false };
+      const e = cajaEtiqueta(def, c, etiqueta)!;
+      const d = cajaDibujo(def, c, etiqueta);
+      expect(e.ancho).toBeCloseTo(anchoTexto(etiqueta, ALTO_ETIQUETA));
+      expect(dentro(e, d)).toBe(true);
+      expect(dentro(cajaSimbolo(def, c), d)).toBe(true);
+    }
   });
 });

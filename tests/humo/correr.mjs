@@ -2,7 +2,8 @@
 // headless a 1024×600 (la pantalla de la netbook).
 //
 // Levanta Vite con la app (en un puerto libre: puede haber un `npm run dev`
-// andando) y corre cada prueba `tNN-*.mjs` de esta carpeta, en orden, con la
+// andando) y corre cada prueba `*.mjs` de esta carpeta (menos este archivo y
+// cdp.mjs: `tNN-*.mjs` por tarea, o con nombre de tema), en orden, con la
 // app recién cargada. Una prueba exporta `nombre` y una función por defecto
 // que recibe la página (cdp.mjs) y `comprobar(descripcion, ok, detalle?)`.
 // Después de cada prueba se comprueba también que la página no haya tenido
@@ -38,10 +39,10 @@ const opcion = (nombre) => args.find((a) => a.startsWith(`--${nombre}=`))?.split
 const bandera = (nombre) => args.includes(`--${nombre}`);
 const filtros = args.filter((a) => !a.startsWith("--"));
 
-/** Pruebas de la carpeta, en orden: t06-…, t07-…, t08-… */
+/** Pruebas de la carpeta, en orden: fuentes-simbolos, t06-…, t07-…, t08-… */
 function pruebas() {
   return readdirSync(AQUI)
-    .filter((f) => /^t\d+.*\.mjs$/.test(f))
+    .filter((f) => f.endsWith(".mjs") && f !== "correr.mjs" && f !== "cdp.mjs")
     .filter((f) => filtros.length === 0 || filtros.some((x) => f.startsWith(x)))
     .sort();
 }

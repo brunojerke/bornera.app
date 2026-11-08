@@ -183,36 +183,66 @@ export const LAMPARA: DefinicionSimbolo = {
 };
 
 // ── Alimentaciones ─────────────────────────────────────────────────────────
-// Fase y neutro van sueltos, como en CADe_SIMU: la fase arriba del esquema y
-// el neutro abajo. Su etiqueta (L, L1, N…) es el nombre de la red: en la
-// simulación, las alimentaciones con la misma etiqueta (sin espacios a los
-// lados y en mayúsculas) quedan conectadas aunque no haya cable entre ellas.
+// Fase y neutro van sueltos: la fase arriba del esquema y el neutro abajo. Su
+// etiqueta (L, L1, N…) es el nombre de la red: en la simulación, las
+// alimentaciones con la misma etiqueta (sin espacios a los lados y en
+// mayúsculas) quedan conectadas aunque no haya cable entre ellas.
+// Las dos se dibujan igual (las distingue la etiqueta): un círculo con un
+// período de senoide adentro, de alterna, y un tramo hasta el único borne,
+// abajo. El dibujo llena justo la caja de 2×2.
 
-/** Medio ancho de la barra de alimentación. */
-const MEDIA_BARRA = 0.75;
+/** Radio del círculo de alimentación. */
+const RADIO_FUENTE = 0.8;
+/** Centro del círculo: pegado al borde de arriba de la caja. */
+const CENTRO_FUENTE = -1 + RADIO_FUENTE;
+/** Medio ancho y amplitud de la senoide. */
+const MEDIO_ANCHO_SENO = 0.5;
+const AMPLITUD_SENO = 0.28;
+/** Tramos rectos con que se aproxima la senoide. */
+const TRAMOS_SENO = 12;
 
-/** Fase: barra arriba y un borne que sale hacia abajo. La etiqueta se edita (L1, L2, L3). */
+/** Dibujo común de fase y neutro: círculo, senoide y tramo hasta el borne (0, 1). */
+function dibujoFuente(): Primitiva[] {
+  const seno: Linea[] = [];
+  const punto = (i: number): [number, number] => [
+    -MEDIO_ANCHO_SENO + (2 * MEDIO_ANCHO_SENO * i) / TRAMOS_SENO,
+    // y crece hacia abajo: el primer medio período sube.
+    CENTRO_FUENTE - AMPLITUD_SENO * Math.sin((2 * Math.PI * i) / TRAMOS_SENO),
+  ];
+  for (let i = 0; i < TRAMOS_SENO; i++) {
+    const [x1, y1] = punto(i);
+    const [x2, y2] = punto(i + 1);
+    seno.push(linea(x1, y1, x2, y2));
+  }
+  return [
+    { forma: "circulo", cx: 0, cy: CENTRO_FUENTE, r: RADIO_FUENTE },
+    ...seno,
+    linea(0, CENTRO_FUENTE + RADIO_FUENTE, 0, 1),
+  ];
+}
+
+/** Fase: la etiqueta se edita (L1, L2, L3). */
 export const FASE: DefinicionSimbolo = {
   tipo: "fuente.fase",
   nombre: "Fase (L)",
   categoria: "fuentes",
   elemento: "fuente",
   tamano: { ancho: 2, alto: 2 },
-  primitivas: [linea(-MEDIA_BARRA, -0.5, MEDIA_BARRA, -0.5), linea(0, -0.5, 0, 1)],
+  primitivas: dibujoFuente(),
   bornes: [{ nombre: "L", x: 0, y: 1, direccion: "abajo" }],
   etiquetaInicial: "L",
   mostrarNombresBornes: false,
 };
 
-/** Neutro: barra abajo y un borne que sale hacia arriba. */
+/** Neutro: mismo dibujo y mismo lado del borne que la fase. */
 export const NEUTRO: DefinicionSimbolo = {
   tipo: "fuente.neutro",
   nombre: "Neutro (N)",
   categoria: "fuentes",
   elemento: "fuente",
   tamano: { ancho: 2, alto: 2 },
-  primitivas: [linea(-MEDIA_BARRA, 0.5, MEDIA_BARRA, 0.5), linea(0, -1, 0, 0.5)],
-  bornes: [{ nombre: "N", x: 0, y: -1, direccion: "arriba" }],
+  primitivas: dibujoFuente(),
+  bornes: [{ nombre: "N", x: 0, y: 1, direccion: "abajo" }],
   etiquetaInicial: "N",
   mostrarNombresBornes: false,
 };

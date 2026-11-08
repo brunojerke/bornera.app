@@ -129,8 +129,35 @@ describe("alimentaciones: fase y neutro", () => {
     expect(FASE.bornes).toEqual([{ nombre: "L", x: 0, y: 1, direccion: "abajo" }]);
   });
 
-  it("el neutro tiene un solo borne N, que sale hacia arriba", () => {
-    expect(NEUTRO.bornes).toEqual([{ nombre: "N", x: 0, y: -1, direccion: "arriba" }]);
+  it("el neutro tiene un solo borne N, que sale hacia abajo, como la fase", () => {
+    expect(NEUTRO.bornes).toEqual([{ nombre: "N", x: 0, y: 1, direccion: "abajo" }]);
+  });
+
+  it.each([FASE, NEUTRO])("%# se dibuja como un círculo con una senoide y un tramo hasta el borne", (s) => {
+    const circulos = s.primitivas.filter((p) => p.forma === "circulo");
+    expect(circulos).toHaveLength(1);
+    const c = circulos[0]!;
+    // Pegado al borde de arriba de la caja.
+    expect(c.cy - c.r).toBeCloseTo(-1);
+    const lineas = s.primitivas.filter((p) => p.forma === "linea");
+    // Tramo vertical del fondo del círculo al borne (0, 1).
+    expect(lineas).toContainEqual({ forma: "linea", x1: 0, y1: c.cy + c.r, x2: 0, y2: 1 });
+    // La senoide: el resto de las líneas, encadenadas y adentro del círculo.
+    const seno = lineas.filter((l) => !(l.x1 === 0 && l.x2 === 0));
+    expect(seno.length).toBeGreaterThanOrEqual(8);
+    for (let i = 1; i < seno.length; i++) {
+      expect(seno[i]!.x1).toBeCloseTo(seno[i - 1]!.x2);
+      expect(seno[i]!.y1).toBeCloseTo(seno[i - 1]!.y2);
+    }
+    for (const l of seno) {
+      for (const [x, y] of [[l.x1, l.y1], [l.x2, l.y2]] as const) {
+        expect(Math.hypot(x - c.cx, y - c.cy)).toBeLessThan(c.r);
+      }
+    }
+    // Un período completo: empieza y termina a la altura del centro, y sube primero.
+    expect(seno[0]!.y1).toBeCloseTo(c.cy);
+    expect(seno.at(-1)!.y2).toBeCloseTo(c.cy);
+    expect(Math.min(...seno.map((l) => l.y2))).toBeLessThan(c.cy);
   });
 
   it.each([
