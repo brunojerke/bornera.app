@@ -36,8 +36,19 @@ export interface OpcionesHerramientas {
 }
 
 /** Hay un diálogo modal abierto: el teclado es suyo. */
-function hayModal(): boolean {
+export function hayModal(): boolean {
   return document.querySelector('[aria-modal="true"]') !== null;
+}
+
+/**
+ * Si el foco está en un campo (la etiqueta del panel), lo suelta: el campo
+ * confirma lo escrito en su blur, sobre el componente que se estaba editando,
+ * antes de que la herramienta cambie la selección. Sin esto, el pointerdown
+ * llega antes que la pérdida de foco (y con preventDefault puede no haberla).
+ */
+function soltarFocoDeCampo(): void {
+  const a = document.activeElement;
+  if (a instanceof HTMLElement && esCampoEditable(a)) a.blur();
 }
 
 export interface Herramientas {
@@ -92,6 +103,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   const alPresionar = (e: PointerEvent) => {
+    soltarFocoDeCampo();
     if (arrastrando || e.defaultPrevented || e.button === 1) return;
     e.preventDefault();
     if (e.button === 0) canvas.setPointerCapture(e.pointerId);
@@ -153,6 +165,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   function desdePaleta(def: DefinicionSimbolo, e: PointerEvent) {
     if (e.button !== 0) return;
     e.preventDefault(); // sin selección de texto ni foco al arrastrar
+    soltarFocoDeCampo();
     terminarArrastre();
     // Clic otra vez en el símbolo que ya se está colocando: se deja de colocar.
     const actual = editor.herramienta;

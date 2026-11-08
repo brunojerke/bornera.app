@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { abrirAlSeleccionar, textoCantidad } from "./propiedades";
+import { abrirAlSeleccionar, textoCambioRed, textoCantidad, textoEtiqueta, textoRed, textoRotacion } from "./propiedades";
 
 describe("abrirAlSeleccionar", () => {
   it("se abre al pasar de nada a algo seleccionado", () => {
@@ -22,5 +22,23 @@ describe("textoCantidad", () => {
   it("singular y plural", () => {
     expect(textoCantidad(1)).toBe("1 componente seleccionado");
     expect(textoCantidad(2000)).toBe("2000 componentes seleccionados");
+  });
+});
+
+describe("textos del panel", () => {
+  it("etiqueta y rotación: vacía, común o Varias", () => {
+    expect(textoEtiqueta("K1")).toBe("K1");
+    expect(textoEtiqueta("")).toBe("—");
+    expect(textoEtiqueta(null)).toBe("Varias");
+    expect(textoRotacion(90)).toBe("90°");
+    expect(textoRotacion(null)).toBe("Varias");
+  });
+
+  it("red de una fuente", () => {
+    expect(textoRed("L1", 0)).toBe("Red L1: sin otras alimentaciones");
+    expect(textoRed("L1", 1)).toBe("Red L1: unida a 1 alimentación más");
+    expect(textoRed("L1", 2)).toBe("Red L1: unida a 2 alimentaciones más");
+    expect(textoCambioRed("L", "L1")).toBe("Al confirmar pasa de la red L a la red L1");
+    expect(textoCambioRed("", "L1")).toBe("Al confirmar pasa a la red L1");
   });
 });

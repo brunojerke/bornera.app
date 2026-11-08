@@ -25,7 +25,10 @@ export default async function (p, comprobar) {
   })()`);
   await esperar(100);
   const sel = () => p.evaluar("[...bornera.activo().seleccion].sort().join(',')");
-  const panel = () => p.evaluar(`document.querySelector('${PANEL}').innerText.replace(/\\s+/g, " ").trim()`);
+  // Texto del panel más el valor de sus campos (desde T11 la etiqueta se edita en un campo).
+  const panel = () =>
+    p.evaluar(`(() => { const e = document.querySelector('${PANEL}');
+      return [e.innerText, ...[...e.querySelectorAll("input")].map((i) => i.value)].join(" ").replace(/\\s+/g, " ").trim(); })()`);
   const ids = (...x) => x.sort().join(",");
 
   await p.clic(await p.punto(0, 0));

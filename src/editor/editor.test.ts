@@ -374,14 +374,23 @@ describe("Editor: selección", () => {
     editor.ejecutar(a);
     const b = colocar(editor.documento, datos(10, 0, "K2"));
     editor.ejecutar(b);
-    expect(editor.resumenSeleccion()).toEqual({ cantidad: 0, unico: null });
+    expect(editor.resumenSeleccion()).toEqual({ cantidad: 0, unico: null, varios: null });
     editor.seleccionarIds([a.id]);
     expect(editor.resumenSeleccion()).toEqual({
       cantidad: 1,
-      unico: { id: a.id, nombre: buscarSimbolo("contactor.bobina")!.nombre, etiqueta: "K1", rot: 90, espejado: true },
+      unico: {
+        id: a.id,
+        nombre: buscarSimbolo("contactor.bobina")!.nombre,
+        etiqueta: "K1",
+        rot: 90,
+        espejado: true,
+        esFuente: false,
+        otrasEnRed: 0,
+      },
+      varios: null,
     });
     editor.seleccionarIds([a.id, b.id]);
-    expect(editor.resumenSeleccion()).toEqual({ cantidad: 2, unico: null });
+    expect(editor.resumenSeleccion()).toEqual({ cantidad: 2, unico: null, varios: { etiqueta: null, rot: null } });
   });
 
   it("la capa dinámica resalta solo los seleccionados visibles", () => {
@@ -872,5 +881,134 @@ describe("Editor: atajos (T10)", () => {
       [false, true],
       [true, true],
     ]);
+  });
+});
+
+describe("Editor: etiquetas (T11)", () => {
+  /** True si `a` contiene a `b` entera. */
+  const contiene = (a: Caja, b: Caja) =>
+    a.x <= b.x + 1e-9 && a.y <= b.y + 1e-9 && a.x + a.ancho >= b.x + b.ancho - 1e-9 && a.y + a.alto >= b.y + b.alto - 1e-9;
+  /** Las regiones invalidadas cubren la caja `k` (alguna la contiene entera). */
+  const cubierta = (regiones: readonly Caja[], k: Caja) => regiones.some((r) => contiene(r, k));
+  const LARGA = "W".repeat(12);
+  /** Pasos de deshacer (el arreglo es privado del Historial). */
+  const pasos = (e: Editor) => (e.historial as unknown as { hechos: unknown[] }).hechos.length;
+
+  it("cambiar la etiqueta es un solo paso; el mismo valor no da paso ni aviso", () => {
+    const { editor } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0, "K1"));
+    editor.ejecutar(cmd);
+    const aviso = vi.fn();
+    editor.alCambiarHistorial = aviso;
+    const antes = pasos(editor);
+    expect(editor.cambiarEtiqueta(cmd.id, "K1")).toBe(false);
+    expect(aviso).not.toHaveBeenCalled();
+    expect(pasos(editor)).toBe(antes);
+    expect(editor.cambiarEtiqueta(cmd.id, "KM2")).toBe(true);
+    expect(pasos(editor)).toBe(antes + 1);
+    expect(aviso).toHaveBeenCalledTimes(1);
+    expect(editor.escena.obtener(cmd.id)).toMatchObject({ etiqueta: "KM2" });
+    editor.deshacer();
+    expect(editor.documento.hojas[0]!.componentes[0]!.etiqueta).toBe("K1");
+    expect(editor.escena.obtener(cmd.id)).toMatchObject({ etiqueta: "K1" });
+  });
+
+  it("invalida la caja vieja y la nueva con textos largos, en las 4 rotaciones y espejado, al hacer, deshacer y rehacer", () => {
+    for (const rot of [0, 90, 180, 270] as const) {
+      for (const espejado of [false, true]) {
+        for (const [de, a] of [
+          ["K1", LARGA],
+          [LARGA, "K1"],
+          [LARGA, ""],
+        ]) {
+          const { editor, vista } = armar();
+          const d = { ...datos(3, -2, de), rot, espejado };
+          const cmd = colocar(editor.documento, d);
+          editor.ejecutar(cmd);
+          const vieja = cajaDe(d);
+          const nueva = cajaDe({ ...d, etiqueta: a });
+          const caso = `${rot}° ${espejado ? "espejado" : ""} "${de}" → "${a}"`;
+          for (const paso of ["hacer", "deshacer", "rehacer"] as const) {
+            vista.regiones = [];
+            if (paso === "hacer") editor.cambiarEtiqueta(cmd.id, a);
+            else if (paso === "deshacer") editor.deshacer();
+            else editor.rehacer();
+            expect(cubierta(vista.regiones, vieja), `${caso}, ${paso}: caja vieja`).toBe(true);
+            expect(cubierta(vista.regiones, nueva), `${caso}, ${paso}: caja nueva`).toBe(true);
+            expect(vista.enteras).toBe(0);
+          }
+        }
+      }
+    }
+  });
+
+  it("no hace nada con un id que ya no está ni durante un gesto", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0, "K1"));
+    editor.ejecutar(a);
+    const b = colocar(editor.documento, datos(20, 0, "K2"));
+    editor.ejecutar(b);
+    editor.ejecutar(new Borrar([b.id]));
+    const antes = pasos(editor);
+    expect(editor.cambiarEtiqueta(b.id, "K9")).toBe(false);
+    expect(editor.cambiarEtiqueta("c999", "K9")).toBe(false);
+    // Rectángulo de selección en curso.
+    editor.aplicar(editor.activa.presionar(ev(-30, -30)));
+    editor.aplicar(editor.activa.mover(ev(-25, -25)));
+    expect(editor.enGesto).toBe(true);
+    expect(editor.cambiarEtiqueta(a.id, "K9")).toBe(false);
+    editor.aplicar(editor.activa.soltar(ev(-25, -25)));
+    expect(editor.enGesto).toBe(false);
+    expect(pasos(editor)).toBe(antes);
+    expect(editor.cambiarEtiqueta(a.id, "K9")).toBe(true);
+  });
+
+  it("deshacer avisa a la selección y el resumen trae la etiqueta de antes", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0, "K1"));
+    editor.ejecutar(a);
+    editor.seleccionarIds([a.id]);
+    editor.cambiarEtiqueta(a.id, "K2");
+    const aviso = vi.fn();
+    editor.alCambiarSeleccion = aviso;
+    editor.deshacer();
+    expect(aviso).toHaveBeenCalled();
+    expect(editor.resumenSeleccion().unico?.etiqueta).toBe("K1");
+  });
+
+  it("las etiquetas se pueden repetir: bobina y contactos K1, varias L", () => {
+    const { editor } = armar();
+    const k = [
+      colocar(editor.documento, datos(0, 0, "K1")),
+      colocar(editor.documento, { ...datos(10, 0, "K1"), tipo: "contactor.auxiliar_na" }),
+      colocar(editor.documento, datos(20, 0, "K2")),
+    ];
+    for (const c of k) editor.ejecutar(c);
+    expect(editor.cambiarEtiqueta(k[2]!.id, "K1")).toBe(true);
+    expect(editor.documento.hojas[0]!.componentes.map((c) => c.etiqueta)).toEqual(["K1", "K1", "K1"]);
+    editor.seleccionarIds(k.map((c) => c.id));
+    expect(editor.resumenSeleccion().varios).toEqual({ etiqueta: "K1", rot: 0 });
+  });
+
+  it("en una fuente cuenta las otras alimentaciones de su red (normalizada); con otra cosa, 0", () => {
+    const { editor } = armar();
+    const fuente = (x: number, etiqueta: string, tipo = "fuente.fase") => {
+      const c = colocar(editor.documento, { ...datos(x, 0, etiqueta), tipo });
+      editor.ejecutar(c);
+      return c.id;
+    };
+    const l = fuente(0, "L");
+    fuente(5, "L");
+    fuente(10, "l ");
+    fuente(15, "L1");
+    fuente(20, "N", "fuente.neutro");
+    const bobina = colocar(editor.documento, datos(30, 0, "L"));
+    editor.ejecutar(bobina);
+    editor.seleccionarIds([l]);
+    expect(editor.resumenSeleccion().unico).toMatchObject({ esFuente: true, otrasEnRed: 2 });
+    editor.cambiarEtiqueta(l, "L1");
+    expect(editor.resumenSeleccion().unico).toMatchObject({ etiqueta: "L1", otrasEnRed: 1 });
+    editor.seleccionarIds([bobina.id]);
+    expect(editor.resumenSeleccion().unico).toMatchObject({ esFuente: false, otrasEnRed: 0 });
   });
 });

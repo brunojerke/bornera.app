@@ -35,8 +35,9 @@
 //   (un paso de deshacer). Solo con ids que siguen en la hoja; sin
 //   ninguno, no hay comando ni paso.
 
-import { Borrar, Espejar, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import { Borrar, CambiarEtiqueta, Espejar, Rotar, type Cambio, type Comando } from "../core/model/comandos";
 import { buscarComponente, crearDocumento, type Componente, type Documento } from "../core/model/documento";
+import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { Historial } from "../core/model/historial";
 import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
@@ -90,10 +91,16 @@ export interface ResumenSeleccion {
     etiqueta: string;
     rot: number;
     espejado: boolean;
+    /** Fase o neutro: la etiqueta es el nombre de la red. */
+    esFuente: boolean;
+    /** En una fuente: cuántas otras alimentaciones del documento están en su misma red; si no, 0. */
+    otrasEnRed: number;
   } | null;
+  /** Con varios: la etiqueta y la rotación si todos tienen la misma; null si son distintas. */
+  varios: { etiqueta: string | null; rot: number | null } | null;
 }
 
-export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unico: null });
+export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unico: null, varios: null });
 
 /**
  * Hasta cuántos componentes visibles se dibujan completos mientras se
@@ -203,15 +210,86 @@ export class Editor {
     this.vista?.invalidar();
   }
 
-  /** Resumen de la selección para el panel de propiedades. */
+  /**
+   * Resumen de la selección para el panel de propiedades. Se pide cuando
+   * cambia la selección o algo seleccionado, no por cuadro: el rectángulo de
+   * selección cambia la selección recién al soltar. Con varios, una pasada por
+   * la hoja; el conteo de red, solo con una única fuente.
+   */
   resumenSeleccion(): ResumenSeleccion {
     const cantidad = this._seleccion.size;
-    if (cantidad !== 1) return cantidad === 0 ? SIN_SELECCION : { cantidad, unico: null };
+    if (cantidad === 0) return SIN_SELECCION;
+    if (cantidad > 1) {
+      let etiqueta: string | null = null;
+      let rot: number | null = null;
+      let primero = true;
+      for (const c of this.componentesHoja()) {
+        if (!this._seleccion.has(c.id)) continue;
+        if (primero) {
+          etiqueta = c.etiqueta;
+          rot = c.rot;
+          primero = false;
+        } else {
+          if (etiqueta !== c.etiqueta) etiqueta = null;
+          if (rot !== c.rot) rot = null;
+          if (etiqueta === null && rot === null) break;
+        }
+      }
+      return { cantidad, unico: null, varios: { etiqueta, rot } };
+    }
     const [id] = this._seleccion;
     const c = buscarComponente(this.documento, id!);
-    if (!c) return { cantidad, unico: null };
-    const nombre = (buscarSimbolo(c.tipo) ?? SIMBOLO_DESCONOCIDO).nombre;
-    return { cantidad, unico: { id: c.id, nombre, etiqueta: c.etiqueta, rot: c.rot, espejado: c.espejado } };
+    if (!c) return { cantidad, unico: null, varios: null };
+    const def = buscarSimbolo(c.tipo) ?? SIMBOLO_DESCONOCIDO;
+    const esFuente = def.elemento === "fuente";
+    return {
+      cantidad,
+      unico: {
+        id: c.id,
+        nombre: def.nombre,
+        etiqueta: c.etiqueta,
+        rot: c.rot,
+        espejado: c.espejado,
+        esFuente,
+        otrasEnRed: esFuente ? this.otrasEnRed(c) : 0,
+      },
+      varios: null,
+    };
+  }
+
+  /** Cuántas otras fuentes del documento (todas las hojas) tienen el mismo nombre de red que `f`. */
+  private otrasEnRed(f: Componente): number {
+    const red = normalizarEtiqueta(f.etiqueta);
+    let n = 0;
+    for (const hoja of this.documento.hojas) {
+      for (const c of hoja.componentes) {
+        if (c.id === f.id || normalizarEtiqueta(c.etiqueta) !== red) continue;
+        if (buscarSimbolo(c.tipo)?.elemento === "fuente") n++;
+      }
+    }
+    return n;
+  }
+
+  /**
+   * Hay un gesto del puntero en curso: rectángulo o arrastre de la selección,
+   * o un arrastre desde la paleta. F5 no cambia de modo en el medio.
+   */
+  get enGesto(): boolean {
+    return this.seleccionar.enGesto || this.arrastrados !== null || this.herramienta?.modo === "arrastre";
+  }
+
+  /**
+   * Cambia la etiqueta de un componente con un solo `CambiarEtiqueta` (un paso
+   * de deshacer). El texto llega ya validado y normalizado por el panel. No
+   * hace nada (y devuelve false) si el valor es el mismo, si el componente ya
+   * no está en la hoja o en medio de un gesto.
+   */
+  cambiarEtiqueta(id: string, etiqueta: string): boolean {
+    if (this.enGesto) return false;
+    const c = this.componentesHoja().find((k) => k.id === id);
+    if (!c || c.etiqueta === etiqueta) return false;
+    this.ejecutar(new CambiarEtiqueta(id, etiqueta));
+    return true;
   }
 
   /** Tipos de símbolo del documento que no están en la biblioteca (se dibujan con SIMBOLO_DESCONOCIDO). */

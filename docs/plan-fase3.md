@@ -140,6 +140,30 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Qué:** con un componente seleccionado, se pueden editar la etiqueta (con `CambiarEtiqueta` al confirmar, no en cada tecla), la rotación y el espejado. Con varios seleccionados, se muestra cuántos son.
 - **Terminado cuando:** cambiar la etiqueta se ve en el lienzo y se deshace en un paso.
 - **Prueba:** test del `Editor`: cambiar la etiqueta invalida la caja vieja ∪ la nueva (puede ser más larga).
+- **Plan detallado (aprobado el 2026-11-08):**
+  - **Piezas:** `core/model/etiquetas.ts` (`normalizarEtiqueta`, `validarEtiqueta`, puras), `Editor.cambiarEtiqueta(id, texto)` (un `CambiarEtiqueta`; false sin paso si no cambió, si el id no está o hay un gesto), `ui/edicionEtiqueta.ts` (borrador, sin DOM) y el panel.
+  - **Etiquetas repetidas:** no se exige que sean únicas (bobina y contactos K1; varias L o N son la misma red).
+  - **Fase y neutro** (`elemento: "fuente"`): el campo es "Red (etiqueta)", con la nota "Las alimentaciones con el mismo nombre están unidas" y "Red L1: unida a N alimentaciones más" (una pasada por la hoja, solo con una única fuente seleccionada). Mientras se escribe: "Al confirmar pasa de la red L a la red L1". El aviso L contra L1/L2/L3 queda para la fase 4.
+  - **Un paso por edición:** escribir solo cambia el borrador. Confirman Enter, perder el foco, apretar en el lienzo, cambiar de escena y cambiar de modo; **confirmar es idempotente** (Enter y después blur: un paso). Esc cancela (Esc y después blur: ningún paso, el borrador no se aplica). Después de Enter o Esc el foco vuelve al lienzo.
+  - **Valores existentes:** si el texto es igual a `valorBase`, no se normaliza, no se valida y no hay paso: un `.brn` con "k1" o un carácter hoy no permitido no cambia por enfocar y salir.
+  - **Validación (solo al editar):** espacios a los lados se quitan; en el medio, error. Permitidos `A–Z 0–9 - _ . + / = :`, máximo 12. Mayúsculas al confirmar (no mientras se escribe). Vacía permitida salvo en fuentes. Con error, Enter no confirma y perder el foco (o F5, o cambiar de escena) vuelve al valor confirmado sin paso. El documento acepta cualquier texto.
+  - **Selección:** 0 = "Nada seleccionado"; 1 = nombre, etiqueta editable, rotación (↻ ↺) y espejado; varios = cantidad, etiqueta y rotación comunes o "Varias", girar y espejar activos, etiqueta de solo lectura (editar varias se define con el etiquetado automático).
+  - **Coherencia:** el borrador guarda `{ editor, id, valorBase }` al empezar y confirma sobre ellos, nunca sobre la selección actual; si el id ya no existe, se descarta. Apretar en el lienzo quita el foco del campo antes de que actúe la herramienta. Un cambio de afuera no pisa el borrador, solo actualiza `valorBase`. En Simular, campo y botones desactivados ("Solo lectura en Simular").
+  - **F5:** sin modificadores alterna Editar/Simular (`preventDefault`, sin repetición), también con el foco en el campo, confirmando antes. Con un diálogo modal o un gesto del puntero, `preventDefault` y no cambia. Ctrl+R, Ctrl+F5 y Mayús+F5 quedan libres.
+  - **Input:** `autocomplete`, `autocorrect` y `spellcheck` apagados, `autocapitalize="off"`.
+  - **Dibujado:** escribir no toca el lienzo; solo el valor confirmado llega a la escena (el caché de textos no crece por letra). Invalida caja vieja y nueva (`cajaDibujo`).
+  - **Rendimiento:** el rectángulo de selección cambia la selección recién al soltar; el resumen se calcula una vez. Se mide en la escena de 2000.
+  - **Humo:** `t11-propiedades.mjs` a 1024×600.
+  - **Verificación manual en la netbook (WebKitGTK), próxima prerelease:** escribir, Enter, Esc, Tab, clic en el lienzo, clic en Deshacer con edición abierta, F5 y Ctrl+Shift+B; además R, M, Supr y rotar 2000 pendientes de T10.
+  - **Pendiente para T15a o el cierre de fase:** qué hacer con una recarga accidental (Ctrl+R, Ctrl+F5, Mayús+F5) con cambios sin guardar.
+- **Hecho (2026-11-08):**
+  - Como el plan detallado. `EdicionEtiqueta` (`ui/edicionEtiqueta.ts`) devuelve cómo terminó cada confirmación ("aplicado", "sinCambios", "error", "revertido", "nada"); el panel solo le cuenta lo que pasa en el campo.
+  - `punteros.ts` le saca el foco al campo en el `pointerdown` del lienzo y de la paleta, antes de que actúe la herramienta.
+  - Ventana confirma antes de F5 y de Ctrl+Shift+B, y además un `$effect` sobre `modo` y `escena` confirma de más como red de seguridad (por si un WebView no le saca el foco al campo al hacer clic en un botón).
+  - F5 no estaba implementado: solo figuraba en el `title` del botón de modo y recargaba la página. Ahora es `ui/modo.ts`.
+  - `ResumenSeleccion` suma `esFuente`, `otrasEnRed` y `varios` (etiqueta y rotación comunes). El conteo de red recorre todas las hojas, solo con una única fuente seleccionada.
+  - **Medición (PC, humo headless):** rectángulo sobre 2000 (504 seleccionados): el resumen se calcula 1 vez, al soltar, en < 0,1 ms; 31 cuadros, 0 lentos (máx. 0,7 ms). Seleccionar las 2000 de una vez, con el resumen: 0,3 ms. Banco: 0 cuadros lentos.
+  - **Humo:** `t11-propiedades.mjs` (65 comprobaciones). `t08` lee también el valor de los campos del panel (la etiqueta ya no es texto).
 
 ---
 

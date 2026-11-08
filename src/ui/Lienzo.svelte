@@ -29,6 +29,7 @@
     colocando = $bindable(null),
     puedeDeshacer = $bindable(false),
     puedeRehacer = $bindable(false),
+    activo = $bindable(null),
     modo = "editar",
     escena = "documento",
     rendimiento = false,
@@ -45,6 +46,8 @@
     /** Hay algo para deshacer o rehacer en el editor a la vista. Solo lectura desde afuera. */
     puedeDeshacer?: boolean;
     puedeRehacer?: boolean;
+    /** Editor de lo que se muestra (null en las escenas que no se editan). Solo lectura desde afuera. */
+    activo?: Editor | null;
     /** Modo de trabajo: en Simular, los atajos de edición no actúan. */
     modo?: Modo;
     /** Qué se dibuja: el documento o una escena de prueba. */
@@ -88,6 +91,7 @@
       editor.alCambiarHistorial = null;
     }
     editor = ed;
+    activo = ed;
     if (ed) ed.diagnostico = { ...untrack(() => diagnostico) };
     v.dinamico = ed?.dibujarDinamico ?? null;
     colocando = null;
@@ -169,6 +173,11 @@
 
   export function rehacer() {
     if (modo === "editar") editor?.accion("rehacer");
+  }
+
+  /** Hay un gesto del puntero en curso en el editor a la vista (F5 no cambia de modo). */
+  export function enGesto(): boolean {
+    return editor?.enGesto ?? false;
   }
 
   export function acercar() {

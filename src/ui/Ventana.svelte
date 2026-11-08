@@ -12,7 +12,10 @@
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
   import { SIN_SELECCION, type DiagnosticoArrastre, type ResumenSeleccion } from "../editor/editor";
   import { abrirAlSeleccionar } from "./propiedades";
-  import { tick } from "svelte";
+  import { esAtajoModo, f5CambiaModo, otroModo } from "./modo";
+  import { hayModal } from "../editor/punteros";
+  import type { Editor } from "../editor/editor";
+  import { tick, untrack } from "svelte";
   import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
 
   let modo = $state<Modo>("editar");
@@ -28,6 +31,9 @@
   let puedeDeshacer = $state(false);
   let puedeRehacer = $state(false);
   let lienzo: ReturnType<typeof Lienzo>;
+  let panel: ReturnType<typeof PanelPropiedades> | undefined = $state();
+  /** Editor de lo que muestra el lienzo: a él van las ediciones del panel. */
+  let editorActivo = $state.raw<Editor | null>(null);
 
   // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
   // prueba), contador de rendimiento y optimizaciones.
@@ -63,7 +69,28 @@
     seleccion = r;
   }
 
+  // Antes de cambiar de modo o de escena, el panel confirma lo que se esté
+  // escribiendo. F5 y Ctrl+Shift+B llaman a `confirmar` antes de cambiar; los
+  // botones ya lo hacen al sacarle el foco al campo. Esto es la red de
+  // seguridad (por ejemplo, si un WebView no le saca el foco al hacer clic):
+  // el borrador recuerda su editor y su componente, y confirmar de más no hace nada.
+  $effect(() => {
+    void modo;
+    void escena;
+    untrack(() => panel?.confirmar());
+  });
+
   function alTecla(e: KeyboardEvent) {
+    // F5: alterna Editar/Simular, también con el foco en el campo del panel.
+    // La tecla es siempre nuestra: sin esto, el WebView recarga y se pierde el documento.
+    if (esAtajoModo(e)) {
+      e.preventDefault();
+      if (f5CambiaModo({ repetida: e.repeat, modal: hayModal(), gesto: lienzo?.enGesto() ?? false })) {
+        panel?.confirmar();
+        modo = otroModo(modo);
+      }
+      return;
+    }
     // F3: contador de rendimiento (y que el navegador no abra "Buscar").
     if (e.key === "F3" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       e.preventDefault();
@@ -73,7 +100,10 @@
     // del banco de pruebas. Se anula el atajo del WebView (barra de favoritos).
     if (esAtajoBanco(e)) {
       e.preventDefault();
-      if (!e.repeat) escena = siguienteEscenaBanco(escena);
+      if (!e.repeat) {
+        panel?.confirmar();
+        escena = siguienteEscenaBanco(escena);
+      }
     }
   }
 </script>
@@ -111,6 +141,7 @@
       bind:colocando
       bind:puedeDeshacer
       bind:puedeRehacer
+      bind:activo={editorActivo}
       {modo}
       {escena}
       {rendimiento}
@@ -119,8 +150,11 @@
       onseleccion={alCambiarSeleccion}
     />
     <PanelPropiedades
+      bind:this={panel}
       bind:abierto={propiedadesAbierto}
       {seleccion}
+      editor={editorActivo}
+      soloLectura={modo === "simular"}
       onalternar={(abierto) => (propiedadesPlegadoPorUsuario = !abierto)}
     />
   </main>
