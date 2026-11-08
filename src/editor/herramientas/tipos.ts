@@ -29,6 +29,12 @@ export interface Resultado {
   terminar?: boolean;
   /** Selección nueva (ids). Es estado de la interfaz, no del documento: no se deshace. */
   seleccion?: ReadonlySet<string>;
+  /**
+   * Arrastre de elementos. "empezar": salen de la capa estática y pasan a la
+   * dinámica. "terminar": vuelven a la estática, después de ejecutar
+   * `comando` si lo hay (si no, quedan donde estaban).
+   */
+  arrastre?: { fase: "empezar"; ids: ReadonlySet<string> } | { fase: "terminar" };
 }
 
 /** Lo que recibe una herramienta. Cada método devuelve qué hacer. */

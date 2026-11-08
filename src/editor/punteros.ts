@@ -58,8 +58,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   // El cursor va en el contenedor: el canvas no tiene cursor propio y lo
   // hereda, salvo cuando la navegación le pone uno (mano al desplazar).
   const contenedor = canvas.parentElement;
+  let cursor = "";
   const actualizarCursor = () => {
-    if (contenedor) contenedor.style.cursor = editor.herramienta ? "copy" : "";
+    const nuevo = editor.herramienta ? "copy" : editor.arrastrando ? "move" : "";
+    if (contenedor && nuevo !== cursor) contenedor.style.cursor = cursor = nuevo;
   };
   const avisoAnterior = editor.alCambiarHerramienta;
   editor.alCambiarHerramienta = () => {
@@ -68,7 +70,9 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   const alMover = (e: PointerEvent) => {
-    if (!arrastrando) editor.aplicar(editor.activa.mover(evento(e)));
+    if (arrastrando) return;
+    editor.aplicar(editor.activa.mover(evento(e)));
+    actualizarCursor(); // "move" mientras se arrastra la selección
   };
 
   const alPresionar = (e: PointerEvent) => {
@@ -82,10 +86,13 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     // El arrastre desde la paleta se suelta por su cuenta (en window).
     if (arrastrando || e.button !== 0) return;
     editor.aplicar(editor.activa.soltar(evento(e)));
+    actualizarCursor();
   };
 
   const alCortar = () => {
-    if (!arrastrando) editor.aplicar(editor.activa.soltar(null));
+    if (arrastrando) return;
+    editor.aplicar(editor.activa.soltar(null));
+    actualizarCursor();
   };
 
   const alSalir = () => {
@@ -106,6 +113,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
       editor.cancelarHerramienta();
     } else {
       editor.aplicar(editor.seleccionar.cancelar());
+      actualizarCursor();
     }
   };
 

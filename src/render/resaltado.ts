@@ -42,26 +42,29 @@ const recuadros: number[] = [];
 
 /**
  * Dibuja el recuadro de cada seleccionado visible, todos en un solo trazo.
- * Devuelve cuántos dibujó.
+ * Mientras se arrastra, corridos (dx, dy). Devuelve cuántos dibujó.
  */
 export function dibujarSeleccion(
   r: Renderer,
   info: InfoDinamico,
   escena: EscenaEditable,
   ids: Iterable<string>,
+  dx = 0,
+  dy = 0,
 ): number {
   const v = info.visible;
   const m = MARGEN_RESALTADO;
   let n = 0;
   for (const id of ids) {
     const k = escena.contorno(id);
+    if (!k) continue;
+    const x = k.x + dx;
+    const y = k.y + dy;
     // Visible, contando el margen (como seTocan, pero sin armar otra caja).
-    if (!k || k.x - m > v.x + v.ancho || k.x + k.ancho + m < v.x || k.y - m > v.y + v.alto || k.y + k.alto + m < v.y) {
-      continue;
-    }
+    if (x - m > v.x + v.ancho || x + k.ancho + m < v.x || y - m > v.y + v.alto || y + k.alto + m < v.y) continue;
     const j = n * 4;
-    recuadros[j] = k.x - m;
-    recuadros[j + 1] = k.y - m;
+    recuadros[j] = x - m;
+    recuadros[j + 1] = y - m;
     recuadros[j + 2] = k.ancho + 2 * m;
     recuadros[j + 3] = k.alto + 2 * m;
     n++;

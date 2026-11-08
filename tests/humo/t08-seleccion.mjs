@@ -55,7 +55,8 @@ export default async function (p, comprobar) {
   comprobar("rectángulo a la izquierda (toca): K1 y K2", (await sel()) === ids(a, b), await sel());
 
   // Rectángulo en curso (para la captura) cortado con Esc: no cambia la selección.
-  const ini = await p.punto(25, 6);
+  // Desde (18, 6): con el panel abierto, más a la derecha queda debajo de él.
+  const ini = await p.punto(18, 6);
   const medio = await p.punto(8, -4);
   await p.mouse("mouseMoved", ini.x, ini.y);
   await p.mouse("mousePressed", ini.x, ini.y);

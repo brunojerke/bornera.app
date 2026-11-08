@@ -47,12 +47,16 @@ describe("Camara", () => {
     expect(despues.y - antes.y).toBeCloseTo(-10);
   });
 
-  it("al redimensionar, lo que estaba en el centro sigue en el centro", () => {
+  it("al redimensionar, nada se corre en pantalla (queda fija la esquina superior izquierda)", () => {
     const c = new Camara();
     c.zoom = 1.5;
     c.centrar(0, 0, 800, 500);
-    c.redimensionar(800, 500, 1920, 1080);
-    expect(c.aPantalla(0, 0)).toEqual({ x: 960, y: 540 });
+    const antes = c.aPantalla(3, -2);
+    // Se abre un panel de 220 px a la derecha, y después se agranda la ventana.
+    c.redimensionar(800, 500, 580, 500);
+    expect(c.aPantalla(3, -2)).toEqual(antes);
+    c.redimensionar(580, 500, 1920, 1080);
+    expect(c.aPantalla(3, -2)).toEqual(antes);
     expect(c.zoom).toBe(1.5);
   });
 

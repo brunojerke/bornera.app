@@ -165,6 +165,11 @@ export class Capas {
   /** Lo que tarda un mosaico y lo que tarda componer la pantalla, promediados. */
   private estimadoMosaico = 1;
   private estimadoComposicion = 0;
+  /**
+   * Lo que tarda la capa dinámica, promediado. Mientras se arrastran muchos
+   * símbolos pesa: el presupuesto de los mosaicos lo descuenta.
+   */
+  private estimadoDinamico = 0;
   /** Máximo de mosaicos a guardar; depende del tamaño de la pantalla. */
   private maximoMosaicos = 0;
   private readonly pendientes: Pendiente[] = [];
@@ -292,11 +297,13 @@ export class Capas {
       }
 
       if (this.dinamico) {
+        const t = this.reloj();
         const r = this.renderer;
         r.transformar(k, 0, 0, k, -ox, -oy);
         r.guardar();
         this.dinamico(r, { escala: camara.escala, colores: this.colores, visible: pantalla });
         r.restaurar();
+        this.estimadoDinamico = 0.7 * this.estimadoDinamico + 0.3 * (this.reloj() - t);
       }
 
       if (this.contenido) {
@@ -403,7 +410,7 @@ export class Capas {
     if (pendientes.length === 0) return 0;
     pendientes.sort((a, b) => a.prioridad - b.prioridad);
 
-    const presupuesto = Math.min(PRESUPUESTO_MS, OBJETIVO_CUADRO_MS - this.estimadoComposicion);
+    const presupuesto = Math.min(PRESUPUESTO_MS, OBJETIVO_CUADRO_MS - this.estimadoComposicion - this.estimadoDinamico);
     const t0 = this.reloj();
     let hechos = 0;
     for (const p of pendientes) {

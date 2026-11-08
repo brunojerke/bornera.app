@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Mover } from "../../core/model/comandos";
 import { buscarSimbolo } from "../../core/symbols";
 import type { ComponenteEscena } from "../../render/escena";
 import { EscenaEditable } from "../../render/escenaEditable";
@@ -93,12 +94,93 @@ describe("HerramientaSeleccionar: clics", () => {
     expect(t.sel()).toEqual(["b"]);
   });
 
-  it("apretar sobre uno del grupo y arrastrar no reduce la selección (lo mueve en T9)", () => {
+  it("apretar sobre uno del grupo y arrastrar no reduce la selección", () => {
     const t = armar();
     t.clic(0, 0);
     t.clic(10, 0, true);
     t.arrastrar(10, 0, 14, 3);
     expect(t.sel()).toEqual(["a", "b"]);
+  });
+});
+
+describe("HerramientaSeleccionar: mover arrastrando", () => {
+  it("arrastrar un componente da un solo Mover, con dx y dy enteros redondeados", () => {
+    const t = armar();
+    t.aplicar(t.h.presionar(ev(0.3, 0.2)));
+    const resultados: Resultado[] = [];
+    for (let i = 1; i <= 30; i++) resultados.push(t.aplicar(t.h.mover(ev(0.3 + i * 0.15, 0.2 + i * 0.1))));
+    // Apretar sobre uno sin seleccionar lo selecciona y lo arrastra.
+    expect(t.sel()).toEqual(["a"]);
+    expect(resultados.filter((r) => r.arrastre?.fase === "empezar")).toHaveLength(1);
+    expect(resultados.every((r) => !r.comando)).toBe(true);
+    expect(t.h.arrastre).toMatchObject({ dx: 5, dy: 3 }); // 4,5 → 5 y 3,0 → 3
+
+    const fin = t.aplicar(t.h.soltar(ev(4.6, 2.7)));
+    expect(fin.arrastre).toEqual({ fase: "terminar" });
+    expect(fin.comando).toEqual(new Mover(["a"], 4, 3)); // 4,3 → 4 y 2,5 → 3
+    expect(t.h.arrastre).toBeNull();
+    expect(t.sel()).toEqual(["a"]);
+  });
+
+  it("el arrastre empieza al pasar el umbral y solo pide cuadros al cambiar de punto de grilla", () => {
+    const t = armar();
+    t.aplicar(t.h.presionar(ev(0, 0)));
+    expect(t.h.mover(ev(0.15, 0))).toBe(NADA); // 3 px: todavía es clic
+    const empezar = t.h.mover(ev(0.25, 0));
+    expect(empezar).toMatchObject({ redibujar: true, arrastre: { fase: "empezar" } });
+    expect(empezar.arrastre?.fase === "empezar" && [...empezar.arrastre.ids]).toEqual(["a"]);
+    expect(t.h.mover(ev(0.4, 0))).toBe(NADA); // sigue en dx 0
+    expect(t.h.mover(ev(0.6, 0))).toEqual({ redibujar: true }); // dx 1
+    expect(t.h.mover(ev(1.2, 0.3))).toBe(NADA);
+  });
+
+  it("arrastra toda la selección", () => {
+    const t = armar();
+    t.clic(0, 0);
+    t.clic(20, 0, true);
+    const fin = t.arrastrar(20, 0, 22, -1);
+    expect(fin.comando).toEqual(new Mover(["a", "c"], 2, -1));
+    expect(t.sel()).toEqual(["a", "c"]);
+  });
+
+  it("con Mayús no arrastra: suma o quita y nada más", () => {
+    const t = armar();
+    t.clic(0, 0);
+    const fin = t.arrastrar(10, 0, 15, 0, true);
+    expect(fin.comando).toBeUndefined();
+    expect(fin.arrastre).toBeUndefined();
+    expect(t.sel()).toEqual(["a", "b"]);
+  });
+
+  it("volver al punto de partida no da comando, pero termina el arrastre", () => {
+    const t = armar();
+    t.aplicar(t.h.presionar(ev(0, 0)));
+    t.aplicar(t.h.mover(ev(3, 0)));
+    const fin = t.aplicar(t.h.soltar(ev(0.3, 0.4)));
+    expect(fin).toEqual({ redibujar: true, arrastre: { fase: "terminar" } });
+  });
+
+  it("Esc y pointercancel cortan el arrastre sin comando", () => {
+    for (const cortar of ["esc", "cancel"] as const) {
+      const t = armar();
+      t.aplicar(t.h.presionar(ev(0, 0)));
+      t.aplicar(t.h.mover(ev(3, 0)));
+      const r = cortar === "esc" ? t.h.cancelar() : t.h.soltar(null);
+      expect(r).toEqual({ redibujar: true, arrastre: { fase: "terminar" } });
+      expect(t.h.arrastre).toBeNull();
+      expect(t.sel()).toEqual(["a"]); // no deselecciona
+      expect(t.h.soltar(ev(3, 0))).toBe(NADA); // el botón se suelta después
+    }
+  });
+
+  it("lo que salió de la selección durante el arrastre no se mueve", () => {
+    const t = armar();
+    t.clic(0, 0);
+    t.clic(10, 0, true);
+    t.aplicar(t.h.presionar(ev(0, 0)));
+    t.aplicar(t.h.mover(ev(2, 0)));
+    t.aplicar({ redibujar: false, seleccion: new Set(["a"]) }); // "b" se borró
+    expect(t.h.soltar(ev(2, 0)).comando).toEqual(new Mover(["a"], 2, 0));
   });
 
   it("un clic sobre la etiqueta selecciona el componente", () => {

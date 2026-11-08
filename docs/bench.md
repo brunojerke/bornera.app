@@ -17,6 +17,33 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 
+## Mover arrastrando (fase 3, T9) — 2026-11-08
+
+Cambios:
+
+- Al arrastrar, los seleccionados salen de la capa estática (una invalidación por componente) y se dibujan corridos en la dinámica; al soltar vuelven (otra invalidación). Con más de 200 visibles, solo los contornos de los cuerpos.
+- `EscenaEditable.actualizar` devuelve la caja vieja y la nueva por separado, no su unión.
+- El presupuesto de mosaicos descuenta un estimado de la capa dinámica (`OBJETIVO_CUADRO_MS − composición − dinámica`).
+- **Escenarios nuevos**: *Mover 1 al 31 %* (el componente del centro, 30 cuadros de una unidad, y se suelta) y *Mover todo al 31 %* (lo mismo con todo seleccionado). Una repetición va y la siguiente vuelve.
+
+Misma PC, Edge 157, una corrida (los escenarios viejos dieron 0 cuadros lentos, como antes):
+
+| Símbolos | Escenario | Mediana | p95 | Máx. | Lentos | Por gesto | Mosaicos máx. |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 100 | Mover 1 al 31 % | 0,5 | 2,0 | 4,7 | 0 | 22,2 | 4 |
+|  | Mover todo al 31 % | 4,6 | 7,1 | 13,7 | 0 | 146,0 | 16 |
+| 500 | Mover 1 al 31 % | 1,1 | 3,0 | 4,0 | 0 | 39,0 | 2 |
+|  | Mover todo al 31 % | 3,8 | 8,7 | 11,7 | 0 | 137,8 | 30 |
+| 2000 | Mover 1 al 31 % | 0,7 | 1,7 | 2,1 | 0 | 24,9 | 1 |
+|  | Mover todo al 31 % | 3,7 | 10,4 | 11,0 | 0 | 140,1 | 40 |
+
+Observaciones:
+
+- Mover 1 en 2000: 1 mosaico por cambio y máximo 2,1 ms. Moverse no rehace mosaicos, solo la capa dinámica.
+- *Mover todo* con 100: los 100 entran en pantalla y quedan por debajo del límite de 200, así que se dibujan completos (con `fillText`, la dinámica no usa el caché de textos): 4–5 ms por cuadro. Antes de descontar la dinámica del presupuesto, el cuadro en que se rehacían mosaicos llegaba a 17–19 ms (1 lento en 2 de 2 corridas); después, 9–14 ms.
+- Con 500 y 2000 pasan el límite y se dibujan solo los contornos.
+- **Pendiente:** confirmar en la netbook con F3; si 200 completos dan tirones allá, bajar `LIMITE_ARRASTRE_COMPLETO`.
+
 ## Escena editable con índice espacial (fase 3, T2) — 2026-11-07
 
 Cambios:

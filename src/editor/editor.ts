@@ -14,6 +14,13 @@
 // La selección (ids) es estado de la interfaz, no del documento: no pasa por
 // comandos ni se deshace. Seleccionar no invalida ningún mosaico: el resaltado
 // va solo en la capa dinámica.
+//
+// Arrastrar la selección (T9): al empezar, los arrastrados salen de la capa
+// estática (una invalidación por componente, en su caja) y se dibujan en la
+// dinámica, corridos. Moverse solo pide cuadros. Al soltar se ejecuta un
+// `Mover` mientras siguen ocultos (no invalida nada) y recién después vuelven
+// a la estática (otra invalidación, en la caja nueva). Esc los vuelve a su
+// lugar con la misma invalidación.
 
 import { type Cambio, type Comando } from "../core/model/comandos";
 import { buscarComponente, crearDocumento, type Componente, type Documento } from "../core/model/documento";
@@ -74,6 +81,13 @@ export interface ResumenSeleccion {
 
 export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unico: null });
 
+/**
+ * Hasta cuántos componentes visibles se dibujan completos mientras se
+ * arrastran. Con más, solo el contorno de cada uno: la capa dinámica se
+ * redibuja entera en cada cuadro y no usa el caché de textos.
+ */
+export const LIMITE_ARRASTRE_COMPLETO = 200;
+
 /** Documento vacío para arrancar la app, con la fecha de hoy. */
 export function documentoNuevo(): Documento {
   return crearDocumento({ titulo: "Sin título", autor: "", fecha: new Date().toISOString().slice(0, 10) });
@@ -96,6 +110,8 @@ export class Editor {
   /** La herramienta que está cuando no hay otra. */
   readonly seleccionar: HerramientaSeleccionar;
   private _seleccion: ReadonlySet<string> = new Set();
+  /** Lo que se está arrastrando (oculto en la capa estática); null si no hay arrastre. */
+  private arrastrados: ReadonlySet<string> | null = null;
   private readonly desconocidos = new Set<string>();
 
   constructor(
@@ -116,6 +132,11 @@ export class Editor {
   /** Ids seleccionados. */
   get seleccion(): ReadonlySet<string> {
     return this._seleccion;
+  }
+
+  /** Hay un arrastre de la selección en curso (para no deshacer ni rotar en el medio). */
+  get arrastrando(): boolean {
+    return this.arrastrados !== null;
   }
 
   /**
@@ -184,14 +205,27 @@ export class Editor {
     return this.herramienta;
   }
 
-  /** Termina la herramienta activa sin hacer nada (Esc, cambio de escena). */
+  /**
+   * Termina la herramienta activa sin hacer nada (Esc, cambio de escena). Un
+   * arrastre en curso vuelve a su lugar.
+   */
   cancelarHerramienta(): void {
     if (this.herramienta) this.aplicar(this.herramienta.cancelar());
+    if (this.arrastrados) this.aplicar(this.seleccionar.cancelar());
   }
 
-  /** Hace lo que pidió la herramienta: ejecutar su comando, cambiar la selección, redibujar, terminar. */
+  /**
+   * Hace lo que pidió la herramienta: empezar un arrastre, ejecutar su
+   * comando, terminar el arrastre, cambiar la selección, redibujar, terminar.
+   */
   aplicar(r: Resultado): void {
-    if (r.comando) this.ejecutar(r.comando);
+    if (r.arrastre?.fase === "empezar") this.empezarArrastre(r.arrastre.ids);
+    try {
+      if (r.comando) this.ejecutar(r.comando);
+    } finally {
+      // Aunque el comando falle, lo arrastrado no puede quedar oculto.
+      if (r.arrastre?.fase === "terminar") this.terminarArrastre();
+    }
     if (r.seleccion) this.seleccionarIds(r.seleccion);
     if (r.terminar && this.herramienta) {
       this.herramienta = null;
@@ -200,13 +234,41 @@ export class Editor {
     if (r.redibujar || r.terminar) this.vista?.invalidar();
   }
 
+  /** Saca los arrastrados de la capa estática: cada uno invalida su caja. */
+  private empezarArrastre(ids: ReadonlySet<string>): void {
+    if (this.arrastrados) this.terminarArrastre();
+    this.arrastrados = ids;
+    for (const id of ids) {
+      const k = this.escena.ocultar(id);
+      if (k) this.vista?.invalidarRegion(k);
+    }
+  }
+
+  /** Vuelve los arrastrados a la capa estática, donde estén ahora: cada uno invalida su caja. */
+  private terminarArrastre(): void {
+    const ids = this.arrastrados;
+    this.arrastrados = null;
+    if (!ids) return;
+    for (const id of ids) {
+      const k = this.escena.mostrar(id);
+      if (k) this.vista?.invalidarRegion(k);
+    }
+  }
+
   /**
-   * Capa dinámica, con el color de acento: el resaltado de la selección, el
-   * rectángulo de selección y la vista previa de Colocar. No toca la capa
-   * estática.
+   * Capa dinámica: lo que se arrastra (con los colores de siempre), y con el
+   * color de acento el resaltado de la selección, el rectángulo de selección
+   * y la vista previa de Colocar. No toca la capa estática.
    */
   readonly dibujarDinamico = (r: Renderer, info: InfoDinamico): void => {
-    if (this._seleccion.size > 0) dibujarSeleccion(r, info, this.escena, this._seleccion);
+    const a = this.arrastrados && this.seleccionar.arrastre;
+    if (a) {
+      const datos = { ...info, detalle: nivelDetalle(info.escala) };
+      this.escena.dibujarDesplazados(r, datos, a.ids, a.dx, a.dy, LIMITE_ARRASTRE_COMPLETO);
+      dibujarSeleccion(r, info, this.escena, this._seleccion, a.dx, a.dy);
+    } else if (this._seleccion.size > 0) {
+      dibujarSeleccion(r, info, this.escena, this._seleccion);
+    }
     const rect = this.seleccionar.rectangulo;
     if (rect) dibujarRectangulo(r, info, rect);
     const p = this.herramienta?.previa;
@@ -239,8 +301,9 @@ export class Editor {
   /**
    * Lleva a la escena el estado actual de cada componente del cambio: si sigue
    * en la hoja, se agrega o actualiza; si no (se borró, o es de otra hoja), se
-   * quita. Cada componente invalida su propia caja: unirlas todas marcaría
-   * de más si están lejos entre sí.
+   * quita. Cada componente invalida sus propias cajas, y la vieja y la nueva
+   * por separado: unirlas marcaría de más si están lejos entre sí (dos
+   * componentes lejanos, o deshacer un movimiento largo).
    */
   private reflejar(cambio: Cambio): Cambio {
     if (cambio.componentes.length === 0) return cambio;
@@ -253,8 +316,12 @@ export class Editor {
     let quitados: string[] | null = null;
     for (const id of ids) {
       const c = actuales.get(id);
-      const caja = c ? this.escena.actualizar(id, this.aEscena(c)) : this.escena.quitar(id);
-      if (caja) this.vista?.invalidarRegion(caja);
+      if (c) {
+        for (const k of this.escena.actualizar(id, this.aEscena(c))) this.vista?.invalidarRegion(k);
+      } else {
+        const k = this.escena.quitar(id);
+        if (k) this.vista?.invalidarRegion(k);
+      }
       if (this._seleccion.has(id)) {
         tocaSeleccion = true;
         if (!c) (quitados ??= []).push(id);

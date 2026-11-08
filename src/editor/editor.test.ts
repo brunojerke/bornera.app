@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Borrar, CambiarEtiqueta, colocar, Mover } from "../core/model/comandos";
 import type { Componente } from "../core/model/documento";
 import { buscarSimbolo, SIMBOLOS, validarDefinicion } from "../core/symbols";
-import { unirCajas, type Caja } from "../render/camara";
+import { seTocan, unirCajas, type Caja } from "../render/camara";
 import type { Colores } from "../render/capas";
 import type { Renderer } from "../render/renderer";
 import { cajaDibujo } from "../render/simbolo";
@@ -87,14 +87,35 @@ describe("Editor", () => {
     expect(vista.regiones).toEqual([cajaDe(datos(0, 0))]);
   });
 
-  it("Mover invalida la caja vieja unida a la nueva", () => {
+  it("Mover invalida la caja vieja y la nueva por separado", () => {
     const { editor, vista } = armar();
     const cmd = colocar(editor.documento, datos(0, 0));
     editor.ejecutar(cmd);
     vista.regiones = [];
     editor.ejecutar(new Mover([cmd.id], 5, -2));
-    expect(vista.regiones).toEqual([unirCajas(cajaDe(datos(0, 0)), cajaDe(datos(5, -2)))]);
+    expect(vista.regiones).toEqual([cajaDe(datos(0, 0)), cajaDe(datos(5, -2))]);
     expect(editor.escena.obtener(cmd.id)).toMatchObject({ x: 5, y: -2 });
+  });
+
+  it("deshacer y rehacer un movimiento largo invalidan las dos puntas, no la franja intermedia", () => {
+    const { editor, vista } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    editor.ejecutar(new Mover([cmd.id], 400, 250));
+    const origen = cajaDe(datos(0, 0));
+    const destino = cajaDe(datos(400, 250));
+    const mitad: Caja = { x: 200, y: 125, ancho: 0, alto: 0 };
+
+    vista.regiones = [];
+    editor.deshacer();
+    expect(vista.regiones).toEqual([destino, origen]);
+    vista.regiones = [];
+    editor.rehacer();
+    expect(vista.regiones).toEqual([origen, destino]);
+    // Ninguna región llega a la mitad del camino (la unión sí la tocaría).
+    expect(seTocan(unirCajas(origen, destino), mitad)).toBe(true);
+    for (const k of vista.regiones) expect(seTocan(k, mitad)).toBe(false);
+    expect(vista.enteras).toBe(0);
   });
 
   it("cada componente invalida su propia caja, no la unión de todos", () => {
@@ -119,13 +140,13 @@ describe("Editor", () => {
     expect(editor.escena.obtener(cmd.id)).toMatchObject({ x: 2, y: 2 });
   });
 
-  it("cambiar la etiqueta invalida la caja vieja unida a la nueva", () => {
+  it("alargar la etiqueta invalida solo la caja nueva (contiene a la vieja)", () => {
     const { editor, vista } = armar();
     const cmd = colocar(editor.documento, datos(0, 0, "K1"));
     editor.ejecutar(cmd);
     vista.regiones = [];
     editor.ejecutar(new CambiarEtiqueta(cmd.id, "K1-PRINCIPAL"));
-    expect(vista.regiones).toEqual([unirCajas(cajaDe(datos(0, 0, "K1")), cajaDe(datos(0, 0, "K1-PRINCIPAL")))]);
+    expect(vista.regiones).toEqual([cajaDe(datos(0, 0, "K1-PRINCIPAL"))]);
   });
 
   it("un comando que falla no invalida nada", () => {
@@ -368,5 +389,135 @@ describe("Editor: selección", () => {
     expect(dibujados).toBe(1);
     expect(f.llamadas.filter((l) => l === "rectangulo")).toHaveLength(0);
     expect(f.estilos[0]).toMatchObject({ trazo: "#06f" });
+  });
+});
+
+describe("Editor: mover arrastrando", () => {
+  /** Un componente en (0, 0), seleccionado, con las regiones y cuadros en cero. */
+  function conUno() {
+    const { editor, vista } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    editor.seleccionarIds([cmd.id]);
+    vista.regiones = [];
+    vista.cuadros = 0;
+    return { editor, vista, id: cmd.id };
+  }
+  const h = (editor: Editor) => editor.activa;
+
+  it("30 movimientos dan exactamente 1 comando y 2 invalidaciones", () => {
+    const { editor, vista, id } = conUno();
+    const pasos = editor.historial;
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    for (let i = 1; i <= 30; i++) editor.aplicar(h(editor).mover(ev(i * 0.2, i * 0.1)));
+    expect(editor.arrastrando).toBe(true);
+    expect(vista.regiones).toEqual([cajaDe(datos(0, 0))]); // al empezar: sale de la capa estática
+    expect(editor.escena.oculto(id)).toBe(true);
+    expect(editor.puedeDeshacer).toBe(true); // el Colocar
+    editor.aplicar(h(editor).soltar(ev(6, 3)));
+
+    expect(editor.arrastrando).toBe(false);
+    expect(editor.escena.oculto(id)).toBe(false);
+    expect(vista.regiones).toEqual([cajaDe(datos(0, 0)), cajaDe(datos(6, 3))]);
+    expect(vista.enteras).toBe(0);
+    expect(editor.escena.obtener(id)).toMatchObject({ x: 6, y: 3 });
+    // Un solo paso: deshacer lo devuelve, y el siguiente deshace el Colocar.
+    editor.deshacer();
+    expect(editor.escena.obtener(id)).toMatchObject({ x: 0, y: 0 });
+    editor.deshacer();
+    expect(pasos.puedeDeshacer).toBe(false);
+  });
+
+  it("moverse solo pide un cuadro al cambiar de punto de grilla", () => {
+    const { editor, vista } = conUno();
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    // 0,1 por paso hasta 3,0: el arrastre empieza en 0,3 (12 px > 4) y pasa por 0, 1, 2 y 3.
+    for (let i = 1; i <= 30; i++) editor.aplicar(h(editor).mover(ev(i * 0.1, 0)));
+    expect(vista.cuadros).toBe(4);
+    expect(vista.regiones).toHaveLength(1);
+  });
+
+  it("Esc a mitad del arrastre: ningún comando, vuelve a su lugar con 2 invalidaciones", () => {
+    const { editor, vista, id } = conUno();
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    for (let i = 1; i <= 10; i++) editor.aplicar(h(editor).mover(ev(i, 0)));
+    editor.aplicar(editor.seleccionar.cancelar());
+    expect(editor.arrastrando).toBe(false);
+    expect(vista.regiones).toEqual([cajaDe(datos(0, 0)), cajaDe(datos(0, 0))]);
+    // El botón se suelta después: no hace nada.
+    editor.aplicar(h(editor).soltar(ev(10, 0)));
+    expect(editor.escena.obtener(id)).toMatchObject({ x: 0, y: 0 });
+    expect(editor.documento.hojas[0]!.componentes[0]).toMatchObject({ x: 0, y: 0 });
+    expect([...editor.seleccion]).toEqual([id]); // Esc en el arrastre no deselecciona
+    editor.deshacer(); // lo único para deshacer es el Colocar
+    expect(editor.escena.cantidad).toBe(0);
+  });
+
+  it("volver al punto de partida no da comando; cancelar la herramienta corta el arrastre", () => {
+    const { editor, vista, id } = conUno();
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    editor.aplicar(h(editor).mover(ev(3, 0)));
+    editor.aplicar(h(editor).soltar(ev(0.2, -0.3)));
+    expect(editor.escena.oculto(id)).toBe(false);
+    expect(vista.regiones).toHaveLength(2);
+    editor.deshacer();
+    expect(editor.escena.cantidad).toBe(0); // se deshizo el Colocar: no había Mover
+
+    const otro = conUno();
+    otro.editor.aplicar(h(otro.editor).presionar(ev(0, 0)));
+    otro.editor.aplicar(h(otro.editor).mover(ev(3, 0)));
+    otro.editor.cancelarHerramienta(); // al desconectar el lienzo
+    expect(otro.editor.arrastrando).toBe(false);
+    expect(otro.editor.escena.oculto(otro.id)).toBe(false);
+  });
+
+  it("arrastra el grupo entero: un Mover con todos, cada uno con sus invalidaciones", () => {
+    const { editor, vista } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    const b = colocar(editor.documento, datos(300, 0, "K2"));
+    editor.agrupar([a, b]);
+    editor.seleccionarIds([a.id, b.id]);
+    vista.regiones = [];
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    editor.aplicar(h(editor).mover(ev(2.4, 4.6)));
+    editor.aplicar(h(editor).soltar(ev(2.4, 4.6)));
+    expect(editor.escena.obtener(a.id)).toMatchObject({ x: 2, y: 5 });
+    expect(editor.escena.obtener(b.id)).toMatchObject({ x: 302, y: 5 });
+    expect(vista.regiones).toHaveLength(4);
+    expect(new Set(editor.seleccion)).toEqual(new Set([a.id, b.id]));
+    editor.deshacer();
+    expect(editor.escena.obtener(a.id)).toMatchObject({ x: 0, y: 0 });
+    expect(editor.escena.obtener(b.id)).toMatchObject({ x: 300, y: 0 });
+  });
+
+  it("si algo arrastrado se borra en el medio, se mueve el resto y nada queda oculto", () => {
+    const { editor } = armar();
+    const a = colocar(editor.documento, datos(0, 0));
+    const b = colocar(editor.documento, datos(10, 0, "K2"));
+    editor.agrupar([a, b]);
+    editor.seleccionarIds([a.id, b.id]);
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    editor.aplicar(h(editor).mover(ev(3, 0)));
+    editor.ejecutar(new Borrar([b.id]));
+    editor.aplicar(h(editor).soltar(ev(3, 0)));
+    expect(editor.escena.obtener(a.id)).toMatchObject({ x: 3, y: 0 });
+    expect(editor.escena.oculto(a.id)).toBe(false);
+    editor.deshacer(); // el Mover
+    editor.deshacer(); // el Borrar
+    expect(editor.escena.oculto(b.id)).toBe(false);
+  });
+
+  it("la capa dinámica dibuja lo arrastrado corrido, con su resaltado", () => {
+    const { editor } = conUno();
+    const f = rendererFalso();
+    const pantalla = { visible: { x: 40, y: -20, ancho: 40, alto: 40 }, escala: 20, colores: COLORES };
+    editor.dibujarDinamico(f.r, pantalla);
+    expect(f.llamadas).toEqual([]); // el componente está en 0, fuera de pantalla
+
+    editor.aplicar(h(editor).presionar(ev(0, 0)));
+    editor.aplicar(h(editor).mover(ev(50, 0)));
+    editor.dibujarDinamico(f.r, pantalla);
+    expect(f.llamadas).toContain("trasladar");
+    expect(f.llamadas).toContain("rectangulos"); // el resaltado, corrido hasta la pantalla
   });
 });

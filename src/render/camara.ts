@@ -99,12 +99,14 @@ export class Camara {
   }
 
   /**
-   * La pantalla cambió de tamaño: deja en el centro nuevo el punto de grilla
-   * que estaba en el centro anterior (si no, todo queda pegado a la esquina).
+   * La pantalla cambió de tamaño: la esquina superior izquierda queda fija,
+   * así nada se corre bajo el mouse. Casi siempre cambia por un panel que se
+   * abre o se cierra a la derecha (el de propiedades, al seleccionar): si se
+   * mantuviera el centro, todo saltaría media anchura del panel en medio de un
+   * clic o de un arrastre. (Hasta T9 mantenía el centro.)
    */
-  redimensionar(anchoAntes: number, altoAntes: number, ancho: number, alto: number): void {
-    const centro = this.aGrilla(anchoAntes / 2, altoAntes / 2);
-    this.centrar(centro.x, centro.y, ancho, alto);
+  redimensionar(_anchoAntes: number, _altoAntes: number, _ancho: number, _alto: number): void {
+    // La cámara guarda la esquina (x, y): no hay nada que cambiar.
   }
 
   /** Ajusta zoom y posición para que la caja entre entera, con un margen en píxeles. */

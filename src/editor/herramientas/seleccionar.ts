@@ -2,9 +2,13 @@
 //
 // - Clic sobre un elemento: queda seleccionado solo ese. Si ya estaba en una
 //   selección de varios, el grupo se mantiene mientras el botón está apretado
-//   (para arrastrarlo entero en T9) y se reduce a ese elemento al soltar sin
+//   (para arrastrarlo entero) y se reduce a ese elemento al soltar sin
 //   haberse movido.
-// - Mayús+clic sobre un elemento: lo suma o lo quita.
+// - Apretar sobre un elemento y arrastrar: mueve toda la selección, de a
+//   unidades enteras de grilla. Al soltar da un solo `Mover` (un paso de
+//   deshacer); si volvió al punto de partida, nada. Esc lo corta y todo queda
+//   donde estaba.
+// - Mayús+clic sobre un elemento: lo suma o lo quita (con Mayús no se arrastra).
 // - Clic en vacío: deselecciona todo (con Mayús, no cambia nada).
 // - Arrastrar desde vacío: rectángulo. De izquierda a derecha elige lo que
 //   queda entero adentro ("contiene"); de derecha a izquierda, lo que lo toca
@@ -15,6 +19,7 @@
 // deshace. La herramienta no la guarda: la lee del editor y devuelve la nueva
 // en `Resultado.seleccion`.
 
+import { Mover } from "../../core/model/comandos";
 import type { ModoRectangulo } from "../../render/escenaEditable";
 import { cajaRectangulo, type RectanguloSeleccion } from "../../render/resaltado";
 import type { Caja } from "../../render/camara";
@@ -37,9 +42,13 @@ type Gesto =
       id: string;
       /** Ya estaba seleccionado con otros: al soltar sin mover, queda solo él. */
       reducir: boolean;
+      /** Se apretó con Mayús: no se arrastra. */
+      mayus: boolean;
       x0: number;
       y0: number;
       movio: boolean;
+      /** Arrastre en curso (desde que pasó el umbral); null si no se arrastra. */
+      arrastre: Arrastre | null;
     }
   | {
       /** Se apretó en vacío: clic o rectángulo. */
@@ -51,7 +60,17 @@ type Gesto =
       rect: RectanguloSeleccion | null;
     };
 
+/** Elementos que se arrastran y cuánto se corrieron, en unidades enteras de grilla. */
+export interface Arrastre {
+  ids: ReadonlySet<string>;
+  dx: number;
+  dy: number;
+}
+
 const VACIA: ReadonlySet<string> = Object.freeze(new Set<string>());
+
+/** Fin de un arrastre: los elementos vuelven a la capa estática. */
+const TERMINAR = { fase: "terminar" } as const;
 
 /** True si el mouse ya se movió más que el umbral desde (x0, y0). */
 function seMovio(ev: EventoHerramienta, x0: number, y0: number): boolean {
@@ -79,6 +98,11 @@ export class HerramientaSeleccionar implements Herramienta {
     return this.gesto?.tipo === "vacio" ? this.gesto.rect : null;
   }
 
+  /** Arrastre en curso, para dibujarlo; null si no hay. */
+  get arrastre(): Readonly<Arrastre> | null {
+    return this.gesto?.tipo === "elemento" ? this.gesto.arrastre : null;
+  }
+
   presionar(ev: EventoHerramienta): Resultado {
     if (ev.boton !== 0) return NADA;
     const id = this.elegibles.idEnPunto(ev.x, ev.y, TOLERANCIA_PX / ev.escala);
@@ -89,7 +113,7 @@ export class HerramientaSeleccionar implements Herramienta {
       return NADA;
     }
 
-    this.gesto = { tipo: "elemento", id, reducir: false, x0: ev.x, y0: ev.y, movio: false };
+    this.gesto = { tipo: "elemento", id, reducir: false, mayus: ev.mayus, x0: ev.x, y0: ev.y, movio: false, arrastre: null };
     if (ev.mayus) {
       const nueva = new Set(actual);
       if (nueva.has(id)) nueva.delete(id);
@@ -107,8 +131,23 @@ export class HerramientaSeleccionar implements Herramienta {
     const g = this.gesto;
     if (!g) return NADA;
     if (g.tipo === "elemento") {
-      if (!g.movio && seMovio(ev, g.x0, g.y0)) g.movio = true; // T9: acá empieza a mover
-      return NADA;
+      const a = g.arrastre;
+      if (a) {
+        // Pide un cuadro solo si cambió el punto de grilla.
+        const dx = Math.round(ev.x - g.x0);
+        const dy = Math.round(ev.y - g.y0);
+        if (dx === a.dx && dy === a.dy) return NADA;
+        a.dx = dx;
+        a.dy = dy;
+        return { redibujar: true };
+      }
+      if (g.movio || !seMovio(ev, g.x0, g.y0)) return NADA;
+      g.movio = true;
+      // Se arrastra la selección, si el elemento está en ella (con Mayús pudo haber salido).
+      const actual = this.seleccion();
+      if (g.mayus || !actual.has(g.id)) return NADA;
+      g.arrastre = { ids: actual, dx: Math.round(ev.x - g.x0), dy: Math.round(ev.y - g.y0) };
+      return { redibujar: true, arrastre: { fase: "empezar", ids: actual } };
     }
     if (!g.rect) {
       if (!seMovio(ev, g.x0, g.y0)) return NADA;
@@ -122,10 +161,21 @@ export class HerramientaSeleccionar implements Herramienta {
     const g = this.gesto;
     this.gesto = null;
     if (!g) return NADA;
-    // Gesto cortado (pointercancel): se descarta sin cambiar la selección.
-    if (!ev) return g.tipo === "vacio" && g.rect ? { redibujar: true } : NADA;
+    // Gesto cortado (pointercancel): se descarta sin cambiar nada.
+    if (!ev) return this.descartar(g);
 
     if (g.tipo === "elemento") {
+      const a = g.arrastre;
+      if (a) {
+        // Termina donde se soltó; si volvió al punto de partida, no hay comando.
+        const dx = Math.round(ev.x - g.x0);
+        const dy = Math.round(ev.y - g.y0);
+        // Lo que se borró durante el arrastre ya salió de la selección: no se mueve.
+        const actual = this.seleccion();
+        const ids = [...a.ids].filter((id) => actual.has(id));
+        if ((dx === 0 && dy === 0) || ids.length === 0) return { redibujar: true, arrastre: TERMINAR };
+        return { comando: new Mover(ids, dx, dy), redibujar: true, arrastre: TERMINAR };
+      }
       return g.reducir && !g.movio ? this.con(new Set([g.id])) : NADA;
     }
     if (!g.rect) {
@@ -149,9 +199,14 @@ export class HerramientaSeleccionar implements Herramienta {
   cancelar(): Resultado {
     const g = this.gesto;
     this.gesto = null;
-    if (g?.tipo === "vacio" && g.rect) return { redibujar: true };
-    if (g) return NADA;
+    if (g) return this.descartar(g);
     return this.seleccion().size > 0 ? this.con(VACIA) : NADA;
+  }
+
+  /** Corta un gesto sin cambiar nada: borra el rectángulo o devuelve lo arrastrado a su lugar. */
+  private descartar(g: Gesto): Resultado {
+    if (g.tipo === "vacio") return g.rect ? { redibujar: true } : NADA;
+    return g.arrastre ? { redibujar: true, arrastre: TERMINAR } : NADA;
   }
 
   private con(seleccion: ReadonlySet<string>): Resultado {

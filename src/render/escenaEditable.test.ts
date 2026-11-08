@@ -20,11 +20,6 @@ function info(visible: Caja): InfoDibujo {
   return { escala: 20, colores: { simbolo: "#000", borne: "#f00" }, visible, detalle: { ...DETALLE_COMPLETO } };
 }
 
-/** Contiene a `b` entera. */
-function cubre(a: Caja, b: Caja): boolean {
-  return a.x <= b.x && a.y <= b.y && a.x + a.ancho >= b.x + b.ancho && a.y + a.alto >= b.y + b.alto;
-}
-
 const def = SIMBOLOS[0]!;
 const en = (x: number, y: number, etiqueta = "S1"): ComponenteEscena => ({
   def,
@@ -72,15 +67,14 @@ describe("EscenaEditable", () => {
     expect(e.caja).toBeNull();
   });
 
-  it("actualizar devuelve la caja vieja unida a la nueva, y ya no aparece donde estaba", () => {
+  it("actualizar devuelve la caja vieja y la nueva por separado, y ya no aparece donde estaba", () => {
     const e = new EscenaEditable([
       ["c1", en(0, 0)],
       ["c2", en(40, 0)],
     ]);
     const vieja = cajaDibujo(def, en(0, 0), "S1");
     const nueva = cajaDibujo(def, en(20, 10), "K1234");
-    const k = e.actualizar("c1", en(20, 10, "K1234"));
-    expect(cubre(k, vieja) && cubre(k, nueva)).toBe(true);
+    expect(e.actualizar("c1", en(20, 10, "K1234"))).toEqual([vieja, nueva]);
     expect(e.idsCandidatos({ x: 0, y: 0, ancho: 0, alto: 0 })).toEqual([]);
     expect(e.idsCandidatos({ x: 20, y: 10, ancho: 0, alto: 0 })).toEqual(["c1"]);
     expect(e.obtener("c1")!.etiqueta).toBe("K1234");
@@ -90,12 +84,96 @@ describe("EscenaEditable", () => {
     const lista = generarBanco(2000);
     const e = new EscenaEditable(lista.map((c, i) => [`b${i}`, c]));
     const c = e.obtener("b7")!;
-    const k = e.actualizar("b7", { ...c, x: c.x + 1 });
-    // Una caja chica (un símbolo y su paso): toca a pocos vecinos, no a la escena.
-    expect(k.ancho).toBeLessThan(12);
-    expect(k.alto).toBeLessThan(12);
-    expect(e.idsCandidatos(k).length).toBeLessThan(10);
-    expect(e.idsCandidatos(k)).toContain("b7");
+    const cajas = e.actualizar("b7", { ...c, x: c.x + 1 });
+    expect(cajas).toHaveLength(2);
+    // Cajas chicas (un símbolo): tocan a pocos vecinos, no a la escena.
+    for (const k of cajas) {
+      expect(k.ancho).toBeLessThan(12);
+      expect(k.alto).toBeLessThan(12);
+      expect(e.idsCandidatos(k).length).toBeLessThan(10);
+    }
+    expect(e.idsCandidatos(cajas[1]!)).toContain("b7");
+  });
+
+  it("un movimiento largo no marca la franja intermedia: dos cajas chicas, no su unión", () => {
+    const e = new EscenaEditable([["a", en(0, 0)]]);
+    const cajas = e.actualizar("a", en(500, 300));
+    expect(cajas).toEqual([cajaDibujo(def, en(0, 0), "S1"), cajaDibujo(def, en(500, 300), "S1")]);
+    // Nada entre las dos: ni un punto de la mitad del camino.
+    for (const k of cajas) expect(seTocan(k, { x: 250, y: 150, ancho: 0, alto: 0 })).toBe(false);
+  });
+
+  it("si una caja contiene a la otra, devuelve solo la grande", () => {
+    const e = new EscenaEditable([["a", en(0, 0, "K1")]]);
+    const larga = cajaDibujo(def, en(0, 0), "K1-PRINCIPAL");
+    expect(e.actualizar("a", en(0, 0, "K1-PRINCIPAL"))).toEqual([larga]);
+    expect(e.actualizar("a", en(0, 0, "K1"))).toEqual([larga]);
+  });
+
+  it("ocultar lo saca del dibujo pero no del índice; mostrar lo devuelve", () => {
+    const e = new EscenaEditable([
+      ["a", en(0, 0)],
+      ["b", en(20, 0)],
+    ]);
+    const ka = cajaDibujo(def, en(0, 0), "S1");
+    const todo = { x: -50, y: -50, ancho: 200, alto: 100 };
+    expect(e.ocultar("a")).toEqual(ka);
+    expect(e.ocultar("a")).toBeNull(); // ya estaba oculto
+    expect(e.oculto("a")).toBe(true);
+    expect(e.dibujar(grabador().r, info(todo))).toBe(1);
+    // Se sigue eligiendo y resaltando.
+    expect(e.idEnPunto(0, 0)).toBe("a");
+    expect(e.contorno("a")).not.toBeNull();
+
+    // Moverlo o quitarlo oculto no afecta la capa estática.
+    expect(e.actualizar("a", en(10, 10))).toEqual([]);
+    expect(e.mostrar("a")).toEqual(cajaDibujo(def, en(10, 10), "S1"));
+    expect(e.mostrar("a")).toBeNull();
+    expect(e.dibujar(grabador().r, info(todo))).toBe(2);
+    e.ocultar("b");
+    expect(e.quitar("b")).toBeNull();
+    expect(e.oculto("b")).toBe(false);
+    expect(e.ocultar("no-esta")).toBeNull();
+  });
+
+  it("dibujarDesplazados dibuja corridos solo los pedidos que quedan en pantalla", () => {
+    const e = new EscenaEditable([
+      ["a", en(0, 0)],
+      ["b", en(20, 0)],
+      ["c", en(100, 0)],
+    ]);
+    const ids = new Set(["a", "c"]);
+    // La pantalla está en x 40..60: "a" corrido 50 entra; "c" (en 150) no; "b" no se pidió.
+    const pantalla = { x: 40, y: -10, ancho: 20, alto: 20 };
+    const { r, llamadas } = grabador();
+    expect(e.dibujarDesplazados(r, info(pantalla), ids, 50, 0, 10)).toBe(1);
+    expect(llamadas[0]).toEqual(["guardar"]);
+    expect(llamadas[1]).toEqual(["trasladar", 50, 0]);
+    expect(llamadas.at(-1)).toEqual(["restaurar"]);
+    expect(llamadas.length).toBeGreaterThan(4); // el símbolo entero, no solo su caja
+    expect(llamadas.map(([n]) => n)).not.toContain("rectangulos");
+    expect(e.dibujarDesplazados(grabador().r, info(pantalla), ids, 0, 0, 10)).toBe(0);
+  });
+
+  it("dibujarDesplazados con más del límite dibuja solo los cuerpos, en un solo relleno", () => {
+    const lista = generarBanco(500);
+    const e = new EscenaEditable(lista.map((c, i) => [`b${i}`, c]));
+    const ids = new Set(lista.map((_, i) => `b${i}`));
+    const { r, llamadas } = grabador();
+    const n = e.dibujarDesplazados(r, info(e.caja!), ids, 0, 0, 200);
+    expect(n).toBeGreaterThan(200);
+    const nombres = llamadas.map(([nombre]) => nombre);
+    expect(nombres.filter((x) => x === "rectangulos")).toHaveLength(1);
+    expect(nombres).not.toContain("texto");
+    expect(nombres).not.toContain("simbolo");
+    const [, cajas, cantidad] = llamadas.find(([x]) => x === "rectangulos")!;
+    expect(cantidad).toBe(n);
+    // Cada rectángulo es el cuerpo de un componente (sin la etiqueta).
+    const cuerpos = new Set([...ids].map((id) => JSON.stringify(e.forma(id)!.cuerpo)));
+    for (let i = 0; i < n; i++) {
+      const [x, y, ancho, alto] = (cajas as number[]).slice(i * 4, i * 4 + 4);
+      expect(cuerpos.has(JSON.stringify({ x, y, ancho, alto }))).toBe(true);
+    }
   });
 
   it("la caja total se achica al quitar el de la punta", () => {

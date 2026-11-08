@@ -23,6 +23,8 @@ import {
 } from "../../src/render/capas";
 import type { EscenaEditable as Escena } from "../../src/render/escenaEditable";
 import { dibujarSeleccion } from "../../src/render/resaltado";
+import { nivelDetalle } from "../../src/render/detalle";
+import { LIMITE_ARRASTRE_COMPLETO } from "../../src/editor/editor";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 
 /** Pantalla típica de netbook. */
@@ -130,7 +132,7 @@ function editado(e: Escena): string {
 function editar(_: Camara, capas: Capas, e: Escena, i: number): void {
   const id = editado(e);
   const c = e.obtener(id)!;
-  capas.invalidarRegion(e.actualizar(id, { ...c, x: c.x + (i % 2 ? -1 : 1) }));
+  for (const k of e.actualizar(id, { ...c, x: c.x + (i % 2 ? -1 : 1) })) capas.invalidarRegion(k);
 }
 
 /**
@@ -154,6 +156,46 @@ function seleccionar(c: Camara, _: Capas, e: Escena, i: number): void {
     seleccion = new Set(id ? [id] : []);
   }
 }
+
+/**
+ * Arrastre de la selección, como el editor (T9): en el primer cuadro los
+ * seleccionados salen de la capa estática (una invalidación por componente),
+ * después se dibujan corridos en la dinámica, una unidad por cuadro, y en el
+ * último se sueltan: se mueven y vuelven a la estática (otra invalidación).
+ * Una repetición va y la siguiente vuelve, así la escena queda como estaba.
+ */
+const arrastre = { dx: 0, dy: 0, activo: false, sentido: -1 };
+const CUADROS_ARRASTRE = 30;
+function moverArrastrando(_: Camara, capas: Capas, e: Escena, i: number): void {
+  if (i === 0) {
+    arrastre.sentido = -arrastre.sentido;
+    arrastre.activo = true;
+    for (const id of seleccion) {
+      const k = e.ocultar(id);
+      if (k) capas.invalidarRegion(k);
+    }
+  }
+  arrastre.dx = arrastre.sentido * i;
+  arrastre.dy = arrastre.sentido * Math.round(i / 3);
+  if (i === CUADROS_ARRASTRE - 1) {
+    for (const id of seleccion) {
+      const c = e.obtener(id)!;
+      e.actualizar(id, { ...c, x: c.x + arrastre.dx, y: c.y + arrastre.dy });
+      const k = e.mostrar(id);
+      if (k) capas.invalidarRegion(k);
+    }
+    arrastre.activo = false;
+  }
+}
+const dibujarArrastre = (e: Escena): DibujarDinamico => (r, info) => {
+  if (!arrastre.activo) {
+    dibujarSeleccion(r, info, e, seleccion);
+    return;
+  }
+  const { dx, dy } = arrastre;
+  e.dibujarDesplazados(r, { ...info, detalle: nivelDetalle(info.escala) }, seleccion, dx, dy, LIMITE_ARRASTRE_COMPLETO);
+  dibujarSeleccion(r, info, e, seleccion, dx, dy);
+};
 
 const ESCENARIOS: Escenario[] = [
   {
@@ -245,6 +287,32 @@ const ESCENARIOS: Escenario[] = [
     paso: (c) => c.desplazar(-16, -3),
     repeticiones: 2,
     dinamico: resaltar,
+  },
+  {
+    // Arrastrar el componente del centro 30 unidades y soltarlo.
+    nombre: "Mover 1 al 31 %",
+    preparar: (c, e) => {
+      seleccion = new Set([editado(e)]);
+      centrar(c, e, ZOOM_TEXTOS);
+    },
+    cuadros: CUADROS_ARRASTRE,
+    paso: moverArrastrando,
+    // Impar: con la de calentamiento son pares, y la escena vuelve a su lugar.
+    repeticiones: 3,
+    dinamico: dibujarArrastre,
+  },
+  {
+    // Lo mismo con todo seleccionado: con más de LIMITE_ARRASTRE_COMPLETO
+    // visibles se dibujan solo los contornos.
+    nombre: "Mover todo al 31 %",
+    preparar: (c, e) => {
+      seleccion = new Set(e.idsEnCaja(e.caja!, "contiene"));
+      centrar(c, e, ZOOM_TEXTOS);
+    },
+    cuadros: CUADROS_ARRASTRE,
+    paso: moverArrastrando,
+    repeticiones: 3,
+    dinamico: dibujarArrastre,
   },
 ];
 
