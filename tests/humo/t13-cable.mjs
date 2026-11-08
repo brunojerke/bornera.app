@@ -103,7 +103,7 @@ export default async function (p, comprobar) {
   await mover(0, 2.2);
   comprobar("sobre un borne, la barra dice dónde empieza", (await pista()) === "Empezar en K1 · A2", await pista());
   await mover(12, 0.2);
-  comprobar("sobre un cable, una derivación", (await pista()) === "Empezar con una derivación (T) sobre w1", await pista());
+  comprobar("sobre un cable, una derivación", (await pista()) === "Empezar con una derivación (T) sobre un cable", await pista());
 
   // ── 0 codos: K1 A1 → K3 A2 ──
   let n = await pasos();

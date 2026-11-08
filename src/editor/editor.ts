@@ -52,7 +52,8 @@
 // cancelar el tramo si el documento cambia por otra vía.
 
 import { hayCablesEn, indexarHoja, recorridoCable, type IndiceHoja } from "../core/model/cables";
-import { Borrar, CambiarEtiqueta, Espejar, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import { Borrar, CambiarEtiqueta, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import type { EntornoPlan } from "../core/model/seguir";
 import {
   crearDocumento,
   type Cable,
@@ -265,8 +266,20 @@ export class Editor {
         if (c) this.escena.ponerCable(w.id, c);
       }
     }
-    this.seleccionar = new HerramientaSeleccionar(this.escena, () => this._seleccion, (ids) => this.bloqueo("mover", ids));
+    this.seleccionar = new HerramientaSeleccionar(
+      this.escena,
+      () => this._seleccion,
+      (ids) => this.bloqueo("mover", ids),
+      (ids, dx, dy) => new Mover(ids, dx, dy, { entorno: this.entornoPlan }),
+    );
   }
+
+  /**
+   * Índice y consulta de la hoja para planear mover, girar y espejar (T14a):
+   * los del editor, con el índice espacial de la escena, siempre al día con
+   * el documento.
+   */
+  readonly entornoPlan = (): EntornoPlan => ({ indice: this.indiceHoja, consulta: this.consulta });
 
   /** La herramienta que recibe los eventos: la elegida, o la de selección. */
   get activa(): Herramienta {
@@ -520,13 +533,13 @@ export class Editor {
     }
     switch (a) {
       case "rotar":
-        this.ejecutar(new Rotar(ids, 90));
+        this.ejecutar(new Rotar(ids, 90, { entorno: this.entornoPlan }));
         break;
       case "rotarAntihorario":
-        this.ejecutar(new Rotar(ids, -90));
+        this.ejecutar(new Rotar(ids, -90, { entorno: this.entornoPlan }));
         break;
       case "espejar":
-        this.ejecutar(new Espejar(ids));
+        this.ejecutar(new Espejar(ids, { entorno: this.entornoPlan }));
         break;
       case "borrar":
         this.borrarSeleccion(ids);

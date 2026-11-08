@@ -12,9 +12,7 @@
 //   inversa: así es exacto aunque la operación ajuste coordenadas.
 // - Las coordenadas quedan siempre enteras.
 
-import type { Rotacion } from "../symbols/tipos";
-import { espejarEnPantalla, rotarEnPantalla } from "../symbols/transformar";
-import { copiarCable, hayCablesEn, indexarHoja, puntoExtremo, validarCable, type IndiceHoja } from "./cables";
+import { copiarCable, indexarHoja, puntoExtremo, validarCable, type IndiceHoja } from "./cables";
 import {
   buscarComponente,
   generarId,
@@ -23,7 +21,9 @@ import {
   type Componente,
   type Documento,
   type Extremo,
+  type Hoja,
 } from "./documento";
+import { entornoLineal, planearTransformacion, type EntornoPlan, type Operacion, type Plan } from "./seguir";
 
 /** Lo que cambió un comando. */
 export interface Cambio {
@@ -61,31 +61,6 @@ export function copiarComponente(c: Componente): Componente {
 
 // ── Ayudas ─────────────────────────────────────────────────────────────────
 
-interface Ubicacion {
-  comp: Componente;
-  hoja: number;
-  indice: number;
-}
-
-/** Todos los componentes del documento por id, en una sola pasada. */
-function indexar(doc: Documento): Map<string, Ubicacion> {
-  const mapa = new Map<string, Ubicacion>();
-  doc.hojas.forEach((hoja, h) => {
-    hoja.componentes.forEach((comp, indice) => mapa.set(comp.id, { comp, hoja: h, indice }));
-  });
-  return mapa;
-}
-
-/** Ubica cada id (armando el índice una vez); tira un error si falta alguno. */
-function ubicar(doc: Documento, ids: readonly string[]): Ubicacion[] {
-  const mapa = indexar(doc);
-  return ids.map((id) => {
-    const u = mapa.get(id);
-    if (!u) throw new Error(`No existe el componente "${id}".`);
-    return u;
-  });
-}
-
 /** Lista de ids sin repetidos; tira un error si queda vacía. */
 function idsUnicos(ids: Iterable<string>, comando: string): string[] {
   const lista = [...new Set(ids)];
@@ -95,18 +70,6 @@ function idsUnicos(ids: Iterable<string>, comando: string): string[] {
 
 function exigirEntero(valor: number, nombre: string): void {
   if (!Number.isInteger(valor)) throw new RangeError(`${nombre} tiene que ser entero (es ${valor}).`);
-}
-
-/**
- * Hasta que los extremos sigan al borne (T14a), mover, rotar o espejar un
- * componente cableado dejaría tramos en diagonal: se rechaza antes de tocar
- * nada. Una pasada por los cables de cada hoja.
- */
-function exigirSinCables(doc: Documento, ids: readonly string[], comando: string): void {
-  const set = new Set(ids);
-  for (const hoja of doc.hojas) {
-    if (hayCablesEn(hoja, set)) throw new Error(`${comando}: todavía no se pueden mover componentes con cables.`);
-  }
 }
 
 // ── Colocar ────────────────────────────────────────────────────────────────
@@ -157,169 +120,179 @@ export function colocar(doc: Documento, datos: Omit<Componente, "id">, hoja = 0)
   return new Colocar({ ...datos, id: generarId(doc) }, hoja);
 }
 
-// ── Mover ──────────────────────────────────────────────────────────────────
+// ── Mover, rotar y espejar ─────────────────────────────────────────────────
 
-/** Traslada varios componentes en unidades enteras de grilla. */
-export class Mover implements Comando {
-  private readonly ids: string[];
-
-  constructor(
-    ids: Iterable<string>,
-    private readonly dx: number,
-    private readonly dy: number,
-  ) {
-    exigirEntero(dx, "dx");
-    exigirEntero(dy, "dy");
-    this.ids = idsUnicos(ids, "Mover");
-  }
-
-  aplicar(doc: Documento): Cambio {
-    return this.trasladar(doc, this.dx, this.dy);
-  }
-
-  deshacer(doc: Documento): Cambio {
-    return this.trasladar(doc, -this.dx, -this.dy);
-  }
-
-  private trasladar(doc: Documento, dx: number, dy: number): Cambio {
-    const ubicados = ubicar(doc, this.ids);
-    exigirSinCables(doc, this.ids, "Mover");
-    for (const { comp } of ubicados) {
-      comp.x += dx;
-      comp.y += dy;
-    }
-    return soloComponentes(this.ids);
-  }
+/** Lo que el editor le puede dar a Mover, Rotar y Espejar. */
+export interface OpcionesTransformar {
+  /**
+   * Índice y consulta de la hoja (los del editor, con el índice espacial).
+   * Sin esto se arman lineales sobre la hoja, que alcanza para los tests.
+   */
+  entorno?: (hoja: Hoja) => EntornoPlan;
+  /**
+   * Plan ya calculado con los mismos ids y la misma operación (la vista
+   * previa del arrastre). Se usa si lo que toca sigue igual en el documento.
+   */
+  plan?: Plan;
 }
 
-// ── Rotar y espejar ────────────────────────────────────────────────────────
-
-/** Lo que cambian rotar y espejar en cada componente. */
-interface Pose {
-  x: number;
-  y: number;
-  rot: Rotacion;
-  espejado: boolean;
-}
-
-function pose(c: Componente): Pose {
-  return { x: c.x, y: c.y, rot: c.rot, espejado: c.espejado };
-}
-
-/** Caja de las posiciones (centros) de los componentes. */
-function cajaPosiciones(comps: readonly Componente[]): { x0: number; y0: number; x1: number; y1: number } {
-  let x0 = Infinity;
-  let y0 = Infinity;
-  let x1 = -Infinity;
-  let y1 = -Infinity;
-  for (const c of comps) {
-    x0 = Math.min(x0, c.x);
-    y0 = Math.min(y0, c.y);
-    x1 = Math.max(x1, c.x);
-    y1 = Math.max(y1, c.y);
+/** La hoja donde están todos los ids; tira si falta alguno o están en hojas distintas. */
+function hojaDe(doc: Documento, ids: readonly string[]): number {
+  let hoja = -1;
+  for (const id of ids) {
+    const h = doc.hojas.findIndex((k) => k.componentes.some((c) => c.id === id) || k.cables.some((w) => w.id === id));
+    if (h < 0) throw new Error(`No existe "${id}".`);
+    if (hoja >= 0 && h !== hoja) throw new Error("Los elementos están en hojas distintas.");
+    hoja = h;
   }
-  return { x0, y0, x1, y1 };
+  return hoja;
 }
 
-/** Base de Rotar y Espejar: calcula las poses nuevas y guarda las viejas para deshacer. */
+/** True si lo que el plan toca está en la hoja igual que cuando se calculó. */
+function planVigente(hoja: Hoja, plan: Plan): boolean {
+  const indice = indexarHoja(hoja);
+  for (const c of plan.antes.componentes) {
+    const actual = indice.componentes.get(c.id);
+    if (!actual || JSON.stringify(actual) !== JSON.stringify(c)) return false;
+  }
+  for (const w of plan.antes.cables) {
+    const actual = indice.cables.get(w.id);
+    if (!actual || JSON.stringify(actual) !== JSON.stringify(w)) return false;
+  }
+  return true;
+}
+
+/**
+ * Base de Mover, Rotar y Espejar: una transformación de grupo sobre
+ * componentes y cables (mezclados), con todo lo que les pasa a los cables
+ * (`planearTransformacion`, T14a). Si el plan se rechaza (una conexión
+ * aparente nueva, un ciclo de apoyos, nada que mover), tira con el aviso y no
+ * cambia nada. Deshacer vuelve a las copias de antes; rehacer vuelve a
+ * aplicar el mismo plan si el documento sigue como entonces.
+ */
 abstract class Transformar implements Comando {
   protected readonly ids: string[];
-  private antes: Pose[] | null = null;
+  private hecho: { hoja: number; plan: Plan } | null = null;
 
   constructor(
     ids: Iterable<string>,
-    private readonly nombre: string,
+    nombre: string,
+    private readonly opciones: OpcionesTransformar = {},
   ) {
     this.ids = idsUnicos(ids, nombre);
   }
 
-  /** Poses nuevas de los componentes, en el mismo orden. No modifica nada. */
-  protected abstract calcular(comps: readonly Componente[]): Pose[];
+  /** La operación de grupo que hace el comando. */
+  protected abstract get operacion(): Operacion;
 
   aplicar(doc: Documento): Cambio {
-    const comps = ubicar(doc, this.ids).map((u) => u.comp);
-    exigirSinCables(doc, this.ids, this.nombre);
-    const nuevas = this.calcular(comps);
-    this.antes = comps.map(pose);
-    comps.forEach((c, i) => Object.assign(c, nuevas[i]!));
-    return soloComponentes(this.ids);
+    const h = hojaDe(doc, this.ids);
+    const hoja = doc.hojas[h]!;
+    let plan: Plan | null = null;
+    if (this.hecho?.hoja === h && planVigente(hoja, this.hecho.plan)) plan = this.hecho.plan;
+    else if (this.opciones.plan && planVigente(hoja, this.opciones.plan)) plan = this.opciones.plan;
+    if (!plan) {
+      const entorno = this.opciones.entorno?.(hoja) ?? entornoLineal(hoja);
+      const r = planearTransformacion(hoja, this.ids, this.operacion, entorno);
+      if (r.rechazo) throw new Error(r.rechazo.motivo);
+      plan = r.plan;
+    }
+    const indice = indexarHoja(hoja);
+    for (const { id, pose } of plan.componentes) Object.assign(indice.componentes.get(id)!, pose);
+    for (const c of plan.cables) {
+      const w = indice.cables.get(c.id)!;
+      w.desde = { ...c.desde };
+      w.hasta = { ...c.hasta };
+      w.codos = c.codos.map(([x, y]) => [x, y]);
+    }
+    this.hecho = { hoja: h, plan };
+    return cambioDe(plan);
   }
 
   deshacer(doc: Documento): Cambio {
-    const antes = this.antes;
-    if (!antes) throw new Error("No se puede deshacer un comando que no se aplicó.");
-    ubicar(doc, this.ids).forEach((u, i) => Object.assign(u.comp, antes[i]!));
-    return soloComponentes(this.ids);
+    const hecho = this.hecho;
+    if (!hecho) throw new Error("No se puede deshacer un comando que no se aplicó.");
+    const hoja = doc.hojas[hecho.hoja];
+    if (!hoja) throw new Error(`No existe la hoja ${hecho.hoja}.`);
+    const indice = indexarHoja(hoja);
+    const { antes } = hecho.plan;
+    // Todo se comprueba antes de tocar nada.
+    for (const c of antes.componentes) if (!indice.componentes.has(c.id)) throw new Error(`No existe el componente "${c.id}".`);
+    for (const w of antes.cables) if (!indice.cables.has(w.id)) throw new Error(`No existe el cable "${w.id}".`);
+    for (const c of antes.componentes) {
+      const actual = indice.componentes.get(c.id)!;
+      actual.x = c.x;
+      actual.y = c.y;
+      actual.rot = c.rot;
+      actual.espejado = c.espejado;
+    }
+    for (const w of antes.cables) {
+      const actual = indice.cables.get(w.id)!;
+      actual.desde = { ...w.desde };
+      actual.hasta = { ...w.hasta };
+      actual.codos = w.codos.map(([x, y]) => [x, y]);
+    }
+    return cambioDe(hecho.plan);
+  }
+}
+
+function cambioDe(plan: Plan): Cambio {
+  return { componentes: plan.componentes.map((c) => c.id), cables: plan.cables.map((c) => c.id) };
+}
+
+/**
+ * Traslada componentes y cables en unidades enteras de grilla. Los cables
+ * conectados siguen a sus bornes (T14a).
+ */
+export class Mover extends Transformar {
+  constructor(
+    ids: Iterable<string>,
+    private readonly dx: number,
+    private readonly dy: number,
+    opciones?: OpcionesTransformar,
+  ) {
+    exigirEntero(dx, "dx");
+    exigirEntero(dy, "dy");
+    super(ids, "Mover", opciones);
+  }
+
+  protected get operacion(): Operacion {
+    return { tipo: "mover", dx: this.dx, dy: this.dy };
   }
 }
 
 /**
- * Rota los componentes ±90° (horario con 90, como `transformarPunto`) sobre el
- * centro exacto de la caja de sus posiciones. Uno solo rota en su lugar.
- *
- * Si el ancho y el alto de la caja tienen paridad distinta, el centro cae en
- * media unidad en un solo eje y el resultado quedaría en medias unidades: se
- * corre el grupo (+½, −½) si el ancho es impar y (−½, +½) si es par, en los dos
- * sentidos. Cada rotación cambia la paridad del ancho, así que las correcciones
- * se alternan y se anulan de a pares: girar y volver (4 × +90, +90 y −90) deja
- * el grupo exactamente igual. Depende solo de la paridad, no del signo de las
- * coordenadas. Redondear el centro (Math.round) corría el grupo hasta 4
- * unidades cada 4 giros. Ver "Decisión - Rotar y espejar en grupo".
+ * Rota ±90° (horario con 90, como `transformarPunto`) sobre el centro exacto
+ * de la caja de lo seleccionado: las posiciones de los componentes y los
+ * puntos de los cables seleccionados. Uno solo rota en su lugar. Ver
+ * `transformacionGrupo` para la corrección de media unidad.
  */
 export class Rotar extends Transformar {
   constructor(
     ids: Iterable<string>,
     private readonly sentido: 90 | -90,
+    opciones?: OpcionesTransformar,
   ) {
-    super(ids, "Rotar");
+    super(ids, "Rotar", opciones);
   }
 
-  protected calcular(comps: readonly Componente[]): Pose[] {
-    const { x0, y0, x1, y1 } = cajaPosiciones(comps);
-    // Múltiplos de ½: las cuentas son exactas en punto flotante.
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    const anchoImpar = (x1 - x0) % 2 === 1;
-    const altoImpar = (y1 - y0) % 2 === 1;
-    const corrimiento = anchoImpar === altoImpar ? 0 : anchoImpar ? 0.5 : -0.5;
-    const horario = this.sentido === 90;
-    return comps.map((c) => {
-      const dx = c.x - cx;
-      const dy = c.y - cy;
-      const t = rotarEnPantalla({ rotacion: c.rot, espejado: c.espejado }, this.sentido);
-      return {
-        // `+ 0` convierte -0 en 0.
-        x: (horario ? cx - dy : cx + dy) + corrimiento + 0,
-        y: (horario ? cy + dx : cy - dx) - corrimiento + 0,
-        rot: t.rotacion,
-        espejado: t.espejado,
-      };
-    });
+  protected get operacion(): Operacion {
+    return { tipo: "rotar", sentido: this.sentido };
   }
 }
 
 /**
  * Espejo horizontal en pantalla, sobre el eje vertical del centro de la caja
- * de las posiciones. Un símbolo rotado también se da vuelta izquierda↔derecha
+ * de lo seleccionado. Un símbolo rotado también se da vuelta izquierda↔derecha
  * en pantalla, por eso cambia su `rot` además de `espejado`.
  */
 export class Espejar extends Transformar {
-  constructor(ids: Iterable<string>) {
-    super(ids, "Espejar");
+  constructor(ids: Iterable<string>, opciones?: OpcionesTransformar) {
+    super(ids, "Espejar", opciones);
   }
 
-  protected calcular(comps: readonly Componente[]): Pose[] {
-    const { x0, x1 } = cajaPosiciones(comps);
-    return comps.map((c) => {
-      const t = espejarEnPantalla({ rotacion: c.rot, espejado: c.espejado });
-      return {
-        // x0 + x1 es entero aunque el centro caiga en media unidad.
-        x: x0 + x1 - c.x + 0,
-        y: c.y,
-        rot: t.rotacion,
-        espejado: t.espejado,
-      };
-    });
+  protected get operacion(): Operacion {
+    return { tipo: "espejar" };
   }
 }
 

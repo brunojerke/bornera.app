@@ -276,13 +276,14 @@ describe("Borrar con cables", () => {
   });
 });
 
-describe("transformar con cables (bloqueado hasta T14a)", () => {
-  it("Mover, Rotar y Espejar de un componente cableado tiran y no cambian nada", () => {
+describe("transformar con cables (T14a)", () => {
+  it("mover un componente cableado deja la hoja válida, y deshacer, igual", () => {
     const doc = docCombinado();
     const antes = copia(doc);
-    expect(() => new Mover(["c1"], 1, 0).aplicar(doc)).toThrow(/cables/);
-    expect(() => new Rotar(["c4", "c2"], 90).aplicar(doc)).toThrow(/cables/);
-    expect(() => new Espejar(["c3"]).aplicar(doc)).toThrow(/cables/);
+    const cmd = new Mover(["c2"], 0, 3);
+    cmd.aplicar(doc);
+    expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+    cmd.deshacer(doc);
     expect(doc).toEqual(antes);
   });
 
@@ -293,10 +294,12 @@ describe("transformar con cables (bloqueado hasta T14a)", () => {
     expect(doc.hojas[0]!.componentes[3]).toMatchObject({ x: 42, rot: 90 });
   });
 
-  it("no reciben ids de cables", () => {
+  it("reciben ids de cables: uno suelto se mueve entero", () => {
     const doc = docCombinado();
-    expect(() => new Mover(["w5"], 1, 0).aplicar(doc)).toThrow(/No existe el componente "w5"/);
-    expect(() => new Rotar(["w5"], 90).aplicar(doc)).toThrow(/No existe el componente "w5"/);
+    new Mover(["w5"], 1, 0).aplicar(doc);
+    expect(doc.hojas[0]!.cables[4]).toMatchObject({ desde: libre(31, 0), hasta: libre(31, 5) });
+    new Espejar(["w5"]).aplicar(doc);
+    expect(validarHoja(doc.hojas[0]!)).toEqual([]);
   });
 
   it("componentesCableados da los que tienen algún cable en un borne", () => {

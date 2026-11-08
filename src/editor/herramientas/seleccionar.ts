@@ -20,7 +20,7 @@
 // deshace. La herramienta no la guarda: la lee del editor y devuelve la nueva
 // en `Resultado.seleccion`.
 
-import { Mover } from "../../core/model/comandos";
+import { Mover, type Comando } from "../../core/model/comandos";
 import type { ModoRectangulo } from "../../render/escenaEditable";
 import { cajaRectangulo, type RectanguloSeleccion } from "../../render/resaltado";
 import type { Caja } from "../../render/camara";
@@ -94,6 +94,8 @@ export class HerramientaSeleccionar implements Herramienta {
     private readonly seleccion: () => ReadonlySet<string>,
     /** Aviso si esos ids no se pueden mover; null si se puede. */
     private readonly bloqueo: (ids: ReadonlySet<string>) => string | null = () => null,
+    /** Arma el comando del arrastre (el editor le pasa su índice y su consulta). */
+    private readonly crearMover: (ids: string[], dx: number, dy: number) => Comando = (ids, dx, dy) => new Mover(ids, dx, dy),
   ) {}
 
   /** Rectángulo de selección en curso, para dibujarlo; null si no hay. */
@@ -187,7 +189,7 @@ export class HerramientaSeleccionar implements Herramienta {
         const actual = this.seleccion();
         const ids = [...a.ids].filter((id) => actual.has(id));
         if ((dx === 0 && dy === 0) || ids.length === 0) return { redibujar: true, arrastre: TERMINAR };
-        return { comando: new Mover(ids, dx, dy), redibujar: true, arrastre: TERMINAR };
+        return { comando: this.crearMover(ids, dx, dy), redibujar: true, arrastre: TERMINAR };
       }
       return g.reducir && !g.movio ? this.con(new Set([g.id])) : NADA;
     }

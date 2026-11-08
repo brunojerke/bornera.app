@@ -64,7 +64,7 @@ describe("problemasTrazado", () => {
   it("encimarse con otro cable se bloquea; el cruce simple no", () => {
     const hoja = hojaCon([], [cable("w1", libre(0, 10), libre(10, 10))]);
     expect(mensajes(hoja, { desde: libre(5, 10), hasta: libre(15, 10), puntos: [5, 10, 15, 10] })).toEqual([
-      "El cable se encimaría con w1.",
+      "El cable se encimaría con otro cable.",
     ]);
     expect(mensajes(hoja, { desde: libre(5, 5), hasta: libre(5, 15), puntos: [5, 5, 5, 15] })).toEqual([]);
   });
@@ -72,14 +72,14 @@ describe("problemasTrazado", () => {
   it("tocar otro cable en un codo o extremo se bloquea", () => {
     const hoja = hojaCon([], [cable("w1", libre(0, 5), libre(10, 5)), cable("w2", libre(20, 0), libre(20, 5))]);
     // Extremo libre del nuevo sobre el interior de w1.
-    expect(mensajes(hoja, { desde: libre(3, 0), hasta: libre(3, 5), puntos: [3, 0, 3, 5] })).toEqual(["El cable tocaría w1 sin conectarse."]);
+    expect(mensajes(hoja, { desde: libre(3, 0), hasta: libre(3, 5), puntos: [3, 0, 3, 5] })).toEqual(["El cable tocaría otro cable sin conectarse."]);
     // Codo del nuevo sobre el interior de w1: (2, 5) es esquina del nuevo.
     expect(mensajes(hoja, { desde: libre(2, 0), hasta: libre(-3, 8), puntos: [2, 0, 2, 5, -3, 5] })).toContain(
-      "El cable se encimaría con w1.",
+      "El cable se encimaría con otro cable.",
     );
     // Pasar por el extremo suelto de w2.
     expect(mensajes(hoja, { desde: libre(17, 5), hasta: libre(23, 5), puntos: [17, 5, 23, 5] })).toEqual([
-      "El cable pasaría por el extremo suelto de w2.",
+      "El cable pasaría por el extremo suelto de otro cable.",
     ]);
   });
 

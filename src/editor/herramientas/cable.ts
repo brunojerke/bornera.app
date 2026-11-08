@@ -126,7 +126,7 @@ function libre(x: number, y: number): Extremo {
 }
 
 function nombreBorne(b: BorneHoja): string {
-  return `${b.etiqueta || b.comp} · ${b.borne}`;
+  return `${b.nombre} · ${b.borne}`;
 }
 
 export class HerramientaCable implements Herramienta {
@@ -351,9 +351,9 @@ export class HerramientaCable implements Herramienta {
 
   /** Por qué no se puede empezar en `obj` (vacío si se puede). */
   private problemasInicio(obj: Objetivo): Conflicto[] {
-    if (obj.tipo === "bloqueado") return [{ mensaje: obj.mensaje, x: obj.x, y: obj.y }];
+    if (obj.tipo === "bloqueado") return [{ mensaje: obj.mensaje, x: obj.x, y: obj.y, clave: `objetivo|${obj.mensaje}` }];
     if (obj.tipo === "borne" && salidasLibres(this.entorno.consulta, obj.x, obj.y, obj.borne.direccion).length === 0) {
-      return [{ mensaje: MENSAJE_SIN_SALIDAS, x: obj.x, y: obj.y }];
+      return [{ mensaje: MENSAJE_SIN_SALIDAS, x: obj.x, y: obj.y, clave: "objetivo|sinSalidas" }];
     }
     return [];
   }
@@ -373,7 +373,7 @@ export class HerramientaCable implements Herramienta {
   private calcular(obj: Objetivo): Calculo {
     const t = this.tramo!;
     const fijo = this.puntosFijados();
-    const problema = (mensaje: string): Calculo => ({ datos: null, ruta: null, puntos: fijo, problemas: [{ mensaje, x: obj.x, y: obj.y }] });
+    const problema = (mensaje: string): Calculo => ({ datos: null, ruta: null, puntos: fijo, problemas: [{ mensaje, x: obj.x, y: obj.y, clave: `objetivo|${mensaje}` }] });
     if (obj.tipo === "bloqueado") return problema(obj.mensaje);
     const mismoBorne =
       obj.tipo === "borne" && t.desde.tipo === "borne" && t.desde.comp === obj.borne.comp && t.desde.borne === obj.borne.borne;
@@ -472,13 +472,13 @@ export class HerramientaCable implements Herramienta {
 
   private pistaInicio(obj: Objetivo): string {
     if (obj.tipo === "borne") return `Empezar en ${nombreBorne(obj.borne)}`;
-    if (obj.tipo === "cable") return `Empezar con una derivación (T) sobre ${obj.cable}`;
+    if (obj.tipo === "cable") return "Empezar con una derivación (T) sobre un cable";
     return "Empezar con un extremo libre";
   }
 
   private pistaTramo(obj: Objetivo, terminaLibre: boolean): string {
     if (obj.tipo === "borne") return `Conecta con ${nombreBorne(obj.borne)}`;
-    if (obj.tipo === "cable") return `Derivación (T) sobre ${obj.cable}`;
+    if (obj.tipo === "cable") return "Derivación (T) sobre un cable";
     if (terminaLibre) return "Extremo libre: clic para terminar acá";
     return "Clic fija un codo · otro clic en el mismo punto termina con un extremo libre";
   }
