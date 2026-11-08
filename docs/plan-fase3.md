@@ -16,6 +16,7 @@ Estado del código hoy:
 - Hay 5 símbolos. Para la marcha-parada falta una fuente (L, N).
 
 Regla para todas las tareas: una tarea por sesión, primero el plan y después el código. Al terminar: `npm test`, `npm run check`, commit y una línea en Bornera.md.
+Desde T8 (2026-11-08), cada tarea con algo visible en la app suma su prueba `tests/humo/tNN-*.mjs` y al cerrar se corre `npm run humo` entero.
 
 Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fase 4 queda para el autoguardado, las migraciones y los circuitos de referencia.
 

@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "node tests/bench/correr.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "humo": "node tests/humo/correr.mjs"
   },
   "license": "GPL-3.0-only",
   "dependencies": {
