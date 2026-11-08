@@ -24,12 +24,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+        # Un tag con "-" (v0.1.3-alpha.1) es una versión de prueba: prerelease.
         run: |
+          if [[ "$TAG" == *-* ]]; then prerelease=true; else prerelease=false; fi
           id=$(gh api "repos/${{ github.repository }}/releases" \
             -f tag_name="$TAG" \
             -f name="Bornera $TAG" \
             -f body="Instaladores de Bornera $TAG para Linux y Windows." \
             -F draft=true \
+            -F prerelease="$prerelease" \
             --jq .id)
           echo "release_id=$id" >> "$GITHUB_OUTPUT"
 

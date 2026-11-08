@@ -1,6 +1,6 @@
 [package]
 name = "bornera"
-version = "0.1.2"
+version = "0.1.3-alpha.1"
 description = "Editor y simulador de automatismos eléctricos"
 authors = ["Bruno Jerke"]
 license = "GPL-3.0-only"
