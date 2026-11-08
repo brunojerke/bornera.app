@@ -10,7 +10,9 @@
 // Mientras se arrastran (T9), los componentes se ocultan de la capa estática:
 // siguen en el índice, para elegirlos y resaltarlos, pero `dibujar` no los
 // dibuja (los dibuja la capa dinámica con `dibujarDesplazados`). Cambiar o
-// quitar un oculto no afecta ninguna caja: la estática no lo muestra.
+// quitar un oculto no afecta ninguna caja: la estática no lo muestra. Con
+// los cables pasa lo mismo (T14a): mientras se arrastra, los cables que se
+// pueden acomodar se ocultan y los dibuja la capa dinámica.
 //
 // El recorte por vista usa un índice espacial (indiceEspacial.ts) en lugar de
 // recorrer todos los componentes. El mismo índice sirve para elegir con el
@@ -202,14 +204,17 @@ class Cables {
   private readonly libres: number[] = [];
   readonly indice = new IndiceEspacial();
   readonly visibles: number[] = [];
+  /** Lugares que la capa estática no dibuja (se arrastran, T14a). */
+  readonly ocultos = new Set<number>();
 
   get cantidad(): number {
     return this.lugarDe.size;
   }
 
-  /** Agrega o cambia; devuelve las cajas a rehacer (las viejas y las nuevas). */
+  /** Agrega o cambia; devuelve las cajas a rehacer (las viejas y las nuevas; ninguna si está oculto). */
   poner(id: string, c: CableEscena): Caja[] {
     let n = this.lugarDe.get(id);
+    const oculto = n !== undefined && this.ocultos.has(n);
     const viejas = n === undefined ? [] : this.cajas[n]!;
     if (n === undefined) {
       n = this.libres.pop() ?? this.lugares.length;
@@ -221,14 +226,14 @@ class Cables {
     this.cajas[n] = nuevas;
     this.formas[n] = formaCable(c);
     this.indice.insertar(n, cajaCable(nuevas));
-    return [...viejas, ...nuevas];
+    return oculto ? [] : [...viejas, ...nuevas];
   }
 
-  /** Quita; devuelve las cajas que ocupaba (vacío si no estaba). */
+  /** Quita; devuelve las cajas que ocupaba (vacío si no estaba o estaba oculto). */
   quitar(id: string): Caja[] {
     const n = this.lugarDe.get(id);
     if (n === undefined) return [];
-    const k = this.cajas[n]!;
+    const k = this.ocultos.delete(n) ? [] : this.cajas[n]!;
     this.indice.quitar(n);
     this.lugares[n] = null;
     this.cajas[n] = null;
@@ -258,6 +263,11 @@ class Cables {
     if (this.lugarDe.size === 0) return;
     const v = info.visible;
     const visibles = this.indice.enCaja(v, this.visibles);
+    if (this.ocultos.size > 0) {
+      let j = 0;
+      for (const lugar of visibles) if (!this.ocultos.has(lugar)) visibles[j++] = lugar;
+      visibles.length = j;
+    }
     if (visibles.length === 0) return;
     let n = 0;
     for (const lugar of visibles) n = anotarTramos(this.lugares[lugar]!, v, tramos, n);
@@ -361,6 +371,30 @@ export class EscenaEditable implements Contenido {
     const cajas = this.cables.poner(id, c);
     this.cajaTotal = undefined;
     return cajas;
+  }
+
+  /**
+   * Saca el cable de la capa estática (sigue en el índice: se elige y se
+   * consulta). Devuelve las cajas a rehacer; vacío si no está o ya estaba oculto.
+   */
+  ocultarCable(id: string): readonly Caja[] {
+    const n = this.cables.lugarDe.get(id);
+    if (n === undefined || this.cables.ocultos.has(n)) return [];
+    this.cables.ocultos.add(n);
+    return this.cables.cajas[n]!;
+  }
+
+  /** Lo vuelve a la capa estática, como esté ahora. Devuelve las cajas a rehacer; vacío si no estaba oculto. */
+  mostrarCable(id: string): readonly Caja[] {
+    const n = this.cables.lugarDe.get(id);
+    if (n === undefined || !this.cables.ocultos.delete(n)) return [];
+    return this.cables.cajas[n]!;
+  }
+
+  /** True si la capa estática no dibuja ese cable. */
+  cableOculto(id: string): boolean {
+    const n = this.cables.lugarDe.get(id);
+    return n !== undefined && this.cables.ocultos.has(n);
   }
 
   /** Quita un cable. Devuelve las cajas de los tramos que ocupaba (vacío si no estaba). */

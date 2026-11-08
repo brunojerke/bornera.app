@@ -47,7 +47,7 @@ describe("documentoBancoCables", () => {
     const cercanos = [...comps].sort((a, b) => (a.x - cx) ** 2 + (a.y - cy) ** 2 - ((b.x - cx) ** 2 + (b.y - cy) ** 2));
     const libres = cercanos.slice(0, SIN_CABLES_BANCO / 2).map((c) => c.id);
     expect(libres.filter((id) => cableados.has(id))).toEqual([]);
-    expect(editor.bloqueo("mover", libres)).toBeNull();
+    expect(editor.tieneCables(libres)).toBe(false);
     expect(editor.escena.cantidadCables).toBe(3000);
   });
 });

@@ -8,6 +8,7 @@ import type { Renderer } from "../render/renderer";
 import { cajaDibujo } from "../render/simbolo";
 import type { EventoHerramienta } from "./herramientas/tipos";
 import {
+  AVISO_ARRASTRE_CANCELADO,
   documentoNuevo,
   Editor,
   esCuadroDeMuestra,
@@ -522,8 +523,10 @@ describe("Editor: mover arrastrando", () => {
     expect(editor.escena.obtener(b.id)).toMatchObject({ x: 300, y: 0 });
   });
 
-  it("si algo arrastrado se borra en el medio, se mueve el resto y nada queda oculto", () => {
+  it("si el documento cambia en medio del arrastre (algo se borra), el arrastre se cancela y nada queda oculto", () => {
     const { editor } = armar();
+    const avisos: string[] = [];
+    editor.alAvisar = (t) => avisos.push(t);
     const a = colocar(editor.documento, datos(0, 0));
     const b = colocar(editor.documento, datos(10, 0, "K2"));
     editor.agrupar([a, b]);
@@ -531,12 +534,14 @@ describe("Editor: mover arrastrando", () => {
     editor.aplicar(h(editor).presionar(ev(0, 0)));
     editor.aplicar(h(editor).mover(ev(3, 0)));
     editor.ejecutar(new Borrar([b.id]));
+    expect(editor.arrastrando).toBe(false);
+    expect(avisos).toEqual([AVISO_ARRASTRE_CANCELADO]);
     editor.aplicar(h(editor).soltar(ev(3, 0)));
-    expect(editor.escena.obtener(a.id)).toMatchObject({ x: 3, y: 0 });
+    expect(editor.escena.obtener(a.id)).toMatchObject({ x: 0, y: 0 });
     expect(editor.escena.oculto(a.id)).toBe(false);
-    editor.deshacer(); // el Mover
-    editor.deshacer(); // el Borrar
+    editor.deshacer(); // el Borrar (no hubo Mover)
     expect(editor.escena.oculto(b.id)).toBe(false);
+    expect(editor.historial.puedeDeshacer).toBe(true); // queda el Colocar
   });
 
   it("la capa dinámica dibuja lo arrastrado corrido, con su resaltado", () => {

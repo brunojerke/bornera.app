@@ -146,9 +146,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     if (!arrastrando && editando()) editor.aplicar(editor.activa.salir());
   };
 
-  // Con una herramienta activa, el botón derecho la termina: sin menú del navegador.
+  // Con una herramienta activa, el botón derecho la termina; con el izquierdo
+  // apretado, corta el gesto (un arrastre vuelve a su lugar): sin menú del navegador.
   const alMenu = (e: MouseEvent) => {
-    if (editor.herramienta) e.preventDefault();
+    if (editor.herramienta || (e.buttons & 1) !== 0 || editor.enGesto) e.preventDefault();
   };
 
   // Esc: termina Colocar o cancela el cable en curso (sin tramo, termina la

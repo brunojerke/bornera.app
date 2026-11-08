@@ -38,9 +38,24 @@
 // Cables (T12): la escena dibuja cada cable del documento con su recorrido
 // resuelto (`recorridoCable`). La selección puede tener cables y
 // componentes; Supr borra todo junto (`Borrar` suelta lo que colgaba de lo
-// borrado). Hasta que los extremos sigan al borne (T14a), girar, espejar y
-// arrastrar no hacen nada si hay un cable seleccionado o un componente
-// cableado: no hay comando ni paso, y se avisa en la barra de estado.
+// borrado).
+//
+// Cables que siguen (T14a): girar, espejar y arrastrar usan
+// `planearTransformacion` con el índice y la consulta del editor. Si el plan
+// se rechaza (una conexión aparente nueva, un ciclo de apoyos, nada que
+// mover), no hay comando ni paso: se avisa, y con R y M se marcan los
+// conflictos con una ✕ hasta el próximo cambio. Al empezar a arrastrar, los
+// componentes y toda la zona de cables que se pueden acomodar salen de la
+// capa estática (una invalidación por caja); en cada punto de grilla se
+// planea con la preparación hecha al empezar y la capa dinámica dibuja el
+// resultado (a rayas lo inválido, con la ✕ y el motivo en la pista). Al
+// soltar va un `Mover` con ese mismo plan, si el documento no cambió. Si el
+// documento cambia en medio del arrastre (por otra vía), el arrastre se
+// cancela. Con más de TOPE_CABLES_PREVIA cables que se acomodan, la previa
+// dibuja gomas y el plan se calcula recién al soltar.
+//
+// Colocar usa la misma regla (`problemasComponente`): una previa que crearía
+// una conexión aparente se ve en aviso y el clic no coloca.
 //
 // Herramienta cable (T13): W la activa y vacía la selección. Mientras hay un
 // tramo en curso, Ctrl+Z (y el botón Deshacer, y Retroceso) quitan el último
@@ -53,7 +68,18 @@
 
 import { hayCablesEn, indexarHoja, recorridoCable, type IndiceHoja } from "../core/model/cables";
 import { Borrar, CambiarEtiqueta, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
-import type { EntornoPlan } from "../core/model/seguir";
+import {
+  enMinuscula,
+  MENSAJE_NO_SE_ACOMODA,
+  planearTransformacion,
+  prefijoRechazo,
+  prepararTransformacion,
+  type EntornoPlan,
+  type Operacion,
+  type Preparacion,
+  type ResultadoPlan,
+} from "../core/model/seguir";
+import { geometriaComponente, problemasComponente, type Conflicto } from "../core/model/trazado";
 import {
   crearDocumento,
   type Cable,
@@ -68,16 +94,16 @@ import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
 import { nivelDetalle } from "../render/detalle";
 import { grosorLinea, type ComponenteEscena } from "../render/escena";
-import { EscenaEditable, type CableEscena } from "../render/escenaEditable";
+import { anotarTramos, EscenaEditable, type CableEscena } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
-import { dibujarCableEnCurso, dibujarMarcasCable } from "../render/cableEnCurso";
+import { dibujarCablesArrastre, dibujarCableEnCurso, dibujarCruces, dibujarMarcasCable } from "../render/cableEnCurso";
 import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
 import type { Accion } from "./atajos";
 import { BornesConCable } from "./bornesConCable";
 import { ConsultaEscena } from "./consultaEscena";
 import { HerramientaCable } from "./herramientas/cable";
-import { HerramientaColocar, type ModoColocar } from "./herramientas/colocar";
+import { HerramientaColocar, type ModoColocar, type Previa } from "./herramientas/colocar";
 import { HerramientaSeleccionar } from "./herramientas/seleccionar";
 import type { Herramienta, Resultado } from "./herramientas/tipos";
 
@@ -151,15 +177,50 @@ export const SIN_SELECCION: ResumenSeleccion = Object.freeze({
   varios: null,
 });
 
-/** Lo que hace cada acción que se bloquea con cables, para el aviso. */
-export type Transformacion = "mover" | "girar" | "espejar";
-
 /**
- * Aviso de una transformación bloqueada hasta que los extremos sigan al
- * borne. Es para el usuario: no menciona tareas.
+ * Con más cables que se acomodan (no rígidos) que esto, la previa del
+ * arrastre no planea en cada punto de grilla: dibuja gomas rectas y el plan
+ * se calcula al soltar. Valor inicial; se fija con la medición del banco en
+ * la netbook (T14a).
  */
-export function avisoBloqueo(t: Transformacion, hayCableSeleccionado: boolean): string {
-  return hayCableSeleccionado ? `Todavía no se pueden ${t} cables.` : `Todavía no se pueden ${t} componentes con cables.`;
+export const TOPE_CABLES_PREVIA = 150;
+
+/** Aviso cuando el documento cambia por otra vía en medio de un arrastre. */
+export const AVISO_ARRASTRE_CANCELADO = "El documento cambió: se canceló el arrastre.";
+
+/** Un arrastre de la selección en curso, del lado del editor. */
+interface ArrastreEditor {
+  /** Lo que se arrastra (los componentes, ocultos en la capa estática). */
+  ids: ReadonlySet<string>;
+  /** Preparación del plan (null si la hoja tiene un cable que no se puede resolver). */
+  prep: Preparacion | null;
+  /** `cambios` al empezar: el plan vale mientras el documento no cambie. */
+  cambios: number;
+  /** Zona de cables, ocultos en la capa estática mientras dura el arrastre. */
+  cables: readonly string[];
+  /** Último plan, del punto de grilla (dx, dy). */
+  plan: PlanArrastre | null;
+}
+
+/** El plan de un punto de grilla del arrastre, listo para dibujar. */
+interface PlanArrastre {
+  dx: number;
+  dy: number;
+  r: ResultadoPlan;
+  /** Recorrido nuevo de cada cable que cambia. */
+  cambiados: Map<string, CableEscena>;
+  /** Cables que aparecen en algún conflicto (van a rayas). */
+  invalidos: Set<string>;
+}
+
+/** Un plan que no se pudo hacer: solo el rechazo. */
+type PlanFallido = { plan: null; rechazo: { motivo: string; conflictos: Conflicto[] } };
+
+/** Ids de cables que aparecen en los conflictos ("cable:w3" en la clave). */
+function cablesEnConflicto(conflictos: readonly Conflicto[]): Set<string> {
+  const ids = new Set<string>();
+  for (const c of conflictos) for (const parte of c.clave.split("|")) if (parte.startsWith("cable:")) ids.add(parte.slice(6));
+  return ids;
 }
 
 /**
@@ -238,8 +299,16 @@ export class Editor {
   /** La herramienta que está cuando no hay otra. */
   readonly seleccionar: HerramientaSeleccionar;
   private _seleccion: ReadonlySet<string> = new Set();
-  /** Lo que se está arrastrando (oculto en la capa estática); null si no hay arrastre. */
-  private arrastrados: ReadonlySet<string> | null = null;
+  /** El arrastre de la selección en curso; null si no hay. */
+  private arrastre: ArrastreEditor | null = null;
+  /** Preparación hecha al ver si se puede arrastrar; se usa al empezar si nada cambió. */
+  private preparado: { ids: ReadonlySet<string>; prep: Preparacion; cambios: number } | null = null;
+  /** Se está ejecutando el `Mover` del arrastre (no es un cambio "por otra vía"). */
+  private soltando = false;
+  /** ✕ del último R o M rechazado; se borran con el próximo cambio. */
+  private crucesRechazo: readonly { x: number; y: number }[] = [];
+  /** Tramos de los cables del arrastre en el cuadro en curso (x0, y0, x1, y1 seguidos): se reusa. */
+  private readonly tramosArrastre: number[] = [];
   /** Diagnóstico del arrastre (menú de desarrollo). */
   diagnostico: DiagnosticoArrastre = { modo: "auto", sonda: false };
   /** Cuadros dibujados del arrastre en curso (para elegir los de muestra). */
@@ -269,8 +338,8 @@ export class Editor {
     this.seleccionar = new HerramientaSeleccionar(
       this.escena,
       () => this._seleccion,
-      (ids) => this.bloqueo("mover", ids),
-      (ids, dx, dy) => new Mover(ids, dx, dy, { entorno: this.entornoPlan }),
+      (ids) => this.motivoArrastre(ids),
+      (ids, dx, dy) => this.comandoArrastre(ids, dx, dy),
     );
   }
 
@@ -306,9 +375,14 @@ export class Editor {
     return this._cambios;
   }
 
-  /** Pista de la herramienta para la barra de estado; null sin herramienta cable. */
+  /**
+   * Pista para la barra de estado: la de la herramienta cable, por qué no se
+   * puede colocar o soltar donde está el cursor, o cuántos cables se
+   * acomodan al soltar. Null si no hay nada que decir: se limpia sola al
+   * volver a una posición que vale.
+   */
   get pista(): string | null {
-    return this.cable?.pista ?? null;
+    return this.cable?.pista ?? this.colocar?.pista ?? this.pistaArrastre();
   }
 
   /** Ids seleccionados. */
@@ -318,7 +392,7 @@ export class Editor {
 
   /** Hay un arrastre de la selección en curso (para no deshacer ni rotar en el medio). */
   get arrastrando(): boolean {
-    return this.arrastrados !== null;
+    return this.arrastre !== null;
   }
 
   /**
@@ -330,6 +404,7 @@ export class Editor {
     for (const id of ids) if (this.escena.existe(id)) nueva.add(id);
     const actual = this._seleccion;
     if (nueva.size === actual.size && [...nueva].every((id) => actual.has(id))) return;
+    this.limpiarCruces();
     this._seleccion = nueva;
     this.alCambiarSeleccion?.();
     this.vista?.invalidar();
@@ -417,7 +492,7 @@ export class Editor {
    * o un arrastre desde la paleta. F5 no cambia de modo en el medio.
    */
   get enGesto(): boolean {
-    return this.seleccionar.enGesto || this.arrastrados !== null || this.colocar?.modo === "arrastre" || (this.cable?.enGesto ?? false);
+    return this.seleccionar.enGesto || this.arrastre !== null || this.colocar?.modo === "arrastre" || (this.cable?.enGesto ?? false);
   }
 
   /**
@@ -481,6 +556,7 @@ export class Editor {
    * comentario del principio). Devuelve true si hizo algo.
    */
   accion(a: Accion): boolean {
+    this.limpiarCruces();
     if (a === "cable") return this.alternarCable();
     const w = this.cable;
     if (w) {
@@ -524,42 +600,125 @@ export class Editor {
     }
     const ids = this.idsSeleccionados();
     if (ids.length === 0) return false;
-    if (a !== "borrar") {
-      const aviso = this.bloqueo(a === "espejar" ? "espejar" : "girar", ids);
-      if (aviso) {
-        this.alAvisar?.(aviso);
-        return false;
-      }
+    if (a === "borrar") {
+      this.borrarSeleccion(ids);
+      return true;
     }
-    switch (a) {
-      case "rotar":
-        this.ejecutar(new Rotar(ids, 90, { entorno: this.entornoPlan }));
-        break;
-      case "rotarAntihorario":
-        this.ejecutar(new Rotar(ids, -90, { entorno: this.entornoPlan }));
-        break;
-      case "espejar":
-        this.ejecutar(new Espejar(ids, { entorno: this.entornoPlan }));
-        break;
-      case "borrar":
-        this.borrarSeleccion(ids);
-        break;
+    const op: Operacion = a === "espejar" ? { tipo: "espejar" } : { tipo: "rotar", sentido: a === "rotar" ? 90 : -90 };
+    const r = this.planear(ids, op);
+    if (r.rechazo || !r.plan) {
+      this.alAvisar?.(r.rechazo!.motivo);
+      this.crucesRechazo = r.rechazo!.conflictos;
+      if (this.crucesRechazo.length > 0) this.vista?.invalidar();
+      return false;
     }
+    const opciones = { entorno: this.entornoPlan, plan: r.plan };
+    this.ejecutar(op.tipo === "rotar" ? new Rotar(ids, op.sentido, opciones) : new Espejar(ids, opciones));
     return true;
   }
 
   /**
-   * Aviso si `ids` no se pueden mover, girar o espejar todavía (hay un cable,
-   * o un componente cableado); null si se puede. Una pasada por los cables.
+   * El plan de girar, espejar o mover `ids` con el índice y la consulta del
+   * editor. Si la hoja tiene un cable que no se puede resolver, un rechazo.
    */
-  bloqueo(t: Transformacion, ids: Iterable<string>): string | null {
-    const comps = new Set<string>();
-    for (const id of ids) {
-      if (this.escena.esCable(id)) return avisoBloqueo(t, true);
-      comps.add(id);
-    }
+  private planear(ids: readonly string[], op: Operacion): ResultadoPlan | PlanFallido {
     const hoja = this.documento.hojas[this.hoja];
-    return hoja && hayCablesEn(hoja, comps) ? avisoBloqueo(t, false) : null;
+    try {
+      if (hoja) return planearTransformacion(hoja, ids, op, this.entornoPlan());
+    } catch {
+      // un cable que apunta a algo que no está
+    }
+    return { plan: null, rechazo: { motivo: `${prefijoRechazo(op)}: ${enMinuscula(MENSAJE_NO_SE_ACOMODA)}`, conflictos: [] } };
+  }
+
+  /** True si algún componente de `ids` tiene un cable en un borne. Una pasada por los cables. */
+  tieneCables(ids: Iterable<string>): boolean {
+    const hoja = this.documento.hojas[this.hoja];
+    return hoja !== undefined && hayCablesEn(hoja, new Set(ids));
+  }
+
+  /** Borra las ✕ de un R o M rechazado, si había. */
+  private limpiarCruces(): void {
+    if (this.crucesRechazo.length === 0) return;
+    this.crucesRechazo = [];
+    this.vista?.invalidar();
+  }
+
+  /** Prepara el plan de mover `ids`; null si la hoja tiene un cable que no se puede resolver. */
+  private preparar(ids: Iterable<string>): Preparacion | null {
+    const hoja = this.documento.hojas[this.hoja];
+    if (!hoja) return null;
+    try {
+      return prepararTransformacion(hoja, ids, this.entornoPlan());
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Aviso si la selección `ids` no se puede arrastrar (no movería nada);
+   * null si se puede. Deja hecha la preparación para el arrastre.
+   */
+  private motivoArrastre(ids: ReadonlySet<string>): string | null {
+    const prep = this.preparar(ids);
+    if (!prep) return `${prefijoRechazo({ tipo: "mover", dx: 0, dy: 0 })}: ${enMinuscula(MENSAJE_NO_SE_ACOMODA)}`;
+    this.preparado = { ids, prep, cambios: this._cambios };
+    return prep.motivoNada;
+  }
+
+  /**
+   * El comando del arrastre al soltar en (dx, dy), con el plan de la previa si
+   * el documento no cambió (si cambió, se planea de nuevo). Null si el plan se
+   * rechaza: se avisa y no hay paso.
+   */
+  private comandoArrastre(ids: string[], dx: number, dy: number): Comando | null {
+    const a = this.arrastre;
+    const op: Operacion = { tipo: "mover", dx, dy };
+    const mismos =
+      a !== null && a.prep !== null && a.cambios === this._cambios && a.ids.size === ids.length && ids.every((id) => a.ids.has(id));
+    let r: ResultadoPlan | PlanFallido;
+    if (mismos && a.plan && a.plan.dx === dx && a.plan.dy === dy) r = a.plan.r;
+    else if (mismos) r = a.prep!.planear(op);
+    else r = this.planear(ids, op);
+    if (r.rechazo || !r.plan) {
+      this.alAvisar?.(r.rechazo!.motivo);
+      return null;
+    }
+    return new Mover(ids, dx, dy, { entorno: this.entornoPlan, plan: r.plan });
+  }
+
+  /** Con muchos cables que se acomodan, la previa no planea en cada punto (modo reducido). */
+  private reducido(a: ArrastreEditor): boolean {
+    return (a.prep?.rehechos ?? 0) > TOPE_CABLES_PREVIA;
+  }
+
+  /**
+   * El plan del punto de grilla actual del arrastre (con caché); null sin
+   * arrastre, sin moverse, en modo reducido o si el documento cambió.
+   */
+  private planArrastre(): PlanArrastre | null {
+    const a = this.arrastre;
+    const g = this.seleccionar.arrastre;
+    if (!a || !g || !a.prep || (g.dx === 0 && g.dy === 0) || this.reducido(a) || a.cambios !== this._cambios) return null;
+    if (a.plan && a.plan.dx === g.dx && a.plan.dy === g.dy) return a.plan;
+    const r = a.prep.planear({ tipo: "mover", dx: g.dx, dy: g.dy });
+    const cambiados = new Map<string, CableEscena>();
+    for (const c of r.plan.cables) {
+      const libres: number[] = [];
+      if (c.desde.tipo === "libre") libres.push(c.desde.x, c.desde.y);
+      if (c.hasta.tipo === "libre") libres.push(c.hasta.x, c.hasta.y);
+      cambiados.set(c.id, { puntos: c.puntos, libres });
+    }
+    a.plan = { dx: g.dx, dy: g.dy, r, cambiados, invalidos: r.rechazo ? cablesEnConflicto(r.rechazo.conflictos) : new Set() };
+    return a.plan;
+  }
+
+  /** Pista del arrastre: por qué no se puede soltar acá, o cuántos cables se acomodan al soltar. */
+  private pistaArrastre(): string | null {
+    const a = this.arrastre;
+    if (!a || !this.seleccionar.arrastre) return null;
+    if (this.reducido(a)) return `${a.prep!.rehechos} cables se acomodan al soltar.`;
+    return this.planArrastre()?.r.rechazo?.motivo ?? null;
   }
 
   /**
@@ -592,9 +751,23 @@ export class Editor {
   /** Empieza a colocar un símbolo de la paleta (cancela la herramienta cable). Sin vista no hace nada. */
   iniciarColocar(def: DefinicionSimbolo, modo: ModoColocar): HerramientaColocar | null {
     if (!this.vista) return null;
-    const h = new HerramientaColocar(def, modo, this.documento, this.hoja);
+    const h = new HerramientaColocar(def, modo, this.documento, this.hoja, (p) => this.revisarColocar(p));
     this.ponerHerramienta(h);
     return h;
+  }
+
+  /** Conexiones aparentes que crearía colocar la previa `p` (la misma regla que al mover). */
+  private revisarColocar(p: Omit<Previa, "conflictos">): Conflicto[] {
+    const g = geometriaComponente({
+      id: "nuevo",
+      tipo: p.def.tipo,
+      x: p.x,
+      y: p.y,
+      rot: p.rotacion,
+      espejado: p.espejado,
+      etiqueta: p.def.etiquetaInicial ?? "",
+    });
+    return g ? problemasComponente(g, this.consulta) : [];
   }
 
   /**
@@ -603,7 +776,7 @@ export class Editor {
    * un gesto, no hace nada.
    */
   iniciarCable(): HerramientaCable | null {
-    if (!this.vista || this.seleccionar.enGesto || this.arrastrados || this.colocar?.modo === "arrastre") return null;
+    if (!this.vista || this.seleccionar.enGesto || this.arrastre || this.colocar?.modo === "arrastre") return null;
     this.seleccionarIds([]);
     const h = new HerramientaCable({
       documento: this.documento,
@@ -650,7 +823,7 @@ export class Editor {
    */
   cancelarHerramienta(): void {
     if (this.herramienta) this.aplicar(this.herramienta.terminar());
-    if (this.arrastrados) this.aplicar(this.seleccionar.cancelar());
+    if (this.arrastre) this.aplicar(this.seleccionar.cancelar());
   }
 
   /** Esc con una herramienta: Colocar termina; Cable cancela el tramo (o termina si no hay). */
@@ -662,6 +835,11 @@ export class Editor {
   refrescarHerramienta(): void {
     if (this.cable?.refrescar()) {
       this.avisarTramo(); // un cambio del documento pudo cancelar el tramo
+      this.avisarPista();
+      this.vista?.invalidar();
+    }
+    // Colocando en modo clic, deshacer o rehacer pueden cambiar si la previa vale.
+    if (this.colocar?.revisarDeNuevo()) {
       this.avisarPista();
       this.vista?.invalidar();
     }
@@ -693,11 +871,14 @@ export class Editor {
   aplicar(r: Resultado): void {
     if (r.aviso) this.alAvisar?.(r.aviso);
     if (r.arrastre?.fase === "empezar") this.empezarArrastre(r.arrastre.ids);
+    const termina = r.arrastre?.fase === "terminar";
+    this.soltando = termina;
     try {
       if (r.comando) this.ejecutar(r.comando);
     } finally {
+      this.soltando = false;
       // Aunque el comando falle, lo arrastrado no puede quedar oculto.
-      if (r.arrastre?.fase === "terminar") this.terminarArrastre();
+      if (termina) this.terminarArrastre();
     }
     if (r.seleccion) this.seleccionarIds(r.seleccion);
     if (r.terminar && this.herramienta) {
@@ -716,26 +897,110 @@ export class Editor {
     return m;
   }
 
-  /** Saca los arrastrados de la capa estática: cada uno invalida su caja. */
+  /**
+   * Saca los arrastrados y toda la zona de cables de la capa estática: cada
+   * uno invalida sus cajas (por tramo, en los cables). Recién al pasar el
+   * umbral: un clic sin movimiento no invalida nada.
+   */
   private empezarArrastre(ids: ReadonlySet<string>): void {
-    if (this.arrastrados) this.terminarArrastre();
-    this.arrastrados = ids;
+    if (this.arrastre) this.terminarArrastre();
+    const p = this.preparado;
+    const prep = p && p.ids === ids && p.cambios === this._cambios ? p.prep : this.preparar(ids);
+    this.preparado = null;
+    this.limpiarCruces();
+    const cables = prep ? [...prep.zona] : [];
+    this.arrastre = { ids, prep, cambios: this._cambios, cables, plan: null };
     this.cuadrosArrastre = 0;
     for (const id of ids) {
       const k = this.escena.ocultar(id);
       if (k) this.vista?.invalidarRegion(k);
     }
+    for (const id of cables) for (const k of this.escena.ocultarCable(id)) this.vista?.invalidarRegion(k);
   }
 
-  /** Vuelve los arrastrados a la capa estática, donde estén ahora: cada uno invalida su caja. */
+  /** Vuelve los arrastrados y su zona de cables a la capa estática, como estén ahora: cada uno invalida sus cajas. */
   private terminarArrastre(): void {
-    const ids = this.arrastrados;
-    this.arrastrados = null;
-    if (!ids) return;
-    for (const id of ids) {
+    const a = this.arrastre;
+    this.arrastre = null;
+    if (!a) return;
+    for (const id of a.ids) {
       const k = this.escena.mostrar(id);
       if (k) this.vista?.invalidarRegion(k);
     }
+    for (const id of a.cables) for (const k of this.escena.mostrarCable(id)) this.vista?.invalidarRegion(k);
+  }
+
+  /**
+   * El documento cambió por otra vía en medio de un arrastre: el plan ya no
+   * vale. Se cancela como con Esc (todo vuelve, sin paso) y se avisa.
+   */
+  private cancelarArrastrePorCambio(): void {
+    this.alAvisar?.(AVISO_ARRASTRE_CANCELADO);
+    this.aplicar(this.seleccionar.cancelar());
+  }
+
+  /**
+   * Los cables de la zona en la capa dinámica: los rígidos corridos (dx, dy),
+   * los que se acomodan con el recorrido del plan (o como estaban), lo
+   * inválido a rayas con la ✕; en modo reducido, gomas.
+   */
+  private dibujarCablesDelArrastre(r: Renderer, info: InfoDinamico, a: ArrastreEditor, dx: number, dy: number, bornes: boolean): void {
+    const prep = a.prep;
+    if (!prep) return;
+    const v = info.visible;
+    const plan = this.planArrastre();
+    const reducido = this.reducido(a);
+    const invalidos: number[][] = [];
+    const gomas: number[] = [];
+    const libres: number[] = [];
+    let n = 0;
+    for (const id of a.cables) {
+      const c = this.escena.obtenerCable(id);
+      if (!c) continue;
+      if (prep.rigidos.has(id)) {
+        if (plan?.invalidos.has(id)) invalidos.push([...(plan.cambiados.get(id)?.puntos ?? [])]);
+        else n = anotarTramos(c, v, this.tramosArrastre, n, dx, dy);
+        if (bornes) for (let i = 0; i + 1 < c.libres.length; i += 2) libres.push(c.libres[i]! + dx, c.libres[i + 1]! + dy);
+        continue;
+      }
+      if (reducido) {
+        n = this.anotarGoma(id, c, v, dx, dy, prep, n, gomas);
+        if (bornes) libres.push(...c.libres);
+        continue;
+      }
+      const k = plan?.cambiados.get(id) ?? c;
+      if (plan?.invalidos.has(id)) invalidos.push([...k.puntos]);
+      else n = anotarTramos(k, v, this.tramosArrastre, n);
+      if (bornes) libres.push(...k.libres);
+    }
+    dibujarCablesArrastre(r, info, {
+      tramos: this.tramosArrastre,
+      cantidad: n,
+      invalidos,
+      gomas,
+      libres,
+      conflictos: plan?.r.rechazo?.conflictos ?? [],
+    });
+  }
+
+  /**
+   * Modo reducido: la parte fija de un cable que se acomoda, como estaba, y
+   * una goma recta desde su último punto fijo hasta cada extremo movido.
+   */
+  private anotarGoma(id: string, c: CableEscena, v: Caja, dx: number, dy: number, prep: Preparacion, n: number, gomas: number[]): number {
+    const w = this.indiceHoja.cables.get(id);
+    if (!w) return n;
+    const mueve = (e: Extremo) => (e.tipo === "borne" && prep.movidos.has(e.comp)) || (e.tipo === "cable" && prep.rigidos.has(e.cable));
+    const p = c.puntos;
+    const m = p.length;
+    const desde = mueve(w.desde);
+    const hasta = mueve(w.hasta);
+    const i0 = desde ? 2 : 0;
+    const i1 = hasta ? m - 2 : m;
+    if (i1 - i0 >= 4) n = anotarTramos({ puntos: p.slice(i0, i1), libres: [] }, v, this.tramosArrastre, n);
+    if (desde) gomas.push(p[2]!, p[3]!, p[0]! + dx, p[1]! + dy);
+    if (hasta) gomas.push(p[m - 4]!, p[m - 3]!, p[m - 2]! + dx, p[m - 1]! + dy);
+    return n;
   }
 
   /**
@@ -744,8 +1009,9 @@ export class Editor {
    * y la vista previa de Colocar. No toca la capa estática.
    */
   readonly dibujarDinamico = (r: Renderer, info: InfoDinamico): void => {
-    const a = this.arrastrados && this.seleccionar.arrastre;
-    if (a) {
+    const ae = this.arrastre;
+    const a = ae && this.seleccionar.arrastre;
+    if (ae && a) {
       const { modo, sonda } = this.diagnostico;
       if (modo === "nada") return; // base: la capa dinámica vacía
       const detalle = nivelDetalle(info.escala);
@@ -753,14 +1019,26 @@ export class Editor {
       if (modo === "sinTextosNiBornes") detalle.bornes = false;
       const limite = modo === "auto" ? LIMITE_ARRASTRE_COMPLETO : modo === "contornos" ? 0 : Infinity;
       const datos = { ...info, detalle };
-      const dibujar = () => this.escena.dibujarDesplazados(r, datos, a.ids, a.dx, a.dy, limite);
+      const dibujar = () => {
+        // Como en la capa estática: primero los cables, después los componentes.
+        this.dibujarCablesDelArrastre(r, info, ae, a.dx, a.dy, detalle.bornes);
+        this.escena.dibujarDesplazados(r, datos, a.ids, a.dx, a.dy, limite);
+      };
       if (sonda && esCuadroDeMuestra(this.cuadrosArrastre)) this.muestras.push(info.medir(dibujar));
       else dibujar();
       this.cuadrosArrastre++;
-      dibujarSeleccion(r, info, this.escena, this._seleccion, a.dx, a.dy);
+      // El resaltado de un cable sigue su recorrido de la previa (los rígidos, corridos).
+      const plan = this.planArrastre();
+      dibujarSeleccion(r, info, this.escena, this._seleccion, a.dx, a.dy, (id) => {
+        const c = this.escena.obtenerCable(id);
+        if (!c) return null;
+        if (ae.prep?.rigidos.has(id)) return { cable: c, dx: a.dx, dy: a.dy };
+        return { cable: plan?.cambiados.get(id) ?? c, dx: 0, dy: 0 };
+      });
     } else if (this._seleccion.size > 0) {
       dibujarSeleccion(r, info, this.escena, this._seleccion);
     }
+    if (this.crucesRechazo.length > 0) dibujarCruces(r, info, this.crucesRechazo);
     const rect = this.seleccionar.rectangulo;
     if (rect) dibujarRectangulo(r, info, rect);
     const w = this.cable;
@@ -777,11 +1055,14 @@ export class Editor {
     if (!p) return;
     // Con la orientación de la herramienta (R, M): la misma que va a tener al colocarse.
     const c = { x: p.x, y: p.y, rotacion: p.rotacion, espejado: p.espejado };
-    const color = info.colores.acento;
+    // Si crearía una conexión aparente, en aviso y con la ✕ (el clic no coloca).
+    const valida = p.conflictos.length === 0;
+    const color = valida ? info.colores.acento : (info.colores.aviso ?? info.colores.borne);
     r.estilo({ trazo: color, relleno: color, grosor: grosorLinea(info.escala) });
     const detalle = nivelDetalle(info.escala);
     dibujarSimbolo(r, p.def, c, { textos: detalle.textos, etiqueta: p.def.etiquetaInicial });
     if (detalle.bornes) dibujarMarcasBornes(r, p.def, c);
+    if (!valida) dibujarCruces(r, info, p.conflictos);
   };
 
   /**
@@ -851,6 +1132,9 @@ export class Editor {
    * componentes lejanos, o deshacer un movimiento largo).
    */
   private reflejar(cambio: Cambio): Cambio {
+    // Un cambio por otra vía en medio de un arrastre: el plan de la previa ya no vale.
+    if (this.arrastre && !this.soltando) this.cancelarArrastrePorCambio();
+    this.limpiarCruces();
     this._cambios++;
     if (cambio.componentes.length === 0 && cambio.cables.length === 0) return this.trasReflejar(cambio);
     // Una pasada por la hoja, no una búsqueda por id.

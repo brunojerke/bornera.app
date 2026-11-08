@@ -6,9 +6,11 @@
 //   haberse movido.
 // - Apretar sobre un elemento y arrastrar: mueve toda la selección, de a
 //   unidades enteras de grilla. Al soltar da un solo `Mover` (un paso de
-//   deshacer); si volvió al punto de partida, nada. Esc lo corta y todo queda
-//   donde estaba. Si la selección no se puede mover (tiene cables, hasta
-//   T14a), no se arrastra: se avisa una vez y el gesto sigue como un clic.
+//   deshacer); si volvió al punto de partida, nada. Esc o el botón derecho lo
+//   cortan y todo queda donde estaba. Si la selección no movería nada (cables
+//   atados a componentes que no se mueven), no se arrastra: se avisa una vez y
+//   el gesto sigue como un clic. Si al soltar el editor rechaza el plan (una
+//   conexión aparente nueva), no hay comando y todo vuelve.
 // - Mayús+clic sobre un elemento: lo suma o lo quita (con Mayús no se arrastra).
 // - Clic en vacío: deselecciona todo (con Mayús, no cambia nada).
 // - Arrastrar desde vacío: rectángulo. De izquierda a derecha elige lo que
@@ -94,8 +96,11 @@ export class HerramientaSeleccionar implements Herramienta {
     private readonly seleccion: () => ReadonlySet<string>,
     /** Aviso si esos ids no se pueden mover; null si se puede. */
     private readonly bloqueo: (ids: ReadonlySet<string>) => string | null = () => null,
-    /** Arma el comando del arrastre (el editor le pasa su índice y su consulta). */
-    private readonly crearMover: (ids: string[], dx: number, dy: number) => Comando = (ids, dx, dy) => new Mover(ids, dx, dy),
+    /**
+     * Arma el comando del arrastre (el editor usa el plan de la previa); null
+     * si no se puede soltar ahí (el editor ya avisó).
+     */
+    private readonly crearMover: (ids: string[], dx: number, dy: number) => Comando | null = (ids, dx, dy) => new Mover(ids, dx, dy),
   ) {}
 
   /** Rectángulo de selección en curso, para dibujarlo; null si no hay. */
@@ -117,6 +122,12 @@ export class HerramientaSeleccionar implements Herramienta {
   }
 
   presionar(ev: EventoHerramienta): Resultado {
+    // El botón derecho en medio de un gesto lo corta, como Esc.
+    if (ev.boton === 2 && this.gesto) {
+      const g = this.gesto;
+      this.gesto = null;
+      return this.descartar(g);
+    }
     if (ev.boton !== 0) return NADA;
     const id = this.elegibles.idEnPunto(ev.x, ev.y, TOLERANCIA_PX / ev.escala);
     const actual = this.seleccion();
@@ -189,7 +200,8 @@ export class HerramientaSeleccionar implements Herramienta {
         const actual = this.seleccion();
         const ids = [...a.ids].filter((id) => actual.has(id));
         if ((dx === 0 && dy === 0) || ids.length === 0) return { redibujar: true, arrastre: TERMINAR };
-        return { comando: this.crearMover(ids, dx, dy), redibujar: true, arrastre: TERMINAR };
+        const comando = this.crearMover(ids, dx, dy);
+        return comando ? { comando, redibujar: true, arrastre: TERMINAR } : { redibujar: true, arrastre: TERMINAR };
       }
       return g.reducir && !g.movio ? this.con(new Set([g.id])) : NADA;
     }

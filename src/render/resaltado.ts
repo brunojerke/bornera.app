@@ -11,7 +11,7 @@
 import type { Caja } from "./camara";
 import type { InfoDinamico } from "./capas";
 import { grosorLinea } from "./escena";
-import { anotarTramos, type EscenaEditable, type ModoRectangulo } from "./escenaEditable";
+import { anotarTramos, type CableEscena, type EscenaEditable, type ModoRectangulo } from "./escenaEditable";
 import type { Renderer } from "./renderer";
 
 /** Separación entre el elemento y su recuadro de selección, en unidades. */
@@ -46,10 +46,17 @@ const recuadros: number[] = [];
 const tramosSeleccion: number[] = [];
 
 /**
+ * Cómo se resalta un cable mientras se arrastra (T14a): su recorrido de la
+ * vista previa y su corrimiento. Null si no es un cable.
+ */
+export type CableResaltado = (id: string) => { cable: CableEscena; dx: number; dy: number } | null;
+
+/**
  * Dibuja el recuadro de cada componente seleccionado visible, todos en un
  * solo trazo, y los tramos visibles de cada cable seleccionado, en otro.
- * Mientras se arrastra, corridos (dx, dy). Devuelve cuántos recuadros y
- * tramos dibujó.
+ * Mientras se arrastra, corridos (dx, dy); los cables, como diga `cableDe`
+ * (un cable que se acomoda no se corre: cambia). Devuelve cuántos recuadros
+ * y tramos dibujó.
  */
 export function dibujarSeleccion(
   r: Renderer,
@@ -58,16 +65,25 @@ export function dibujarSeleccion(
   ids: Iterable<string>,
   dx = 0,
   dy = 0,
+  cableDe?: CableResaltado,
 ): number {
   const v = info.visible;
   const m = MARGEN_RESALTADO;
   let n = 0;
   let t = 0;
   for (const id of ids) {
-    const cable = escena.obtenerCable(id);
-    if (cable) {
-      t = anotarTramos(cable, v, tramosSeleccion, t, dx, dy);
-      continue;
+    if (cableDe) {
+      const c = cableDe(id);
+      if (c) {
+        t = anotarTramos(c.cable, v, tramosSeleccion, t, c.dx, c.dy);
+        continue;
+      }
+    } else {
+      const cable = escena.obtenerCable(id);
+      if (cable) {
+        t = anotarTramos(cable, v, tramosSeleccion, t, dx, dy);
+        continue;
+      }
     }
     const k = escena.contorno(id);
     if (!k) continue;

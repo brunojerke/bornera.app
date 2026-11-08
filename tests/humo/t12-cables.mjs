@@ -135,11 +135,15 @@ export default async function (p, comprobar) {
       (await p.evaluar(`document.querySelector("#prop-etiqueta") === null`)),
   );
 
-  // ── R con un cable: aviso, sin paso ──
+  // ── R con un cable entre componentes que no se mueven: aviso, sin paso (T14a) ──
   const antesR = await pasos();
   await tecla(R);
   await esperar(50);
-  comprobar("R con un cable avisa y no da paso", (await pasos()) === antesR && (await aviso()) === "Todavía no se pueden girar cables.", await aviso());
+  comprobar(
+    "R con un cable solo avisa y no da paso",
+    (await pasos()) === antesR && (await aviso()) === "Ese cable está conectado a componentes que no se mueven: mové los componentes.",
+    await aviso(),
+  );
 
   // ── Supr borra el cable; Ctrl+Z lo devuelve sin restos ──
   await tecla(SUPR);
@@ -149,20 +153,23 @@ export default async function (p, comprobar) {
   d = await distintos("ref");
   comprobar("Ctrl+Z lo devuelve, igual que antes", d === 0, `${d} píxeles distintos`);
 
-  // ── Arrastrar un componente cableado: aviso, sin paso, sin restos ──
+  // ── Arrastrar un componente cableado (T14a): un paso, los cables lo siguen; Ctrl+Z sin restos ──
   await p.esc();
   const antesArr = await pasos();
   const docAntes = await documento();
   await p.arrastrar(await p.punto(-6, 0), await p.punto(-6, 6));
   await esperar(50);
   comprobar(
-    "arrastrar un componente con cables avisa y no lo mueve",
-    (await pasos()) === antesArr && (await documento()) === docAntes && (await aviso()) === "Todavía no se pueden mover componentes con cables.",
+    "arrastrar un componente con cables lo mueve en un paso y la hoja queda válida",
+    (await pasos()) === antesArr + 1 &&
+      (await documento()) !== docAntes &&
+      (await p.evaluar("bornera.cables.validarHoja(bornera.editor.documento.hojas[0]).length")) === 0,
     await aviso(),
   );
   await p.esc();
+  await tecla(Z, CTRL);
   d = await distintos("ref");
-  comprobar("y la pantalla queda igual", d === 0, `${d} píxeles distintos`);
+  comprobar("Ctrl+Z lo devuelve con sus cables y la pantalla queda igual", (await documento()) === docAntes && d === 0, `${d} píxeles distintos`);
 
   // ── Selección mezclada en el panel ──
   await seleccionar([e.K1, e.w1, e.w2]);
@@ -170,7 +177,13 @@ export default async function (p, comprobar) {
   comprobar("el panel cuenta componentes y cables", (await texto(".nombre")) === "1 componente y 2 cables seleccionados", await texto(".nombre"));
   await tecla(["m", "KeyM", 77]);
   await esperar(50);
-  comprobar("M con cables seleccionados avisa y no da paso", (await pasos()) === antesArr && (await aviso()) === "Todavía no se pueden espejar cables.", await aviso());
+  // Espejar K1 (con w1 y w2) sobre su lugar no deja recorrido válido hasta S1: se rechaza, sin ids en el aviso.
+  const avisoM = (await aviso()) ?? "";
+  comprobar(
+    "M con la selección mezclada avisa por qué y no da paso",
+    (await pasos()) === antesArr && avisoM.startsWith("No se puede espejar: ") && !/[wc]\d+/.test(avisoM),
+    avisoM,
+  );
 
   // ── Borrar un componente con dos cables: los suelta; deshacer y rehacer, exactos ──
   await seleccionar([e.K1]);

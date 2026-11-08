@@ -236,7 +236,7 @@ function cercanosAlCentro(c: Camara, e: Escena, n: number): Set<string> {
   const cy = v.y + v.alto / 2;
   const ids = e
     .idsEnCaja(v, "contiene")
-    .filter((id) => !e.esCable(id) && (editorCables?.escena !== e || editorCables.bloqueo("mover", [id]) === null));
+    .filter((id) => !e.esCable(id) && (editorCables?.escena !== e || !editorCables.tieneCables([id])));
   const d = (id: string) => {
     const k = e.obtener(id)!;
     return (k.x - cx) ** 2 + (k.y - cy) ** 2;
@@ -423,7 +423,7 @@ function cableadoDelCentro(e: Escena): string {
   let mejor = Infinity;
   for (const c of ed.documento.hojas[0]!.componentes) {
     const d = (c.x - cx) ** 2 + (c.y - cy) ** 2;
-    if (d < mejor && ed.bloqueo("mover", [c.id]) !== null) {
+    if (d < mejor && ed.tieneCables([c.id])) {
       mejor = d;
       borrado = c.id;
     }
@@ -460,7 +460,7 @@ function empezarCable(c: Camara, e: Escena): void {
     let mejor = Infinity;
     for (const comp of ed.documento.hojas[0]!.componentes) {
       const d = (comp.x - cx) ** 2 + (comp.y - cy) ** 2;
-      if (d >= mejor || ed.bloqueo("mover", [comp.id]) !== null) continue;
+      if (d >= mejor || ed.tieneCables([comp.id])) continue;
       const ce = e.obtener(comp.id)!;
       const b = bornesColocados(ce.def.bornes, ce.x, ce.y, ce)[0];
       if (!b) continue;

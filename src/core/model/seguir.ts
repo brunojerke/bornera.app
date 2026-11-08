@@ -519,6 +519,14 @@ export interface Preparacion {
   readonly zona: ReadonlySet<string>;
   /** Los que se mueven enteros con la transformación. */
   readonly rigidos: ReadonlySet<string>;
+  /** Cuántos de la zona no son rígidos (se acomodan: se rehacen o quedan igual). */
+  readonly rehechos: number;
+  /** Componentes que se transforman. */
+  readonly movidos: ReadonlySet<string>;
+  /** False si la operación no movería nada (cables seleccionados que siguen atados a lo que no se mueve). */
+  readonly mueveAlgo: boolean;
+  /** El aviso si no mueve nada; null si mueve algo. */
+  readonly motivoNada: string | null;
   planear(op: Operacion): ResultadoPlan;
 }
 
@@ -686,7 +694,9 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
     return s;
   };
 
-  return { zona, rigidos, planear };
+  const mueveAlgo = movidos.size > 0 || rigidos.size > 0;
+  const motivoNada = mueveAlgo ? null : seleccionados.size > 1 ? MENSAJE_NADA_SE_MUEVE_VARIOS : MENSAJE_NADA_SE_MUEVE_UNO;
+  return { zona, rigidos, rehechos: resto.length, movidos, mueveAlgo, motivoNada, planear };
 
   function planear(op: Operacion): ResultadoPlan {
     const t = transformacionGrupo(op, op.tipo === "mover" ? null : caja);
@@ -730,10 +740,7 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
       };
     };
 
-    if (movidos.size === 0 && rigidos.size === 0) {
-      const motivo = seleccionados.size > 1 ? MENSAJE_NADA_SE_MUEVE_VARIOS : MENSAJE_NADA_SE_MUEVE_UNO;
-      return resultado([], { motivo, conflictos: [] });
-    }
+    if (motivoNada) return resultado([], { motivo: motivoNada, conflictos: [] });
 
     const quitar = new Set<string>([...movidos, ...zona]);
     const transformados = { ids: new Set<string>([...movidos, ...rigidos]), t };

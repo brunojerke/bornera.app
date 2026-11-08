@@ -33,7 +33,7 @@ describe("HerramientaColocar, modo clic", () => {
     const d = doc();
     const h = new HerramientaColocar(BOBINA, "clic", d);
     h.mover(ev(3.4, -1.6));
-    expect(h.previa).toEqual({ def: BOBINA, x: 3, y: -2, rotacion: 0, espejado: false });
+    expect(h.previa).toEqual({ def: BOBINA, x: 3, y: -2, rotacion: 0, espejado: false, conflictos: [] });
 
     const r = h.presionar(ev(3.4, -1.6));
     expect(r.terminar).toBeFalsy();

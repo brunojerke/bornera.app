@@ -1,17 +1,16 @@
 // El editor con cables (T12): dibujo e invalidación, borrar y deshacer,
-// elegir con el mouse, y los bloqueos de girar, espejar y arrastrar.
+// elegir con el mouse. Girar, espejar y arrastrar con cables (T14a), en
+// arrastreCables.test.ts.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { validarHoja } from "../core/model/cables";
 import { cablear, colocar, type DatosCable } from "../core/model/comandos";
 import type { Componente, Documento, Extremo } from "../core/model/documento";
 import type { Caja } from "../render/camara";
-import type { InfoDibujo } from "../render/escena";
 import { cajasCable, TOPE_TOLERANCIA_CABLE } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
 import { documentoNuevo, Editor, type DestinoVista } from "./editor";
 import { TOLERANCIA_PX } from "./herramientas/seleccionar";
-import type { EventoHerramienta } from "./herramientas/tipos";
 
 class VistaFalsa implements DestinoVista {
   regiones: Caja[] = [];
@@ -68,7 +67,6 @@ function armar(): { editor: Editor; vista: VistaFalsa; avisos: string[]; pasos: 
   return { editor, vista, avisos, pasos: () => historial.hechos.length };
 }
 
-const ev = (x: number, y: number, escala = 20): EventoHerramienta => ({ x, y, boton: 0, botones: 1, mayus: false, ctrl: false, escala });
 
 describe("Editor: cables en la escena", () => {
   it("Cablear dibuja el cable e invalida cada tramo; deshacer invalida lo mismo y lo quita", () => {
@@ -173,136 +171,5 @@ describe("Editor: elegir cables", () => {
     expect(lineas).toHaveLength(1);
     expect(lineas[0]!.args[1]).toBe(4); // 1 tramo de w1 y 3 de w2
     expect(llamadas.filter((l) => l.nombre === "rectangulos")).toHaveLength(1); // c3
-  });
-});
-
-describe("Editor: girar, espejar y arrastrar con cables (bloqueado)", () => {
-  it("R y M con un cable, o con un componente cableado, avisan y no dan paso", () => {
-    const { editor, avisos, pasos } = armar();
-    const antes = copia(editor.documento);
-    const n = pasos();
-    editor.seleccionarIds(["w1"]);
-    expect(editor.accion("rotar")).toBe(false);
-    editor.seleccionarIds(["c3", "w1"]);
-    expect(editor.accion("espejar")).toBe(false);
-    editor.seleccionarIds(["c1"]);
-    expect(editor.accion("rotarAntihorario")).toBe(false);
-    expect(avisos).toEqual([
-      "Todavía no se pueden girar cables.",
-      "Todavía no se pueden espejar cables.",
-      "Todavía no se pueden girar componentes con cables.",
-    ]);
-    expect(pasos()).toBe(n);
-    expect(editor.documento).toEqual(antes);
-  });
-
-  it("un componente sin cables se sigue girando", () => {
-    const { editor, avisos, pasos } = armar();
-    const n = pasos();
-    editor.seleccionarIds(["c3"]);
-    expect(editor.accion("rotar")).toBe(true);
-    expect(pasos()).toBe(n + 1);
-    expect(avisos).toEqual([]);
-  });
-
-  it("arrastrar un componente cableado avisa una vez, no arrastra y no da paso", () => {
-    const { editor, avisos, pasos } = armar();
-    const antes = copia(editor.documento);
-    const n = pasos();
-    editor.seleccionarIds(["c1"]);
-    const h = editor.seleccionar;
-    editor.aplicar(h.presionar(ev(0.5, 0)));
-    editor.aplicar(h.mover(ev(3, 0)));
-    editor.aplicar(h.mover(ev(5, 0)));
-    expect(editor.arrastrando).toBe(false);
-    editor.aplicar(h.soltar(ev(5, 0)));
-    expect(avisos).toEqual(["Todavía no se pueden mover componentes con cables."]);
-    expect(pasos()).toBe(n);
-    expect(editor.documento).toEqual(antes);
-  });
-
-  it("arrastrar con un cable seleccionado tampoco; uno sin cables, sí", () => {
-    const { editor, avisos, pasos } = armar();
-    editor.seleccionarIds(["c3", "w1"]);
-    editor.aplicar(editor.seleccionar.presionar(ev(40, 0)));
-    editor.aplicar(editor.seleccionar.mover(ev(43, 0)));
-    editor.aplicar(editor.seleccionar.soltar(ev(43, 0)));
-    expect(avisos).toEqual(["Todavía no se pueden mover cables."]);
-    const n = pasos();
-    editor.seleccionarIds(["c3"]);
-    editor.aplicar(editor.seleccionar.presionar(ev(40, 0)));
-    editor.aplicar(editor.seleccionar.mover(ev(43, 0)));
-    editor.aplicar(editor.seleccionar.soltar(ev(43, 0)));
-    expect(pasos()).toBe(n + 1);
-    expect(editor.documento.hojas[0]!.componentes[2]).toMatchObject({ id: "c3", x: 43 });
-  });
-});
-
-describe("Editor: resumen con cables", () => {
-  it("un cable: sus extremos; varios: la cantidad de cada cosa", () => {
-    const { editor } = armar();
-    editor.seleccionarIds(["w2"]);
-    expect(editor.resumenSeleccion()).toEqual({
-      cantidad: 1,
-      componentes: 0,
-      cables: 1,
-      cable: { id: "w2", desde: { tipo: "borne", etiqueta: "K1", borne: "A2" }, hasta: { tipo: "borne", etiqueta: "S1", borne: "14" } },
-      unico: null,
-      varios: null,
-    });
-    editor.seleccionarIds(["c1", "w1", "w2"]);
-    expect(editor.resumenSeleccion()).toMatchObject({ cantidad: 3, componentes: 1, cables: 2, varios: { etiqueta: "K1", rot: 0 } });
-    editor.seleccionarIds(["w1", "w2"]);
-    expect(editor.resumenSeleccion()).toMatchObject({ componentes: 0, cables: 2, varios: { etiqueta: null, rot: null } });
-  });
-
-  it("un extremo suelto se muestra como libre", () => {
-    const { editor } = armar();
-    editor.seleccionarIds(["c1"]);
-    editor.accion("borrar");
-    editor.seleccionarIds(["w1"]);
-    expect(editor.resumenSeleccion().cable).toEqual({ id: "w1", desde: { tipo: "libre" }, hasta: { tipo: "borne", etiqueta: "S1", borne: "13" } });
-  });
-});
-
-describe("EscenaEditable: dibujo de cables", () => {
-  /** Dibuja la escena del editor en `visible` y devuelve las llamadas a `lineas` y `circulo`. */
-  function dibujar(editor: Editor, visible: Caja, bornes = true) {
-    const llamadas: { nombre: string; args: unknown[] }[] = [];
-    const r = new Proxy({} as Renderer, {
-      get: (_, nombre) => (...args: unknown[]) => llamadas.push({ nombre: String(nombre), args: args.map((a) => (Array.isArray(a) ? [...a] : a)) }),
-    });
-    const info: InfoDibujo = { escala: 20, colores: { simbolo: "#000", borne: "#f00" }, visible, detalle: { textos: true, bornes } };
-    editor.escena.dibujar(r, info);
-    return llamadas;
-  }
-
-  it("todos los cables en un solo trazo, antes que los componentes", () => {
-    const { editor } = armar();
-    const ll = dibujar(editor, { x: -100, y: -100, ancho: 200, alto: 200 });
-    const lineas = ll.filter((l) => l.nombre === "lineas");
-    expect(lineas).toHaveLength(1);
-    expect(lineas[0]!.args[1]).toBe(5); // w1: 1, w2: 3, w3: 1
-    expect(ll.findIndex((l) => l.nombre === "lineas")).toBeLessThan(ll.findIndex((l) => l.nombre === "simbolo" || l.nombre === "linea"));
-  });
-
-  it("en un mosaico, solo los tramos que lo tocan", () => {
-    const { editor } = armar();
-    // La esquina de abajo a la derecha de w2: el tramo de y = 5 y el de x = 10, no el de x = 0.
-    const ll = dibujar(editor, { x: 8, y: 3, ancho: 4, alto: 4 });
-    const lineas = ll.filter((l) => l.nombre === "lineas");
-    expect(lineas).toHaveLength(1);
-    expect(lineas[0]!.args[1]).toBe(2);
-    expect((lineas[0]!.args[0] as number[]).slice(0, 8)).toEqual([0, 5, 10, 5, 10, 5, 10, 2]);
-  });
-
-  it("los extremos libres llevan un círculo, solo con los bornes a la vista", () => {
-    const { editor } = armar();
-    editor.seleccionarIds(["c1"]);
-    editor.accion("borrar");
-    const todo = { x: -100, y: -100, ancho: 200, alto: 200 };
-    const marca = (l: { nombre: string; args: unknown[] }) => l.nombre === "circulo" && l.args[2] === 0.25;
-    expect(dibujar(editor, todo).filter(marca)).toHaveLength(2);
-    expect(dibujar(editor, todo, false).filter(marca)).toHaveLength(0);
   });
 });
