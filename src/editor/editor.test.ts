@@ -374,10 +374,13 @@ describe("Editor: selección", () => {
     editor.ejecutar(a);
     const b = colocar(editor.documento, datos(10, 0, "K2"));
     editor.ejecutar(b);
-    expect(editor.resumenSeleccion()).toEqual({ cantidad: 0, unico: null, varios: null });
+    expect(editor.resumenSeleccion()).toEqual({ cantidad: 0, componentes: 0, cables: 0, cable: null, unico: null, varios: null });
     editor.seleccionarIds([a.id]);
     expect(editor.resumenSeleccion()).toEqual({
       cantidad: 1,
+      componentes: 1,
+      cables: 0,
+      cable: null,
       unico: {
         id: a.id,
         nombre: buscarSimbolo("contactor.bobina")!.nombre,
@@ -390,7 +393,14 @@ describe("Editor: selección", () => {
       varios: null,
     });
     editor.seleccionarIds([a.id, b.id]);
-    expect(editor.resumenSeleccion()).toEqual({ cantidad: 2, unico: null, varios: { etiqueta: null, rot: null } });
+    expect(editor.resumenSeleccion()).toEqual({
+      cantidad: 2,
+      componentes: 2,
+      cables: 0,
+      cable: null,
+      unico: null,
+      varios: { etiqueta: null, rot: null },
+    });
   });
 
   it("la capa dinámica resalta solo los seleccionados visibles", () => {

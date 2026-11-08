@@ -97,8 +97,10 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
         const c = editor.escena.obtener(id)!;
         return (c.x - cx) ** 2 + (c.y - cy) ** 2;
       };
+      // Solo componentes que se pueden mover (en la escena con cables, los del centro).
       const ids = editor.escena
         .idsEnCaja(v, "contiene")
+        .filter((id) => !editor.escena.esCable(id) && editor.bloqueo("mover", [id]) === null)
         .sort((a, b) => distancia(a) - distancia(b))
         .slice(0, ARRASTRADOS_DIAGNOSTICO);
       if (ids.length === 0) throw new Error("No hay componentes en pantalla.");

@@ -16,8 +16,14 @@
 // recorrer todos los componentes. El mismo índice sirve para elegir con el
 // mouse (`idEnPunto`, `idsEnCaja`): primero da los candidatos por su caja de
 // dibujo y después se compara con su forma para elegir (`FormaEleccion`).
-// Esas consultas no miran qué es cada elemento, solo su forma: cuando lleguen
-// los cables (T12) se suman con los tramos como zonas y las consultas no cambian.
+// Esas consultas no miran qué es cada elemento, solo su forma.
+//
+// Los cables (T12) tienen su propio índice: se dibujan antes que los
+// componentes (las marcas de bornes quedan encima), en un solo trazo por
+// pasada y solo los tramos que tocan lo que se dibuja (un cable largo en L
+// aparece en mosaicos que su caja toca y sus tramos no). Al elegir con un
+// clic, un cable gana sobre un componente: es fino, y si el clic cae sobre él
+// es porque se apuntó a él.
 
 import { ampliarCaja, seTocan, unirCajas, type Caja } from "./camara";
 import { dibujarComponentes, grosorLinea, type ComponenteEscena, type Contenido, type InfoDibujo, type OpcionesEscena } from "./escena";
@@ -83,6 +89,202 @@ function puntoEn(k: Caja, x: number, y: number, tolerancia: number): boolean {
 /** Cuerpos de los arrastrados (x, y, ancho, alto seguidos): se reusa para no pedir memoria. */
 const cuerpos: number[] = [];
 
+// ── Cables ─────────────────────────────────────────────────────────────────
+
+/**
+ * Un cable en la escena, ya resuelto (el editor saca los puntos del
+ * documento con `recorridoCable`). La escena no conoce bornes ni comandos.
+ */
+export interface CableEscena {
+  /** Recorrido: x, y de cada punto seguidos (por lo menos dos puntos). */
+  puntos: readonly number[];
+  /** Extremos libres: x, y seguidos (0, 1 o 2 puntos). */
+  libres: readonly number[];
+}
+
+/**
+ * Lo que sobresale el trazo de un cable de su línea, en unidades: medio
+ * grosor (0,5 u en el zoom mínimo, 1 px) y el suavizado del borde. El tope
+ * redondeado de cada tramo también queda adentro.
+ */
+export const MARGEN_CABLE = 0.5;
+/** Radio del círculo de un extremo libre, en unidades. */
+export const RADIO_LIBRE = 0.25;
+/**
+ * Tolerancia máxima para elegir un cable con un clic, en unidades: con dos
+ * cables paralelos a 1 unidad, un clic entre los dos no agarra ninguno.
+ */
+export const TOPE_TOLERANCIA_CABLE = 0.4;
+
+/**
+ * Cajas a rehacer de un cable: una por tramo (con el margen del trazo) y una
+ * por extremo libre. No la caja entera: un cable largo en L marcaría todo el
+ * rectángulo que encierra.
+ */
+export function cajasCable(c: CableEscena): Caja[] {
+  const cajas: Caja[] = [];
+  const p = c.puntos;
+  const m = MARGEN_CABLE;
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    const x0 = Math.min(p[i]!, p[i + 2]!);
+    const y0 = Math.min(p[i + 1]!, p[i + 3]!);
+    const x1 = Math.max(p[i]!, p[i + 2]!);
+    const y1 = Math.max(p[i + 1]!, p[i + 3]!);
+    cajas.push({ x: x0 - m, y: y0 - m, ancho: x1 - x0 + 2 * m, alto: y1 - y0 + 2 * m });
+  }
+  const r = RADIO_LIBRE + m;
+  for (let i = 0; i + 1 < c.libres.length; i += 2) cajas.push({ x: c.libres[i]! - r, y: c.libres[i + 1]! - r, ancho: 2 * r, alto: 2 * r });
+  return cajas;
+}
+
+/** Caja de dibujo de un cable: la unión de sus cajas por tramo. */
+function cajaCable(cajas: readonly Caja[]): Caja {
+  let k = cajas[0]!;
+  for (let i = 1; i < cajas.length; i++) k = unirCajas(k, cajas[i]!);
+  return k;
+}
+
+/**
+ * Forma para elegir un cable: cada tramo, sin grosor (la tolerancia del clic
+ * lo engorda). El cuerpo es la caja de todos los puntos: si queda entera
+ * dentro del rectángulo, quedan todos los tramos.
+ */
+export function formaCable(c: CableEscena): FormaEleccion {
+  const p = c.puntos;
+  const zonas: Caja[] = [];
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    const x0 = Math.min(p[i]!, p[i + 2]!);
+    const y0 = Math.min(p[i + 1]!, p[i + 3]!);
+    zonas.push({ x: x0, y: y0, ancho: Math.abs(p[i + 2]! - p[i]!), alto: Math.abs(p[i + 3]! - p[i + 1]!) });
+  }
+  const forma = crearForma(zonas[0]!, zonas);
+  return { ...forma, cuerpo: forma.contorno };
+}
+
+/** Tramos a trazar en el cuadro en curso (x0, y0, x1, y1 seguidos): se reusa para no pedir memoria. */
+const tramos: number[] = [];
+
+/**
+ * Anota en `salida`, desde `n`, los tramos de `c` que tocan `v` (con el margen
+ * del trazo). Devuelve el nuevo total. Corridos (dx, dy).
+ */
+export function anotarTramos(c: CableEscena, v: Caja, salida: number[], n: number, dx = 0, dy = 0): number {
+  const p = c.puntos;
+  const m = MARGEN_CABLE;
+  const vx0 = v.x - m - dx;
+  const vy0 = v.y - m - dy;
+  const vx1 = v.x + v.ancho + m - dx;
+  const vy1 = v.y + v.alto + m - dy;
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    const ax = p[i]!;
+    const ay = p[i + 1]!;
+    const bx = p[i + 2]!;
+    const by = p[i + 3]!;
+    if (Math.max(ax, bx) < vx0 || Math.min(ax, bx) > vx1 || Math.max(ay, by) < vy0 || Math.min(ay, by) > vy1) continue;
+    const j = n * 4;
+    salida[j] = ax + dx;
+    salida[j + 1] = ay + dy;
+    salida[j + 2] = bx + dx;
+    salida[j + 3] = by + dy;
+    n++;
+  }
+  return n;
+}
+
+/** Cables de la escena, con su propio índice espacial. */
+class Cables {
+  readonly lugares: (CableEscena | null)[] = [];
+  /** Cajas por tramo de cada lugar. */
+  readonly cajas: (Caja[] | null)[] = [];
+  readonly formas: (FormaEleccion | null)[] = [];
+  readonly ids: (string | null)[] = [];
+  readonly lugarDe = new Map<string, number>();
+  private readonly libres: number[] = [];
+  readonly indice = new IndiceEspacial();
+  readonly visibles: number[] = [];
+
+  get cantidad(): number {
+    return this.lugarDe.size;
+  }
+
+  /** Agrega o cambia; devuelve las cajas a rehacer (las viejas y las nuevas). */
+  poner(id: string, c: CableEscena): Caja[] {
+    let n = this.lugarDe.get(id);
+    const viejas = n === undefined ? [] : this.cajas[n]!;
+    if (n === undefined) {
+      n = this.libres.pop() ?? this.lugares.length;
+      this.ids[n] = id;
+      this.lugarDe.set(id, n);
+    }
+    const nuevas = cajasCable(c);
+    this.lugares[n] = c;
+    this.cajas[n] = nuevas;
+    this.formas[n] = formaCable(c);
+    this.indice.insertar(n, cajaCable(nuevas));
+    return [...viejas, ...nuevas];
+  }
+
+  /** Quita; devuelve las cajas que ocupaba (vacío si no estaba). */
+  quitar(id: string): Caja[] {
+    const n = this.lugarDe.get(id);
+    if (n === undefined) return [];
+    const k = this.cajas[n]!;
+    this.indice.quitar(n);
+    this.lugares[n] = null;
+    this.cajas[n] = null;
+    this.formas[n] = null;
+    this.ids[n] = null;
+    this.lugarDe.delete(id);
+    this.libres.push(n);
+    return k;
+  }
+
+  /** El cable de arriba (el último en dibujarse) a menos de `tolerancia` de (x, y), o null. */
+  enPunto(x: number, y: number, tolerancia: number): string | null {
+    const t = Math.min(tolerancia, TOPE_TOLERANCIA_CABLE);
+    const candidatos = this.indice.enCaja({ x: x - t, y: y - t, ancho: 2 * t, alto: 2 * t });
+    for (let i = candidatos.length - 1; i >= 0; i--) {
+      const n = candidatos[i]!;
+      for (const z of this.formas[n]!.zonas) if (puntoEn(z, x, y, t)) return this.ids[n]!;
+    }
+    return null;
+  }
+
+  /**
+   * Dibuja los cables que tocan `info.visible`: solo sus tramos que la tocan,
+   * todos en un solo trazo, y después los círculos de los extremos libres.
+   */
+  dibujar(r: Renderer, info: InfoDibujo): void {
+    if (this.lugarDe.size === 0) return;
+    const v = info.visible;
+    const visibles = this.indice.enCaja(v, this.visibles);
+    if (visibles.length === 0) return;
+    let n = 0;
+    for (const lugar of visibles) n = anotarTramos(this.lugares[lugar]!, v, tramos, n);
+    const g = grosorLinea(info.escala);
+    if (n > 0) {
+      r.estilo({ trazo: info.colores.simbolo, relleno: info.colores.simbolo, grosor: g });
+      r.lineas(tramos, n);
+    }
+    if (!info.detalle.bornes) return;
+    let estilo = false;
+    const m = RADIO_LIBRE + MARGEN_CABLE;
+    for (const lugar of visibles) {
+      const l = this.lugares[lugar]!.libres;
+      for (let i = 0; i + 1 < l.length; i += 2) {
+        const x = l[i]!;
+        const y = l[i + 1]!;
+        if (x + m < v.x || x - m > v.x + v.ancho || y + m < v.y || y - m > v.y + v.alto) continue;
+        if (!estilo) {
+          r.estilo({ trazo: info.colores.borne, relleno: info.colores.borne, grosor: g });
+          estilo = true;
+        }
+        r.circulo(x, y, RADIO_LIBRE);
+      }
+    }
+  }
+}
+
 export class EscenaEditable implements Contenido {
   /** Componente en cada lugar del índice; null si el lugar está libre. */
   private readonly lugares: (ComponenteEscena | null)[] = [];
@@ -103,6 +305,7 @@ export class EscenaEditable implements Contenido {
   private readonly ocultos = new Set<number>();
   /** Lugares de lo que se dibuja desplazado (se reusa, como `visibles`). */
   private readonly desplazados: number[] = [];
+  private readonly cables = new Cables();
 
   constructor(componentes: Iterable<[string, ComponenteEscena]> = [], opciones: OpcionesEscena = {}) {
     this.marcarBornes = opciones.marcarBornes ?? true;
@@ -117,6 +320,7 @@ export class EscenaEditable implements Contenido {
     if (this.cajaTotal === undefined) {
       let total: Caja | null = null;
       for (const k of this.cajas) if (k) total = total ? unirCajas(total, k) : k;
+      for (const lista of this.cables.cajas) if (lista) for (const k of lista) total = total ? unirCajas(total, k) : k;
       this.cajaTotal = total;
     }
     return this.cajaTotal;
@@ -126,6 +330,44 @@ export class EscenaEditable implements Contenido {
   obtener(id: string): ComponenteEscena | undefined {
     const n = this.lugarDe.get(id);
     return n === undefined ? undefined : this.lugares[n]!;
+  }
+
+  /** Cantidad de cables. */
+  get cantidadCables(): number {
+    return this.cables.cantidad;
+  }
+
+  /** El cable con ese id, o undefined. */
+  obtenerCable(id: string): CableEscena | undefined {
+    const n = this.cables.lugarDe.get(id);
+    return n === undefined ? undefined : this.cables.lugares[n]!;
+  }
+
+  /** True si hay un componente o un cable con ese id. */
+  existe(id: string): boolean {
+    return this.lugarDe.has(id) || this.cables.lugarDe.has(id);
+  }
+
+  /** True si el id es de un cable de la escena. */
+  esCable(id: string): boolean {
+    return this.cables.lugarDe.has(id);
+  }
+
+  /**
+   * Agrega o cambia un cable. Devuelve las cajas a rehacer: las de cada tramo
+   * viejo y nuevo, por separado.
+   */
+  ponerCable(id: string, c: CableEscena): readonly Caja[] {
+    const cajas = this.cables.poner(id, c);
+    this.cajaTotal = undefined;
+    return cajas;
+  }
+
+  /** Quita un cable. Devuelve las cajas de los tramos que ocupaba (vacío si no estaba). */
+  quitarCable(id: string): readonly Caja[] {
+    const cajas = this.cables.quitar(id);
+    if (cajas.length > 0) this.cajaTotal = undefined;
+    return cajas;
   }
 
   /**
@@ -216,7 +458,9 @@ export class EscenaEditable implements Contenido {
   /** Forma para elegir del elemento con ese id, o undefined. */
   forma(id: string): FormaEleccion | undefined {
     const n = this.lugarDe.get(id);
-    return n === undefined ? undefined : this.formas[n]!;
+    if (n !== undefined) return this.formas[n]!;
+    const w = this.cables.lugarDe.get(id);
+    return w === undefined ? undefined : this.cables.formas[w]!;
   }
 
   /** Ids de los elementos cuya caja de dibujo toca `caja` (candidatos, sin el filtro fino). */
@@ -230,6 +474,9 @@ export class EscenaEditable implements Contenido {
    * (el que se dibuja último). Null si no hay ninguno.
    */
   idEnPunto(x: number, y: number, tolerancia = 0): string | null {
+    // Primero los cables, con la tolerancia acotada (TOPE_TOLERANCIA_CABLE).
+    const cable = this.cables.enPunto(x, y, tolerancia);
+    if (cable !== null) return cable;
     // La caja de dibujo contiene a las zonas: con la tolerancia, no se pierde ninguno.
     const candidatos = this.indice.enCaja({ x: x - tolerancia, y: y - tolerancia, ancho: 2 * tolerancia, alto: 2 * tolerancia });
     // Vienen de menor a mayor lugar, que es el orden de dibujo: se recorre al revés.
@@ -247,6 +494,12 @@ export class EscenaEditable implements Contenido {
    */
   idsEnCaja(caja: Caja, modo: ModoRectangulo): string[] {
     const salida: string[] = [];
+    const cables = this.cables;
+    for (const n of cables.indice.enCaja(caja)) {
+      const f = cables.formas[n]!;
+      const elegido = modo === "contiene" ? contieneCaja(caja, f.cuerpo) : f.zonas.some((z) => seTocan(z, caja));
+      if (elegido) salida.push(cables.ids[n]!);
+    }
     for (const n of this.indice.enCaja(caja)) {
       const f = this.formas[n]!;
       const elegido = modo === "contiene" ? contieneCaja(caja, f.cuerpo) : f.zonas.some((z) => seTocan(z, caja));
@@ -268,6 +521,7 @@ export class EscenaEditable implements Contenido {
   }
 
   dibujar(r: Renderer, info: InfoDibujo): number {
+    this.cables.dibujar(r, info);
     const visibles = this.indice.enCaja(info.visible, this.visibles);
     if (this.ocultos.size > 0) {
       // Sin los ocultos, compactando la misma lista (sin pedir memoria).

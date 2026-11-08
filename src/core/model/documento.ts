@@ -28,9 +28,31 @@ export interface Componente {
   params: Record<string, string>;
 }
 
-/** Cable entre bornes. Por ahora solo el id: los puntos y extremos llegan en T12. */
+/**
+ * Extremo de un cable.
+ * - "borne": conectado al borne `borne` del componente `comp`. No guarda
+ *   coordenada: la posición sale del componente (`bornesColocados`).
+ * - "cable": conectado a un punto de otro cable (una T). El punto es la
+ *   fuente de verdad y tiene que caer sobre el recorrido de ese cable.
+ * - "libre": suelto en (x, y). No conecta con nada, aunque caiga sobre un
+ *   borne o un cable: reconectarlo es tarea de la herramienta cable (W).
+ */
+export type Extremo =
+  | { tipo: "borne"; comp: string; borne: string }
+  | { tipo: "cable"; cable: string; x: number; y: number }
+  | { tipo: "libre"; x: number; y: number };
+
+/**
+ * Cable con codos. El recorrido es [desde, ...codos, hasta]: tramos solo
+ * horizontales o verticales, en coordenadas enteras (ver `validarCable`).
+ */
 export interface Cable {
+  /** "w1", "w2"… */
   id: string;
+  desde: Extremo;
+  hasta: Extremo;
+  /** Solo los puntos intermedios, [x, y] enteros. */
+  codos: [number, number][];
 }
 
 export interface Hoja {
@@ -70,6 +92,13 @@ export function buscarComponente(doc: Documento, id: string): Componente | undef
   }
   return undefined;
 }
+
+/**
+ * Prefijo de los ids de cables nuevos ("w1"); los de componentes son "c1". Es
+ * solo para darlos: qué es cada id se sabe por la lista donde está, no por
+ * el prefijo (un .brn puede traer cualquier id).
+ */
+export const PREFIJO_CABLE = "w";
 
 /**
  * Da un id nuevo ("c1", "c2"…) y sube el contador del documento. No se deshace:

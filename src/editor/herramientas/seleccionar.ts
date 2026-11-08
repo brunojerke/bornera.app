@@ -7,7 +7,8 @@
 // - Apretar sobre un elemento y arrastrar: mueve toda la selección, de a
 //   unidades enteras de grilla. Al soltar da un solo `Mover` (un paso de
 //   deshacer); si volvió al punto de partida, nada. Esc lo corta y todo queda
-//   donde estaba.
+//   donde estaba. Si la selección no se puede mover (tiene cables, hasta
+//   T14a), no se arrastra: se avisa una vez y el gesto sigue como un clic.
 // - Mayús+clic sobre un elemento: lo suma o lo quita (con Mayús no se arrastra).
 // - Clic en vacío: deselecciona todo (con Mayús, no cambia nada).
 // - Arrastrar desde vacío: rectángulo. De izquierda a derecha elige lo que
@@ -91,6 +92,8 @@ export class HerramientaSeleccionar implements Herramienta {
     private readonly elegibles: Elegibles,
     /** La selección actual (la tiene el editor). */
     private readonly seleccion: () => ReadonlySet<string>,
+    /** Aviso si esos ids no se pueden mover; null si se puede. */
+    private readonly bloqueo: (ids: ReadonlySet<string>) => string | null = () => null,
   ) {}
 
   /** Rectángulo de selección en curso, para dibujarlo; null si no hay. */
@@ -154,6 +157,8 @@ export class HerramientaSeleccionar implements Herramienta {
       // Se arrastra la selección, si el elemento está en ella (con Mayús pudo haber salido).
       const actual = this.seleccion();
       if (g.mayus || !actual.has(g.id)) return NADA;
+      const aviso = this.bloqueo(actual);
+      if (aviso) return { redibujar: false, aviso };
       g.arrastre = { ids: actual, dx: Math.round(ev.x - g.x0), dy: Math.round(ev.y - g.y0) };
       return { redibujar: true, arrastre: { fase: "empezar", ids: actual } };
     }

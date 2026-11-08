@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { esAtajoBanco, siguienteEscenaBanco } from "./escenas";
 
 describe("atajo del banco de pruebas", () => {
-  it("cicla documento → 100 → 500 → 2000 → vacía → documento", () => {
+  it("cicla documento → 100 → 500 → 2000 → cables → vacía → documento", () => {
     expect(siguienteEscenaBanco("documento")).toBe(100);
     expect(siguienteEscenaBanco(100)).toBe(500);
     expect(siguienteEscenaBanco(500)).toBe(2000);
-    expect(siguienteEscenaBanco(2000)).toBe("vacia");
+    expect(siguienteEscenaBanco(2000)).toBe("cables");
+    expect(siguienteEscenaBanco("cables")).toBe("vacia");
     expect(siguienteEscenaBanco("vacia")).toBe("documento");
   });
 

@@ -1,5 +1,6 @@
 // Resaltado de la selección en la capa dinámica: un rectángulo de acento
-// alrededor de cada elemento seleccionado que está en pantalla, y el
+// alrededor de cada componente seleccionado que está en pantalla, sus tramos
+// trazados de nuevo, más gruesos, en cada cable seleccionado, y el
 // rectángulo de selección mientras se arrastra.
 //
 // La capa dinámica se dibuja en cada cuadro (también al desplazar la vista):
@@ -10,11 +11,13 @@
 import type { Caja } from "./camara";
 import type { InfoDinamico } from "./capas";
 import { grosorLinea } from "./escena";
-import type { EscenaEditable, ModoRectangulo } from "./escenaEditable";
+import { anotarTramos, type EscenaEditable, type ModoRectangulo } from "./escenaEditable";
 import type { Renderer } from "./renderer";
 
 /** Separación entre el elemento y su recuadro de selección, en unidades. */
 export const MARGEN_RESALTADO = 0.3;
+/** Grosor del resaltado de un cable, en veces el grosor de línea. */
+export const GROSOR_RESALTADO_CABLE = 3;
 /** Largo de cada raya del rectángulo "toca", en px de pantalla. */
 const RAYA_PX = 5;
 
@@ -39,10 +42,14 @@ export function cajaRectangulo(r: RectanguloSeleccion): Caja {
 
 /** Recuadros del cuadro en curso (x, y, ancho, alto seguidos): se reusa para no pedir memoria. */
 const recuadros: number[] = [];
+/** Tramos de los cables seleccionados del cuadro en curso (x0, y0, x1, y1 seguidos). */
+const tramosSeleccion: number[] = [];
 
 /**
- * Dibuja el recuadro de cada seleccionado visible, todos en un solo trazo.
- * Mientras se arrastra, corridos (dx, dy). Devuelve cuántos dibujó.
+ * Dibuja el recuadro de cada componente seleccionado visible, todos en un
+ * solo trazo, y los tramos visibles de cada cable seleccionado, en otro.
+ * Mientras se arrastra, corridos (dx, dy). Devuelve cuántos recuadros y
+ * tramos dibujó.
  */
 export function dibujarSeleccion(
   r: Renderer,
@@ -55,7 +62,13 @@ export function dibujarSeleccion(
   const v = info.visible;
   const m = MARGEN_RESALTADO;
   let n = 0;
+  let t = 0;
   for (const id of ids) {
+    const cable = escena.obtenerCable(id);
+    if (cable) {
+      t = anotarTramos(cable, v, tramosSeleccion, t, dx, dy);
+      continue;
+    }
     const k = escena.contorno(id);
     if (!k) continue;
     const x = k.x + dx;
@@ -69,11 +82,18 @@ export function dibujarSeleccion(
     recuadros[j + 3] = k.alto + 2 * m;
     n++;
   }
-  if (n === 0) return 0;
+  if (n === 0 && t === 0) return 0;
   const color = info.colores.acento;
-  r.estilo({ trazo: color, relleno: color, grosor: 1.5 * grosorLinea(info.escala) });
-  r.rectangulos(recuadros, n);
-  return n;
+  const g = grosorLinea(info.escala);
+  if (t > 0) {
+    r.estilo({ trazo: color, relleno: color, grosor: GROSOR_RESALTADO_CABLE * g });
+    r.lineas(tramosSeleccion, t);
+  }
+  if (n > 0) {
+    r.estilo({ trazo: color, relleno: color, grosor: 1.5 * g });
+    r.rectangulos(recuadros, n);
+  }
+  return n + t;
 }
 
 /**

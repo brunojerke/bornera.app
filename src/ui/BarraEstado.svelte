@@ -3,7 +3,12 @@
   import type { Modo } from "./tipos";
   import type { Punto } from "../render/camara";
 
-  let { modo, zoom, cursor }: { modo: Modo; zoom: number; cursor: Punto | null } = $props();
+  let {
+    modo,
+    zoom,
+    cursor,
+    aviso = null,
+  }: { modo: Modo; zoom: number; cursor: Punto | null; aviso?: string | null } = $props();
 </script>
 
 <footer class="estado">
@@ -15,7 +20,7 @@
   </span>
   <span class="dato">Zoom {Math.round(zoom * 100)} %</span>
   <span class="espacio"></span>
-  <span class="avisos">Sin avisos</span>
+  <span class="avisos" class:activo={aviso !== null} role="status" aria-live="polite">{aviso ?? "Sin avisos"}</span>
 </footer>
 
 <style>
@@ -48,5 +53,15 @@
 
   .espacio {
     flex: 1;
+  }
+
+  .avisos {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .avisos.activo {
+    color: var(--texto);
+    font-weight: 600;
   }
 </style>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { abrirAlSeleccionar, textoCambioRed, textoCantidad, textoEtiqueta, textoRed, textoRotacion } from "./propiedades";
+import {
+  abrirAlSeleccionar,
+  textoCambioRed,
+  textoCantidad,
+  textoEtiqueta,
+  textoExtremo,
+  textoRed,
+  textoRotacion,
+} from "./propiedades";
 
 describe("abrirAlSeleccionar", () => {
   it("se abre al pasar de nada a algo seleccionado", () => {
@@ -22,6 +30,21 @@ describe("textoCantidad", () => {
   it("singular y plural", () => {
     expect(textoCantidad(1)).toBe("1 componente seleccionado");
     expect(textoCantidad(2000)).toBe("2000 componentes seleccionados");
+  });
+
+  it("con cables, solos o mezclados", () => {
+    expect(textoCantidad(0, 1)).toBe("1 cable seleccionado");
+    expect(textoCantidad(0, 3000)).toBe("3000 cables seleccionados");
+    expect(textoCantidad(2, 1)).toBe("2 componentes y 1 cable seleccionados");
+    expect(textoCantidad(1, 1)).toBe("1 componente y 1 cable seleccionados");
+  });
+});
+
+describe("textoExtremo", () => {
+  it("borne, sobre otro cable o suelto", () => {
+    expect(textoExtremo({ tipo: "borne", etiqueta: "K1", borne: "A1" })).toBe("K1 · A1");
+    expect(textoExtremo({ tipo: "cable" })).toBe("Sobre otro cable");
+    expect(textoExtremo({ tipo: "libre" })).toBe("Suelto");
   });
 });
 

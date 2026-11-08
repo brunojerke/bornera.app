@@ -46,6 +46,7 @@
     { valor: "documento", texto: "Documento" },
     { valor: "simbolos", texto: "Revisión de símbolos" },
     ...CANTIDADES_BANCO.map((n) => ({ valor: n, texto: `Banco: ${n.toLocaleString("es-AR")} símbolos` })),
+    { valor: "cables", texto: "Banco: 2.000 símbolos y 3.000 cables" },
     { valor: "vacia", texto: "Escena vacía" },
   ];
 

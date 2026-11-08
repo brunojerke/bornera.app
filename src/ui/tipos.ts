@@ -8,6 +8,7 @@ export type Modo = "editar" | "simular";
 /**
  * Lo que muestra el lienzo: el documento (lo normal) o, desde el menú de
  * desarrollo o con Ctrl+Shift+B, una escena de prueba: la de revisión de
- * símbolos, un banco con esa cantidad de componentes o la escena vacía.
+ * símbolos, un banco con esa cantidad de componentes, el banco de 2000 con
+ * cables ("cables") o la escena vacía.
  */
-export type EscenaDesarrollo = "documento" | "simbolos" | CantidadBanco | "vacia";
+export type EscenaDesarrollo = "documento" | "simbolos" | CantidadBanco | "cables" | "vacia";

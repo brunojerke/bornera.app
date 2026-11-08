@@ -35,6 +35,8 @@ export interface Resultado {
    * `comando` si lo hay (si no, quedan donde estaban).
    */
   arrastre?: { fase: "empezar"; ids: ReadonlySet<string> } | { fase: "terminar" };
+  /** Aviso para la barra de estado: algo que se pidió y no se puede hacer. */
+  aviso?: string;
 }
 
 /** Lo que recibe una herramienta. Cada método devuelve qué hacer. */

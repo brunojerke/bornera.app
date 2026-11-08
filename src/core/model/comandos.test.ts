@@ -125,11 +125,11 @@ describe("comandos: aplicar, deshacer y rehacer", () => {
 
   it("cada comando informa los ids que tocó", () => {
     const doc = docBase();
-    expect(new Mover(["c1", "c1", "c2"], 1, 0).aplicar(doc)).toEqual({ componentes: ["c1", "c2"] });
-    expect(new CambiarEtiqueta("c3", "S1").aplicar(doc)).toEqual({ componentes: ["c3"] });
+    expect(new Mover(["c1", "c1", "c2"], 1, 0).aplicar(doc)).toEqual({ componentes: ["c1", "c2"], cables: [] });
+    expect(new CambiarEtiqueta("c3", "S1").aplicar(doc)).toEqual({ componentes: ["c3"], cables: [] });
     const grupo = new Grupo([new Mover(["c1"], 1, 0), new Rotar(["c1", "c4"], 90)]);
-    expect(grupo.aplicar(doc)).toEqual({ componentes: ["c1", "c4"] });
-    expect(grupo.deshacer(doc)).toEqual({ componentes: ["c1", "c4"] });
+    expect(grupo.aplicar(doc)).toEqual({ componentes: ["c1", "c4"], cables: [] });
+    expect(grupo.deshacer(doc)).toEqual({ componentes: ["c1", "c4"], cables: [] });
   });
 });
 

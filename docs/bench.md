@@ -17,6 +17,36 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 
+## Cables (fase 3, T12) — 2026-11-08
+
+- **Escena nueva:** los 2000 símbolos del banco con 3000 cables entre bornes de vecinos (0 a 3 codos), abierta en un `Editor` como en la app (Ctrl+Shift+B, después de la de 2000). Los 40 componentes más cercanos al centro quedan sin cables: es el grupo que se puede arrastrar mientras mover lo cableado está bloqueado (hasta T14a).
+- **Escenarios nuevos** en esa escena: *Seleccionar todo al 31 %* (seleccionar los 5000 y el resumen del panel, alternando con nada), *Mover 40 sin cables al 58 %* (el caso del criterio de la netbook) y *Borrar y deshacer uno con cables al 31 %* (Supr y Ctrl+Z por el editor). Los dos que tienen paso informan también lo que tarda el paso, fuera del cuadro.
+- Los cables van en un solo trazo por pasada, filtrados por tramo en cada mosaico.
+
+Misma PC, Edge 157, una corrida. Todo lo demás dio 0 cuadros lentos, como en T9.
+
+| Escena | Escenario | Mediana | p95 | Máx. | Lentos | Por gesto | Mosaicos máx. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2000 | Rehacer al 31 % | 8,6 | 9,8 | 10,1 | 0 | 35,4 | 15 |
+|  | Arrastre al 31 % | 0,4 | 2,5 | 8,8 | 0 | 63,4 | 12 |
+|  | Arrastre con todo seleccionado al 31 % | 1,5 | 3,7 | 7,2 | 0 | 172,0 | 12 |
+| 2000 + 3000 cables | Rehacer al 100 % | 8,5 | 9,4 | 9,6 | 0 | 14,6 | 25 |
+|  | Rehacer al 31 % | 8,5 | 9,1 | 9,2 | 0 | 33,1 | 14 |
+|  | Encuadrar (F) | 7,8 | 9,9 | 10,3 | 0 | 25,3 | 27 |
+|  | Zoom con la rueda | 3,5 | 9,5 | 11,3 | 0 | 61,1 | 13 |
+|  | Desplazar al 100 % | 0,2 | 0,4 | 0,6 | 0 | 6,3 | 0 |
+|  | Arrastre al 31 % | 0,3 | 2,7 | 10,7 | 0 | 62,1 | 12 |
+|  | Seleccionar todo al 31 % | 2,9 | 7,7 | 8,3 | 0 | 30,8 | 0 |
+|  | Arrastre con todo seleccionado al 31 % | 5,2 | 8,7 | 12,1 | 0 | 542,5 | 12 |
+|  | Mover 40 sin cables al 58 % | 2,7 | 6,2 | 12,3 | 0 | 92,3 | 13 |
+|  | Borrar y deshacer uno con cables al 31 % | 1,6 | 2,5 | 2,9 | 0 | 16,3 | 1 |
+
+Tiempo del paso (fuera del cuadro): seleccionar todo y el resumen, 0,8 ms de mediana y 2,8 ms de máximo; borrar o deshacer uno con cables, 0,8 y 2,2 ms. Heap con la escena armada: 9,2 MB (4,6 MB sin cables).
+
+- Los cables no cambian rehacer, encuadrar, el zoom ni desplazar: lo mismo que la escena de 2000 sin cables.
+- *Arrastre con todo seleccionado* pasa de 1,5 a 5,2 ms de mediana: es el resaltado de 3000 cables (sus tramos) en cada cuadro. Sin lentos.
+- **Criterio para la netbook:** F3 en la escena con cables, desplazando y arrastrando los 40 del centro al 58 %: casi 0 cuadros >16 ms, como 0.1.2.
+
 ## Arrastrar 40 completos (diagnóstico, alpha.2) — 2026-11-08
 
 Para reproducir los tirones de la netbook (40 arrastrados completos al 58–73 %):

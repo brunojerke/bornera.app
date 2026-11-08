@@ -18,8 +18,10 @@
   import { probarArrastre, type OpcionesDiagnostico } from "./diagnosticoArrastre";
   import { ARRASTRADOS_DIAGNOSTICO, DURACION_DIAGNOSTICO_MS, tablaDiagnostico } from "./diagnostico";
   import { VERSION } from "./version";
-  import { documentoBanco } from "../editor/banco";
+  import { documentoBanco, documentoBancoCables } from "../editor/banco";
+  import { SIMBOLOS_BANCO_CABLES } from "./escenas";
   import * as comandos from "../core/model/comandos";
+  import * as cables from "../core/model/cables";
   import Rendimiento from "./Rendimiento.svelte";
   import type { EscenaDesarrollo, Modo } from "./tipos";
 
@@ -36,6 +38,7 @@
     opciones = OPCIONES_OPTIMIZADAS,
     diagnostico = { modo: "auto", sonda: false },
     onseleccion,
+    onaviso,
   }: {
     /** Zoom actual (1 = 100 %). Solo lectura desde afuera. */
     zoom?: number;
@@ -60,6 +63,8 @@
     diagnostico?: Readonly<DiagnosticoArrastre>;
     /** Cambió la selección o algo seleccionado. */
     onseleccion?: (resumen: ResumenSeleccion) => void;
+    /** Una acción que no se pudo hacer (para la barra de estado). */
+    onaviso?: (texto: string) => void;
   } = $props();
 
   let canvas: HTMLCanvasElement;
@@ -77,6 +82,7 @@
   function editorPara(e: EscenaDesarrollo): Editor | null {
     if (e === "documento") return editorDocumento;
     if (typeof e === "number") return new Editor(documentoBanco(e));
+    if (e === "cables") return new Editor(documentoBancoCables(SIMBOLOS_BANCO_CABLES));
     return null;
   }
 
@@ -89,6 +95,7 @@
       editor.alCambiarHerramienta = null;
       editor.alCambiarSeleccion = null;
       editor.alCambiarHistorial = null;
+      editor.alAvisar = null;
     }
     editor = ed;
     activo = ed;
@@ -106,6 +113,7 @@
     ed.alCambiarHerramienta = () => (colocando = ed.herramienta?.def.tipo ?? null);
     ed.alCambiarSeleccion = () => onseleccion?.(ed.resumenSeleccion());
     ed.alCambiarHistorial = historial;
+    ed.alAvisar = (t) => onaviso?.(t);
     // Después de la navegación: lo que ella consume llega con defaultPrevented.
     herramientas = conectarHerramientas(canvas, {
       camara: v.camara,
@@ -118,12 +126,15 @@
   //   const { editor, comandos: c } = bornera;
   //   editor.ejecutar(c.colocar(editor.documento, { tipo: "contactor.bobina",
   //     x: 0, y: 0, rot: 0, espejado: false, etiqueta: "K1", params: {} }));
+  //   editor.ejecutar(c.cablear(editor.documento, { desde: { tipo: "borne", comp: "c1", borne: "A1" },
+  //     hasta: { tipo: "libre", x: 0, y: -6 }, codos: [] }));
   //   editor.deshacer();
   // `bornera.activo()` da el editor de lo que se muestra (el del banco, en esas escenas).
   if (import.meta.env.DEV) {
     (globalThis as Record<string, unknown>).bornera = {
       editor: editorDocumento,
       comandos,
+      cables,
       activo: () => editor,
       diagnosticarArrastre,
     };

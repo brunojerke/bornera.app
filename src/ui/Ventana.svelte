@@ -11,7 +11,7 @@
   import type { Punto } from "../render/camara";
   import { OPCIONES_OPTIMIZADAS, type OpcionesCapas } from "../render/capas";
   import { SIN_SELECCION, type DiagnosticoArrastre, type ResumenSeleccion } from "../editor/editor";
-  import { abrirAlSeleccionar } from "./propiedades";
+  import { abrirAlSeleccionar, DURACION_AVISO_MS } from "./propiedades";
   import { esAtajoModo, f5CambiaModo, otroModo } from "./modo";
   import { hayModal } from "../editor/punteros";
   import type { Editor } from "../editor/editor";
@@ -30,6 +30,15 @@
   let colocando = $state<string | null>(null);
   let puedeDeshacer = $state(false);
   let puedeRehacer = $state(false);
+  /** Aviso de la barra de estado (una acción que no se pudo hacer); se borra solo. */
+  let aviso = $state<string | null>(null);
+  let temporizadorAviso = 0;
+
+  function avisar(texto: string) {
+    aviso = texto;
+    clearTimeout(temporizadorAviso);
+    temporizadorAviso = window.setTimeout(() => (aviso = null), DURACION_AVISO_MS);
+  }
   let lienzo: ReturnType<typeof Lienzo>;
   let panel: ReturnType<typeof PanelPropiedades> | undefined = $state();
   /** Editor de lo que muestra el lienzo: a él van las ediciones del panel. */
@@ -148,6 +157,7 @@
       {opciones}
       {diagnostico}
       onseleccion={alCambiarSeleccion}
+      onaviso={avisar}
     />
     <PanelPropiedades
       bind:this={panel}
@@ -158,7 +168,7 @@
       onalternar={(abierto) => (propiedadesPlegadoPorUsuario = !abierto)}
     />
   </main>
-  <BarraEstado {modo} {zoom} {cursor} />
+  <BarraEstado {modo} {zoom} {cursor} {aviso} />
 </div>
 
 {#if prueba}

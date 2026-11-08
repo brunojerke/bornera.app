@@ -7,6 +7,11 @@
   // rotación comunes (o "Varias") y girar o espejar el grupo; la etiqueta, de
   // solo lectura. En Simular, todo de solo lectura.
   //
+  // Con un cable: "Cable" y sus extremos, sin etiqueta ni giro. Con varios
+  // que incluyen cables: la cantidad de cada cosa; la etiqueta y la rotación
+  // son las de los componentes, y girar o espejar avisa que no se puede
+  // (lo decide el editor, como con R y M).
+  //
   // La etiqueta se edita con un borrador (edicionEtiqueta.ts): escribir no
   // toca el documento ni el lienzo; Enter, perder el foco, apretar en el
   // lienzo, F5 o cambiar de escena confirman (un paso de deshacer), y Esc
@@ -23,7 +28,7 @@
   import type { Accion } from "../editor/atajos";
   import { normalizarEtiqueta } from "../core/model/etiquetas";
   import { EdicionEtiqueta } from "./edicionEtiqueta";
-  import { NOTA_RED, textoCambioRed, textoCantidad, textoEtiqueta, textoRed, textoRotacion } from "./propiedades";
+  import { NOTA_RED, textoCambioRed, textoCantidad, textoEtiqueta, textoExtremo, textoRed, textoRotacion } from "./propiedades";
 
   let {
     abierto = $bindable(false),
@@ -176,7 +181,20 @@
       </button>
     </div>
 
-    {#if seleccion.unico}
+    {#if seleccion.cable}
+      {@const w = seleccion.cable}
+      <div class="datos">
+        <p class="nombre">Cable</p>
+        <div class="fila">
+          <span class="rotulo">Desde</span>
+          <span class="valor">{textoExtremo(w.desde)}</span>
+        </div>
+        <div class="fila">
+          <span class="rotulo">Hasta</span>
+          <span class="valor">{textoExtremo(w.hasta)}</span>
+        </div>
+      </div>
+    {:else if seleccion.unico}
       {@const c = seleccion.unico}
       <div class="datos">
         <p class="nombre">{c.nombre}</p>
@@ -228,21 +246,23 @@
     {:else if seleccion.cantidad > 1}
       {@const v = seleccion.varios}
       <div class="datos">
-        <p class="nombre">{textoCantidad(seleccion.cantidad)}</p>
-        <div class="fila">
-          <span class="rotulo">Etiqueta</span>
-          <span class="valor" class:varias={v?.etiqueta === null}>{textoEtiqueta(v?.etiqueta ?? null)}</span>
-        </div>
-        <div class="fila">
-          <span class="rotulo">Rotación</span>
-          <span class="valor" class:varias={v?.rot === null}>{textoRotacion(v?.rot ?? null)}</span>
-          {@render botonesGiro()}
-        </div>
-        <div class="fila">
-          <span class="rotulo">Espejar</span>
-          <span class="valor"></span>
-          {@render botonEspejar()}
-        </div>
+        <p class="nombre">{textoCantidad(seleccion.componentes, seleccion.cables)}</p>
+        {#if seleccion.componentes > 0}
+          <div class="fila">
+            <span class="rotulo">Etiqueta</span>
+            <span class="valor" class:varias={v?.etiqueta === null}>{textoEtiqueta(v?.etiqueta ?? null)}</span>
+          </div>
+          <div class="fila">
+            <span class="rotulo">Rotación</span>
+            <span class="valor" class:varias={v?.rot === null}>{textoRotacion(v?.rot ?? null)}</span>
+            {@render botonesGiro()}
+          </div>
+          <div class="fila">
+            <span class="rotulo">Espejar</span>
+            <span class="valor"></span>
+            {@render botonEspejar()}
+          </div>
+        {/if}
         {#if soloLectura}
           <p class="nota">Solo lectura en Simular</p>
         {/if}
@@ -251,7 +271,7 @@
       <div class="vacio">
         <MousePointer2 size={22} />
         <p>Nada seleccionado</p>
-        <p class="pista">Seleccioná un componente para ver su etiqueta y rotación.</p>
+        <p class="pista">Seleccioná un componente o un cable para ver sus datos.</p>
       </div>
     {/if}
   {:else}

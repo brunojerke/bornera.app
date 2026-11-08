@@ -9,9 +9,29 @@ export function abrirAlSeleccionar(antes: number, despues: number, plegadoPorUsu
   return antes === 0 && despues > 0 && !plegadoPorUsuario;
 }
 
-/** "1 componente seleccionado", "3 componentes seleccionados". */
-export function textoCantidad(n: number): string {
-  return n === 1 ? "1 componente seleccionado" : `${n} componentes seleccionados`;
+import type { ExtremoResumen } from "../editor/editor";
+
+/** Cuánto dura un aviso en la barra de estado, en ms. */
+export const DURACION_AVISO_MS = 4000;
+
+const cuenta = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
+/**
+ * "1 componente seleccionado", "3 cables seleccionados", "2 componentes y 1
+ * cable seleccionados".
+ */
+export function textoCantidad(componentes: number, cables = 0): string {
+  const c = cuenta(componentes, "componente", "componentes");
+  const w = cuenta(cables, "cable", "cables");
+  if (cables === 0) return `${c} ${componentes === 1 ? "seleccionado" : "seleccionados"}`;
+  if (componentes === 0) return `${w} ${cables === 1 ? "seleccionado" : "seleccionados"}`;
+  return `${c} y ${w} seleccionados`;
+}
+
+/** Un extremo de cable: "K1 · A1", "Sobre otro cable", "Suelto". */
+export function textoExtremo(e: ExtremoResumen): string {
+  if (e.tipo === "borne") return `${e.etiqueta} · ${e.borne}`;
+  return e.tipo === "cable" ? "Sobre otro cable" : "Suelto";
 }
 
 /** Con varios seleccionados, un valor distinto entre ellos. */

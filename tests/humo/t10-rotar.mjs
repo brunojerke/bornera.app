@@ -290,7 +290,7 @@ export default async function (p, comprobar) {
   comprobar("rotar todo con 2000 es un solo paso", (await pasos()) === 2);
 
   // Volver al documento (vacía → documento): sigue habiendo un solo listener.
-  for (let i = 0; i < 2; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
+  for (let i = 0; i < 3; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
   await p.esperarA("bornera.activo() === bornera.editor");
   await seleccionar([ids[0]]);
   const antesVuelta = await pasos();

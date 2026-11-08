@@ -81,6 +81,16 @@ function informe(r, sinGpu) {
     lineas.push(tabla(filas));
   }
 
+  // Lo que tarda el paso (fuera del cuadro): seleccionar y resumir, borrar y deshacer.
+  const conPaso = r.mediciones.filter((m) => m.paso && m.modo === modos[0]);
+  if (conPaso.length > 0) {
+    lineas.push("");
+    lineas.push("Tiempo de cada paso, fuera del cuadro (comando, selección, resumen del panel), en ms:");
+    const filas = [["Escena", "Escenario", "Mediana", "Máx."]];
+    for (const m of conPaso) filas.push([String(m.componentes), m.escenario, ms.format(m.paso.mediana), ms.format(m.paso.maximo)]);
+    lineas.push(tabla(filas));
+  }
+
   // Caché de textos de la capa dinámica, en los escenarios que lo informan.
   const conTextos = r.mediciones.filter((m) => m.textos);
   if (conTextos.length > 0) {

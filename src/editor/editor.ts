@@ -34,9 +34,23 @@
 // - Girar, espejar y borrar actúan sobre la selección, con un solo comando
 //   (un paso de deshacer). Solo con ids que siguen en la hoja; sin
 //   ninguno, no hay comando ni paso.
+//
+// Cables (T12): la escena dibuja cada cable del documento con su recorrido
+// resuelto (`recorridoCable`). La selección puede tener cables y
+// componentes; Supr borra todo junto (`Borrar` suelta lo que colgaba de lo
+// borrado). Hasta que los extremos sigan al borne (T14a), girar, espejar y
+// arrastrar no hacen nada si hay un cable seleccionado o un componente
+// cableado: no hay comando ni paso, y se avisa en la barra de estado.
 
+import { hayCablesEn, indexarHoja, recorridoCable, type IndiceHoja } from "../core/model/cables";
 import { Borrar, CambiarEtiqueta, Espejar, Rotar, type Cambio, type Comando } from "../core/model/comandos";
-import { buscarComponente, crearDocumento, type Componente, type Documento } from "../core/model/documento";
+import {
+  crearDocumento,
+  type Cable,
+  type Componente,
+  type Documento,
+  type Extremo,
+} from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { Historial } from "../core/model/historial";
 import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
@@ -44,7 +58,7 @@ import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
 import { nivelDetalle } from "../render/detalle";
 import { grosorLinea, type ComponenteEscena } from "../render/escena";
-import { EscenaEditable } from "../render/escenaEditable";
+import { EscenaEditable, type CableEscena } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
 import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
@@ -80,10 +94,21 @@ export interface DestinoVista {
   invalidar(): void;
 }
 
+/** Un extremo de cable, para mostrar en el panel. */
+export type ExtremoResumen =
+  | { tipo: "borne"; etiqueta: string; borne: string }
+  | { tipo: "cable" }
+  | { tipo: "libre" };
+
 /** Lo que el panel de propiedades muestra de la selección. */
 export interface ResumenSeleccion {
+  /** Componentes más cables. */
   cantidad: number;
-  /** Con un solo componente seleccionado, sus datos; si no, null. */
+  componentes: number;
+  cables: number;
+  /** Con un solo cable seleccionado (y nada más), sus extremos; si no, null. */
+  cable: { id: string; desde: ExtremoResumen; hasta: ExtremoResumen } | null;
+  /** Con un solo componente seleccionado (y nada más), sus datos; si no, null. */
   unico: {
     id: string;
     /** Nombre del símbolo, para mostrar ("Bobina de contactor"). */
@@ -96,11 +121,32 @@ export interface ResumenSeleccion {
     /** En una fuente: cuántas otras alimentaciones del documento están en su misma red; si no, 0. */
     otrasEnRed: number;
   } | null;
-  /** Con varios: la etiqueta y la rotación si todos tienen la misma; null si son distintas. */
+  /**
+   * Con varios: la etiqueta y la rotación de los componentes, si todos tienen
+   * la misma; null si son distintas o no hay componentes.
+   */
   varios: { etiqueta: string | null; rot: number | null } | null;
 }
 
-export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unico: null, varios: null });
+export const SIN_SELECCION: ResumenSeleccion = Object.freeze({
+  cantidad: 0,
+  componentes: 0,
+  cables: 0,
+  cable: null,
+  unico: null,
+  varios: null,
+});
+
+/** Lo que hace cada acción que se bloquea con cables, para el aviso. */
+export type Transformacion = "mover" | "girar" | "espejar";
+
+/**
+ * Aviso de una transformación bloqueada hasta que los extremos sigan al
+ * borne. Es para el usuario: no menciona tareas.
+ */
+export function avisoBloqueo(t: Transformacion, hayCableSeleccionado: boolean): string {
+  return hayCableSeleccionado ? `Todavía no se pueden ${t} cables.` : `Todavía no se pueden ${t} componentes con cables.`;
+}
 
 /**
  * Hasta cuántos componentes visibles se dibujan completos mientras se
@@ -158,6 +204,8 @@ export class Editor {
   alCambiarSeleccion: (() => void) | null = null;
   /** Se avisa cuando cambia lo que se puede deshacer o rehacer (para los botones). */
   alCambiarHistorial: (() => void) | null = null;
+  /** Aviso para la barra de estado: una acción que no se pudo hacer. */
+  alAvisar: ((texto: string) => void) | null = null;
   /** La herramienta que está cuando no hay otra. */
   readonly seleccionar: HerramientaSeleccionar;
   private _seleccion: ReadonlySet<string> = new Set();
@@ -178,7 +226,15 @@ export class Editor {
   ) {
     this.historial = new Historial(documento);
     for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
-    this.seleccionar = new HerramientaSeleccionar(this.escena, () => this._seleccion);
+    const h = documento.hojas[hoja];
+    if (h && h.cables.length > 0) {
+      const indice = indexarHoja(h);
+      for (const w of h.cables) {
+        const c = this.cableEscena(indice, w);
+        if (c) this.escena.ponerCable(w.id, c);
+      }
+    }
+    this.seleccionar = new HerramientaSeleccionar(this.escena, () => this._seleccion, (ids) => this.bloqueo("mover", ids));
   }
 
   /** La herramienta que recibe los eventos: la elegida, o la de selección. */
@@ -202,7 +258,7 @@ export class Editor {
    */
   seleccionarIds(ids: Iterable<string>): void {
     const nueva = new Set<string>();
-    for (const id of ids) if (this.escena.obtener(id)) nueva.add(id);
+    for (const id of ids) if (this.escena.existe(id)) nueva.add(id);
     const actual = this._seleccion;
     if (nueva.size === actual.size && [...nueva].every((id) => actual.has(id))) return;
     this._seleccion = nueva;
@@ -219,31 +275,42 @@ export class Editor {
   resumenSeleccion(): ResumenSeleccion {
     const cantidad = this._seleccion.size;
     if (cantidad === 0) return SIN_SELECCION;
-    if (cantidad > 1) {
-      let etiqueta: string | null = null;
-      let rot: number | null = null;
-      let primero = true;
-      for (const c of this.componentesHoja()) {
-        if (!this._seleccion.has(c.id)) continue;
-        if (primero) {
-          etiqueta = c.etiqueta;
-          rot = c.rot;
-          primero = false;
-        } else {
-          if (etiqueta !== c.etiqueta) etiqueta = null;
-          if (rot !== c.rot) rot = null;
-          if (etiqueta === null && rot === null) break;
-        }
+    // Una pasada por los componentes y otra por los cables de la hoja.
+    let componentes = 0;
+    let cables = 0;
+    let etiqueta: string | null = null;
+    let rot: number | null = null;
+    let unico: Componente | null = null;
+    let unicoCable: Cable | null = null;
+    for (const c of this.componentesHoja()) {
+      if (!this._seleccion.has(c.id)) continue;
+      if (componentes === 0) {
+        etiqueta = c.etiqueta;
+        rot = c.rot;
+        unico = c;
+      } else {
+        if (etiqueta !== c.etiqueta) etiqueta = null;
+        if (rot !== c.rot) rot = null;
       }
-      return { cantidad, unico: null, varios: { etiqueta, rot } };
+      componentes++;
     }
-    const [id] = this._seleccion;
-    const c = buscarComponente(this.documento, id!);
-    if (!c) return { cantidad, unico: null, varios: null };
+    for (const w of this.cablesHoja()) {
+      if (!this._seleccion.has(w.id)) continue;
+      if (cables === 0) unicoCable = w;
+      cables++;
+    }
+    const base = { cantidad, componentes, cables, cable: null, unico: null, varios: null };
+    if (cantidad > 1) return { ...base, varios: { etiqueta, rot } };
+    if (unicoCable) {
+      const w = unicoCable;
+      return { ...base, cable: { id: w.id, desde: this.extremoResumen(w.desde), hasta: this.extremoResumen(w.hasta) } };
+    }
+    if (!unico) return base;
+    const c = unico;
     const def = buscarSimbolo(c.tipo) ?? SIMBOLO_DESCONOCIDO;
     const esFuente = def.elemento === "fuente";
     return {
-      cantidad,
+      ...base,
       unico: {
         id: c.id,
         nombre: def.nombre,
@@ -253,8 +320,14 @@ export class Editor {
         esFuente,
         otrasEnRed: esFuente ? this.otrasEnRed(c) : 0,
       },
-      varios: null,
     };
+  }
+
+  /** Un extremo para el panel: en un borne, la etiqueta del componente (o su id, si no tiene). */
+  private extremoResumen(e: Extremo): ExtremoResumen {
+    if (e.tipo !== "borne") return { tipo: e.tipo };
+    const c = this.componentesHoja().find((k) => k.id === e.comp);
+    return { tipo: "borne", etiqueta: c?.etiqueta || e.comp, borne: e.borne };
   }
 
   /** Cuántas otras fuentes del documento (todas las hojas) tienen el mismo nombre de red que `f`. */
@@ -361,6 +434,13 @@ export class Editor {
     }
     const ids = this.idsSeleccionados();
     if (ids.length === 0) return false;
+    if (a !== "borrar") {
+      const aviso = this.bloqueo(a === "espejar" ? "espejar" : "girar", ids);
+      if (aviso) {
+        this.alAvisar?.(aviso);
+        return false;
+      }
+    }
     switch (a) {
       case "rotar":
         this.ejecutar(new Rotar(ids, 90));
@@ -379,9 +459,22 @@ export class Editor {
   }
 
   /**
-   * Borra lo seleccionado en un solo paso. Los ids van tal cual al comando,
-   * sin suponer que son solo componentes: en T12, `Borrar` también recibe
-   * cables, y por dentro borra o suelta los cables conectados a lo que borra.
+   * Aviso si `ids` no se pueden mover, girar o espejar todavía (hay un cable,
+   * o un componente cableado); null si se puede. Una pasada por los cables.
+   */
+  bloqueo(t: Transformacion, ids: Iterable<string>): string | null {
+    const comps = new Set<string>();
+    for (const id of ids) {
+      if (this.escena.esCable(id)) return avisoBloqueo(t, true);
+      comps.add(id);
+    }
+    const hoja = this.documento.hojas[this.hoja];
+    return hoja && hayCablesEn(hoja, comps) ? avisoBloqueo(t, false) : null;
+  }
+
+  /**
+   * Borra lo seleccionado en un solo paso, componentes y cables juntos.
+   * `Borrar` suelta lo que colgaba de lo borrado.
    */
   private borrarSeleccion(ids: readonly string[]): void {
     this.ejecutar(new Borrar(ids));
@@ -396,6 +489,7 @@ export class Editor {
     if (this._seleccion.size === 0) return [];
     const ids: string[] = [];
     for (const c of this.componentesHoja()) if (this._seleccion.has(c.id)) ids.push(c.id);
+    for (const w of this.cablesHoja()) if (this._seleccion.has(w.id)) ids.push(w.id);
     return ids;
   }
 
@@ -427,6 +521,7 @@ export class Editor {
    * comando, terminar el arrastre, cambiar la selección, redibujar, terminar.
    */
   aplicar(r: Resultado): void {
+    if (r.aviso) this.alAvisar?.(r.aviso);
     if (r.arrastre?.fase === "empezar") this.empezarArrastre(r.arrastre.ids);
     try {
       if (r.comando) this.ejecutar(r.comando);
@@ -511,6 +606,27 @@ export class Editor {
     return this.documento.hojas[this.hoja]?.componentes ?? [];
   }
 
+  private cablesHoja(): readonly Cable[] {
+    return this.documento.hojas[this.hoja]?.cables ?? [];
+  }
+
+  /**
+   * Lo que dibuja la escena para un cable del documento, o null si no se
+   * puede resolver (un extremo apunta a algo que no está): no se dibuja y se
+   * avisa en la consola, sin romper nada.
+   */
+  private cableEscena(indice: IndiceHoja, w: Cable): CableEscena | null {
+    const puntos = recorridoCable(indice, w);
+    if (!puntos) {
+      console.warn(`Bornera: el cable "${w.id}" apunta a algo que no está; no se dibuja.`);
+      return null;
+    }
+    const libres: number[] = [];
+    if (w.desde.tipo === "libre") libres.push(w.desde.x, w.desde.y);
+    if (w.hasta.tipo === "libre") libres.push(w.hasta.x, w.hasta.y);
+    return { puntos, libres };
+  }
+
   /** Lo que dibuja la escena para un componente del documento. Avisa una vez por tipo desconocido. */
   private aEscena(c: Componente): ComponenteEscena {
     let def = buscarSimbolo(c.tipo);
@@ -532,7 +648,7 @@ export class Editor {
    * componentes lejanos, o deshacer un movimiento largo).
    */
   private reflejar(cambio: Cambio): Cambio {
-    if (cambio.componentes.length === 0) return cambio;
+    if (cambio.componentes.length === 0 && cambio.cables.length === 0) return cambio;
     // Una pasada por la hoja, no una búsqueda por id.
     const ids = new Set(cambio.componentes);
     const actuales = new Map<string, Componente>();
@@ -551,6 +667,20 @@ export class Editor {
       if (this._seleccion.has(id)) {
         tocaSeleccion = true;
         if (!c) (quitados ??= []).push(id);
+      }
+    }
+    if (cambio.cables.length > 0) {
+      const hoja = this.documento.hojas[this.hoja];
+      const indice = hoja ? indexarHoja(hoja) : null;
+      for (const id of new Set(cambio.cables)) {
+        const w = indice?.cables.get(id);
+        const c = indice && w ? this.cableEscena(indice, w) : null;
+        const cajas = c ? this.escena.ponerCable(id, c) : this.escena.quitarCable(id);
+        for (const k of cajas) this.vista?.invalidarRegion(k);
+        if (this._seleccion.has(id)) {
+          tocaSeleccion = true;
+          if (!c) (quitados ??= []).push(id);
+        }
       }
     }
     // Lo seleccionado que ya no está (se borró, o se deshizo su Colocar) sale de la selección.

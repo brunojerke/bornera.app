@@ -32,7 +32,7 @@ export class Historial {
   /** Varios comandos en un solo paso de deshacer. Sin comandos, no agrega paso. */
   agrupar(comandos: readonly Comando[]): Cambio {
     const grupo = new Grupo(comandos);
-    if (grupo.vacio) return { componentes: [] };
+    if (grupo.vacio) return { componentes: [], cables: [] };
     return this.ejecutar(grupo);
   }
 

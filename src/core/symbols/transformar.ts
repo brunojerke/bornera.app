@@ -85,3 +85,26 @@ export function transformarBornes(bornes: readonly Borne[], t: Transformacion): 
     direccion: transformarDireccion(b.direccion, t),
   }));
 }
+
+/**
+ * Bornes de un símbolo colocado en (x, y) con la transformación `t`: posición
+ * absoluta en la hoja y dirección de salida en pantalla. Es la única cuenta
+ * de dónde queda un borne: la usan los cables, la escena y las herramientas.
+ */
+export function bornesColocados(bornes: readonly Borne[], x: number, y: number, t: Transformacion): Borne[] {
+  return transformarBornes(bornes, t).map((b) => ({ ...b, x: b.x + x + 0, y: b.y + y + 0 }));
+}
+
+/** El borne `nombre` colocado (como `bornesColocados`), o undefined si el símbolo no lo tiene. */
+export function borneColocado(
+  bornes: readonly Borne[],
+  nombre: string,
+  x: number,
+  y: number,
+  t: Transformacion,
+): Borne | undefined {
+  const b = bornes.find((k) => k.nombre === nombre);
+  if (!b) return undefined;
+  const p = transformarPunto(b.x, b.y, t);
+  return { nombre: b.nombre, x: p.x + x + 0, y: p.y + y + 0, direccion: transformarDireccion(b.direccion, t) };
+}

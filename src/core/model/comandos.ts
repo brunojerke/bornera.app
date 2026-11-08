@@ -14,12 +14,28 @@
 
 import type { Rotacion } from "../symbols/tipos";
 import { espejarEnPantalla, rotarEnPantalla } from "../symbols/transformar";
-import { buscarComponente, generarId, type Componente, type Documento } from "./documento";
+import { copiarCable, hayCablesEn, indexarHoja, puntoExtremo, validarCable, type IndiceHoja } from "./cables";
+import {
+  buscarComponente,
+  generarId,
+  PREFIJO_CABLE,
+  type Cable,
+  type Componente,
+  type Documento,
+  type Extremo,
+} from "./documento";
 
-/** Lo que cambió un comando. T12 suma `cables`. */
+/** Lo que cambió un comando. */
 export interface Cambio {
   /** Ids de los componentes agregados, quitados o modificados. */
   componentes: string[];
+  /** Ids de los cables agregados, quitados o modificados (también los soltados). */
+  cables: string[];
+}
+
+/** Cambio que toca solo esos componentes. */
+function soloComponentes(ids: readonly string[]): Cambio {
+  return { componentes: [...ids], cables: [] };
 }
 
 export interface Comando {
@@ -29,9 +45,13 @@ export interface Comando {
 
 /** Une varios cambios en uno, sin ids repetidos. */
 export function unirCambios(cambios: readonly Cambio[]): Cambio {
-  const ids = new Set<string>();
-  for (const c of cambios) for (const id of c.componentes) ids.add(id);
-  return { componentes: [...ids] };
+  const comps = new Set<string>();
+  const cables = new Set<string>();
+  for (const c of cambios) {
+    for (const id of c.componentes) comps.add(id);
+    for (const id of c.cables) cables.add(id);
+  }
+  return { componentes: [...comps], cables: [...cables] };
 }
 
 /** Copia de un componente que no comparte nada con el original. */
@@ -77,6 +97,18 @@ function exigirEntero(valor: number, nombre: string): void {
   if (!Number.isInteger(valor)) throw new RangeError(`${nombre} tiene que ser entero (es ${valor}).`);
 }
 
+/**
+ * Hasta que los extremos sigan al borne (T14a), mover, rotar o espejar un
+ * componente cableado dejaría tramos en diagonal: se rechaza antes de tocar
+ * nada. Una pasada por los cables de cada hoja.
+ */
+function exigirSinCables(doc: Documento, ids: readonly string[], comando: string): void {
+  const set = new Set(ids);
+  for (const hoja of doc.hojas) {
+    if (hayCablesEn(hoja, set)) throw new Error(`${comando}: todavía no se pueden mover componentes con cables.`);
+  }
+}
+
 // ── Colocar ────────────────────────────────────────────────────────────────
 
 /** Agrega un componente ya armado, con su id. Para uno nuevo, usar `colocar`. */
@@ -102,7 +134,7 @@ export class Colocar implements Comando {
     if (buscarComponente(doc, this.id)) throw new Error(`Ya existe el componente "${this.id}".`);
     // Una copia nueva cada vez: rehacer arranca del componente original.
     hoja.componentes.push(copiarComponente(this.componente));
-    return { componentes: [this.id] };
+    return soloComponentes([this.id]);
   }
 
   deshacer(doc: Documento): Cambio {
@@ -110,7 +142,7 @@ export class Colocar implements Comando {
     const i = lista ? lista.findIndex((c) => c.id === this.id) : -1;
     if (!lista || i < 0) throw new Error(`No existe el componente "${this.id}".`);
     lista.splice(i, 1);
-    return { componentes: [this.id] };
+    return soloComponentes([this.id]);
   }
 }
 
@@ -150,11 +182,13 @@ export class Mover implements Comando {
   }
 
   private trasladar(doc: Documento, dx: number, dy: number): Cambio {
-    for (const { comp } of ubicar(doc, this.ids)) {
+    const ubicados = ubicar(doc, this.ids);
+    exigirSinCables(doc, this.ids, "Mover");
+    for (const { comp } of ubicados) {
       comp.x += dx;
       comp.y += dy;
     }
-    return { componentes: [...this.ids] };
+    return soloComponentes(this.ids);
   }
 }
 
@@ -192,7 +226,10 @@ abstract class Transformar implements Comando {
   protected readonly ids: string[];
   private antes: Pose[] | null = null;
 
-  constructor(ids: Iterable<string>, nombre: string) {
+  constructor(
+    ids: Iterable<string>,
+    private readonly nombre: string,
+  ) {
     this.ids = idsUnicos(ids, nombre);
   }
 
@@ -201,17 +238,18 @@ abstract class Transformar implements Comando {
 
   aplicar(doc: Documento): Cambio {
     const comps = ubicar(doc, this.ids).map((u) => u.comp);
+    exigirSinCables(doc, this.ids, this.nombre);
     const nuevas = this.calcular(comps);
     this.antes = comps.map(pose);
     comps.forEach((c, i) => Object.assign(c, nuevas[i]!));
-    return { componentes: [...this.ids] };
+    return soloComponentes(this.ids);
   }
 
   deshacer(doc: Documento): Cambio {
     const antes = this.antes;
     if (!antes) throw new Error("No se puede deshacer un comando que no se aplicó.");
     ubicar(doc, this.ids).forEach((u, i) => Object.assign(u.comp, antes[i]!));
-    return { componentes: [...this.ids] };
+    return soloComponentes(this.ids);
   }
 }
 
@@ -285,49 +323,218 @@ export class Espejar extends Transformar {
   }
 }
 
-// ── Borrar ─────────────────────────────────────────────────────────────────
+// ── Cablear ────────────────────────────────────────────────────────────────
 
-interface Borrado {
-  hoja: number;
-  indice: number;
-  comp: Componente;
+/** Agrega un cable ya armado, con su id. Para uno nuevo, usar `cablear`. */
+export class Cablear implements Comando {
+  private readonly cable: Cable;
+
+  constructor(
+    cable: Cable,
+    private readonly hoja = 0,
+  ) {
+    this.cable = copiarCable(cable);
+  }
+
+  get id(): string {
+    return this.cable.id;
+  }
+
+  aplicar(doc: Documento): Cambio {
+    const hoja = doc.hojas[this.hoja];
+    if (!hoja) throw new Error(`No existe la hoja ${this.hoja}.`);
+    const indice = indexarHoja(hoja);
+    if (indice.cables.has(this.id) || indice.componentes.has(this.id)) throw new Error(`Ya existe el id "${this.id}".`);
+    const problemas = validarCable(indice, this.cable);
+    if (problemas.length > 0) throw new Error(`Cable "${this.id}" inválido: ${problemas.map((p) => p.mensaje).join(" ")}`);
+    // Una copia nueva cada vez: rehacer arranca del cable original.
+    hoja.cables.push(copiarCable(this.cable));
+    return { componentes: [], cables: [this.id] };
+  }
+
+  deshacer(doc: Documento): Cambio {
+    const lista = doc.hojas[this.hoja]?.cables;
+    const i = lista ? lista.findIndex((w) => w.id === this.id) : -1;
+    if (!lista || i < 0) throw new Error(`No existe el cable "${this.id}".`);
+    lista.splice(i, 1);
+    return { componentes: [], cables: [this.id] };
+  }
 }
 
-/** Quita componentes. Deshacer los devuelve a su hoja y a su lugar en la lista. */
+/** Datos de un cable nuevo: los extremos y los codos, sin id. */
+export type DatosCable = Omit<Cable, "id">;
+
+/**
+ * Arma el comando para un cable nuevo. El id ("w1"…) se da acá, al
+ * construir. Los números se validan antes de gastar el id; el resto
+ * (referencias, forma), al aplicar.
+ */
+export function cablear(doc: Documento, datos: DatosCable, hoja = 0): Cablear {
+  for (const e of [datos.desde, datos.hasta]) {
+    if (e.tipo !== "borne") {
+      exigirEntero(e.x, "x");
+      exigirEntero(e.y, "y");
+    }
+  }
+  for (const [x, y] of datos.codos) {
+    exigirEntero(x, "x del codo");
+    exigirEntero(y, "y del codo");
+  }
+  return new Cablear({ ...datos, id: generarId(doc, PREFIJO_CABLE) }, hoja);
+}
+
+// ── Borrar ─────────────────────────────────────────────────────────────────
+
+interface Borrado<T> {
+  hoja: number;
+  indice: number;
+  dato: T;
+}
+
+/** Un cable que quedó con un extremo suelto, y cómo estaban sus extremos antes. */
+interface Soltado {
+  hoja: number;
+  id: string;
+  desde: Extremo;
+  hasta: Extremo;
+}
+
+const porLugar = <T>(a: Borrado<T>, b: Borrado<T>) => a.hoja - b.hoja || a.indice - b.indice;
+
+/**
+ * Quita componentes y cables (los ids pueden venir mezclados). Lo que colgaba
+ * de lo borrado se suelta, no se borra: un extremo en un borne de un
+ * componente borrado, o sobre un cable borrado, pasa a libre en el punto
+ * donde estaba. Deshacer devuelve todo a su hoja y a su lugar en la lista, y
+ * los extremos soltados a su conexión.
+ *
+ * Todo sale de un índice armado en una pasada por el documento:
+ * O(componentes + cables), sin búsquedas por id.
+ */
 export class Borrar implements Comando {
   private readonly ids: string[];
-  /** Ordenados por hoja e índice, de menor a mayor. */
-  private borrados: Borrado[] | null = null;
+  private hecho: {
+    /** Ordenados por hoja e índice, de menor a mayor. */
+    componentes: Borrado<Componente>[];
+    cables: Borrado<Cable>[];
+    soltados: Soltado[];
+  } | null = null;
 
   constructor(ids: Iterable<string>) {
     this.ids = idsUnicos(ids, "Borrar");
   }
 
   aplicar(doc: Documento): Cambio {
-    const borrados = ubicar(doc, this.ids)
-      .map((u) => ({ hoja: u.hoja, indice: u.indice, comp: copiarComponente(u.comp) }))
-      .sort((a, b) => a.hoja - b.hoja || a.indice - b.indice);
-    // De atrás para adelante, así los índices que faltan no se corren.
-    for (let i = borrados.length - 1; i >= 0; i--) {
-      const b = borrados[i]!;
-      doc.hojas[b.hoja]!.componentes.splice(b.indice, 1);
+    // 1. Ubicar todo sin tocar nada: si falta un id, el documento queda igual.
+    const lugares = new Map<string, { hoja: number; indice: number; cable: boolean }>();
+    doc.hojas.forEach((hoja, h) => {
+      hoja.componentes.forEach((c, indice) => lugares.set(c.id, { hoja: h, indice, cable: false }));
+      hoja.cables.forEach((w, indice) => lugares.set(w.id, { hoja: h, indice, cable: true }));
+    });
+    const componentes: Borrado<Componente>[] = [];
+    const cables: Borrado<Cable>[] = [];
+    const quitados = new Set<string>();
+    for (const id of this.ids) {
+      const u = lugares.get(id);
+      if (!u) throw new Error(`No existe "${id}".`);
+      const hoja = doc.hojas[u.hoja]!;
+      if (u.cable) cables.push({ hoja: u.hoja, indice: u.indice, dato: copiarCable(hoja.cables[u.indice]!) });
+      else componentes.push({ hoja: u.hoja, indice: u.indice, dato: copiarComponente(hoja.componentes[u.indice]!) });
+      quitados.add(id);
     }
-    this.borrados = borrados;
-    return { componentes: [...this.ids] };
+    componentes.sort(porLugar);
+    cables.sort(porLugar);
+
+    // 2. Lo que se suelta, con el punto que tiene ahora (antes de quitar nada).
+    const soltados: Soltado[] = [];
+    const nuevos: { cable: Cable; desde: Extremo; hasta: Extremo }[] = [];
+    doc.hojas.forEach((hoja, h) => {
+      let indice: IndiceHoja | null = null;
+      for (const w of hoja.cables) {
+        if (quitados.has(w.id)) continue;
+        const sueltaDesde = cuelgaDe(w.desde, quitados);
+        const sueltaHasta = cuelgaDe(w.hasta, quitados);
+        if (!sueltaDesde && !sueltaHasta) continue;
+        indice ??= indexarHoja(hoja);
+        soltados.push({ hoja: h, id: w.id, desde: { ...w.desde }, hasta: { ...w.hasta } });
+        nuevos.push({
+          cable: w,
+          desde: sueltaDesde ? soltar(indice, w.desde) : w.desde,
+          hasta: sueltaHasta ? soltar(indice, w.hasta) : w.hasta,
+        });
+      }
+    });
+
+    // 3. Recién ahora se cambia el documento.
+    for (const n of nuevos) {
+      n.cable.desde = n.desde;
+      n.cable.hasta = n.hasta;
+    }
+    // De atrás para adelante, así los índices que faltan no se corren.
+    for (let i = cables.length - 1; i >= 0; i--) doc.hojas[cables[i]!.hoja]!.cables.splice(cables[i]!.indice, 1);
+    for (let i = componentes.length - 1; i >= 0; i--) {
+      doc.hojas[componentes[i]!.hoja]!.componentes.splice(componentes[i]!.indice, 1);
+    }
+    this.hecho = { componentes, cables, soltados };
+    return this.cambio();
   }
 
   deshacer(doc: Documento): Cambio {
-    const borrados = this.borrados;
-    if (!borrados) throw new Error("No se puede deshacer un comando que no se aplicó.");
-    const mapa = indexar(doc);
-    for (const b of borrados) {
-      if (!doc.hojas[b.hoja]) throw new Error(`No existe la hoja ${b.hoja}.`);
-      if (mapa.has(b.comp.id)) throw new Error(`Ya existe el componente "${b.comp.id}".`);
+    const hecho = this.hecho;
+    if (!hecho) throw new Error("No se puede deshacer un comando que no se aplicó.");
+    // Todo se comprueba antes de tocar nada.
+    const existentes = new Set<string>();
+    const cablesPorId = new Map<string, Cable>();
+    for (const hoja of doc.hojas) {
+      for (const c of hoja.componentes) existentes.add(c.id);
+      for (const w of hoja.cables) {
+        existentes.add(w.id);
+        cablesPorId.set(w.id, w);
+      }
     }
+    for (const b of [...hecho.componentes, ...hecho.cables]) {
+      if (!doc.hojas[b.hoja]) throw new Error(`No existe la hoja ${b.hoja}.`);
+      if (existentes.has(b.dato.id)) throw new Error(`Ya existe "${b.dato.id}".`);
+    }
+    for (const s of hecho.soltados) if (!cablesPorId.has(s.id)) throw new Error(`No existe el cable "${s.id}".`);
+
     // De adelante para atrás: cada uno vuelve a su índice original.
-    for (const b of borrados) doc.hojas[b.hoja]!.componentes.splice(b.indice, 0, copiarComponente(b.comp));
-    return { componentes: [...this.ids] };
+    for (const b of hecho.componentes) doc.hojas[b.hoja]!.componentes.splice(b.indice, 0, copiarComponente(b.dato));
+    for (const b of hecho.cables) doc.hojas[b.hoja]!.cables.splice(b.indice, 0, copiarCable(b.dato));
+    for (const s of hecho.soltados) {
+      const w = cablesPorId.get(s.id)!;
+      w.desde = { ...s.desde };
+      w.hasta = { ...s.hasta };
+    }
+    return this.cambio();
   }
+
+  private cambio(): Cambio {
+    const h = this.hecho!;
+    return {
+      componentes: h.componentes.map((b) => b.dato.id),
+      cables: [...h.cables.map((b) => b.dato.id), ...h.soltados.map((s) => s.id)],
+    };
+  }
+}
+
+/** True si el extremo está conectado a algo de `quitados`. */
+function cuelgaDe(e: Extremo, quitados: ReadonlySet<string>): boolean {
+  if (e.tipo === "borne") return quitados.has(e.comp);
+  if (e.tipo === "cable") return quitados.has(e.cable);
+  return false;
+}
+
+/**
+ * El extremo suelto en el punto donde está ahora. Si no se puede resolver (un
+ * documento que ya era inválido: un borne que no existe), queda en el centro
+ * del componente, para no perder el cable.
+ */
+function soltar(indice: IndiceHoja, e: Extremo): Extremo {
+  const p = puntoExtremo(indice, e);
+  if (p) return { tipo: "libre", x: p.x, y: p.y };
+  const c = e.tipo === "borne" ? indice.componentes.get(e.comp) : undefined;
+  return { tipo: "libre", x: c?.x ?? 0, y: c?.y ?? 0 };
 }
 
 // ── Etiqueta ───────────────────────────────────────────────────────────────
@@ -344,13 +551,13 @@ export class CambiarEtiqueta implements Comando {
     const c = this.buscar(doc);
     this.anterior = c.etiqueta;
     c.etiqueta = this.etiqueta;
-    return { componentes: [this.id] };
+    return soloComponentes([this.id]);
   }
 
   deshacer(doc: Documento): Cambio {
     if (this.anterior === null) throw new Error("No se puede deshacer un comando que no se aplicó.");
     this.buscar(doc).etiqueta = this.anterior;
-    return { componentes: [this.id] };
+    return soloComponentes([this.id]);
   }
 
   private buscar(doc: Documento): Componente {

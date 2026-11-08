@@ -31,6 +31,13 @@ export interface Renderer {
    * trazarlos de a uno cuesta un trazo por rectángulo.
    */
   rectangulos(cajas: ArrayLike<number>, n: number): void;
+  /**
+   * `n` segmentos en un solo trazo. `segmentos` tiene x0, y0, x1, y1
+   * seguidos. Para los cables: un trazo por pasada, no uno por cable, y los
+   * codos no se pintan dos veces. Tope cuadrado (pensado para segmentos
+   * horizontales y verticales).
+   */
+  lineas(segmentos: ArrayLike<number>, n: number): void;
   /** `y` es el centro vertical del texto; `alto` es el alto de la letra. */
   texto(x: number, y: number, texto: string, alto: number, alineacion?: Alineacion): void;
   /**

@@ -149,6 +149,22 @@ export class RendererCanvas implements Renderer {
     else this.ctx.strokeRect(x, y, ancho, alto);
   }
 
+  lineas(segmentos: ArrayLike<number>, n: number): void {
+    if (n === 0) return;
+    const c = this.ctx;
+    c.beginPath();
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      c.moveTo(segmentos[j]!, segmentos[j + 1]!);
+      c.lineTo(segmentos[j + 2]!, segmentos[j + 3]!);
+    }
+    // Tope cuadrado: en tramos horizontales y verticales llena justo la
+    // esquina de cada codo (con el redondeado, la esquina de afuera queda
+    // redonda) y no tiene arcos que suavizar.
+    c.lineCap = "square";
+    c.stroke();
+    c.lineCap = "round";
+  }
+
   rectangulos(cajas: ArrayLike<number>, n: number): void {
     if (n === 0) return;
     const c = this.ctx;

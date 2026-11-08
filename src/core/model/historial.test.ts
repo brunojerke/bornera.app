@@ -24,7 +24,7 @@ const fallido: Comando = {
     throw new Error("falla a propósito");
   },
   deshacer(): Cambio {
-    return { componentes: [] };
+    return { componentes: [], cables: [] };
   },
 };
 
@@ -41,16 +41,16 @@ describe("Historial", () => {
     const { doc, h } = nuevo();
     const c = colocar(doc, lampara(2, 2));
     const vacio = copia(doc);
-    expect(h.ejecutar(c)).toEqual({ componentes: ["c1"] });
+    expect(h.ejecutar(c)).toEqual({ componentes: ["c1"], cables: [] });
     const colocado = copia(doc);
     expect(h.puedeDeshacer).toBe(true);
 
-    expect(h.deshacer()).toEqual({ componentes: ["c1"] });
+    expect(h.deshacer()).toEqual({ componentes: ["c1"], cables: [] });
     expect(doc).toEqual(vacio);
     expect(h.puedeDeshacer).toBe(false);
     expect(h.puedeRehacer).toBe(true);
 
-    expect(h.rehacer()).toEqual({ componentes: ["c1"] });
+    expect(h.rehacer()).toEqual({ componentes: ["c1"], cables: [] });
     expect(doc).toEqual(colocado);
     expect(h.puedeRehacer).toBe(false);
   });
@@ -86,7 +86,7 @@ describe("Historial", () => {
     const a = colocar(doc, lampara(4, 0));
     const antes = copia(doc);
     const cambio = h.agrupar([a, new Mover([a.id, "c1"], 0, 2), new Rotar([a.id, "c1"], 90), new Borrar(["c1"])]);
-    expect(cambio).toEqual({ componentes: [a.id, "c1"] });
+    expect(cambio).toEqual({ componentes: [a.id, "c1"], cables: [] });
     const despues = copia(doc);
 
     h.deshacer();
@@ -100,7 +100,7 @@ describe("Historial", () => {
     const { doc, h } = nuevo();
     h.ejecutar(colocar(doc, lampara(0, 0)));
     h.deshacer();
-    expect(h.agrupar([])).toEqual({ componentes: [] });
+    expect(h.agrupar([])).toEqual({ componentes: [], cables: [] });
     expect(h.puedeDeshacer).toBe(false);
     expect(h.puedeRehacer).toBe(true);
   });

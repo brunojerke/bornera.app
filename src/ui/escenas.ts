@@ -5,8 +5,11 @@
 import { CANTIDADES_BANCO } from "../render/banco";
 import type { EscenaDesarrollo } from "./tipos";
 
-/** Orden del ciclo: 100, 500, 2000 símbolos, la escena vacía y vuelta al documento. */
-export const CICLO_BANCO: readonly EscenaDesarrollo[] = [...CANTIDADES_BANCO, "vacia", "documento"];
+/** Orden del ciclo: 100, 500, 2000 símbolos, 2000 con cables, la escena vacía y vuelta al documento. */
+export const CICLO_BANCO: readonly EscenaDesarrollo[] = [...CANTIDADES_BANCO, "cables", "vacia", "documento"];
+
+/** Símbolos de la escena del banco con cables (con CABLES_POR_COMPONENTE cables cada uno). */
+export const SIMBOLOS_BANCO_CABLES = 2000;
 
 /** Escena que sigue en el ciclo. Desde una escena fuera del ciclo, arranca por la primera. */
 export function siguienteEscenaBanco(actual: EscenaDesarrollo): EscenaDesarrollo {

@@ -1,6 +1,7 @@
 // Banco de dibujado: corre dentro del navegador headless que abre correr.mjs.
 // Dibuja las escenas de 100, 500 y 2000 símbolos con las mismas Capas que usa
-// la app y manda los tiempos al script por POST.
+// la app y manda los tiempos al script por POST. Después, la de 2000 con 3000
+// cables (T12), abierta en un Editor como en la app (Ctrl+Shift+B).
 //
 // Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
 // repite varias veces. Un gesto son cuadros seguidos, uno cada 16,7 ms, y
@@ -24,7 +25,9 @@ import {
 import type { EscenaEditable as Escena } from "../../src/render/escenaEditable";
 import { dibujarSeleccion } from "../../src/render/resaltado";
 import { nivelDetalle } from "../../src/render/detalle";
-import { LIMITE_ARRASTRE_COMPLETO } from "../../src/editor/editor";
+import { Editor, LIMITE_ARRASTRE_COMPLETO } from "../../src/editor/editor";
+import { documentoBancoCables, SIN_CABLES_BANCO } from "../../src/editor/banco";
+import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 
 /** Pantalla típica de netbook. */
@@ -45,7 +48,8 @@ const MAX_COLA = 500;
 export type Modo = "optimizado" | "sin caché de textos" | "sin optimizar";
 
 export interface Medicion {
-  componentes: number;
+  /** Símbolos de la escena, o "2000 + 3000 cables". */
+  componentes: number | string;
   escenario: string;
   modo: Modo;
   /** Cuadros medidos (gesto más cola, en todas las repeticiones). */
@@ -67,6 +71,8 @@ export interface Medicion {
    * primer cuadro de cada gesto y el resto. Solo en los escenarios que lo piden.
    */
   textos?: { primero: UsoTextos; resto: UsoTextos };
+  /** ms de cada paso (fuera del cuadro), en los escenarios que lo piden: mediana y máximo. */
+  paso?: { mediana: number; maximo: number };
 }
 
 export interface Resultado {
@@ -76,7 +82,7 @@ export interface Resultado {
   dpr: number;
   mediciones: Medicion[];
   /** MB de heap JS con cada escena armada (null si el navegador no lo informa). */
-  memoria: { componentes: number; heapMB: number | null }[];
+  memoria: { componentes: number | string; heapMB: number | null }[];
 }
 
 interface Escenario {
@@ -95,6 +101,8 @@ interface Escenario {
   dinamico?(e: Escena): DibujarDinamico;
   /** Informar aciertos y fallos del caché de textos de la capa dinámica. */
   textos?: boolean;
+  /** Medir también lo que tarda cada paso (fuera del cuadro). */
+  medirPaso?: boolean;
 }
 
 /** Aciertos y fallos del caché de textos de la capa dinámica. */
@@ -216,12 +224,18 @@ const dibujarArrastre = arrastrarCon(LIMITE_ARRASTRE_COMPLETO);
 const ZOOM_ARRASTRE = 0.58;
 const ARRASTRADOS = 40;
 
-/** Los `n` componentes más cercanos al centro de la escena que están enteros en pantalla. */
+/**
+ * Los `n` componentes más cercanos al centro de la escena que están enteros
+ * en pantalla. En la escena con cables, solo los que se pueden mover (los del
+ * centro, sin cables).
+ */
 function cercanosAlCentro(c: Camara, e: Escena, n: number): Set<string> {
   const v = c.visible(ANCHO, ALTO);
   const cx = v.x + v.ancho / 2;
   const cy = v.y + v.alto / 2;
-  const ids = e.idsEnCaja(v, "contiene");
+  const ids = e
+    .idsEnCaja(v, "contiene")
+    .filter((id) => !e.esCable(id) && (editorCables?.escena !== e || editorCables.bloqueo("mover", [id]) === null));
   const d = (id: string) => {
     const k = e.obtener(id)!;
     return (k.x - cx) ** 2 + (k.y - cy) ** 2;
@@ -375,6 +389,118 @@ const ESCENARIOS: Escenario[] = [
   },
 ];
 
+// ── Escena con cables ──────────────────────────────────────────────────────
+// Se abre en un Editor: seleccionar, borrar y deshacer van por el editor y
+// sus comandos, como en la app. Las invalidaciones van a las Capas del
+// escenario que se está midiendo.
+
+let editorCables: Editor | null = null;
+let capasActivas: Capas | null = null;
+
+function abrirEditorCables(): Editor {
+  const ed = new Editor(documentoBancoCables(SIMBOLOS_BANCO_CABLES));
+  ed.vista = { invalidarRegion: (k) => void capasActivas?.invalidarRegion(k), invalidar: () => {} };
+  editorCables = ed;
+  return ed;
+}
+
+/** Todo seleccionado y el resumen del panel, alternando con nada seleccionado. */
+function seleccionarTodo(_: Camara, __: Capas, e: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 0) ed.seleccionarIds(e.idsEnCaja(e.caja!, "toca"));
+  else ed.seleccionarIds([]);
+  ed.resumenSeleccion();
+}
+
+/** El componente cableado más cercano al centro (fuera de los que no tienen cables). */
+let borrado: string | null = null;
+function cableadoDelCentro(e: Escena): string {
+  const ed = editorCables!;
+  const k = e.caja!;
+  const cx = k.x + k.ancho / 2;
+  const cy = k.y + k.alto / 2;
+  let mejor = Infinity;
+  for (const c of ed.documento.hojas[0]!.componentes) {
+    const d = (c.x - cx) ** 2 + (c.y - cy) ** 2;
+    if (d < mejor && ed.bloqueo("mover", [c.id]) !== null) {
+      mejor = d;
+      borrado = c.id;
+    }
+  }
+  return borrado!;
+}
+
+/** Supr sobre un componente con cables y Ctrl+Z, alternando: un paso de deshacer cada uno. */
+function borrarYDeshacer(_: Camara, __: Capas, e: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 0) {
+    ed.seleccionarIds([borrado ?? cableadoDelCentro(e)]);
+    ed.accion("borrar");
+  } else {
+    ed.deshacer();
+  }
+}
+
+/** Escenarios de la escena con cables: los de dibujo de siempre y los de edición que se pueden hacer. */
+const ESCENARIOS_CABLES: Escenario[] = [
+  ...ESCENARIOS.filter((x) =>
+    ["Rehacer al 100 %", "Rehacer al 31 %", "Encuadrar (F)", "Zoom con la rueda", "Desplazar al 100 %", "Arrastre al 31 %"].includes(x.nombre),
+  ),
+  {
+    // Seleccionar todo (2000 símbolos y 3000 cables) y deseleccionar: resaltado y resumen del panel.
+    nombre: "Seleccionar todo al 31 %",
+    preparar: (c, e) => {
+      editorCables!.seleccionarIds([]);
+      centrar(c, e, ZOOM_TEXTOS);
+    },
+    cuadros: 10,
+    paso: seleccionarTodo,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+  },
+  {
+    // La vista se arrastra con todo seleccionado: el resaltado de 3000 cables en cada cuadro.
+    nombre: "Arrastre con todo seleccionado al 31 %",
+    preparar: (c, e) => {
+      editorCables!.seleccionarIds(e.idsEnCaja(e.caja!, "toca"));
+      alBordeIzquierdo(c, e, ZOOM_TEXTOS);
+    },
+    reiniciar: (c, e) => alBordeIzquierdo(c, e, ZOOM_TEXTOS),
+    cuadros: 100,
+    paso: (c) => c.desplazar(-16, -3),
+    repeticiones: 2,
+    dinamico: () => editorCables!.dibujarDinamico,
+  },
+  {
+    // El arrastre que se puede hacer hasta T14a: los 40 del centro, sin cables.
+    // Es el mismo caso que el criterio de la netbook.
+    nombre: `Mover ${SIN_CABLES_BANCO} sin cables al 58 %`,
+    preparar: (c, e) => {
+      editorCables!.seleccionarIds([]);
+      centrar(c, e, ZOOM_ARRASTRE);
+      seleccion = cercanosAlCentro(c, e, ARRASTRADOS);
+    },
+    cuadros: CUADROS_ARRASTRE,
+    paso: moverArrastrando,
+    repeticiones: 3,
+    dinamico: dibujarArrastre,
+  },
+  {
+    // Supr y Ctrl+Z sobre un componente con cables, con la vista quieta.
+    nombre: "Borrar y deshacer uno con cables al 31 %",
+    preparar: (c, e) => {
+      editorCables!.seleccionarIds([]);
+      centrar(c, e, ZOOM_TEXTOS);
+    },
+    cuadros: 10,
+    paso: borrarYDeshacer,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+  },
+];
+
 const OPCIONES: Record<Modo, OpcionesCapas> = {
   optimizado: { ...OPCIONES_OPTIMIZADAS },
   "sin caché de textos": { ...OPCIONES_OPTIMIZADAS, cacheTextos: false },
@@ -398,6 +524,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
   canvas.height = ALTO * DPR;
   const ctx = contexto(canvas);
   const capas = new Capas(ctx);
+  capasActivas = capas;
   capas.contenido = escena;
   capas.opciones = { ...opciones };
   capas.dinamico = escenario.dinamico?.(escena) ?? null;
@@ -430,6 +557,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
   };
 
   const tiempos: number[] = [];
+  const pasos: number[] = [];
   let total = 0;
   const usoPrimero = { aciertos: 0, fallos: 0 };
   const usoResto = { aciertos: 0, fallos: 0 };
@@ -460,7 +588,9 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     midiendo = medido;
     let m: MedidaCuadro | null = null;
     for (let i = 0; i < escenario.cuadros; i++) {
+      const p0 = performance.now();
       escenario.paso(camara, capas, escena, i);
+      if (medido && escenario.medirPaso) pasos.push(performance.now() - p0);
       t += CUADRO;
       const antes = { ...capas.textosDinamica };
       const [m2, ms] = cuadro();
@@ -473,8 +603,10 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     if (medido) sumarTextos(usoResto, antes);
   }
   capas.liberarCache();
+  capasActivas = null;
   canvas.width = canvas.height = 0;
   tiempos.sort((a, b) => a - b);
+  pasos.sort((a, b) => a - b);
   return {
     cuadros: tiempos.length,
     mediana: percentil(tiempos, 0.5),
@@ -485,6 +617,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     cache,
     mosaicosMax,
     ...(escenario.textos ? { textos: { primero: usoPrimero, resto: usoResto } } : {}),
+    ...(escenario.medirPaso ? { paso: { mediana: percentil(pasos, 0.5), maximo: pasos.at(-1) ?? 0 } } : {}),
   };
 }
 
@@ -532,6 +665,18 @@ async function correr(): Promise<void> {
       }
     }
   }
+  // La de 2000 con cables, en un Editor.
+  const ed = abrirEditorCables();
+  const nombre = `${SIMBOLOS_BANCO_CABLES} + ${ed.escena.cantidadCables} cables`;
+  resultado.memoria.push({ componentes: nombre, heapMB: heapMB() });
+  for (const escenario of ESCENARIOS_CABLES) {
+    for (const modo of modos) {
+      estado.textContent = `${nombre} · ${escenario.nombre} · ${modo}`;
+      await respirar();
+      resultado.mediciones.push({ componentes: nombre, escenario: escenario.nombre, modo, ...medir(ed.escena, escenario, OPCIONES[modo]) });
+    }
+  }
+
   await enviar(resultado);
   estado.textContent = "Listo.";
 }
