@@ -131,10 +131,13 @@ export class Pagina {
     return this.cdp("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY });
   }
 
-  /** Aprieta y suelta una tecla: `key` ("Escape", "b"), `code` ("KeyB") y código de Windows. */
-  async tecla(key, code, codigoWindows, mods = 0) {
+  /**
+   * Aprieta y suelta una tecla: `key` ("Escape", "b"), `code` ("KeyB") y código de Windows.
+   * Con `texto`, la tecla también escribe ese texto (en un campo con foco).
+   */
+  async tecla(key, code, codigoWindows, mods = 0, texto = undefined) {
     const base = { key, code, windowsVirtualKeyCode: codigoWindows, modifiers: mods };
-    await this.cdp("Input.dispatchKeyEvent", { type: "keyDown", ...base });
+    await this.cdp("Input.dispatchKeyEvent", { type: "keyDown", ...base, ...(texto ? { text: texto } : {}) });
     await this.cdp("Input.dispatchKeyEvent", { type: "keyUp", ...base });
     await esperar(30);
   }

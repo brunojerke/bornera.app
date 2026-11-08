@@ -632,3 +632,245 @@ describe("Editor: diagnóstico del arrastre (alpha.2)", () => {
     }
   });
 });
+
+describe("Editor: atajos (T10)", () => {
+  /** Tres bobinas en (0,0), (6,0) y (3,4), seleccionadas, con las regiones en cero. */
+  function conTres() {
+    const { editor, vista } = armar();
+    const ids = [
+      [0, 0],
+      [6, 0],
+      [3, 4],
+    ].map(([x, y], i) => {
+      const cmd = colocar(editor.documento, datos(x!, y!, `K${i + 1}`));
+      editor.ejecutar(cmd);
+      return cmd.id;
+    });
+    editor.seleccionarIds(ids);
+    vista.regiones = [];
+    vista.cuadros = 0;
+    return { editor, vista, ids };
+  }
+  const pose = (editor: Editor) =>
+    editor.documento.hojas[0]!.componentes.map(({ x, y, rot, espejado }) => ({ x, y, rot, espejado }));
+  /** Cantidad de pasos que se pueden deshacer (sin tocar la escena: va directo al historial y vuelve). */
+  function pasos(editor: Editor): number {
+    let n = 0;
+    while (editor.historial.puedeDeshacer) {
+      editor.historial.deshacer();
+      n++;
+    }
+    for (let i = 0; i < n; i++) editor.historial.rehacer();
+    return n;
+  }
+
+  it("R con varios seleccionados: un solo paso, y cada uno invalida su caja vieja y la nueva", () => {
+    const { editor, vista } = conTres();
+    const antes = editor.documento.hojas[0]!.componentes.map((c) => ({ ...c }));
+    expect(editor.accion("rotar")).toBe(true);
+    expect(pasos(editor)).toBe(4); // 3 Colocar + 1 Rotar
+    const despues = editor.documento.hojas[0]!.componentes;
+    expect(vista.regiones).toEqual(antes.flatMap((c, i) => [cajaDe(c), cajaDe(despues[i]!)]));
+    expect(vista.enteras).toBe(0);
+    expect(editor.escena.obtener(despues[0]!.id)).toMatchObject({ x: despues[0]!.x, y: despues[0]!.y, rotacion: 90 });
+    // Siguen seleccionados.
+    expect(editor.seleccion.size).toBe(3);
+  });
+
+  it("4×R, 4×Mayús+R y 2×M vuelven al estado exacto; cada uno es un paso que se deshace y rehace", () => {
+    const { editor } = conTres();
+    const original = pose(editor);
+    for (const [accion, veces] of [
+      ["rotar", 4],
+      ["rotarAntihorario", 4],
+      ["espejar", 2],
+    ] as const) {
+      const intermedios: ReturnType<typeof pose>[] = [];
+      for (let i = 0; i < veces; i++) {
+        editor.accion(accion);
+        intermedios.push(pose(editor));
+      }
+      expect(pose(editor), accion).toEqual(original);
+      // Deshacer de a uno pasa por los mismos estados al revés; rehacer vuelve.
+      for (let i = veces - 2; i >= 0; i--) {
+        editor.accion("deshacer");
+        expect(pose(editor)).toEqual(intermedios[i]);
+      }
+      editor.accion("deshacer");
+      expect(pose(editor)).toEqual(original);
+      for (let i = 0; i < veces; i++) editor.accion("rehacer");
+      expect(pose(editor)).toEqual(original);
+    }
+  });
+
+  it("Supr borra la selección en un paso, la vacía e invalida cada caja; deshacer los devuelve", () => {
+    const { editor, vista, ids } = conTres();
+    const cajas = editor.documento.hojas[0]!.componentes.map(cajaDe);
+    const avisos = vi.fn();
+    editor.alCambiarSeleccion = avisos;
+    expect(editor.accion("borrar")).toBe(true);
+    expect(editor.documento.hojas[0]!.componentes).toEqual([]);
+    expect(editor.escena.cantidad).toBe(0);
+    expect(editor.seleccion.size).toBe(0);
+    expect(avisos).toHaveBeenCalled();
+    expect(vista.regiones).toEqual(cajas);
+    editor.accion("deshacer");
+    expect(editor.documento.hojas[0]!.componentes.map((c) => c.id)).toEqual(ids);
+    expect(editor.escena.cantidad).toBe(3);
+    // La selección no se deshace: lo restaurado no vuelve a quedar seleccionado.
+    expect(editor.seleccion.size).toBe(0);
+    editor.accion("rehacer");
+    expect(editor.escena.cantidad).toBe(0);
+  });
+
+  it("sin selección, R, M y Supr no hacen nada ni agregan pasos", () => {
+    const { editor, vista } = conTres();
+    editor.seleccionarIds([]);
+    const n = pasos(editor);
+    for (const a of ["rotar", "rotarAntihorario", "espejar", "borrar"] as const) expect(editor.accion(a)).toBe(false);
+    expect(pasos(editor)).toBe(n);
+    expect(vista.regiones).toEqual([]);
+  });
+
+  it("colocar, seleccionar, deshacer y R: sin cambios y sin paso nuevo", () => {
+    const { editor } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    editor.seleccionarIds([cmd.id]);
+    editor.accion("deshacer");
+    // Deshacer el Colocar lo sacó también de la selección.
+    expect(editor.seleccion.size).toBe(0);
+    expect(editor.accion("rotar")).toBe(false);
+    expect(editor.accion("borrar")).toBe(false);
+    expect(editor.puedeDeshacer).toBe(false);
+    expect(editor.puedeRehacer).toBe(true); // R no generó un paso que borre lo deshecho
+    // Rehacer lo vuelve a poner, pero sin seleccionarlo.
+    editor.accion("rehacer");
+    expect(editor.seleccion.size).toBe(0);
+  });
+
+  it("rehacer un Borrar saca de la selección lo que se vuelve a borrar", () => {
+    const { editor, ids } = conTres();
+    editor.accion("borrar");
+    editor.accion("deshacer");
+    editor.seleccionarIds([ids[0]!]);
+    editor.accion("rehacer");
+    expect(editor.seleccion.size).toBe(0);
+    expect(editor.accion("rotar")).toBe(false);
+  });
+
+  it("durante un arrastre de la selección se ignora todo, sin tocar nada", () => {
+    const { editor, vista } = conTres();
+    editor.aplicar(editor.activa.presionar(ev(0, 0)));
+    for (let i = 1; i <= 10; i++) editor.aplicar(editor.activa.mover(ev(i * 0.3, 0)));
+    expect(editor.arrastrando).toBe(true);
+    const antes = pose(editor);
+    const n = pasos(editor);
+    const regiones = vista.regiones.length;
+    for (const a of ["rotar", "rotarAntihorario", "espejar", "borrar", "deshacer", "rehacer"] as const) {
+      expect(editor.accion(a)).toBe(false);
+    }
+    expect(pose(editor)).toEqual(antes);
+    expect(pasos(editor)).toBe(n);
+    expect(vista.regiones).toHaveLength(regiones);
+    expect(editor.arrastrando).toBe(true);
+    // Al soltar, un solo Mover como siempre.
+    editor.aplicar(editor.activa.soltar(ev(3, 0)));
+    expect(pasos(editor)).toBe(n + 1);
+    expect(pose(editor)[0]).toMatchObject({ x: 3, y: 0, rot: 0 });
+  });
+
+  it("con el botón apretado (clic o rectángulo en curso) también se ignora", () => {
+    const { editor } = conTres();
+    editor.aplicar(editor.activa.presionar(ev(20, 20))); // en vacío
+    expect(editor.accion("borrar")).toBe(false);
+    editor.aplicar(editor.activa.mover(ev(25, 25))); // rectángulo
+    expect(editor.accion("rotar")).toBe(false);
+    expect(editor.accion("deshacer")).toBe(false);
+    editor.aplicar(editor.activa.soltar(ev(25, 25)));
+    // Terminado el gesto, vuelve a andar.
+    expect(editor.accion("deshacer")).toBe(true);
+  });
+
+  it("colocando: R y M giran la vista previa sin pasos; Supr no hace nada; el Colocar sale orientado", () => {
+    const { editor, vista } = conTres();
+    const n = pasos(editor);
+    const h = editor.iniciarColocar(buscarSimbolo("fuente.fase")!, "clic")!;
+    editor.aplicar(h.mover(ev(10, 10)));
+    vista.cuadros = 0;
+    expect(editor.accion("rotar")).toBe(true);
+    expect(editor.accion("rotar")).toBe(true);
+    expect(editor.accion("espejar")).toBe(true);
+    expect(vista.cuadros).toBe(3);
+    expect(vista.regiones).toEqual([]);
+    expect(pasos(editor)).toBe(n);
+    // Supr no borra la selección mientras se coloca.
+    expect(editor.accion("borrar")).toBe(false);
+    expect(editor.documento.hojas[0]!.componentes).toHaveLength(3);
+
+    // La previa se dibuja con esa orientación…
+    const g: unknown[][] = [];
+    const r = new Proxy({} as Renderer, { get: (_, nombre) => (...a: unknown[]) => g.push([nombre, ...a]) });
+    editor.dibujarDinamico(r, { escala: 20, colores: COLORES, medir: MEDIR, visible: TODO });
+    expect(g).toContainEqual(["rotar", 180]);
+    expect(g).toContainEqual(["escalar", -1, 1]);
+    // …y es la que queda en el documento.
+    editor.aplicar(h.presionar(ev(10, 10)));
+    expect(editor.documento.hojas[0]!.componentes[3]).toMatchObject({
+      tipo: "fuente.fase",
+      x: 10,
+      y: 10,
+      rot: 180,
+      espejado: true,
+    });
+    expect(pasos(editor)).toBe(n + 1);
+  });
+
+  it("colocando en modo clic, Ctrl+Z deshace; mientras se arrastra desde la paleta, no", () => {
+    const { editor } = conTres();
+    const h = editor.iniciarColocar(buscarSimbolo("contactor.bobina")!, "clic")!;
+    editor.aplicar(h.presionar(ev(10, 10)));
+    expect(editor.documento.hojas[0]!.componentes).toHaveLength(4);
+    expect(editor.accion("deshacer")).toBe(true);
+    expect(editor.documento.hojas[0]!.componentes).toHaveLength(3);
+    expect(editor.herramienta).toBe(h); // sigue colocando
+    editor.cancelarHerramienta();
+
+    const a = editor.iniciarColocar(buscarSimbolo("contactor.bobina")!, "arrastre")!;
+    editor.aplicar(a.mover(ev(1, 1)));
+    expect(editor.accion("deshacer")).toBe(false);
+    expect(editor.accion("rehacer")).toBe(false);
+    expect(editor.accion("rotar")).toBe(true); // girar la previa sí
+    editor.aplicar(a.soltar(ev(1, 1)));
+    expect(editor.documento.hojas[0]!.componentes.at(-1)).toMatchObject({ rot: 90 });
+  });
+
+  it("un símbolo nuevo de la paleta empieza derecho; Esc descarta la orientación", () => {
+    const { editor } = armar();
+    const def = buscarSimbolo("contactor.bobina")!;
+    editor.iniciarColocar(def, "clic");
+    editor.accion("rotar");
+    editor.accion("espejar");
+    editor.cancelarHerramienta();
+    expect(editor.puedeDeshacer).toBe(false);
+    expect(editor.iniciarColocar(def, "clic")!.orientacion).toEqual({ rotacion: 0, espejado: false });
+  });
+
+  it("avisa cada cambio del historial (para los botones), también al deshacer y rehacer", () => {
+    const { editor } = conTres();
+    const estados: [boolean, boolean][] = [];
+    editor.alCambiarHistorial = () => estados.push([editor.puedeDeshacer, editor.puedeRehacer]);
+    editor.accion("rotar");
+    for (let i = 0; i < 4; i++) editor.accion("deshacer");
+    expect(editor.accion("deshacer")).toBe(false); // nada más: sin aviso
+    editor.accion("rehacer");
+    expect(estados).toEqual([
+      [true, false],
+      [true, true],
+      [true, true],
+      [true, true],
+      [false, true],
+      [true, true],
+    ]);
+  });
+});

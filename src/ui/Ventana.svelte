@@ -25,6 +25,8 @@
   let cursor = $state<Punto | null>(null);
   /** Tipo del símbolo que se está colocando (para resaltarlo en la paleta). */
   let colocando = $state<string | null>(null);
+  let puedeDeshacer = $state(false);
+  let puedeRehacer = $state(false);
   let lienzo: ReturnType<typeof Lienzo>;
 
   // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
@@ -85,6 +87,10 @@
     onacercar={() => lienzo.acercar()}
     onalejar={() => lienzo.alejar()}
     onencuadrar={() => lienzo.encuadrar()}
+    puedeDeshacer={modo === "editar" && puedeDeshacer}
+    puedeRehacer={modo === "editar" && puedeRehacer}
+    ondeshacer={() => lienzo.deshacer()}
+    onrehacer={() => lienzo.rehacer()}
     bind:escena
     bind:rendimiento
     bind:opciones
@@ -103,6 +109,9 @@
       bind:zoom
       bind:cursor
       bind:colocando
+      bind:puedeDeshacer
+      bind:puedeRehacer
+      {modo}
       {escena}
       {rendimiento}
       {opciones}

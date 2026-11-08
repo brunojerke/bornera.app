@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Borne, Rotacion, Transformacion } from "./tipos";
-import { transformarBornes, transformarDireccion, transformarPunto } from "./transformar";
+import {
+  espejarEnPantalla,
+  normalizarRotacion,
+  rotarEnPantalla,
+  transformarBornes,
+  transformarDireccion,
+  transformarPunto,
+} from "./transformar";
 import { validarDefinicion } from "./validar";
 
 const ROTACIONES: Rotacion[] = [0, 90, 180, 270];
@@ -123,5 +130,79 @@ describe("transformarBornes", () => {
       });
       expect(errores).toEqual([]);
     }
+  });
+});
+
+describe("normalizarRotacion", () => {
+  it.each([
+    [0, 0],
+    [360, 0],
+    [-90, 270],
+    [-360, 0],
+    [450, 90],
+    [-270, 90],
+    [720, 0],
+  ] as const)("%i° → %i°", (entrada, esperada) => {
+    expect(Object.is(normalizarRotacion(entrada), esperada)).toBe(true);
+  });
+
+  it("rechaza lo que no es múltiplo de 90", () => {
+    expect(() => normalizarRotacion(45)).toThrow(RangeError);
+  });
+});
+
+describe("rotarEnPantalla y espejarEnPantalla", () => {
+  /** Puntos asimétricos: cualquier error de composición se nota. */
+  const PUNTOS = [
+    [2, 1],
+    [-1, 3],
+    [0, -2],
+  ] as const;
+
+  it.each(TODAS)("con %o, rotar equivale a girar en pantalla el resultado", (t) => {
+    for (const sentido of [90, -90] as const) {
+      const u = rotarEnPantalla(t, sentido);
+      for (const [x, y] of PUNTOS) {
+        const p = transformarPunto(x, y, t);
+        // Giro de 90° horario en pantalla (y hacia abajo): (x, y) → (−y, x).
+        const esperado = sentido === 90 ? { x: -p.y + 0, y: p.x + 0 } : { x: p.y + 0, y: -p.x + 0 };
+        expect(transformarPunto(x, y, u)).toEqual(esperado);
+      }
+      expect(ROTACIONES).toContain(u.rotacion);
+    }
+  });
+
+  it.each(TODAS)("con %o, espejar equivale a espejar en pantalla el resultado (x → −x)", (t) => {
+    const u = espejarEnPantalla(t);
+    for (const [x, y] of PUNTOS) {
+      const p = transformarPunto(x, y, t);
+      expect(transformarPunto(x, y, u)).toEqual({ x: -p.x + 0, y: p.y });
+    }
+    expect(ROTACIONES).toContain(u.rotacion);
+  });
+
+  it.each(TODAS)("con %o, la rotación siempre queda en 0, 90, 180 o 270 (nunca 360 ni negativa)", (t) => {
+    let u = t;
+    for (const paso of ["+", "+", "-", "m", "-", "-", "-", "m", "+"] as const) {
+      u = paso === "m" ? espejarEnPantalla(u) : rotarEnPantalla(u, paso === "+" ? 90 : -90);
+      expect(ROTACIONES).toContain(u.rotacion);
+      expect(Object.is(u.rotacion, -0)).toBe(false);
+    }
+  });
+
+  it.each(TODAS)("con %o, rotar 4 veces y espejar 2 vuelven al estado exacto", (t) => {
+    for (const sentido of [90, -90] as const) {
+      let u = t;
+      for (let i = 0; i < 4; i++) u = rotarEnPantalla(u, sentido);
+      expect(u).toEqual(t);
+    }
+    expect(espejarEnPantalla(espejarEnPantalla(t))).toEqual(t);
+  });
+
+  it("no modifican la transformación que reciben", () => {
+    const t: Transformacion = { rotacion: 90, espejado: false };
+    rotarEnPantalla(t, 90);
+    espejarEnPantalla(t);
+    expect(t).toEqual({ rotacion: 90, espejado: false });
   });
 });

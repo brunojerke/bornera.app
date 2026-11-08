@@ -33,7 +33,7 @@ describe("HerramientaColocar, modo clic", () => {
     const d = doc();
     const h = new HerramientaColocar(BOBINA, "clic", d);
     h.mover(ev(3.4, -1.6));
-    expect(h.previa).toEqual({ def: BOBINA, x: 3, y: -2 });
+    expect(h.previa).toEqual({ def: BOBINA, x: 3, y: -2, rotacion: 0, espejado: false });
 
     const r = h.presionar(ev(3.4, -1.6));
     expect(r.terminar).toBeFalsy();
@@ -160,5 +160,89 @@ describe("los 7 símbolos de la biblioteca", () => {
       expect(Number.isInteger(c.y)).toBe(true);
     }
     expect(comps.map((c) => [c.x, c.y])).toEqual(SIMBOLOS.map((_, i) => [i * 4, -1]));
+  });
+});
+
+describe("R y M sobre la vista previa (T10)", () => {
+  const FASE = buscarSimbolo("fuente.fase")!;
+
+  it("R gira la previa 90° horario y Mayús+R antihorario; M la espeja", () => {
+    const h = new HerramientaColocar(BOBINA, "clic", doc());
+    h.mover(ev(1, 1));
+    expect(h.rotar(90).redibujar).toBe(true);
+    expect(h.previa).toMatchObject({ x: 1, y: 1, rotacion: 90, espejado: false });
+    h.rotar(-90);
+    h.rotar(-90);
+    expect(h.previa).toMatchObject({ rotacion: 270, espejado: false });
+    expect(h.espejar().redibujar).toBe(true);
+    // Espejar en pantalla: 270 → 90, con espejado.
+    expect(h.previa).toMatchObject({ rotacion: 90, espejado: true });
+  });
+
+  it("el Colocar sale con la orientación de la previa, en el punto de grilla", () => {
+    const d = doc();
+    const h = new HerramientaColocar(FASE, "clic", d);
+    h.mover(ev(2.4, -0.6));
+    h.rotar(90);
+    h.rotar(90);
+    h.espejar();
+    const historial = new Historial(d);
+    historial.ejecutar(h.presionar(ev(2.4, -0.6)).comando!);
+    expect(d.hojas[0]!.componentes[0]).toMatchObject({ tipo: "fuente.fase", x: 2, y: -1, rot: 180, espejado: true });
+    // Un solo paso de deshacer, y girar la previa no agregó ninguno.
+    historial.deshacer();
+    expect(historial.puedeDeshacer).toBe(false);
+  });
+
+  it("en modo clic, la orientación se conserva para el siguiente", () => {
+    const d = doc();
+    const h = new HerramientaColocar(BOBINA, "clic", d);
+    const historial = new Historial(d);
+    h.rotar(90);
+    historial.ejecutar(h.presionar(ev(0, 0)).comando!);
+    historial.ejecutar(h.presionar(ev(6, 0)).comando!);
+    expect(d.hojas[0]!.componentes.map((c) => c.rot)).toEqual([90, 90]);
+  });
+
+  it("también al arrastrar desde la paleta", () => {
+    const d = doc();
+    const h = new HerramientaColocar(BOBINA, "arrastre", d);
+    h.mover(ev(3, 3));
+    h.rotar(-90);
+    new Historial(d).ejecutar(h.soltar(ev(3, 3)).comando!);
+    expect(d.hojas[0]!.componentes[0]).toMatchObject({ rot: 270, espejado: false });
+  });
+
+  it("una herramienta nueva (elegir otra vez en la paleta) empieza derecha", () => {
+    const d = doc();
+    const h = new HerramientaColocar(BOBINA, "clic", d);
+    h.rotar(90);
+    h.espejar();
+    expect(new HerramientaColocar(BOBINA, "clic", d).orientacion).toEqual({ rotacion: 0, espejado: false });
+  });
+
+  it("sin previa a la vista (mouse fuera del lienzo) cambia la orientación sin pedir cuadro", () => {
+    const h = new HerramientaColocar(BOBINA, "clic", doc());
+    expect(h.rotar(90).redibujar).toBe(false);
+    expect(h.espejar().redibujar).toBe(false);
+    h.mover(ev(0, 0));
+    expect(h.previa).toMatchObject({ rotacion: 270, espejado: true });
+  });
+
+  it("4×R y 2×M vuelven a la orientación inicial", () => {
+    const h = new HerramientaColocar(BOBINA, "clic", doc());
+    for (let i = 0; i < 4; i++) h.rotar(90);
+    h.espejar();
+    h.espejar();
+    expect(h.orientacion).toEqual({ rotacion: 0, espejado: false });
+  });
+
+  it("Esc después de girar no produce nada", () => {
+    const d = doc();
+    const h = new HerramientaColocar(BOBINA, "clic", d);
+    h.mover(ev(0, 0));
+    h.rotar(90);
+    expect(h.cancelar()).toEqual({ redibujar: true, terminar: true });
+    expect(d.hojas[0]!.componentes).toEqual([]);
   });
 });

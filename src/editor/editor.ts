@@ -21,8 +21,21 @@
 // `Mover` mientras siguen ocultos (no invalida nada) y recién después vuelven
 // a la estática (otra invalidación, en la caja nueva). Esc los vuelve a su
 // lugar con la misma invalidación.
+//
+// Atajos (T10): `accion` recibe lo que pidió el teclado o un botón (girar,
+// espejar, borrar, deshacer, rehacer) y decide si se puede hacer ahora:
+// - Durante un gesto del puntero en la herramienta de selección (arrastre o
+//   rectángulo en curso, o el botón todavía apretado) se ignora todo: girar
+//   lo que se arrastra no vale la pena, y deshacer en el medio dejaría el
+//   arrastre apuntando a un estado viejo.
+// - Colocando, girar y espejar van a la vista previa; borrar no hace nada;
+//   deshacer y rehacer valen en modo clic, no mientras se arrastra desde la
+//   paleta.
+// - Girar, espejar y borrar actúan sobre la selección, con un solo comando
+//   (un paso de deshacer). Solo con ids que siguen en la hoja; sin
+//   ninguno, no hay comando ni paso.
 
-import { type Cambio, type Comando } from "../core/model/comandos";
+import { Borrar, Espejar, Rotar, type Cambio, type Comando } from "../core/model/comandos";
 import { buscarComponente, crearDocumento, type Componente, type Documento } from "../core/model/documento";
 import { Historial } from "../core/model/historial";
 import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
@@ -34,6 +47,7 @@ import { EscenaEditable } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
 import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
+import type { Accion } from "./atajos";
 import { HerramientaColocar, type ModoColocar } from "./herramientas/colocar";
 import { HerramientaSeleccionar } from "./herramientas/seleccionar";
 import type { Herramienta, Resultado } from "./herramientas/tipos";
@@ -135,6 +149,8 @@ export class Editor {
    * panel de propiedades).
    */
   alCambiarSeleccion: (() => void) | null = null;
+  /** Se avisa cuando cambia lo que se puede deshacer o rehacer (para los botones). */
+  alCambiarHistorial: (() => void) | null = null;
   /** La herramienta que está cuando no hay otra. */
   readonly seleccionar: HerramientaSeleccionar;
   private _seleccion: ReadonlySet<string> = new Set();
@@ -213,22 +229,102 @@ export class Editor {
 
   /** Ejecuta el comando y muestra el cambio. Si el comando tira un error, no cambia nada. */
   ejecutar(comando: Comando): Cambio {
-    return this.reflejar(this.historial.ejecutar(comando));
+    return this.trasHistorial(this.reflejar(this.historial.ejecutar(comando)));
   }
 
   /** Varios comandos en un solo paso de deshacer. */
   agrupar(comandos: readonly Comando[]): Cambio {
-    return this.reflejar(this.historial.agrupar(comandos));
+    return this.trasHistorial(this.reflejar(this.historial.agrupar(comandos)));
   }
 
+  /**
+   * Deshace el último paso. Lo seleccionado que sale del documento (por
+   * ejemplo, al deshacer su Colocar) sale también de la selección. Para el
+   * teclado y los botones, usar `accion("deshacer")`, que no lo hace en medio
+   * de un gesto.
+   */
   deshacer(): Cambio | null {
     const cambio = this.historial.deshacer();
-    return cambio && this.reflejar(cambio);
+    return cambio && this.trasHistorial(this.reflejar(cambio));
   }
 
+  /** Rehace el último paso deshecho. Igual que `deshacer` con la selección. */
   rehacer(): Cambio | null {
     const cambio = this.historial.rehacer();
-    return cambio && this.reflejar(cambio);
+    return cambio && this.trasHistorial(this.reflejar(cambio));
+  }
+
+  /**
+   * Hace la acción de un atajo o un botón, si se puede ahora (ver el
+   * comentario del principio). Devuelve true si hizo algo.
+   */
+  accion(a: Accion): boolean {
+    const h = this.herramienta;
+    if (h) {
+      // Colocando: girar y espejar cambian la vista previa (también mientras
+      // se arrastra desde la paleta).
+      if (a === "rotar" || a === "rotarAntihorario") {
+        this.aplicar(h.rotar(a === "rotar" ? 90 : -90));
+        return true;
+      }
+      if (a === "espejar") {
+        this.aplicar(h.espejar());
+        return true;
+      }
+      if (a === "borrar" || h.modo === "arrastre") return false;
+    } else if (this.seleccionar.enGesto) {
+      return false;
+    }
+    switch (a) {
+      case "deshacer":
+        return this.deshacer() !== null;
+      case "rehacer":
+        return this.rehacer() !== null;
+    }
+    const ids = this.idsSeleccionados();
+    if (ids.length === 0) return false;
+    switch (a) {
+      case "rotar":
+        this.ejecutar(new Rotar(ids, 90));
+        break;
+      case "rotarAntihorario":
+        this.ejecutar(new Rotar(ids, -90));
+        break;
+      case "espejar":
+        this.ejecutar(new Espejar(ids));
+        break;
+      case "borrar":
+        this.borrarSeleccion(ids);
+        break;
+    }
+    return true;
+  }
+
+  /**
+   * Borra lo seleccionado en un solo paso. Los ids van tal cual al comando,
+   * sin suponer que son solo componentes: en T12, `Borrar` también recibe
+   * cables, y por dentro borra o suelta los cables conectados a lo que borra.
+   */
+  private borrarSeleccion(ids: readonly string[]): void {
+    this.ejecutar(new Borrar(ids));
+  }
+
+  /**
+   * Los ids seleccionados que siguen en la hoja. La selección ya se limpia al
+   * reflejar cada cambio; esto es la garantía de que un comando nunca nombra
+   * un id que no existe.
+   */
+  private idsSeleccionados(): string[] {
+    if (this._seleccion.size === 0) return [];
+    const ids: string[] = [];
+    for (const c of this.componentesHoja()) if (this._seleccion.has(c.id)) ids.push(c.id);
+    return ids;
+  }
+
+  /** Avisa que el historial cambió (después de reflejar el cambio). */
+  private trasHistorial(cambio: Cambio): Cambio {
+    this.alCambiarHistorial?.();
+    return cambio;
   }
 
   /** Empieza a colocar un símbolo de la paleta. Sin vista no hace nada. */
@@ -324,7 +420,8 @@ export class Editor {
     if (rect) dibujarRectangulo(r, info, rect);
     const p = this.herramienta?.previa;
     if (!p) return;
-    const c = { x: p.x, y: p.y, rotacion: 0 as const, espejado: false };
+    // Con la orientación de la herramienta (R, M): la misma que va a tener al colocarse.
+    const c = { x: p.x, y: p.y, rotacion: p.rotacion, espejado: p.espejado };
     const color = info.colores.acento;
     r.estilo({ trazo: color, relleno: color, grosor: grosorLinea(info.escala) });
     const detalle = nivelDetalle(info.escala);

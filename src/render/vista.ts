@@ -82,6 +82,15 @@ export class Vista {
     return this.capas.memoriaCache;
   }
 
+  /**
+   * No hay nada por dibujar: ni un cuadro pedido, ni mosaicos pendientes (si
+   * quedan, el cuadro pide otro), ni la espera del zoom. Para las pruebas de
+   * humo: comparar la pantalla recién cuando terminó de rehacerse.
+   */
+  get enReposo(): boolean {
+    return this.cuadroPendiente === 0 && this.espera === 0;
+  }
+
   /** El contenido cambió: rehacer la capa estática en el próximo cuadro. */
   invalidarContenido(): void {
     this.capas.invalidarEstatica();

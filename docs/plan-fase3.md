@@ -76,7 +76,7 @@ Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fas
 - **Terminado cuando:** aparece en `SIMBOLOS` y pasa `validar`.
 - **Prueba:** test de bornes en `biblioteca.test.ts`, con el mismo patrón que los otros 5.
 - **Hecho (2026-11-08):** tipo `fuente.monofasica`, 2×4, círculo con onda; L (0,−2) arriba y N (0,2) abajo.
-- **Reemplazada (2026-11-08, después de T7):** como en CADe_SIMU, la fuente pasa a ser dos símbolos sueltos de un borne, en Fuentes. `FASE` (`fuente.fase`, "Fase (L)", 2×2): barra arriba y borne `L` en (0, 1) hacia abajo. `NEUTRO` (`fuente.neutro`, "Neutro (N)", 2×2): barra abajo y borne `N` en (0, −1) hacia arriba. La etiqueta es el nombre de la red (se coloca con "L" o "N" por `etiquetaInicial` y se edita: L1, L2, L3). No dibujan el nombre del borne (`mostrarNombresBornes: false`): se vería dos veces. Ver "Etiquetas de red" en [Para la fase 4](#para-la-fase-4).
+- **Reemplazada (2026-11-08, después de T7):** como en CADe_SIMU, la fuente pasa a ser dos símbolos sueltos de un borne, en Fuentes. `FASE` (`fuente.fase`, "Fase (L)", 2×2): barra arriba y borne `L` en (0, 1) hacia abajo. `NEUTRO` (`fuente.neutro`, "Neutro (N)", 2×2): barra abajo y borne `N` en (0, −1) hacia arriba. **Cambio (2026-11-08, antes de T10):** fase y neutro tienen el mismo dibujo, un círculo con senoide, y el borne en (0, 1) hacia abajo; girados 180°, el borne queda arriba. La etiqueta es el nombre de la red (se coloca con "L" o "N" por `etiquetaInicial` y se edita: L1, L2, L3). No dibujan el nombre del borne (`mostrarNombresBornes: false`): se vería dos veces. Ver "Etiquetas de red" en [Para la fase 4](#para-la-fase-4).
 
 ---
 
@@ -115,6 +115,26 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - R y M también rotan/espejan la vista previa mientras se coloca.
 - **Terminado cuando:** todo se puede deshacer y rehacer desde el teclado y los botones.
 - **Prueba:** test del mapa de atajos a comandos y prueba manual.
+- **Hecho (2026-11-08):**
+  - **Transformación:** `rotarEnPantalla` y `espejarEnPantalla` (en `transformar.ts`, siempre devuelven 0/90/180/270) son la única cuenta de R y M: las usan `Rotar`, `Espejar` y la vista previa. Un test compara la matriz del Renderer con `transformarPunto` en las 8 orientaciones, y otro verifica que ningún texto se dibuje girado.
+  - **Mapa de atajos:** está en `src/editor/atajos.ts`, sin DOM.
+    - R gira 90° en sentido horario y Mayús+R antihorario. Cuenta solo la tecla Mayús, no Bloq Mayús.
+    - M espeja; Mayús+M queda libre.
+    - Supr o Retroceso borran; Mayús+Supr queda libre.
+    - Ctrl+Z deshace; Ctrl+Y y Ctrl+Mayús+Z rehacen.
+    - Alt y Meta no hacen nada.
+    - R, M, Supr y Retroceso no se repiten al mantener la tecla.
+  - **Teclado:** un solo listener, el de `punteros.ts`, que se desconecta al cambiar de editor. Los atajos andan aunque el foco quede en la paleta o en un botón. Se ignoran en campos editables, con un diálogo modal abierto y en modo Simular.
+  - **`Editor.accion`:** decide si la acción se puede hacer ahora.
+    - Con un gesto de la herramienta de selección en curso (arrastre o rectángulo), se ignora todo.
+    - Colocando, R y M giran la vista previa y Supr no hace nada. Deshacer y rehacer valen en modo clic, pero no mientras se arrastra desde la paleta.
+    - Sobre la selección, cada acción es un solo comando y usa solo ids que siguen en la hoja.
+  - **Vista previa:** la orientación se conserva mientras la herramienta siga activa. Elegir en la paleta empieza en 0°, y Esc la descarta.
+  - **Deshacer y rehacer:** lo que sale del documento sale también de la selección, y lo restaurado no se vuelve a seleccionar. Botones de la barra activos o inactivos con `alCambiarHistorial`.
+  - **Bug corregido:** `cajaDibujo` no cubría el lado derecho de la etiqueta: con 90° o 270°, una etiqueta larga dejaba restos. Ahora une la etiqueta entera, con el ancho de la letra más ancha (`ANCHO_LETRA_MAXIMO`, 1,05). `cajaEtiqueta` (elegir y resaltar) sigue con el promedio.
+  - **T12:** `Borrar` recibe los ids tal cual. Va a encontrar y guardar los cables conectados dentro de `aplicar`, sin cambiar su interfaz.
+  - **Medición:** rotar todo con 2000 tarda 8–14 ms el comando y 55–69 ms hasta terminar los mosaicos, en la PC. No hizo falta agrupar las invalidaciones por mosaico. Banco: 0 cuadros lentos.
+  - **Humo:** `t10-rotar.mjs`. Compara los píxeles antes y después de 4×R, 2×M y Supr+Ctrl+Z, después de esperar a que no queden mosaicos pendientes (`Vista.enReposo`).
 
 ### T11. Panel de propiedades
 - **Qué:** con un componente seleccionado, se pueden editar la etiqueta (con `CambiarEtiqueta` al confirmar, no en cada tecla), la rotación y el espejado. Con varios seleccionados, se muestra cuántos son.

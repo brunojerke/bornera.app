@@ -3,10 +3,40 @@
 // Orden: primero el espejado horizontal y después la rotación horaria, ambos
 // sobre el origen (centro del símbolo). Un punto entero queda entero.
 
-import type { Borne, Direccion, Transformacion } from "./tipos";
+import type { Borne, Direccion, Rotacion, Transformacion } from "./tipos";
 
 /** Transformación que no cambia nada. */
 export const SIN_TRANSFORMAR: Transformacion = { rotacion: 0, espejado: false };
+
+/** Lleva cualquier múltiplo de 90 (negativo, 360, 450…) a 0, 90, 180 o 270. */
+export function normalizarRotacion(grados: number): Rotacion {
+  if (grados % 90 !== 0) throw new RangeError(`La rotación tiene que ser múltiplo de 90 (es ${grados}).`);
+  // `+ 0` convierte -0 en 0.
+  return ((((grados % 360) + 360) % 360) + 0) as Rotacion;
+}
+
+// ── Componer en pantalla ───────────────────────────────────────────────────
+// Lo que hacen R y M sobre un símbolo, sea uno del documento (Rotar, Espejar)
+// o la vista previa al colocar: las dos usan estas funciones, así el resultado
+// es el mismo. Se aplican después de la transformación que ya tiene.
+
+/**
+ * Gira 90° en pantalla sobre el centro del símbolo: horario con 90,
+ * antihorario con −90. El espejado va antes de la rotación, así que solo
+ * cambia la rotación.
+ */
+export function rotarEnPantalla(t: Transformacion, sentido: 90 | -90): Transformacion {
+  return { rotacion: normalizarRotacion(t.rotacion + sentido), espejado: t.espejado };
+}
+
+/**
+ * Espeja en pantalla, izquierda ↔ derecha, sobre el eje vertical del centro
+ * del símbolo. Espejo en pantalla ∘ rotación θ ∘ espejo propio = rotación −θ ∘
+ * (espejo propio invertido): un símbolo girado también se da vuelta en pantalla.
+ */
+export function espejarEnPantalla(t: Transformacion): Transformacion {
+  return { rotacion: normalizarRotacion(-t.rotacion), espejado: !t.espejado };
+}
 
 /** Aplica espejado y rotación a un punto en coordenadas locales. */
 export function transformarPunto(x: number, y: number, t: Transformacion): { x: number; y: number } {

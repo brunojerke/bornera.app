@@ -220,6 +220,24 @@ function casosGrupo(): [string, [number, number][]][] {
 }
 
 describe("Rotar", () => {
+  it("el centro común sale de las posiciones: el tamaño de las cajas (par o impar) no interviene", () => {
+    // Los mismos lugares con tipos de cajas distintas (2×2, 2×4, 4×4) giran a
+    // las mismas poses: cada símbolo gira sobre su centro entero, y sus bornes
+    // son enteros respecto de ese centro (lo exige validar), aunque los
+    // bordes de una caja impar caigan en media unidad.
+    const posiciones: [number, number][] = [[0, 0], [3, 0], [1, 4]];
+    const poses = (tipos: string[]) => {
+      const doc = crearDocumento(meta);
+      posiciones.forEach(([x, y], i) => colocar(doc, datos(tipos[i]!, x, y)).aplicar(doc));
+      new Rotar(ids(doc), 90).aplicar(doc);
+      return doc.hojas[0]!.componentes.map(({ x, y, rot, espejado }) => ({ x, y, rot, espejado }));
+    };
+    const a = poses(["fuente.fase", "contactor.bobina", "pulsador.na"]);
+    const b = poses(["senalizacion.lampara", "pulsador.nc", "fuente.neutro"]);
+    expect(a).toEqual(b);
+    expect(a.every((p) => Number.isInteger(p.x) && Number.isInteger(p.y))).toBe(true);
+  });
+
   it("uno solo rota en su lugar", () => {
     const doc = docCon([[5, -3]]);
     new Rotar(["c1"], 90).aplicar(doc);

@@ -56,6 +56,13 @@ export function cajaSimbolo(def: DefinicionSimbolo, c: Colocacion): Caja {
 const ANCHO_LETRA = 0.7;
 
 /**
+ * Ancho de la letra más ancha de Helvetica y Arial (W ≈ 0,94, @ ≈ 1,02), con
+ * margen, en altos de letra. Cota para la caja de dibujo: ningún texto real
+ * la pasa, aunque sea "WWWW".
+ */
+export const ANCHO_LETRA_MAXIMO = 1.05;
+
+/**
  * Lo que sobresalen de la caja del símbolo los nombres de bornes y el grosor
  * del trazo. Un borne está en el borde de la caja y su nombre va medio paso
  * adentro, corrido a un costado: con 1,5 unidades sobra para nombres cortos.
@@ -69,20 +76,27 @@ export function anchoTexto(texto: string, alto: number): number {
 
 /**
  * Caja que ocupa todo lo que se dibuja de un símbolo colocado: geometría,
- * nombres de bornes y etiqueta. Es aproximada pero nunca se queda corta;
- * sirve para el recorte por vista (lo que no la toca, no se dibuja).
+ * nombres de bornes y etiqueta. Es aproximada pero nunca se queda corta: es
+ * la del índice espacial (recorte por vista) y la que se invalida al cambiar
+ * el símbolo; si se quedara corta, al rotar, mover o borrar quedarían restos.
+ * La etiqueta entra entera, con el ancho de la letra más ancha (no el
+ * promedio): con 90° o 270° va centrada y sobresale a los dos lados.
+ * Para elegir y resaltar se usa `cajaEtiqueta`, más ajustada.
  */
 export function cajaDibujo(def: DefinicionSimbolo, c: Colocacion, etiqueta?: string): Caja {
   const s = cajaSimbolo(def, c);
   let x0 = s.x - MARGEN_TEXTOS;
   let y0 = s.y - MARGEN_TEXTOS;
-  const x1 = s.x + s.ancho + MARGEN_TEXTOS;
-  const y1 = s.y + s.alto + MARGEN_TEXTOS;
-  const e = cajaEtiqueta(def, c, etiqueta);
+  let x1 = s.x + s.ancho + MARGEN_TEXTOS;
+  let y1 = s.y + s.alto + MARGEN_TEXTOS;
+  const e = cajaTextoEtiqueta(def, c, etiqueta, ANCHO_LETRA_MAXIMO);
   if (e) {
-    x0 = Math.min(x0, e.x);
-    // Medio alto de letra más de margen arriba, por las dudas.
-    y0 = Math.min(y0, e.y - ALTO_ETIQUETA / 2);
+    // Medio alto de letra de margen alrededor, por las dudas (acentos, suavizado).
+    const m = ALTO_ETIQUETA / 2;
+    x0 = Math.min(x0, e.x - m);
+    y0 = Math.min(y0, e.y - m);
+    x1 = Math.max(x1, e.x + e.ancho + m);
+    y1 = Math.max(y1, e.y + e.alto + m);
   }
   return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
 }
@@ -90,12 +104,18 @@ export function cajaDibujo(def: DefinicionSimbolo, c: Colocacion, etiqueta?: str
 /**
  * Caja que ocupa el texto de la etiqueta (centrado en vertical sobre su
  * posición, con el ancho aproximado por exceso); null si no hay etiqueta.
- * Sirve para elegir el componente haciendo clic sobre su etiqueta.
+ * Sirve para elegir el componente haciendo clic sobre su etiqueta, y para su
+ * resaltado: no se agranda con la cota de `cajaDibujo`.
  */
 export function cajaEtiqueta(def: DefinicionSimbolo, c: Colocacion, etiqueta?: string): Caja | null {
+  return cajaTextoEtiqueta(def, c, etiqueta, ANCHO_LETRA);
+}
+
+/** Caja de la etiqueta con `anchoLetra` por letra (en altos de letra). */
+function cajaTextoEtiqueta(def: DefinicionSimbolo, c: Colocacion, etiqueta: string | undefined, anchoLetra: number): Caja | null {
   if (!etiqueta) return null;
   const e = posicionEtiqueta(def, c);
-  const ancho = anchoTexto(etiqueta, ALTO_ETIQUETA);
+  const ancho = etiqueta.length * ALTO_ETIQUETA * anchoLetra;
   // Derecha: el texto termina en e.x. Centro: se reparte a los dos lados.
   const izquierda = c.x + e.x - (e.alineacion === "derecha" ? ancho : ancho / 2);
   return { x: izquierda, y: c.y + e.y - ALTO_ETIQUETA / 2, ancho, alto: ALTO_ETIQUETA };

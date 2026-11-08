@@ -10,9 +10,18 @@
 //
 // Con el botón izquierdo apretado sobre el lienzo, el puntero se captura: el
 // rectángulo de selección sigue al mouse y termina aunque se suelte afuera.
+//
+// Teclado: Esc y los atajos del editor (atajos.ts: R, M, Supr, Ctrl+Z…) van
+// por un solo listener en window, así andan aunque el foco quede en la
+// paleta o en un botón. Se ignoran en los campos donde se escribe (el campo
+// recibe su letra y su propio Ctrl+Z), con un diálogo modal abierto y cuando
+// `atajosActivos` dice que no (modo Simular). Hay un solo listener por
+// lienzo: `desconectar` lo quita, y Lienzo desconecta antes de conectar otro
+// editor (escenas del banco), así una tecla nunca actúa dos veces.
 
 import type { DefinicionSimbolo } from "../core/symbols";
 import type { Camara } from "../render/camara";
+import { accionDeTecla, teclaDe } from "./atajos";
 import type { Editor } from "./editor";
 import { UMBRAL_ARRASTRE_PX, type EventoHerramienta } from "./herramientas/tipos";
 import { esCampoEditable } from "./navegacion";
@@ -22,6 +31,13 @@ export { UMBRAL_ARRASTRE_PX };
 export interface OpcionesHerramientas {
   camara: Camara;
   editor: Editor;
+  /** Si los atajos de edición valen ahora (no en modo Simular). Por defecto, sí. */
+  atajosActivos?: () => boolean;
+}
+
+/** Hay un diálogo modal abierto: el teclado es suyo. */
+function hayModal(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
 }
 
 export interface Herramientas {
@@ -105,16 +121,27 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   // Esc: termina la herramienta; sin herramienta, corta el rectángulo o deselecciona.
+  // Los demás atajos van al editor, que decide si se pueden hacer ahora.
   const alTecla = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || esCampoEditable(e.target)) return;
-    e.preventDefault();
-    if (editor.herramienta) {
-      terminarArrastre();
-      editor.cancelarHerramienta();
-    } else {
-      editor.aplicar(editor.seleccionar.cancelar());
-      actualizarCursor();
+    if (esCampoEditable(e.target)) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (editor.herramienta) {
+        terminarArrastre();
+        editor.cancelarHerramienta();
+      } else {
+        editor.aplicar(editor.seleccionar.cancelar());
+        actualizarCursor();
+      }
+      return;
     }
+    const accion = accionDeTecla(teclaDe(e));
+    if (!accion || hayModal() || op.atajosActivos?.() === false) return;
+    // Aunque el editor la ignore (en medio de un arrastre), la tecla es
+    // nuestra: Ctrl+Y no abre el historial del navegador.
+    e.preventDefault();
+    editor.accion(accion);
+    actualizarCursor();
   };
 
   function terminarArrastre() {

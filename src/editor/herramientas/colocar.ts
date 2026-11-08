@@ -9,16 +9,28 @@
 //
 // La vista previa va en la capa dinámica: solo pide redibujo cuando el punto
 // de grilla cambia, no en cada píxel que se mueve el mouse.
+//
+// R y M (T10) giran y espejan la vista previa con las mismas funciones que
+// los comandos Rotar y Espejar (`rotarEnPantalla`, `espejarEnPantalla`), y el
+// Colocar sale con esa orientación. No tocan el documento ni el historial: es
+// estado de la herramienta. Se conserva mientras siga activa (para colocar
+// varios iguales) y cada herramienta nueva empieza derecha (0°, sin espejar).
 
 import { colocar } from "../../core/model/comandos";
 import type { Documento } from "../../core/model/documento";
-import type { DefinicionSimbolo } from "../../core/symbols";
+import {
+  espejarEnPantalla,
+  rotarEnPantalla,
+  SIN_TRANSFORMAR,
+  type DefinicionSimbolo,
+  type Transformacion,
+} from "../../core/symbols";
 import { NADA, type EventoHerramienta, type Herramienta, type Resultado } from "./tipos";
 
 export type ModoColocar = "clic" | "arrastre";
 
-/** Lo que dibuja la vista previa: el símbolo en un punto entero de la grilla. */
-export interface Previa {
+/** Lo que dibuja la vista previa: el símbolo en un punto entero de la grilla, con su orientación. */
+export interface Previa extends Transformacion {
   def: DefinicionSimbolo;
   x: number;
   y: number;
@@ -32,6 +44,8 @@ export function ajustarAGrilla(v: number): number {
 export class HerramientaColocar implements Herramienta {
   /** Punto de grilla bajo el mouse; null si el mouse no está sobre el lienzo. */
   private punto: { x: number; y: number } | null = null;
+  /** Orientación con la que se coloca (R y M). */
+  private _orientacion: Transformacion = SIN_TRANSFORMAR;
 
   constructor(
     readonly def: DefinicionSimbolo,
@@ -44,8 +58,24 @@ export class HerramientaColocar implements Herramienta {
     return this._modo;
   }
 
+  get orientacion(): Transformacion {
+    return this._orientacion;
+  }
+
   get previa(): Previa | null {
-    return this.punto && { def: this.def, x: this.punto.x, y: this.punto.y };
+    return this.punto && { def: this.def, x: this.punto.x, y: this.punto.y, ...this._orientacion };
+  }
+
+  /** R (o Mayús+R): gira la vista previa 90°. Redibuja solo si se ve. */
+  rotar(sentido: 90 | -90): Resultado {
+    this._orientacion = rotarEnPantalla(this._orientacion, sentido);
+    return { redibujar: this.punto !== null };
+  }
+
+  /** M: espeja la vista previa izquierda ↔ derecha. Redibuja solo si se ve. */
+  espejar(): Resultado {
+    this._orientacion = espejarEnPantalla(this._orientacion);
+    return { redibujar: this.punto !== null };
   }
 
   /**
@@ -109,13 +139,15 @@ export class HerramientaColocar implements Herramienta {
   /**
    * El id se fija acá (generarId), al construir el comando, como piden los
    * comandos. La etiqueta es la inicial del símbolo (la fase entra como "L").
+   * La orientación es la de la vista previa.
    */
   private comando() {
     const p = this.punto!;
     const etiqueta = this.def.etiquetaInicial ?? "";
+    const { rotacion: rot, espejado } = this._orientacion;
     return colocar(
       this.doc,
-      { tipo: this.def.tipo, x: p.x, y: p.y, rot: 0, espejado: false, etiqueta, params: {} },
+      { tipo: this.def.tipo, x: p.x, y: p.y, rot, espejado, etiqueta, params: {} },
       this.hoja,
     );
   }

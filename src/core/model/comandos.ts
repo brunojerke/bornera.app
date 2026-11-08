@@ -13,6 +13,7 @@
 // - Las coordenadas quedan siempre enteras.
 
 import type { Rotacion } from "../symbols/tipos";
+import { espejarEnPantalla, rotarEnPantalla } from "../symbols/transformar";
 import { buscarComponente, generarId, type Componente, type Documento } from "./documento";
 
 /** Lo que cambió un comando. T12 suma `cables`. */
@@ -247,13 +248,13 @@ export class Rotar extends Transformar {
     return comps.map((c) => {
       const dx = c.x - cx;
       const dy = c.y - cy;
+      const t = rotarEnPantalla({ rotacion: c.rot, espejado: c.espejado }, this.sentido);
       return {
         // `+ 0` convierte -0 en 0.
         x: (horario ? cx - dy : cx + dy) + corrimiento + 0,
         y: (horario ? cy + dx : cy - dx) - corrimiento + 0,
-        // El espejado va antes de la rotación: rotar el grupo solo suma a `rot`.
-        rot: ((c.rot + (horario ? 90 : 270)) % 360) as Rotacion,
-        espejado: c.espejado,
+        rot: t.rotacion,
+        espejado: t.espejado,
       };
     });
   }
@@ -271,14 +272,16 @@ export class Espejar extends Transformar {
 
   protected calcular(comps: readonly Componente[]): Pose[] {
     const { x0, x1 } = cajaPosiciones(comps);
-    return comps.map((c) => ({
-      // x0 + x1 es entero aunque el centro caiga en media unidad.
-      x: x0 + x1 - c.x + 0,
-      y: c.y,
-      // Espejo en pantalla ∘ rotación θ ∘ espejo propio = rotación −θ ∘ (sin espejo propio).
-      rot: ((360 - c.rot) % 360) as Rotacion,
-      espejado: !c.espejado,
-    }));
+    return comps.map((c) => {
+      const t = espejarEnPantalla({ rotacion: c.rot, espejado: c.espejado });
+      return {
+        // x0 + x1 es entero aunque el centro caiga en media unidad.
+        x: x0 + x1 - c.x + 0,
+        y: c.y,
+        rot: t.rotacion,
+        espejado: t.espejado,
+      };
+    });
   }
 }
 

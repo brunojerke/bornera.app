@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Barra de herramientas superior. Todavía sin acciones: solo la estructura.
+  // Barra de herramientas superior. Por ahora andan el historial (deshacer y
+  // rehacer, desactivados si no hay nada) y el zoom; el resto es estructura.
   import FilePlus from "@lucide/svelte/icons/file-plus";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Save from "@lucide/svelte/icons/save";
@@ -23,6 +24,10 @@
     onacercar,
     onalejar,
     onencuadrar,
+    puedeDeshacer = false,
+    puedeRehacer = false,
+    ondeshacer,
+    onrehacer,
     escena = $bindable("documento"),
     rendimiento = $bindable(false),
     opciones = $bindable(),
@@ -35,6 +40,11 @@
     onacercar?: () => void;
     onalejar?: () => void;
     onencuadrar?: () => void;
+    /** Hay algo para deshacer o rehacer: si no, el botón queda desactivado. */
+    puedeDeshacer?: boolean;
+    puedeRehacer?: boolean;
+    ondeshacer?: () => void;
+    onrehacer?: () => void;
     /** Menú de desarrollo (en `npm run dev` / `tauri dev` y en las prereleases). */
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
@@ -57,8 +67,12 @@
   </div>
 
   <div class="grupo" role="group" aria-label="Historial">
-    <button class="boton-icono" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><Undo2 size={TAM} /></button>
-    <button class="boton-icono" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><Redo2 size={TAM} /></button>
+    <button class="boton-icono" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled={!puedeDeshacer} onclick={ondeshacer}>
+      <Undo2 size={TAM} />
+    </button>
+    <button class="boton-icono" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled={!puedeRehacer} onclick={onrehacer}>
+      <Redo2 size={TAM} />
+    </button>
   </div>
 
   <div class="grupo" role="group" aria-label="Zoom">

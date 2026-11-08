@@ -21,12 +21,15 @@
   import { documentoBanco } from "../editor/banco";
   import * as comandos from "../core/model/comandos";
   import Rendimiento from "./Rendimiento.svelte";
-  import type { EscenaDesarrollo } from "./tipos";
+  import type { EscenaDesarrollo, Modo } from "./tipos";
 
   let {
     zoom = $bindable(1),
     cursor = $bindable(null),
     colocando = $bindable(null),
+    puedeDeshacer = $bindable(false),
+    puedeRehacer = $bindable(false),
+    modo = "editar",
     escena = "documento",
     rendimiento = false,
     opciones = OPCIONES_OPTIMIZADAS,
@@ -39,6 +42,11 @@
     cursor?: Punto | null;
     /** Tipo del símbolo que se está colocando; null si no hay herramienta. Solo lectura desde afuera. */
     colocando?: string | null;
+    /** Hay algo para deshacer o rehacer en el editor a la vista. Solo lectura desde afuera. */
+    puedeDeshacer?: boolean;
+    puedeRehacer?: boolean;
+    /** Modo de trabajo: en Simular, los atajos de edición no actúan. */
+    modo?: Modo;
     /** Qué se dibuja: el documento o una escena de prueba. */
     escena?: EscenaDesarrollo;
     /** Muestra el contador de rendimiento (F3). */
@@ -77,18 +85,29 @@
       editor.vista = null;
       editor.alCambiarHerramienta = null;
       editor.alCambiarSeleccion = null;
+      editor.alCambiarHistorial = null;
     }
     editor = ed;
     if (ed) ed.diagnostico = { ...untrack(() => diagnostico) };
     v.dinamico = ed?.dibujarDinamico ?? null;
     colocando = null;
     onseleccion?.(ed?.resumenSeleccion() ?? SIN_SELECCION);
+    const historial = () => {
+      puedeDeshacer = ed?.puedeDeshacer ?? false;
+      puedeRehacer = ed?.puedeRehacer ?? false;
+    };
+    historial();
     if (!ed) return;
     ed.vista = v;
     ed.alCambiarHerramienta = () => (colocando = ed.herramienta?.def.tipo ?? null);
     ed.alCambiarSeleccion = () => onseleccion?.(ed.resumenSeleccion());
+    ed.alCambiarHistorial = historial;
     // Después de la navegación: lo que ella consume llega con defaultPrevented.
-    herramientas = conectarHerramientas(canvas, { camara: v.camara, editor: ed });
+    herramientas = conectarHerramientas(canvas, {
+      camara: v.camara,
+      editor: ed,
+      atajosActivos: () => modo === "editar",
+    });
   }
 
   // Desarrollo: ejecutar comandos desde la consola. Por ejemplo:
@@ -141,6 +160,15 @@
     if (!vista) return;
     vista.invalidar();
     zoom = vista.camara.zoom;
+  }
+
+  /** Botones de la barra: lo mismo que Ctrl+Z y Ctrl+Y (no en medio de un gesto). */
+  export function deshacer() {
+    if (modo === "editar") editor?.accion("deshacer");
+  }
+
+  export function rehacer() {
+    if (modo === "editar") editor?.accion("rehacer");
   }
 
   export function acercar() {

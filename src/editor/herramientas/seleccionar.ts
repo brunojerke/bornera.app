@@ -98,6 +98,14 @@ export class HerramientaSeleccionar implements Herramienta {
     return this.gesto?.tipo === "vacio" ? this.gesto.rect : null;
   }
 
+  /**
+   * Hay un gesto en curso: el botón se apretó y todavía no se soltó (clic,
+   * arrastre o rectángulo). Los atajos esperan a que termine.
+   */
+  get enGesto(): boolean {
+    return this.gesto !== null;
+  }
+
   /** Arrastre en curso, para dibujarlo; null si no hay. */
   get arrastre(): Readonly<Arrastre> | null {
     return this.gesto?.tipo === "elemento" ? this.gesto.arrastre : null;
