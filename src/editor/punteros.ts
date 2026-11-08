@@ -23,6 +23,7 @@ import type { DefinicionSimbolo } from "../core/symbols";
 import type { Camara } from "../render/camara";
 import { accionDeTecla, teclaDe } from "./atajos";
 import type { Editor } from "./editor";
+import { HerramientaColocar } from "./herramientas/colocar";
 import { UMBRAL_ARRASTRE_PX, type EventoHerramienta } from "./herramientas/tipos";
 import { esCampoEditable } from "./navegacion";
 
@@ -54,6 +55,11 @@ function soltarFocoDeCampo(): void {
 export interface Herramientas {
   /** Empieza a colocar `def` desde un pointerdown en la paleta. */
   desdePaleta(def: DefinicionSimbolo, e: PointerEvent): void;
+  /**
+   * La cámara cambió (rueda, desplazar, encuadrar, botones de zoom): la
+   * herramienta vuelve a mirar qué hay bajo el cursor, que quedó quieto.
+   */
+  refrescar(): void;
   desconectar(): void;
 }
 
@@ -63,7 +69,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   let arrastrando = false;
   let quitarArrastre: (() => void) | null = null;
 
-  const evento = (e: PointerEvent): EventoHerramienta => {
+  /** Último puntero sobre el lienzo (px de la ventana); null si salió. */
+  let ultimo: { clientX: number; clientY: number; buttons: number } | null = null;
+
+  const evento = (e: Pick<PointerEvent, "clientX" | "clientY" | "button" | "buttons" | "shiftKey" | "ctrlKey">): EventoHerramienta => {
     const r = canvas.getBoundingClientRect();
     const p = camara.aGrilla(e.clientX - r.left, e.clientY - r.top);
     return {
@@ -87,7 +96,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   const contenedor = canvas.parentElement;
   let cursor = "";
   const actualizarCursor = () => {
-    const nuevo = editor.herramienta ? "copy" : editor.arrastrando ? "move" : "";
+    const nuevo = editor.cable ? "crosshair" : editor.herramienta ? "copy" : editor.arrastrando ? "move" : "";
     if (contenedor && nuevo !== cursor) contenedor.style.cursor = cursor = nuevo;
   };
   const avisoAnterior = editor.alCambiarHerramienta;
@@ -97,6 +106,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   const alMover = (e: PointerEvent) => {
+    ultimo = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
     if (arrastrando) return;
     editor.aplicar(editor.activa.mover(evento(e)));
     actualizarCursor(); // "move" mientras se arrastra la selección
@@ -113,7 +123,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   const alSoltar = (e: PointerEvent) => {
     // El arrastre desde la paleta se suelta por su cuenta (en window).
     if (arrastrando || e.button !== 0) return;
-    editor.aplicar(editor.activa.soltar(evento(e)));
+    // Con el puntero capturado, el soltar llega aunque sea afuera: la herramienta cable no fija nada ahí.
+    editor.aplicar(editor.activa.soltar({ ...evento(e), fuera: !sobreLienzo(e) }));
     actualizarCursor();
   };
 
@@ -124,6 +135,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   const alSalir = () => {
+    ultimo = null;
     if (!arrastrando) editor.aplicar(editor.activa.salir());
   };
 
@@ -132,7 +144,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     if (editor.herramienta) e.preventDefault();
   };
 
-  // Esc: termina la herramienta; sin herramienta, corta el rectángulo o deselecciona.
+  // Esc: termina Colocar o cancela el cable en curso (sin tramo, termina la
+  // herramienta cable); sin herramienta, corta el rectángulo o deselecciona.
   // Los demás atajos van al editor, que decide si se pueden hacer ahora.
   const alTecla = (e: KeyboardEvent) => {
     if (esCampoEditable(e.target)) return;
@@ -140,7 +153,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
       e.preventDefault();
       if (editor.herramienta) {
         terminarArrastre();
-        editor.cancelarHerramienta();
+        editor.escape();
+        actualizarCursor();
       } else {
         editor.aplicar(editor.seleccionar.cancelar());
         actualizarCursor();
@@ -169,7 +183,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     terminarArrastre();
     // Clic otra vez en el símbolo que ya se está colocando: se deja de colocar.
     const actual = editor.herramienta;
-    if (actual && actual.modo === "clic" && actual.def.tipo === def.tipo) {
+    if (actual instanceof HerramientaColocar && actual.modo === "clic" && actual.def.tipo === def.tipo) {
       editor.cancelarHerramienta();
       return;
     }
@@ -223,6 +237,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   return {
     desdePaleta,
+    refrescar() {
+      if (arrastrando || !ultimo || !editor.cable) return;
+      editor.aplicar(editor.activa.mover(evento({ ...ultimo, button: 0, shiftKey: false, ctrlKey: false })));
+    },
     desconectar() {
       terminarArrastre();
       editor.cancelarHerramienta();

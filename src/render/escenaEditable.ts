@@ -463,6 +463,20 @@ export class EscenaEditable implements Contenido {
     return w === undefined ? undefined : this.cables.formas[w]!;
   }
 
+  /**
+   * Componentes cuya caja de dibujo toca `caja` (candidatos: la caja de
+   * dibujo contiene el cuerpo y los bornes), en orden de dibujo.
+   */
+  componentesEn(caja: Caja): [string, ComponenteEscena][] {
+    return this.indice.enCaja(caja).map((n) => [this.ids[n]!, this.lugares[n]!]);
+  }
+
+  /** Cables cuya caja toca `caja` (candidatos, sin mirar cada tramo), en orden de dibujo. */
+  cablesEn(caja: Caja): [string, CableEscena][] {
+    const c = this.cables;
+    return c.indice.enCaja(caja).map((n) => [c.ids[n]!, c.lugares[n]!]);
+  }
+
   /** Ids de los elementos cuya caja de dibujo toca `caja` (candidatos, sin el filtro fino). */
   idsCandidatos(caja: Caja): string[] {
     return this.indice.enCaja(caja).map((n) => this.ids[n]!);

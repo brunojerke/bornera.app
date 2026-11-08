@@ -4,6 +4,7 @@
 // derechos y legibles, en la posición transformada.
 
 import {
+  cajaCuerpo,
   transformarBornes,
   transformarDireccion,
   transformarPunto,
@@ -46,10 +47,7 @@ const MARGEN_ETIQUETA = 0.5;
 
 /** Caja que ocupa el símbolo colocado (la rotación de 90° o 270° la traspone). */
 export function cajaSimbolo(def: DefinicionSimbolo, c: Colocacion): Caja {
-  const girado = c.rotacion === 90 || c.rotacion === 270;
-  const ancho = girado ? def.tamano.alto : def.tamano.ancho;
-  const alto = girado ? def.tamano.ancho : def.tamano.alto;
-  return { x: c.x - ancho / 2, y: c.y - alto / 2, ancho, alto };
+  return cajaCuerpo(def.tamano, c.x, c.y, c.rotacion);
 }
 
 /** Ancho de letra promedio de Helvetica, generoso, en altos de letra. */

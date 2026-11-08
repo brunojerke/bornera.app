@@ -66,6 +66,39 @@ describe("validarDefinicion", () => {
     expect(errores).toEqual(['Borne "13" fuera de la caja del símbolo: (0, -3).']);
   });
 
+  it("rechaza un borne adentro de la caja (un cable no podría llegar)", () => {
+    const errores = validarDefinicion(
+      conBornes([
+        { nombre: "13", x: 0, y: -1, direccion: "arriba" },
+        { nombre: "14", x: 0, y: 2, direccion: "abajo" },
+      ]),
+    );
+    expect(errores).toEqual(['Borne "13" adentro de la caja del símbolo: (0, -1); tiene que estar en el borde.']);
+  });
+
+  it("rechaza un borne que apunta hacia adentro o a lo largo del borde", () => {
+    expect(
+      validarDefinicion(
+        conBornes([
+          { nombre: "13", x: 0, y: -2, direccion: "abajo" },
+          { nombre: "14", x: 0, y: 2, direccion: "derecha" },
+        ]),
+      ),
+    ).toEqual([
+      'Borne "13" apunta hacia abajo: tiene que apuntar hacia afuera (arriba).',
+      'Borne "14" apunta hacia derecha: tiene que apuntar hacia afuera (abajo).',
+    ]);
+  });
+
+  it("en una esquina, el borne puede apuntar hacia afuera por cualquiera de los dos bordes", () => {
+    for (const direccion of ["arriba", "izquierda"] as const) {
+      expect(validarDefinicion(conBornes([{ nombre: "1", x: -1, y: -2, direccion }]))).toEqual([]);
+    }
+    for (const direccion of ["abajo", "derecha"] as const) {
+      expect(validarDefinicion(conBornes([{ nombre: "1", x: -1, y: -2, direccion }]))).toHaveLength(1);
+    }
+  });
+
   it("rechaza un tamaño no entero o no positivo", () => {
     expect(validarDefinicion({ ...PULSADOR, tamano: { ancho: 2.5, alto: 4 } })).toContain(
       "El tamaño debe ser entero y positivo (es 2.5×4).",

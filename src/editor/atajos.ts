@@ -9,14 +9,17 @@
 // - M: espeja izquierda ↔ derecha. Mayús+M no hace nada (queda libre).
 // - Supr o Retroceso: borra la selección. Con Mayús, nada (en Windows,
 //   Mayús+Supr es "cortar": queda libre para cuando haya portapapeles).
+//   Retroceso es otra acción ("borrarAtras"): con la herramienta cable y un
+//   tramo en curso, quita el último codo.
+// - W: herramienta cable (T13). Mayús+W y Ctrl+W, nada.
 // - Ctrl+Z deshace; Ctrl+Y y Ctrl+Mayús+Z rehacen.
 // - Con Alt o Meta (Windows, Cmd), nada: son del sistema. Ctrl+R tampoco
 //   (recarga en desarrollo).
-// - R, M, Supr y Retroceso no se repiten al mantener la tecla apretada:
+// - R, M, W, Supr y Retroceso no se repiten al mantener la tecla apretada:
 //   llenarían el historial de pasos. Deshacer y rehacer sí, como en
 //   cualquier programa.
 
-export type Accion = "rotar" | "rotarAntihorario" | "espejar" | "borrar" | "deshacer" | "rehacer";
+export type Accion = "rotar" | "rotarAntihorario" | "espejar" | "borrar" | "borrarAtras" | "deshacer" | "rehacer" | "cable";
 
 /** Lo que importa de un KeyboardEvent. */
 export interface Tecla {
@@ -67,8 +70,10 @@ export function accionDeTecla(t: Tecla): Accion | null {
     return null;
   }
   if (t.repeat) return null;
-  if (t.key === "Delete" || t.key === "Backspace") return t.mayus ? null : "borrar";
+  if (t.key === "Delete") return t.mayus ? null : "borrar";
+  if (t.key === "Backspace") return t.mayus ? null : "borrarAtras";
   if (l === "r") return t.mayus ? "rotarAntihorario" : "rotar";
   if (l === "m" && !t.mayus) return "espejar";
+  if (l === "w" && !t.mayus) return "cable";
   return null;
 }

@@ -17,7 +17,12 @@ describe("accionDeTecla", () => {
     ["Bloq Mayús + M", t("M"), "espejar"],
     ["Mayús+M: libre", t("M", { mayus: true }), null],
     ["Supr", t("Delete"), "borrar"],
-    ["Retroceso", t("Backspace"), "borrar"],
+    ["Retroceso (borra, o quita el último codo del cable en curso)", t("Backspace"), "borrarAtras"],
+    ["Mayús+Retroceso: libre", t("Backspace", { mayus: true }), null],
+    ["W", t("w"), "cable"],
+    ["Bloq Mayús + W", t("W"), "cable"],
+    ["Mayús+W: libre", t("W", { mayus: true }), null],
+    ["Ctrl+W (cerrar): nada", t("w", { ctrl: true }), null],
     ["Mayús+Supr: libre (cortar)", t("Delete", { mayus: true }), null],
     ["Ctrl+Z", t("z", { ctrl: true }), "deshacer"],
     ["Ctrl+Z con Bloq Mayús", t("Z", { ctrl: true }), "deshacer"],
@@ -37,8 +42,8 @@ describe("accionDeTecla", () => {
     expect(accionDeTecla(tecla)).toBe(esperada);
   });
 
-  it("R, M, Supr y Retroceso no se repiten al mantener la tecla", () => {
-    for (const k of ["r", "m", "Delete", "Backspace"]) {
+  it("R, M, W, Supr y Retroceso no se repiten al mantener la tecla", () => {
+    for (const k of ["r", "m", "w", "Delete", "Backspace"]) {
       expect(accionDeTecla(t(k, { repeat: true }))).toBeNull();
     }
     expect(accionDeTecla(t("R", { mayus: true, repeat: true }))).toBeNull();

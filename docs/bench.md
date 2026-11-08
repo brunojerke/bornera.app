@@ -17,6 +17,31 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 
+## Herramienta cable (fase 3, T13) — 2026-11-08
+
+- **Escenario nuevo** en la escena de 2000 + 3000 cables: *Cable en curso al 58 %*. Con la herramienta W, el cable empieza en un borne del componente sin cables más cercano al centro, y el cursor recorre 3 filas de 20 puntos de grilla por encima, cruzando cables y bornes de los vecinos. Cada paso cambia el punto de grilla, así que en todos corren el ruteo y la validación (`prepararCable` con la consulta indexada). Se dibujan la previa, el objetivo y las marcas de los bornes visibles. Informa también lo que tarda el paso.
+- El tramo va en la capa dinámica: no se rehace ningún mosaico mientras se dibuja (0 en *Mosaicos máx.*).
+
+Misma PC, Edge 157, una corrida. Todos los escenarios, de las cuatro escenas, dieron 0 cuadros lentos.
+
+| Escena | Escenario | Mediana | p95 | Máx. | Lentos | Por gesto | Mosaicos máx. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2000 + 3000 cables | Rehacer al 100 % | 8,9 | 9,8 | 13,2 | 0 | 17,3 | 24 |
+|  | Rehacer al 31 % | 8,6 | 9,5 | 10,2 | 0 | 41,8 | 13 |
+|  | Encuadrar (F) | 8,2 | 10,3 | 10,4 | 0 | 31,0 | 27 |
+|  | Zoom con la rueda | 4,3 | 9,4 | 9,9 | 0 | 63,5 | 12 |
+|  | Desplazar al 100 % | 0,5 | 1,2 | 1,4 | 0 | 14,3 | 0 |
+|  | Arrastre al 31 % | 0,6 | 2,7 | 8,0 | 0 | 84,3 | 12 |
+|  | Seleccionar todo al 31 % | 4,2 | 7,9 | 8,3 | 0 | 38,2 | 0 |
+|  | Arrastre con todo seleccionado al 31 % | 5,6 | 8,2 | 13,1 | 0 | 569,9 | 12 |
+|  | Mover 40 sin cables al 58 % | 2,8 | 5,7 | 10,9 | 0 | 88,9 | 13 |
+|  | Borrar y deshacer uno con cables al 31 % | 1,5 | 2,8 | 2,9 | 0 | 15,9 | 1 |
+|  | **Cable en curso al 58 %** | 0,8 | 2,0 | 2,6 | 0 | 55,6 | 0 |
+
+Paso del cable en curso (ruteo, validación y pista, fuera del cuadro): 0,1 ms de mediana y 0,4 ms de máximo. En otras dos corridas: 0,7–1,1 ms de mediana por cuadro, 2,0–2,6 ms de máximo y 0 lentos.
+
+- **Criterio para la netbook** (próxima prerelease): F3 en la escena con cables (Ctrl+Shift+B), W y un cable en curso al 58 % pasando sobre cables y bornes. Casi 0 cuadros >16 ms.
+
 ## Cables (fase 3, T12) — 2026-11-08
 
 - **Escena nueva:** los 2000 símbolos del banco con 3000 cables entre bornes de vecinos (0 a 3 codos), abierta en un `Editor` como en la app (Ctrl+Shift+B, después de la de 2000). Los 40 componentes más cercanos al centro quedan sin cables: es el grupo que se puede arrastrar mientras mover lo cableado está bloqueado (hasta T14a).

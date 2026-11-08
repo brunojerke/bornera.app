@@ -41,6 +41,8 @@ export interface Colores extends ColoresGrilla, ColoresContenido {
   origen: string;
   /** Lo que se está editando en la capa dinámica (vista previa al colocar). */
   acento: string;
+  /** Lo que no se puede hacer (un cable en curso inválido). Opcional: sin él, el de los bornes. */
+  aviso?: string;
 }
 
 /**
@@ -161,6 +163,7 @@ export class Capas {
     simbolo: "#000",
     borne: "#c00",
     acento: "#06f",
+    aviso: "#c40",
   };
 
   private _opciones: OpcionesCapas = { ...OPCIONES_OPTIMIZADAS };

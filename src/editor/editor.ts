@@ -41,6 +41,15 @@
 // borrado). Hasta que los extremos sigan al borne (T14a), girar, espejar y
 // arrastrar no hacen nada si hay un cable seleccionado o un componente
 // cableado: no hay comando ni paso, y se avisa en la barra de estado.
+//
+// Herramienta cable (T13): W la activa y vacía la selección. Mientras hay un
+// tramo en curso, Ctrl+Z (y el botón Deshacer, y Retroceso) quitan el último
+// codo y nunca tocan el historial; Ctrl+Y no hace nada; R, M y Supr tampoco.
+// Un cable terminado es un `Cablear` (un paso). El editor mantiene al día, de
+// forma incremental con cada `Cambio`, el índice de la hoja (componentes y
+// cables por id), qué bornes tienen cable y un contador de cambios: la
+// herramienta los usa para la vista previa y el comando final, y para
+// cancelar el tramo si el documento cambia por otra vía.
 
 import { hayCablesEn, indexarHoja, recorridoCable, type IndiceHoja } from "../core/model/cables";
 import { Borrar, CambiarEtiqueta, Espejar, Rotar, type Cambio, type Comando } from "../core/model/comandos";
@@ -53,16 +62,20 @@ import {
 } from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { Historial } from "../core/model/historial";
-import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
+import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
 import { nivelDetalle } from "../render/detalle";
 import { grosorLinea, type ComponenteEscena } from "../render/escena";
 import { EscenaEditable, type CableEscena } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
+import { dibujarCableEnCurso, dibujarMarcasCable } from "../render/cableEnCurso";
 import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
 import type { Accion } from "./atajos";
+import { BornesConCable } from "./bornesConCable";
+import { ConsultaEscena } from "./consultaEscena";
+import { HerramientaCable } from "./herramientas/cable";
 import { HerramientaColocar, type ModoColocar } from "./herramientas/colocar";
 import { HerramientaSeleccionar } from "./herramientas/seleccionar";
 import type { Herramienta, Resultado } from "./herramientas/tipos";
@@ -193,8 +206,8 @@ export class Editor {
   readonly escena = new EscenaEditable();
   /** Vista que muestra la escena; null si no se está mostrando (no hay nada que invalidar). */
   vista: DestinoVista | null = null;
-  /** Herramienta elegida (Colocar); null si no hay ninguna y está la de selección. */
-  herramienta: HerramientaColocar | null = null;
+  /** Herramienta elegida (Colocar o Cable); null si no hay ninguna y está la de selección. */
+  herramienta: HerramientaColocar | HerramientaCable | null = null;
   /** Se avisa cuando empieza o termina una herramienta (para la paleta). */
   alCambiarHerramienta: (() => void) | null = null;
   /**
@@ -206,6 +219,21 @@ export class Editor {
   alCambiarHistorial: (() => void) | null = null;
   /** Aviso para la barra de estado: una acción que no se pudo hacer. */
   alAvisar: ((texto: string) => void) | null = null;
+  /** Se avisa cuando cambia la pista de la herramienta (para la barra de estado). */
+  alCambiarPista: ((pista: string | null) => void) | null = null;
+  /** Qué bornes tienen cable (marcas de la herramienta W). Al día con cada cambio. */
+  readonly bornesConCable: BornesConCable;
+  /** Bornes, cables y cuerpos cerca de una caja, con el índice de la escena (herramienta W). */
+  readonly consulta: ConsultaEscena;
+  /** Componentes y cables de la hoja por id, al día con cada cambio. */
+  private readonly indiceHoja: { componentes: Map<string, Componente>; cables: Map<string, Cable> };
+  /** Sube con cada cambio del documento que se refleja. */
+  private _cambios = 0;
+  private pistaAvisada: string | null = null;
+  /** Lo último que se avisó de `enTramo` (cambia lo que se puede deshacer). */
+  private tramoAvisado = false;
+  /** Bornes visibles para las marcas de la herramienta W, y de qué vista y cambio son. */
+  private marcas: { clave: string; libres: number[]; ocupados: number[] } = { clave: "", libres: [], ocupados: [] };
   /** La herramienta que está cuando no hay otra. */
   readonly seleccionar: HerramientaSeleccionar;
   private _seleccion: ReadonlySet<string> = new Set();
@@ -227,8 +255,11 @@ export class Editor {
     this.historial = new Historial(documento);
     for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
     const h = documento.hojas[hoja];
+    const indice = h ? indexarHoja(h) : { componentes: new Map<string, Componente>(), cables: new Map<string, Cable>() };
+    this.indiceHoja = { componentes: new Map(indice.componentes), cables: new Map(indice.cables) };
+    this.bornesConCable = new BornesConCable(h?.cables ?? []);
+    this.consulta = new ConsultaEscena(this.escena, () => this.indiceHoja.cables);
     if (h && h.cables.length > 0) {
-      const indice = indexarHoja(h);
       for (const w of h.cables) {
         const c = this.cableEscena(indice, w);
         if (c) this.escena.ponerCable(w.id, c);
@@ -240,6 +271,31 @@ export class Editor {
   /** La herramienta que recibe los eventos: la elegida, o la de selección. */
   get activa(): Herramienta {
     return this.herramienta ?? this.seleccionar;
+  }
+
+  /** La herramienta cable, si es la activa. */
+  get cable(): HerramientaCable | null {
+    return this.herramienta instanceof HerramientaCable ? this.herramienta : null;
+  }
+
+  /** La herramienta Colocar, si es la activa. */
+  get colocar(): HerramientaColocar | null {
+    return this.herramienta instanceof HerramientaColocar ? this.herramienta : null;
+  }
+
+  /** Hay un cable en curso con la herramienta W. */
+  get enTramo(): boolean {
+    return this.cable?.enTramo ?? false;
+  }
+
+  /** Contador de cambios del documento reflejados (sube con cada comando, deshacer y rehacer). */
+  get cambios(): number {
+    return this._cambios;
+  }
+
+  /** Pista de la herramienta para la barra de estado; null sin herramienta cable. */
+  get pista(): string | null {
+    return this.cable?.pista ?? null;
   }
 
   /** Ids seleccionados. */
@@ -348,7 +404,7 @@ export class Editor {
    * o un arrastre desde la paleta. F5 no cambia de modo en el medio.
    */
   get enGesto(): boolean {
-    return this.seleccionar.enGesto || this.arrastrados !== null || this.herramienta?.modo === "arrastre";
+    return this.seleccionar.enGesto || this.arrastrados !== null || this.colocar?.modo === "arrastre" || (this.cable?.enGesto ?? false);
   }
 
   /**
@@ -370,12 +426,14 @@ export class Editor {
     return this.desconocidos;
   }
 
+  /** Con un tramo en curso, siempre: Deshacer quita el último codo (o cancela el tramo). */
   get puedeDeshacer(): boolean {
-    return this.historial.puedeDeshacer;
+    return this.enTramo || this.historial.puedeDeshacer;
   }
 
+  /** Con un tramo en curso, nunca. */
   get puedeRehacer(): boolean {
-    return this.historial.puedeRehacer;
+    return !this.enTramo && this.historial.puedeRehacer;
   }
 
   /** Ejecuta el comando y muestra el cambio. Si el comando tira un error, no cambia nada. */
@@ -410,7 +468,26 @@ export class Editor {
    * comentario del principio). Devuelve true si hizo algo.
    */
   accion(a: Accion): boolean {
-    const h = this.herramienta;
+    if (a === "cable") return this.alternarCable();
+    const w = this.cable;
+    if (w) {
+      // Herramienta cable: con un tramo, deshacer (o Retroceso) quita el último
+      // codo; rehacer no hace nada. Sin tramo, deshacer y rehacer normales.
+      // Girar, espejar y borrar no hacen nada. Con el botón apretado, nada.
+      if (w.enGesto) return false;
+      if (a === "deshacer" || a === "borrarAtras") {
+        const r = w.quitarCodo();
+        if (r) {
+          this.aplicar(r);
+          return true;
+        }
+        return a === "deshacer" && this.deshacer() !== null;
+      }
+      if (a === "rehacer") return !w.enTramo && this.rehacer() !== null;
+      return false;
+    }
+    if (a === "borrarAtras") a = "borrar";
+    const h = this.colocar;
     if (h) {
       // Colocando: girar y espejar cambian la vista previa (también mientras
       // se arrastra desde la paleta).
@@ -499,21 +576,101 @@ export class Editor {
     return cambio;
   }
 
-  /** Empieza a colocar un símbolo de la paleta. Sin vista no hace nada. */
+  /** Empieza a colocar un símbolo de la paleta (cancela la herramienta cable). Sin vista no hace nada. */
   iniciarColocar(def: DefinicionSimbolo, modo: ModoColocar): HerramientaColocar | null {
     if (!this.vista) return null;
-    this.herramienta = new HerramientaColocar(def, modo, this.documento, this.hoja);
-    this.alCambiarHerramienta?.();
-    return this.herramienta;
+    const h = new HerramientaColocar(def, modo, this.documento, this.hoja);
+    this.ponerHerramienta(h);
+    return h;
   }
 
   /**
-   * Termina la herramienta activa sin hacer nada (Esc, cambio de escena). Un
-   * arrastre en curso vuelve a su lugar.
+   * Activa la herramienta cable (W): cancela Colocar sin colocar y vacía la
+   * selección (en W no se puede actuar sobre ella). Sin vista, o en medio de
+   * un gesto, no hace nada.
+   */
+  iniciarCable(): HerramientaCable | null {
+    if (!this.vista || this.seleccionar.enGesto || this.arrastrados || this.colocar?.modo === "arrastre") return null;
+    this.seleccionarIds([]);
+    const h = new HerramientaCable({
+      documento: this.documento,
+      hoja: this.hoja,
+      consulta: this.consulta,
+      indice: () => this.indiceHoja,
+      cambios: () => this._cambios,
+    });
+    this.ponerHerramienta(h);
+    // Las marcas de los bornes aparecen sin esperar a que se mueva el mouse.
+    this.vista?.invalidar();
+    return h;
+  }
+
+  /**
+   * W: activa la herramienta cable, o la termina si ya está y no hay tramo.
+   * Con un tramo no hace nada (avisa cómo cancelarlo).
+   */
+  private alternarCable(): boolean {
+    const w = this.cable;
+    if (!w) return this.iniciarCable() !== null;
+    if (w.enTramo || w.enGesto) {
+      this.alAvisar?.("Esc cancela el cable en curso.");
+      return false;
+    }
+    this.aplicar(w.terminar());
+    return true;
+  }
+
+  /** Cambia la herramienta activa y avisa (la paleta, los botones de deshacer y la pista). */
+  private ponerHerramienta(h: HerramientaColocar | HerramientaCable): void {
+    const habiaCable = this.cable !== null;
+    this.herramienta = h;
+    this.alCambiarHerramienta?.();
+    this.avisarTramo();
+    this.avisarPista();
+    // Lo que dibujaba la herramienta cable (marcas, tramo) se borra.
+    if (habiaCable) this.vista?.invalidar();
+  }
+
+  /**
+   * Termina la herramienta activa sin hacer nada (cambio de escena o de
+   * modo): un tramo en curso se descarta. Un arrastre en curso vuelve a su lugar.
    */
   cancelarHerramienta(): void {
-    if (this.herramienta) this.aplicar(this.herramienta.cancelar());
+    if (this.herramienta) this.aplicar(this.herramienta.terminar());
     if (this.arrastrados) this.aplicar(this.seleccionar.cancelar());
+  }
+
+  /** Esc con una herramienta: Colocar termina; Cable cancela el tramo (o termina si no hay). */
+  escape(): void {
+    if (this.herramienta) this.aplicar(this.herramienta.cancelar());
+  }
+
+  /** La cámara o el documento cambiaron: la herramienta cable vuelve a mirar qué hay bajo el cursor. */
+  refrescarHerramienta(): void {
+    if (this.cable?.refrescar()) {
+      this.avisarTramo(); // un cambio del documento pudo cancelar el tramo
+      this.avisarPista();
+      this.vista?.invalidar();
+    }
+  }
+
+  /**
+   * Si empezó o terminó un tramo, avisa a los botones de deshacer y rehacer.
+   * Se compara con lo último avisado: la herramienta cambia su estado antes
+   * de que el editor aplique su resultado.
+   */
+  private avisarTramo(): void {
+    const t = this.enTramo;
+    if (t === this.tramoAvisado) return;
+    this.tramoAvisado = t;
+    this.alCambiarHistorial?.();
+  }
+
+  private avisarPista(): void {
+    const p = this.pista;
+    if (p === this.pistaAvisada) return;
+    this.pistaAvisada = p;
+    this.alCambiarPista?.(p);
   }
 
   /**
@@ -534,6 +691,8 @@ export class Editor {
       this.herramienta = null;
       this.alCambiarHerramienta?.();
     }
+    this.avisarTramo();
+    this.avisarPista();
     if (r.redibujar || r.terminar) this.vista?.invalidar();
   }
 
@@ -591,7 +750,17 @@ export class Editor {
     }
     const rect = this.seleccionar.rectangulo;
     if (rect) dibujarRectangulo(r, info, rect);
-    const p = this.herramienta?.previa;
+    const w = this.cable;
+    if (w) {
+      if (nivelDetalle(info.escala).bornes) {
+        const m = this.marcasVisibles(info.visible);
+        dibujarMarcasCable(r, info, m.libres, m.ocupados);
+      }
+      const d = w.dibujo;
+      if (d) dibujarCableEnCurso(r, info, d);
+      return;
+    }
+    const p = this.colocar?.previa;
     if (!p) return;
     // Con la orientación de la herramienta (R, M): la misma que va a tener al colocarse.
     const c = { x: p.x, y: p.y, rotacion: p.rotacion, espejado: p.espejado };
@@ -601,6 +770,27 @@ export class Editor {
     dibujarSimbolo(r, p.def, c, { textos: detalle.textos, etiqueta: p.def.etiquetaInicial });
     if (detalle.bornes) dibujarMarcasBornes(r, p.def, c);
   };
+
+  /**
+   * Bornes en `v` para las marcas de la herramienta W: libres (huecos) y con
+   * cable (rellenos), x, y seguidos. Se rehacen solo si cambió la vista o el
+   * documento; con cable o no sale de `bornesConCable`, sin recorrer los cables.
+   */
+  private marcasVisibles(v: Caja): { libres: number[]; ocupados: number[] } {
+    const clave = `${v.x}|${v.y}|${v.ancho}|${v.alto}|${this._cambios}`;
+    if (this.marcas.clave === clave) return this.marcas;
+    const libres: number[] = [];
+    const ocupados: number[] = [];
+    for (const [id, c] of this.escena.componentesEn(v)) {
+      if (!buscarSimbolo(c.def.tipo)) continue;
+      for (const b of bornesColocados(c.def.bornes, c.x, c.y, c)) {
+        if (b.x < v.x - 1 || b.x > v.x + v.ancho + 1 || b.y < v.y - 1 || b.y > v.y + v.alto + 1) continue;
+        (this.bornesConCable.tiene(id, b.nombre) ? ocupados : libres).push(b.x, b.y);
+      }
+    }
+    this.marcas = { clave, libres, ocupados };
+    return this.marcas;
+  }
 
   private componentesHoja(): readonly Componente[] {
     return this.documento.hojas[this.hoja]?.componentes ?? [];
@@ -648,11 +838,17 @@ export class Editor {
    * componentes lejanos, o deshacer un movimiento largo).
    */
   private reflejar(cambio: Cambio): Cambio {
-    if (cambio.componentes.length === 0 && cambio.cables.length === 0) return cambio;
+    this._cambios++;
+    if (cambio.componentes.length === 0 && cambio.cables.length === 0) return this.trasReflejar(cambio);
     // Una pasada por la hoja, no una búsqueda por id.
     const ids = new Set(cambio.componentes);
     const actuales = new Map<string, Componente>();
     for (const c of this.componentesHoja()) if (ids.has(c.id)) actuales.set(c.id, c);
+    for (const id of ids) {
+      const c = actuales.get(id);
+      if (c) this.indiceHoja.componentes.set(id, c);
+      else this.indiceHoja.componentes.delete(id);
+    }
 
     let tocaSeleccion = false;
     let quitados: string[] | null = null;
@@ -670,11 +866,19 @@ export class Editor {
       }
     }
     if (cambio.cables.length > 0) {
-      const hoja = this.documento.hojas[this.hoja];
-      const indice = hoja ? indexarHoja(hoja) : null;
-      for (const id of new Set(cambio.cables)) {
-        const w = indice?.cables.get(id);
-        const c = indice && w ? this.cableEscena(indice, w) : null;
+      const idsCables = new Set(cambio.cables);
+      const actualesCables = new Map<string, Cable>();
+      for (const w of this.cablesHoja()) if (idsCables.has(w.id) && !actualesCables.has(w.id)) actualesCables.set(w.id, w);
+      for (const id of idsCables) {
+        const w = actualesCables.get(id);
+        if (w) this.indiceHoja.cables.set(id, w);
+        else this.indiceHoja.cables.delete(id);
+        this.bornesConCable.poner(id, w);
+      }
+      const indice = this.indiceHoja;
+      for (const id of idsCables) {
+        const w = indice.cables.get(id);
+        const c = w ? this.cableEscena(indice, w) : null;
         const cajas = c ? this.escena.ponerCable(id, c) : this.escena.quitarCable(id);
         for (const k of cajas) this.vista?.invalidarRegion(k);
         if (this._seleccion.has(id)) {
@@ -694,6 +898,12 @@ export class Editor {
       // El resaltado se mueve con el componente, aunque su región no esté en pantalla.
       this.vista?.invalidar();
     }
+    return this.trasReflejar(cambio);
+  }
+
+  /** Después de un cambio, la herramienta cable vuelve a mirar qué hay bajo el cursor. */
+  private trasReflejar(cambio: Cambio): Cambio {
+    this.refrescarHerramienta();
     return cambio;
   }
 }

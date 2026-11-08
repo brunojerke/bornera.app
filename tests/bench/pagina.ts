@@ -29,6 +29,7 @@ import { Editor, LIMITE_ARRASTRE_COMPLETO } from "../../src/editor/editor";
 import { documentoBancoCables, SIN_CABLES_BANCO } from "../../src/editor/banco";
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
+import { bornesColocados } from "../../src/core/symbols";
 
 /** Pantalla típica de netbook. */
 const ANCHO = 1366;
@@ -441,6 +442,47 @@ function borrarYDeshacer(_: Camara, __: Capas, e: Escena, i: number): void {
   }
 }
 
+/**
+ * Cable en curso (T13): el borne de partida es uno del componente sin cables
+ * más cercano al centro; el cursor recorre 3 filas de 20 puntos de grilla
+ * por encima, cruzando cables y bornes de los vecinos (cada paso cambia el
+ * punto de grilla: ruteo y validación en cada uno).
+ */
+let partidaCable: { x: number; y: number } | null = null;
+function empezarCable(c: Camara, e: Escena): void {
+  const ed = editorCables!;
+  ed.cancelarHerramienta();
+  ed.iniciarCable();
+  if (!partidaCable) {
+    const k = e.caja!;
+    const cx = k.x + k.ancho / 2;
+    const cy = k.y + k.alto / 2;
+    let mejor = Infinity;
+    for (const comp of ed.documento.hojas[0]!.componentes) {
+      const d = (comp.x - cx) ** 2 + (comp.y - cy) ** 2;
+      if (d >= mejor || ed.bloqueo("mover", [comp.id]) !== null) continue;
+      const ce = e.obtener(comp.id)!;
+      const b = bornesColocados(ce.def.bornes, ce.x, ce.y, ce)[0];
+      if (!b) continue;
+      mejor = d;
+      partidaCable = { x: b.x, y: b.y };
+    }
+  }
+  const p = partidaCable!;
+  const ev = { x: p.x, y: p.y, boton: 0, botones: 0, mayus: false, ctrl: false, escala: c.escala };
+  ed.aplicar(ed.activa.presionar(ev));
+  ed.aplicar(ed.activa.soltar(ev));
+  if (!ed.enTramo) throw new Error("Cable en curso: el tramo no empezó.");
+}
+
+function moverCable(c: Camara, _: Capas, __: Escena, i: number): void {
+  const ed = editorCables!;
+  const p = partidaCable!;
+  const x = p.x + (i % 20) - 10;
+  const y = p.y - 4 - Math.floor(i / 20) * 4;
+  ed.aplicar(ed.activa.mover({ x, y, boton: 0, botones: 0, mayus: false, ctrl: false, escala: c.escala }));
+}
+
 /** Escenarios de la escena con cables: los de dibujo de siempre y los de edición que se pueden hacer. */
 const ESCENARIOS_CABLES: Escenario[] = [
   ...ESCENARIOS.filter((x) =>
@@ -495,6 +537,21 @@ const ESCENARIOS_CABLES: Escenario[] = [
     },
     cuadros: 10,
     paso: borrarYDeshacer,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+  },
+  {
+    // La herramienta W con un cable en curso: previa, ruteo, validación y marcas de bornes.
+    nombre: "Cable en curso al 58 %",
+    preparar: (c, e) => {
+      editorCables!.seleccionarIds([]);
+      centrar(c, e, ZOOM_ARRASTRE);
+      empezarCable(c, e);
+    },
+    reiniciar: (c, e) => empezarCable(c, e),
+    cuadros: 60,
+    paso: moverCable,
     repeticiones: 3,
     dinamico: () => editorCables!.dibujarDinamico,
     medirPaso: true,

@@ -2,10 +2,12 @@
   // Paleta de componentes (izquierda), plegable. Sale de la biblioteca de
   // símbolos, agrupada por categoría. Apretar un ítem empieza a colocarlo:
   // arrastrando hasta el lienzo, o clic y después clic en el lienzo.
+  // Arriba, el botón de la herramienta cable (W), resaltado mientras está activa.
   import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
   import PanelLeftOpen from "@lucide/svelte/icons/panel-left-open";
   import Search from "@lucide/svelte/icons/search";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Cable from "@lucide/svelte/icons/cable";
   import { SIMBOLOS, type DefinicionSimbolo } from "../core/symbols";
   import { agruparSimbolos } from "./paleta";
 
@@ -13,7 +15,10 @@
     abierta = $bindable(true),
     activo = null,
     desactivada = false,
+    cableActivo = false,
+    cableDesactivado = false,
     onelegir,
+    oncable,
   }: {
     abierta?: boolean;
     /** Tipo del símbolo que se está colocando (se resalta). */
@@ -22,6 +27,12 @@
     desactivada?: boolean;
     /** Se apretó un ítem: empieza a colocarse. */
     onelegir?: (def: DefinicionSimbolo, e: PointerEvent) => void;
+    /** La herramienta cable está activa (se resalta su botón). */
+    cableActivo?: boolean;
+    /** No se puede cablear (escena sin editor, o modo Simular). */
+    cableDesactivado?: boolean;
+    /** Se apretó el botón de la herramienta cable: lo mismo que W. */
+    oncable?: () => void;
   } = $props();
 
   let filtro = $state("");
@@ -42,6 +53,17 @@
         <PanelLeftClose size={16} />
       </button>
     </div>
+
+    <button
+      class="herramienta"
+      class:activo={cableActivo}
+      aria-pressed={cableActivo}
+      disabled={cableDesactivado}
+      title="Dibujar cables: clic en un borne, clic en cada codo y clic en el otro borne"
+      onclick={() => oncable?.()}
+    >
+      <Cable size={14} />Cable (W)
+    </button>
 
     <label class="buscador">
       <Search size={14} />
@@ -114,6 +136,34 @@
     text-transform: uppercase;
     font-size: 11px;
     letter-spacing: 0.05em;
+  }
+
+  .herramienta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 8px 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .herramienta:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  .herramienta.activo {
+    background: var(--acento);
+    border-color: var(--acento);
+    color: var(--acento-texto);
+  }
+
+  .herramienta:disabled {
+    color: var(--texto-suave);
+    cursor: default;
   }
 
   .buscador {

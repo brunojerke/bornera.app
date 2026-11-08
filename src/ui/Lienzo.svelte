@@ -29,6 +29,8 @@
     zoom = $bindable(1),
     cursor = $bindable(null),
     colocando = $bindable(null),
+    cableActivo = $bindable(false),
+    pista = $bindable(null),
     puedeDeshacer = $bindable(false),
     puedeRehacer = $bindable(false),
     activo = $bindable(null),
@@ -46,6 +48,10 @@
     cursor?: Punto | null;
     /** Tipo del símbolo que se está colocando; null si no hay herramienta. Solo lectura desde afuera. */
     colocando?: string | null;
+    /** La herramienta cable (W) está activa. Solo lectura desde afuera. */
+    cableActivo?: boolean;
+    /** Pista de la herramienta para la barra de estado; null si no hay. Solo lectura desde afuera. */
+    pista?: string | null;
     /** Hay algo para deshacer o rehacer en el editor a la vista. Solo lectura desde afuera. */
     puedeDeshacer?: boolean;
     puedeRehacer?: boolean;
@@ -96,12 +102,15 @@
       editor.alCambiarSeleccion = null;
       editor.alCambiarHistorial = null;
       editor.alAvisar = null;
+      editor.alCambiarPista = null;
     }
     editor = ed;
     activo = ed;
     if (ed) ed.diagnostico = { ...untrack(() => diagnostico) };
     v.dinamico = ed?.dibujarDinamico ?? null;
     colocando = null;
+    cableActivo = false;
+    pista = null;
     onseleccion?.(ed?.resumenSeleccion() ?? SIN_SELECCION);
     const historial = () => {
       puedeDeshacer = ed?.puedeDeshacer ?? false;
@@ -110,7 +119,11 @@
     historial();
     if (!ed) return;
     ed.vista = v;
-    ed.alCambiarHerramienta = () => (colocando = ed.herramienta?.def.tipo ?? null);
+    ed.alCambiarHerramienta = () => {
+      colocando = ed.colocar?.def.tipo ?? null;
+      cableActivo = ed.cable !== null;
+    };
+    ed.alCambiarPista = (p) => (pista = p);
     ed.alCambiarSeleccion = () => onseleccion?.(ed.resumenSeleccion());
     ed.alCambiarHistorial = historial;
     ed.alAvisar = (t) => onaviso?.(t);
@@ -175,6 +188,8 @@
     if (!vista) return;
     vista.invalidar();
     zoom = vista.camara.zoom;
+    // La cámara se movió con el mouse quieto: la herramienta cable vuelve a mirar qué hay bajo el cursor.
+    herramientas?.refrescar();
   }
 
   /** Botones de la barra: lo mismo que Ctrl+Z y Ctrl+Y (no en medio de un gesto). */
@@ -184,6 +199,11 @@
 
   export function rehacer() {
     if (modo === "editar") editor?.accion("rehacer");
+  }
+
+  /** Botón de la paleta: lo mismo que W. */
+  export function alternarCable() {
+    if (modo === "editar") editor?.accion("cable");
   }
 
   /** Hay un gesto del puntero en curso en el editor a la vista (F5 no cambia de modo). */
@@ -286,6 +306,12 @@
       conectarEditor(vista, ed);
       encuadrar();
     });
+  });
+
+  // Al pasar a Simular se termina la herramienta activa (Cable o Colocar), sin
+  // cambiar el documento: un cable en curso se descarta.
+  $effect(() => {
+    if (modo === "simular") untrack(() => editor?.cancelarHerramienta());
   });
 
   $effect(() => {

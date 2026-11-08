@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Borne, Rotacion, Transformacion } from "./tipos";
 import {
+  bornesColocados,
+  cajaCuerpo,
   espejarEnPantalla,
   normalizarRotacion,
   rotarEnPantalla,
@@ -8,7 +10,8 @@ import {
   transformarDireccion,
   transformarPunto,
 } from "./transformar";
-import { validarDefinicion } from "./validar";
+import { direccionesAfuera, validarDefinicion } from "./validar";
+import { SIMBOLOS } from "./biblioteca";
 
 const ROTACIONES: Rotacion[] = [0, 90, 180, 270];
 const TODAS: Transformacion[] = ROTACIONES.flatMap((rotacion) => [
@@ -204,5 +207,21 @@ describe("rotarEnPantalla y espejarEnPantalla", () => {
     rotarEnPantalla(t, 90);
     espejarEnPantalla(t);
     expect(t).toEqual({ rotacion: 90, espejado: false });
+  });
+});
+
+describe("cajaCuerpo y bornes colocados", () => {
+  // Un cable no puede atravesar el cuerpo (T13): en cualquier orientación,
+  // cada borne queda en el borde de la caja y apunta hacia afuera.
+  it("cada borne de la biblioteca queda en el borde de la caja y apunta afuera, en las 8 orientaciones", () => {
+    for (const def of SIMBOLOS) {
+      for (const t of TODAS) {
+        const k = cajaCuerpo(def.tamano, 4, -3, t.rotacion);
+        for (const b of bornesColocados(def.bornes, 4, -3, t)) {
+          const afuera = direccionesAfuera(b.x - (k.x + k.ancho / 2), b.y - (k.y + k.alto / 2), k.ancho, k.alto);
+          expect(afuera, `${def.tipo} ${b.nombre} ${t.rotacion}° ${t.espejado}`).toContain(b.direccion);
+        }
+      }
+    }
   });
 });

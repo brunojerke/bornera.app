@@ -2,7 +2,7 @@
 
 Aprobado el 2026-11-07, con cambios: T15a (`.brn`), ids estables al rehacer, bornes enteros después de rotar y T14 partido en T14a/T14b.
 
-Orden: T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10 → T11 → T12 → T13 → T14a → T14b → T15a → T15.
+Orden: T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10 → T11 → T12 → T13 → T14a → T14b → T14c → T15a → T15. (T14c se sumó el 2026-11-08, con el plan de T13.)
 
 ## Contexto
 La fase 2 quedó cerrada (0.1.2 medida en la netbook: casi 0 cuadros >16 ms). La fase 3 según `docs/arquitectura.md`:
@@ -198,6 +198,55 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Terminado cuando:** se puede cablear entre dos bornes con 0, 1 o 2 codos.
 - **Prueba:** tests puros del ruteo (`codos(desde, dirección, hasta)`) para cada combinación de direcciones. Test de la secuencia de clics → `Cablear`.
 - **Pendiente de T12:** un tramo que pasa sobre un borne sin conectar o se encima a otro cable parece conectado y no lo está. La herramienta tiene que evitarlo (no dejar fijar ese tramo) o mostrarlo claro.
+- **Plan detallado (aprobado el 2026-11-08, con ajustes):**
+  - **Alcance:** herramienta W, objetivo bajo el cursor, ruteo, validación compartida (forma + conexiones engañosas), `Cablear` desde/hasta borne, T o libre, integración con atajos, paleta, modo y escena, barra de estado, banco y humo. Fuera: seguir al borne, T en cadena y mover cables (T14a), uniones (T14b), reconectar extremos libres (T14c), guardado (T15a).
+  - **Flujo:**
+    - W (sin modificadores ni repetición) activa la herramienta Cable: cursor `crosshair`, botón "Cable (W)" arriba de la paleta. W otra vez la apaga sin tramo; con tramo, nada ("Esc cancela el cable en curso").
+    - Clic-clic: el primer clic empieza en el objetivo (borne, T o libre en vacío). Clic en vacío fija el recorrido de la previa hasta ahí (sus codos + ese punto); ese punto es el ancla. Clic en borne o cable termina conectado. Un segundo clic en el punto del último codo termina libre ahí (doble clic por punto de grilla, sin temporizador).
+    - Arrastre: apretar, mover > 4 px y soltar = un clic en el punto de soltar. Soltar fuera del lienzo no fija nada.
+    - La herramienta sigue activa al terminar un cable.
+    - Esc: con tramo, cancela el cable en curso entero (la herramienta sigue); sin tramo, vuelve a Seleccionar. Botón derecho = Esc, sin menú. Retroceso con tramo: quita el último codo; sin codos, cancela el tramo.
+  - **Objetivo** (sobre el punto de grilla redondeado; borne > cable > vacío):
+    - Borne: el más cercano a distancia de Chebyshev ≤ `clamp(8 px / escala, 0,5, 0,9)`; empate, el de arriba.
+    - Cable (T): el punto redondeado cae sobre un tramo; la T va en ese punto entero. Bloqueado si es el extremo libre de otro cable, o un cruce de cables que no están unidos ahí.
+    - Vacío: el punto de grilla. Nunca queda un codo ni un extremo libre sobre un borne o un cable.
+    - Se ve antes del clic: marca chica en cada borne visible (hueco libre, relleno con cable; solo con el zoom que muestra bornes); objetivo con anillo (borne), rombo (T) o cruz + círculo hueco (libre); la barra de estado dice "Conecta con K1 · A1", "Derivación (T) sobre w3", "Extremo libre" o el motivo del bloqueo.
+  - **Ruteo** (`core/model/ruteo.ts`, `codos(desde, hasta, acepta?)`, puro): cada extremo tiene punto, salida preferida y prohibida. Borne: preferida la suya (`borneColocado`, 8 orientaciones), prohibida la opuesta. Codo ancla: preferida perpendicular al último tramo, prohibida volver por él. T y vacío: ninguna.
+    - Candidatos en orden fijo: recta; L primero X y primero Y; Z por la mitad en X y en Y (`a + trunc(d/2)`, |d| ≥ 2); U a 1 unidad más allá del lado de salida de `desde` y del de `hasta`.
+    - Filtro: enteros, sin largo cero ni 180°, sin salidas prohibidas y `acepta` (conexiones engañosas y cuerpos). Elige el menor por (preferidas incumplidas, codos, largo, orden). Sin estado ni histéresis.
+    - Al cruzar la línea de salida la L se espeja; al nivel o detrás del borne pasa a U; justo detrás y alineado no hay camino ("Sin camino: fijá un codo"). Al fijar se quitan los codos colineales.
+  - **Conexiones engañosas: se bloquean.** El ruteo descarta los candidatos con conflicto; si no queda ninguno, previa a rayas en `--aviso` con ✕ en el conflicto, el clic no hace nada y la barra dice por qué. Bloquean, para todo el cable (fijado + previa):
+    - un tramo o codo sobre un borne que no es el de su extremo;
+    - un tramo encimado (colineal, más de un punto) con otro cable o consigo mismo;
+    - un contacto en un punto que es codo o extremo de alguno de los dos (incluye pasar por un extremo libre ajeno);
+    - una T sobre un cruce de cables no unidos;
+    - **(ajuste)** un tramo por el interior abierto de la caja del cuerpo (`tamano`) de un componente, propio o ajeno. Llegar a un borne por afuera y bordear la caja se permite.
+    - En los puntos donde el cable declara su conexión (su borne, su punto de T) se permite el contacto, pero no el encimado: **(ajuste)** el segundo y el tercer cable de un borne tienen que salir por otra salida válida (de costado, bordeando la caja) o avisar que hace falta un codo.
+    - El cruce simple de dos interiores se permite y no conecta.
+    - `problemasTrazado(cable, consulta)` en `core`, pura. `consulta` da bornes, tramos y cuerpos que tocan una caja: una lineal sobre la `Hoja` (core) y otra con el índice de la `EscenaEditable` (editor). Previa y clic final usan la misma función y la misma consulta indexada; un test compara las dos en 2000 + 3000. No es invariante del documento: `validarCable` no cambia.
+  - **Casos inválidos:** previa y comando pasan por `prepararCable` = `validarCable` + `problemasTrazado`; la herramienta solo arma `cablear(...)` sin problemas y `Cablear.aplicar` sigue validando la estructura. Mismo borne (con o sin codos): "No se puede terminar en el mismo borne". Largo cero: "El cable no tiene largo". 180°: el ruteo no la genera. T fuera del recorrido: imposible por construcción, `validarCable` lo cubre. Extremos libres propios: al empezar en vacío y con doble clic; libre-libre se permite.
+  - **Deshacer:** un cable = un `Cablear` = un paso. El id se da al construir el comando: cancelar no sube `contadores`. Cancelar (Esc, botón derecho, otra herramienta, escena, modo) no crea pasos y deja el documento `toEqual`. Con tramo, Ctrl+Z (y Retroceso) quita el último codo y sin codos cancela el tramo: nunca toca el historial; Ctrl+Y no hace nada. **(Ajuste)** Con tramo, el botón Deshacer está activo aunque el historial esté vacío y hace la misma acción que Ctrl+Z; Rehacer, inactivo. Al terminar o cancelar el tramo vuelven a depender del historial (`alCambiarHistorial` avisa también al empezar y terminar un tramo). Si el documento cambia por otra vía durante un tramo (contador de cambios del Editor), el tramo se cancela con aviso.
+  - **Extremos libres:** reconectarlos es T14c. En T13 se ven como en T12 (círculo hueco); en W, el extremo libre de otro cable no es objetivo (ni empezar, ni terminar, ni codo): ✕ y "Ese extremo está suelto: todavía no se puede conectar a él".
+  - **Coherencia:** una sola herramienta (`HerramientaColocar | HerramientaCable | null`). W con Colocar lo cancela; la paleta con W cancela el tramo. W vacía la selección; R, M y Supr no hacen nada en W; el cable nuevo no queda seleccionado. W se ignora en un gesto de Seleccionar, en el arrastre desde la paleta, en campos editables y con un modal. La navegación anda durante el tramo y al cambiar la cámara la previa se recalcula con la última posición del puntero. En Simular W no hace nada; al pasar a Simular se cancela la herramienta activa (W o Colocar; hoy el puntero sigue llegando a las herramientas en Simular). F5 solo se bloquea con el botón apretado; con un tramo clic-clic lo cancela y cambia. Ctrl+Shift+B: `desconectar` → `cancelarHerramienta`. Salir del lienzo esconde la previa; `pointercancel` no fija nada.
+  - **Render y rendimiento:** tramo, previa y marcas en la capa dinámica (`Renderer.lineas` para el tramo; marcas de bornes en un solo relleno con `Renderer.rectangulos`, de `EscenaEditable.bornesEn(caja)`, la lista rehecha solo si cambian la caja visible o el documento). **(Ajuste)** Hueco o relleno sale de un índice de bornes con cable en el Editor, actualizado de forma incremental al reflejar cada `Cambio.cables` (crear, borrar, deshacer, rehacer), con las claves de borne recordadas por cable: nunca se recorren los cables al dibujar. Pide cuadro solo al cambiar punto de grilla, objetivo o validez; ruteo y validación, solo en esos cambios. Ningún mosaico se invalida hasta confirmar.
+  - **Banco:** "Cable en curso al 58 %" en 2000 + 3000: ancla en un borne de uno de los 40 sin cables, 60 pasos de cursor que cruzan cables y bornes; mide cuadro y paso (`medirPaso`). 0 cuadros lentos en la PC; F3 en la netbook en la próxima prerelease.
+  - **Tests:** ruteo en 8 orientaciones × destinos (enteros, ortogonal, sale por la dirección transformada, sin 180°, determinista), 8 × 8 pares de bobinas, cruce de ejes; trazado (sobre borne, encimado, codo sobre cable, extremo libre ajeno, T en cruce, **atravesar una bobina se bloquea**, **puente A1-A2 rodea o pide codo**, cruce simple permitido) y lineal = indexada; herramienta (borne → borne con 0, 1 y 2 codos, T, libre, Esc y botón derecho con y sin tramo, Retroceso y Ctrl+Z, cada inválido con los mismos problemas en previa y final, cruce sin T, contadores sin subir al cancelar, **segundo y tercer cable del mismo borne sin encimarse, cuarto avisa**); editor (un paso, cancelar `toEqual`, 0 `invalidarRegion` durante el tramo, W vacía la selección, gestos, paleta, Simular, **botón Deshacer con tramo**, **índice de bornes con cable igual a una pasada completa después de crear, borrar, deshacer y rehacer**); atajos (W → `"cable"`; Mayús+W, Ctrl+W y repetida, nada).
+  - **Consecuencias de los ajustes (confirmadas el 2026-11-08):**
+    - `cajaCuerpo(def, comp)` en `core/symbols/transformar.ts`: la caja del cuerpo (`tamano`, traspuesta con 90° o 270°). `render` usa esa en lugar de su cuenta; un test en las 8 orientaciones confirma que da lo mismo que la anterior, y la caja de selección y `cajaDibujo` no cambian.
+    - `validarDefinicion` exige que cada borne esté en el borde de la caja y apunte hacia afuera de ese borde; en una esquina puede apuntar hacia afuera por cualquiera de los dos bordes.
+    - Un borne admite como máximo 3 cables directos (afuera y los dos costados, bordeando la caja). El cuarto avisa "El borne no tiene más salidas libres: derivá con una T sobre uno de sus cables"; test y humo del aviso y de la derivación con T.
+    - El puente A1-A2 no se rutea solo (rodear la bobina pide 4 codos): sin candidato especial; se prueba con un codo manual.
+  - **Humo** `t13-cable.mjs` (1024×600): W activa cursor y botón; dos bornes con 0, 1 y 2 codos; T; extremo libre; Esc con y sin tramo; Ctrl+Z deshace el cable en un paso; **botón Deshacer activo con tramo y vacío el historial**; inválido no crea; cruce sin T; **segundo y tercer cable del mismo borne**; W en el buscador y en el campo de etiqueta no activa; sin restos (píxeles iguales tras Esc y tras crear + deshacer, con `Vista.enReposo`).
+
+- **Hecho (2026-11-08):**
+  - **Núcleo:** `core/model/ruteo.ts` (`rutas`, `codos`, `simplificar`) y `core/model/trazado.ts` (`problemasTrazado`, `prepararCable`, `salidasLibres`, `consultaHoja`). `cajaCuerpo` en `transformar.ts`; `validarDefinicion` exige bornes en el borde apuntando afuera. Desde un codo fijado, el preferido de costado es débil (solo desempata): alineado sigue recto y, para volver, rodea en U.
+  - **Editor:** `herramientas/cable.ts`, `consultaEscena.ts` (índice de la escena) y `bornesConCable.ts`. El `Editor` mantiene el índice de la hoja (componentes y cables por id), los bornes con cable y un contador de cambios, todo incremental con cada `Cambio`. `Editor.escape()` (Esc: cancela el tramo o termina) y `cancelarHerramienta()` → `terminar()` (cambio de escena o de modo). Retroceso es una acción aparte (`borrarAtras`): fuera de W sigue borrando.
+  - **Bug encontrado:** los botones de deshacer no se enteraban de que empezaba un tramo, porque la herramienta cambia su estado antes de que el editor aplique el resultado. Ahora se compara con lo último avisado (`avisarTramo`).
+  - **Interfaz:** botón "Cable (W)" arriba de la paleta, pista en la barra de estado (`.pista-herramienta`; `.pista` ya la usaba el panel), cursor de cruz, color `--aviso` en la capa dinámica para lo inválido (a rayas). Al cambiar la cámara, la herramienta vuelve a mirar qué hay bajo el cursor. Pasar a Simular termina la herramienta activa.
+  - **Banco:** *Cable en curso al 58 %*: 0,7–1,1 ms de mediana por cuadro, máximo 2,6, 0 lentos, 0 mosaicos; el paso, 0,1 ms (máximo 0,4). Ver `docs/bench.md`.
+  - **Tests:** ruteo (8 orientaciones, 8 × 8 pares, cruce de ejes), trazado, herramienta sobre el Editor (incluye 400 clics al azar sin crear nada inválido), consulta indexada = lineal en 2000 + 3000, bornes con cable = pasada completa. 768 en total.
+  - **Humo:** `t13-cable.mjs` (36 comprobaciones), con las 8 orientaciones con clics de verdad.
+  - **Pendiente:** F3 en la netbook con un cable en curso en la escena de 2000 + 3000.
 
 ### T14a. Extremos que siguen al borne
 - **Qué:** `Mover`, `Rotar` y `Espejar` actualizan los extremos de los cables conectados a bornes de los componentes tocados y rehacen el tramo final para que siga ortogonal (sale en la dirección del borne transformado), dentro del mismo comando (un paso de deshacer). Si los dos extremos de un cable van a componentes que se mueven juntos, el cable entero se traslada sin rehacer codos.
@@ -213,11 +262,17 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - T: mover el componente de A de modo que se corra el tramo donde llega B → el extremo de B queda sobre A, ortogonal. Un movimiento que no toca ese tramo → B no cambia.
   - Cadena A ← B ← C y un ciclo: termina y cada cable se ajusta una vez.
   - Borrar A deja a B con el extremo libre; deshacer lo reconecta.
+- **Pendiente de T13:** la herramienta W no deja crear conexiones aparentes (tramo sobre un borne, encimado, por el cuerpo de un componente), pero mover o rotar un componente puede volver a crearlas: un borne que cae sobre un tramo, un cuerpo sobre un cable. Decidir acá si se bloquea, se avisa o se rehace el tramo. Lo mismo pasa hoy al colocar un componente sobre un cable (T7).
 
 ### T14b. Uniones
 - **Qué:** las uniones (puntos donde se juntan 3 o más conexiones: extremos de cables, bornes y puntos de cable donde llega una T) se calculan solas a partir del documento. No se guardan en el `.brn`. Se dibujan como puntos rellenos en la capa estática; al cambiar un cable se invalida la caja de las uniones viejas y nuevas.
 - **Terminado cuando:** las T muestran su punto y las L no.
 - **Prueba:** una T da 1 unión, una L da 0 y una cruz de dos cables sin empalme da 0. Dos cables que terminan en el mismo borne dan 1.
+
+### T14c. Reconectar extremos libres
+- **Qué:** arrastrar el extremo libre de un cable hasta un borne o un cable (T) lo conecta, con un comando `CambiarExtremo` (un paso de deshacer). El tramo final se rehace con el ruteo de T13 y pasa por la misma validación (`prepararCable`: forma + conexiones engañosas). En T13 un extremo libre ajeno no es objetivo de la herramienta W.
+- **Terminado cuando:** un cable con un extremo libre se conecta a un borne y a otro cable sin borrarlo ni redibujarlo.
+- **Prueba:** reconectar a un borne y a una T; deshacer = igual; un destino inválido (mismo borne, conexión engañosa) no crea paso.
 
 ---
 
@@ -258,6 +313,9 @@ Propuesta: hacerlos después de T15, como T16–T19, antes de abrir la fase 4.
 ---
 
 ## Para la fase 4
+
+### Verificación de conexiones aparentes
+- Un chequeo del documento (al abrir y antes de simular) que avise de lo que parece conectado y no lo está: un tramo sobre un borne sin conectar, tramos encimados, un tramo por el cuerpo de un componente, un extremo libre sobre un borne o un cable. Usa `problemasTrazado` de T13 sobre la hoja entera. Hace falta porque colocar (T7) y mover o rotar (T14a) pueden crearlas sin pasar por la herramienta W.
 
 ### Etiquetas de red
 - Las alimentaciones con el **mismo nombre de red** quedan conectadas entre sí aunque no haya cable, como etiquetas de red. El nombre se compara **sin espacios a los lados y en mayúsculas**: "l1 " y "L1" son la misma red.

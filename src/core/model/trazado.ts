@@ -1,0 +1,351 @@
+// Conexiones engañosas (T13): lo que se ve conectado y no lo está. La
+// herramienta cable (W) no deja fijar un tramo así. Sin dependencias del
+// navegador.
+//
+// Bloquean, para el cable nuevo entero (lo fijado más la vista previa):
+// - un tramo o codo sobre un borne que no es el de su extremo;
+// - un tramo encimado (colineal, más de un punto) con otro cable o consigo
+//   mismo;
+// - un contacto en un punto que es codo o extremo de alguno de los dos
+//   (incluye pasar por el extremo libre de otro cable);
+// - una T sobre un cruce de cables que no están unidos ahí, o sobre el
+//   extremo libre de otro cable;
+// - un tramo por el interior abierto del cuerpo de un componente, propio o
+//   ajeno (llegar a un borne por afuera y bordear la caja vale);
+// - un borne de extremo que ya no tiene salidas libres (afuera y los dos
+//   costados ocupados por otros cables).
+// En los puntos donde el cable declara su conexión (su borne, su punto de T)
+// se permite el contacto, no el encimado. El cruce simple de dos interiores
+// se permite y no conecta.
+//
+// No es una invariante del documento (`validarCable` no cambia): colocar,
+// mover o rotar un componente pueden volver a crear estas situaciones.
+//
+// `problemasTrazado` es la única regla. Los datos los da una `ConsultaTrazado`:
+// la lineal de acá (`consultaHoja`), o la del editor con el índice de la
+// escena. La vista previa y el comando final usan la misma función y la misma
+// consulta.
+
+import { bornesColocados, buscarSimbolo, cajaCuerpo, type Direccion, type Rect } from "../symbols";
+import { indexarHoja, puntoExtremo, recorridoCable, validarCable, type IndiceHoja } from "./cables";
+import type { Extremo, Hoja } from "./documento";
+import type { DatosCable } from "./comandos";
+import { perpendiculares } from "./ruteo";
+
+/** Un borne colocado en la hoja. */
+export interface BorneHoja {
+  comp: string;
+  borne: string;
+  /** Etiqueta del componente, para los mensajes ("K1"); puede estar vacía. */
+  etiqueta: string;
+  x: number;
+  y: number;
+  direccion: Direccion;
+}
+
+/** Un cable de la hoja, con su recorrido resuelto. */
+export interface CableHoja {
+  id: string;
+  puntos: readonly number[];
+  desde: Extremo;
+  hasta: Extremo;
+}
+
+/** El cuerpo de un componente de la hoja. */
+export interface CuerpoHoja {
+  comp: string;
+  etiqueta: string;
+  caja: Rect;
+}
+
+/** Lo que hay en la hoja cerca de una caja. Puede dar de más (candidatos): la regla compara exacto. */
+export interface ConsultaTrazado {
+  bornesEn(caja: Rect): Iterable<BorneHoja>;
+  cablesEn(caja: Rect): Iterable<CableHoja>;
+  cuerposEn(caja: Rect): Iterable<CuerpoHoja>;
+}
+
+/** Un problema del trazado, con el punto donde se marca. */
+export interface Conflicto {
+  mensaje: string;
+  x: number;
+  y: number;
+}
+
+/** El cable que se quiere crear: extremos y recorrido resuelto (x, y seguidos). */
+export interface CableNuevo {
+  desde: Extremo;
+  hasta: Extremo;
+  puntos: readonly number[];
+}
+
+export const MENSAJE_SIN_SALIDAS = "El borne no tiene más salidas libres: derivá con una T sobre uno de sus cables.";
+export const MENSAJE_EXTREMO_SUELTO = "Ese extremo está suelto: todavía no se puede conectar a él.";
+export const MENSAJE_CRUCE = "Ahí se cruzan dos cables sin unirse: elegí otro punto.";
+
+/** True si las cajas se tocan (bordes incluidos). */
+function seTocan(a: Rect, b: Rect): boolean {
+  return a.x <= b.x + b.ancho && b.x <= a.x + a.ancho && a.y <= b.y + b.alto && b.y <= a.y + a.alto;
+}
+
+/** Caja de un punto o de un tramo ortogonal. */
+function cajaTramo(x0: number, y0: number, x1: number, y1: number): Rect {
+  const x = Math.min(x0, x1);
+  const y = Math.min(y0, y1);
+  return { x, y, ancho: Math.abs(x1 - x0), alto: Math.abs(y1 - y0) };
+}
+
+/** Nombre de un componente para los mensajes. */
+function nombre(etiqueta: string, comp: string): string {
+  return etiqueta || comp;
+}
+
+/**
+ * Consulta lineal sobre una hoja: arma una vez las listas de bornes, cables y
+ * cuerpos, y cada consulta las recorre enteras. Para los tests y para
+ * comparar con la indexada del editor. Los símbolos desconocidos no tienen
+ * cuerpo ni bornes.
+ */
+export function consultaHoja(hoja: Hoja, indice: IndiceHoja = indexarHoja(hoja)): ConsultaTrazado {
+  const bornes: BorneHoja[] = [];
+  const cuerpos: CuerpoHoja[] = [];
+  for (const c of hoja.componentes) {
+    const def = buscarSimbolo(c.tipo);
+    if (!def) continue;
+    cuerpos.push({ comp: c.id, etiqueta: c.etiqueta, caja: cajaCuerpo(def.tamano, c.x, c.y, c.rot) });
+    for (const b of bornesColocados(def.bornes, c.x, c.y, { rotacion: c.rot, espejado: c.espejado })) {
+      bornes.push({ comp: c.id, borne: b.nombre, etiqueta: c.etiqueta, x: b.x, y: b.y, direccion: b.direccion });
+    }
+  }
+  const cables: CableHoja[] = [];
+  for (const w of hoja.cables) {
+    const puntos = recorridoCable(indice, w);
+    if (puntos) cables.push({ id: w.id, puntos, desde: w.desde, hasta: w.hasta });
+  }
+  return {
+    bornesEn: (k) => bornes.filter((b) => b.x >= k.x && b.x <= k.x + k.ancho && b.y >= k.y && b.y <= k.y + k.alto),
+    cuerposEn: (k) => cuerpos.filter((c) => seTocan(c.caja, k)),
+    cablesEn: (k) => cables.filter((w) => tocaRecorrido(w.puntos, k)),
+  };
+}
+
+/** True si algún tramo del recorrido toca la caja (bordes incluidos). */
+export function tocaRecorrido(p: readonly number[], k: Rect): boolean {
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    if (seTocan(cajaTramo(p[i]!, p[i + 1]!, p[i + 2]!, p[i + 3]!), k)) return true;
+  }
+  return false;
+}
+
+/**
+ * Salidas libres de un borne en (x, y) con dirección `direccion`: afuera y
+ * los dos costados, menos las que ya usa un tramo de otro cable que sale de
+ * ese punto (o pasa por él). Hacia adentro no se cuenta nunca.
+ */
+export function salidasLibres(consulta: ConsultaTrazado, x: number, y: number, direccion: Direccion): Direccion[] {
+  const ocupadas = new Set<Direccion>();
+  for (const w of consulta.cablesEn({ x, y, ancho: 0, alto: 0 })) {
+    const p = w.puntos;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const x0 = p[i]!;
+      const y0 = p[i + 1]!;
+      const x1 = p[i + 2]!;
+      const y1 = p[i + 3]!;
+      if (!(x >= Math.min(x0, x1) && x <= Math.max(x0, x1) && y >= Math.min(y0, y1) && y <= Math.max(y0, y1))) continue;
+      if (x0 !== x || y0 !== y) ocupadas.add(direccionHacia(x, y, x0, y0));
+      if (x1 !== x || y1 !== y) ocupadas.add(direccionHacia(x, y, x1, y1));
+    }
+  }
+  return [direccion, ...perpendiculares(direccion)].filter((d) => !ocupadas.has(d));
+}
+
+/** Dirección de (x, y) hacia (x1, y1), en un tramo ortogonal. */
+function direccionHacia(x: number, y: number, x1: number, y1: number): Direccion {
+  if (x1 > x) return "derecha";
+  if (x1 < x) return "izquierda";
+  return y1 > y ? "abajo" : "arriba";
+}
+
+/** Cómo se tocan dos tramos ortogonales: nada, un punto o un encimado (más de un punto). */
+type Toque = null | { tipo: "punto"; x: number; y: number } | { tipo: "encimado"; x: number; y: number };
+
+function toque(ax0: number, ay0: number, ax1: number, ay1: number, bx0: number, by0: number, bx1: number, by1: number): Toque {
+  const aH = ay0 === ay1;
+  const bH = by0 === by1;
+  if (aH && bH) {
+    if (ay0 !== by0) return null;
+    const lo = Math.max(Math.min(ax0, ax1), Math.min(bx0, bx1));
+    const hi = Math.min(Math.max(ax0, ax1), Math.max(bx0, bx1));
+    if (lo > hi) return null;
+    return { tipo: lo === hi ? "punto" : "encimado", x: lo, y: ay0 };
+  }
+  if (!aH && !bH) {
+    if (ax0 !== bx0) return null;
+    const lo = Math.max(Math.min(ay0, ay1), Math.min(by0, by1));
+    const hi = Math.min(Math.max(ay0, ay1), Math.max(by0, by1));
+    if (lo > hi) return null;
+    return { tipo: lo === hi ? "punto" : "encimado", x: ax0, y: lo };
+  }
+  // Uno horizontal y otro vertical.
+  const [hx0, hx1, hy, vx, vy0, vy1] = aH ? [ax0, ax1, ay0, bx0, by0, by1] : [bx0, bx1, by0, ax0, ay0, ay1];
+  if (vx < Math.min(hx0, hx1) || vx > Math.max(hx0, hx1) || hy < Math.min(vy0, vy1) || hy > Math.max(vy0, vy1)) return null;
+  return { tipo: "punto", x: vx, y: hy };
+}
+
+/** True si el tramo pasa por el interior abierto de la caja (no solo por su borde). */
+function atraviesa(x0: number, y0: number, x1: number, y1: number, k: Rect): boolean {
+  const kx1 = k.x + k.ancho;
+  const ky1 = k.y + k.alto;
+  if (y0 === y1) {
+    return y0 > k.y && y0 < ky1 && Math.max(Math.min(x0, x1), k.x) < Math.min(Math.max(x0, x1), kx1);
+  }
+  return x0 > k.x && x0 < kx1 && Math.max(Math.min(y0, y1), k.y) < Math.min(Math.max(y0, y1), ky1);
+}
+
+/** True si algún extremo de `w` está en (x, y) y es una T sobre el cable `otro`. */
+export function terminaEnTSobre(w: CableHoja, otro: string, x: number, y: number): boolean {
+  for (const e of [w.desde, w.hasta]) if (e.tipo === "cable" && e.cable === otro && e.x === x && e.y === y) return true;
+  return false;
+}
+
+/**
+ * Problemas del trazado de un cable nuevo contra lo que da `consulta`. Vacío
+ * si se puede fijar. Ver las reglas al principio del archivo.
+ */
+export function problemasTrazado(nuevo: CableNuevo, consulta: ConsultaTrazado): Conflicto[] {
+  const P = nuevo.puntos;
+  const n = P.length;
+  const salida: Conflicto[] = [];
+  const vistos = new Set<string>();
+  const anotar = (mensaje: string, x: number, y: number) => {
+    const clave = `${mensaje}|${x}|${y}`;
+    if (vistos.has(clave)) return;
+    vistos.add(clave);
+    salida.push({ mensaje, x, y });
+  };
+  if (n < 4) return salida;
+  const extremos: [Extremo, number, number][] = [
+    [nuevo.desde, P[0]!, P[1]!],
+    [nuevo.hasta, P[n - 2]!, P[n - 1]!],
+  ];
+  /** El extremo declarado (borne o T) del cable nuevo en (x, y), o null. */
+  const declarado = (x: number, y: number): Extremo | null => {
+    for (const [e, ex, ey] of extremos) if (e.tipo !== "libre" && ex === x && ey === y) return e;
+    return null;
+  };
+
+  // Extremos: borne sin salidas libres; T sobre un extremo suelto.
+  for (const [e, x, y] of extremos) {
+    if (e.tipo === "borne") {
+      for (const b of consulta.bornesEn({ x, y, ancho: 0, alto: 0 })) {
+        if (b.comp !== e.comp || b.borne !== e.borne || b.x !== x || b.y !== y) continue;
+        if (salidasLibres(consulta, x, y, b.direccion).length === 0) anotar(MENSAJE_SIN_SALIDAS, x, y);
+      }
+    } else if (e.tipo === "cable") {
+      for (const w of consulta.cablesEn({ x, y, ancho: 0, alto: 0 })) {
+        if (w.id !== e.cable) continue;
+        const m = w.puntos.length;
+        const suelto =
+          (w.desde.tipo === "libre" && w.puntos[0] === x && w.puntos[1] === y) ||
+          (w.hasta.tipo === "libre" && w.puntos[m - 2] === x && w.puntos[m - 1] === y);
+        if (suelto) anotar(MENSAJE_EXTREMO_SUELTO, x, y);
+      }
+      // Otro cable por el punto de la T, sin estar unido ahí con el anfitrión: un cruce.
+      const ahi = [...consulta.cablesEn({ x, y, ancho: 0, alto: 0 })].filter((w) => tocaRecorrido(w.puntos, { x, y, ancho: 0, alto: 0 }));
+      const anfitrion = ahi.find((w) => w.id === e.cable);
+      for (const w of ahi) {
+        if (w.id === e.cable) continue;
+        const unidos = terminaEnTSobre(w, e.cable, x, y) || (anfitrion !== undefined && terminaEnTSobre(anfitrion, w.id, x, y));
+        if (!unidos) anotar(MENSAJE_CRUCE, x, y);
+      }
+    }
+  }
+
+  for (let i = 0; i + 3 < n; i += 2) {
+    const sx0 = P[i]!;
+    const sy0 = P[i + 1]!;
+    const sx1 = P[i + 2]!;
+    const sy1 = P[i + 3]!;
+    const caja = cajaTramo(sx0, sy0, sx1, sy1);
+
+    // Bornes sobre el tramo, salvo el de su extremo.
+    for (const b of consulta.bornesEn(caja)) {
+      if (b.x < caja.x || b.x > caja.x + caja.ancho || b.y < caja.y || b.y > caja.y + caja.alto) continue;
+      const e = declarado(b.x, b.y);
+      if (e && e.tipo === "borne" && e.comp === b.comp && e.borne === b.borne) continue;
+      anotar(`El cable pasaría sobre el borne ${nombre(b.etiqueta, b.comp)} · ${b.borne} sin conectarse.`, b.x, b.y);
+    }
+
+    // Cuerpos de componentes.
+    for (const c of consulta.cuerposEn(caja)) {
+      if (!atraviesa(sx0, sy0, sx1, sy1, c.caja)) continue;
+      const k = c.caja;
+      const x = Math.min(Math.max((sx0 + sx1) / 2, k.x), k.x + k.ancho);
+      const y = Math.min(Math.max((sy0 + sy1) / 2, k.y), k.y + k.alto);
+      anotar(`El cable atravesaría el cuerpo de ${nombre(c.etiqueta, c.comp)}.`, x, y);
+    }
+
+    // Otros cables.
+    const cables = [...consulta.cablesEn(caja)];
+    for (const w of cables) {
+      const p = w.puntos;
+      for (let j = 0; j + 3 < p.length; j += 2) {
+        const tx0 = p[j]!;
+        const ty0 = p[j + 1]!;
+        const tx1 = p[j + 2]!;
+        const ty1 = p[j + 3]!;
+        const t = toque(sx0, sy0, sx1, sy1, tx0, ty0, tx1, ty1);
+        if (!t) continue;
+        if (t.tipo === "encimado") {
+          anotar(`El cable se encimaría con ${w.id}.`, t.x, t.y);
+          continue;
+        }
+        const e = declarado(t.x, t.y);
+        if (e?.tipo === "borne") continue;
+        if (e?.tipo === "cable") {
+          if (w.id === e.cable) continue;
+          // Otro cable en el punto de la T: vale si ya está unido ahí con el de la T.
+          const anfitrion = cables.find((k) => k.id === e.cable);
+          const unidos = terminaEnTSobre(w, e.cable, t.x, t.y) || (anfitrion !== undefined && terminaEnTSobre(anfitrion, w.id, t.x, t.y));
+          if (!unidos) anotar(MENSAJE_CRUCE, t.x, t.y);
+          continue;
+        }
+        const enVertice = (t.x === sx0 && t.y === sy0) || (t.x === sx1 && t.y === sy1) || (t.x === tx0 && t.y === ty0) || (t.x === tx1 && t.y === ty1);
+        if (!enVertice) continue; // cruce simple: no conecta
+        const m = p.length;
+        const suelto =
+          (w.desde.tipo === "libre" && p[0] === t.x && p[1] === t.y) || (w.hasta.tipo === "libre" && p[m - 2] === t.x && p[m - 1] === t.y);
+        anotar(suelto ? `El cable pasaría por el extremo suelto de ${w.id}.` : `El cable tocaría ${w.id} sin conectarse.`, t.x, t.y);
+      }
+    }
+
+    // Consigo mismo: un tramo no vecino encimado.
+    for (let j = i + 4; j + 3 < n; j += 2) {
+      const t = toque(sx0, sy0, sx1, sy1, P[j]!, P[j + 1]!, P[j + 2]!, P[j + 3]!);
+      if (t?.tipo === "encimado") anotar("El cable se encimaría consigo mismo.", t.x, t.y);
+    }
+  }
+  return salida;
+}
+
+/** Lo que da `prepararCable`: el recorrido (si se pudo resolver) y los problemas. */
+export interface CablePreparado {
+  puntos: number[] | null;
+  problemas: Conflicto[];
+}
+
+/**
+ * La validación completa de un cable nuevo: la estructura (`validarCable`,
+ * lo mismo que exige `Cablear`) y, si está bien, el trazado. La herramienta
+ * W la usa para la vista previa y para el comando final.
+ */
+export function prepararCable(indice: IndiceHoja, consulta: ConsultaTrazado, datos: DatosCable): CablePreparado {
+  const w = { id: "", ...datos };
+  const estructura = validarCable(indice, w);
+  if (estructura.length > 0) {
+    const p = puntoExtremo(indice, datos.hasta) ?? puntoExtremo(indice, datos.desde) ?? { x: 0, y: 0 };
+    return { puntos: null, problemas: estructura.map((e) => ({ mensaje: e.mensaje, x: p.x, y: p.y })) };
+  }
+  const puntos = recorridoCable(indice, w)!;
+  return { puntos, problemas: problemasTrazado({ desde: datos.desde, hasta: datos.hasta, puntos }, consulta) };
+}

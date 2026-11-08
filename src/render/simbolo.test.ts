@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BOBINA_CONTACTOR,
+  cajaCuerpo,
+  SIMBOLOS,
   FASE,
   LAMPARA,
   NEUTRO,
@@ -11,6 +13,7 @@ import {
   type DefinicionSimbolo,
 } from "../core/symbols";
 import type { Caja } from "./camara";
+import { formaComponente } from "./escenaEditable";
 import { RendererCanvas, trazadoSimbolo } from "./canvas2d";
 import type { Renderer } from "./renderer";
 import {
@@ -406,5 +409,60 @@ describe("fase y neutro girados 180°", () => {
     expect(g.textos).toEqual([{ m: IDENTIDAD, x: 4 - 1 - 0.5, y: 6, texto: etiqueta, alto: ALTO_ETIQUETA, alineacion: "derecha" }]);
     // La geometría sí gira: el borne local (0, 1) cae arriba del centro.
     expect(aplicarM(g.simbolos[0]!, 0, 1)).toEqual({ x: 4, y: 5 });
+  });
+});
+
+// T13: la caja del cuerpo pasó a `core` (cajaCuerpo), para que los cables
+// puedan comprobar que un tramo no la atraviesa. Lo que se ve y se elige no
+// cambia: la caja del símbolo, la de dibujo y la forma de selección son las
+// de antes en las 8 orientaciones.
+describe("cajaCuerpo (core) = la cuenta anterior de render", () => {
+  /** La cuenta que tenía `cajaSimbolo` antes de T13. */
+  function cajaAnterior(def: DefinicionSimbolo, x: number, y: number, rotacion: number): Caja {
+    const girado = rotacion === 90 || rotacion === 270;
+    const ancho = girado ? def.tamano.alto : def.tamano.ancho;
+    const alto = girado ? def.tamano.ancho : def.tamano.alto;
+    return { x: x - ancho / 2, y: y - alto / 2, ancho, alto };
+  }
+
+  it("da lo mismo para todos los símbolos en las 8 orientaciones", () => {
+    for (const def of SIMBOLOS) {
+      for (const rotacion of [0, 90, 180, 270] as const) {
+        for (const espejado of [false, true]) {
+          const c = { x: 3, y: -5, rotacion, espejado };
+          expect(cajaCuerpo(def.tamano, 3, -5, rotacion)).toEqual(cajaAnterior(def, 3, -5, rotacion));
+          expect(cajaSimbolo(def, c)).toEqual(cajaAnterior(def, 3, -5, rotacion));
+        }
+      }
+    }
+  });
+
+  // Valores tomados antes del cambio: [tipo, rotación, espejado, símbolo, dibujo, zonas de selección].
+  const ANTES: [string, number, boolean, number[], number[], number[][]][] = [
+    ["pulsador.na", 0, false, [1, -7, 4, 4], [-3.15, -8.5, 9.65, 7], [[1, -7, 4, 4], [-1.6, -5.5, 2.1, 1]]],
+    ["pulsador.na", 0, true, [1, -7, 4, 4], [-3.15, -8.5, 9.65, 7], [[1, -7, 4, 4], [-1.6, -5.5, 2.1, 1]]],
+    ["pulsador.na", 90, false, [1, -7, 4, 4], [-0.5, -9, 7, 7.5], [[1, -7, 4, 4], [1.95, -8.5, 2.1, 1]]],
+    ["pulsador.na", 90, true, [1, -7, 4, 4], [-0.5, -9, 7, 7.5], [[1, -7, 4, 4], [1.95, -8.5, 2.1, 1]]],
+    ["pulsador.na", 180, false, [1, -7, 4, 4], [-3.15, -8.5, 9.65, 7], [[1, -7, 4, 4], [-1.6, -5.5, 2.1, 1]]],
+    ["pulsador.na", 180, true, [1, -7, 4, 4], [-3.15, -8.5, 9.65, 7], [[1, -7, 4, 4], [-1.6, -5.5, 2.1, 1]]],
+    ["pulsador.na", 270, false, [1, -7, 4, 4], [-0.5, -9, 7, 7.5], [[1, -7, 4, 4], [1.95, -8.5, 2.1, 1]]],
+    ["pulsador.na", 270, true, [1, -7, 4, 4], [-0.5, -9, 7, 7.5], [[1, -7, 4, 4], [1.95, -8.5, 2.1, 1]]],
+    ["contactor.bobina", 0, false, [2, -7, 2, 4], [-2.15, -8.5, 7.65, 7], [[2, -7, 2, 4], [-0.6, -5.5, 2.1, 1]]],
+    ["contactor.bobina", 0, true, [2, -7, 2, 4], [-2.15, -8.5, 7.65, 7], [[2, -7, 2, 4], [-0.6, -5.5, 2.1, 1]]],
+    ["contactor.bobina", 90, false, [1, -6, 4, 2], [-0.5, -8, 7, 5.5], [[1, -6, 4, 2], [1.95, -7.5, 2.1, 1]]],
+    ["contactor.bobina", 90, true, [1, -6, 4, 2], [-0.5, -8, 7, 5.5], [[1, -6, 4, 2], [1.95, -7.5, 2.1, 1]]],
+    ["contactor.bobina", 180, false, [2, -7, 2, 4], [-2.15, -8.5, 7.65, 7], [[2, -7, 2, 4], [-0.6, -5.5, 2.1, 1]]],
+    ["contactor.bobina", 180, true, [2, -7, 2, 4], [-2.15, -8.5, 7.65, 7], [[2, -7, 2, 4], [-0.6, -5.5, 2.1, 1]]],
+    ["contactor.bobina", 270, false, [1, -6, 4, 2], [-0.5, -8, 7, 5.5], [[1, -6, 4, 2], [1.95, -7.5, 2.1, 1]]],
+    ["contactor.bobina", 270, true, [1, -6, 4, 2], [-0.5, -8, 7, 5.5], [[1, -6, 4, 2], [1.95, -7.5, 2.1, 1]]],
+  ];
+  const lista = (k: Caja) => [k.x, k.y, k.ancho, k.alto].map((v) => Number(v.toFixed(6)));
+
+  it.each(ANTES)("%s a %i° (espejado %s): caja del símbolo, de dibujo y de selección sin cambios", (tipo, rot, espejado, simbolo, dibujo, zonas) => {
+    const def = SIMBOLOS.find((s) => s.tipo === tipo)!;
+    const c = { def, x: 3, y: -5, rotacion: rot as 0 | 90 | 180 | 270, espejado, etiqueta: "K12" };
+    expect(lista(cajaSimbolo(def, c))).toEqual(simbolo);
+    expect(lista(cajaDibujo(def, c, "K12"))).toEqual(dibujo);
+    expect(formaComponente(c).zonas.map(lista)).toEqual(zonas);
   });
 });

@@ -28,6 +28,10 @@
   let cursor = $state<Punto | null>(null);
   /** Tipo del símbolo que se está colocando (para resaltarlo en la paleta). */
   let colocando = $state<string | null>(null);
+  /** La herramienta cable está activa (para resaltar su botón en la paleta). */
+  let cableActivo = $state(false);
+  /** Pista de la herramienta para la barra de estado. */
+  let pista = $state<string | null>(null);
   let puedeDeshacer = $state(false);
   let puedeRehacer = $state(false);
   /** Aviso de la barra de estado (una acción que no se pudo hacer); se borra solo. */
@@ -142,12 +146,17 @@
       activo={colocando}
       desactivada={escena !== "documento"}
       onelegir={(def, e) => lienzo.iniciarColocar(def, e)}
+      {cableActivo}
+      cableDesactivado={modo === "simular" || editorActivo === null}
+      oncable={() => lienzo.alternarCable()}
     />
     <Lienzo
       bind:this={lienzo}
       bind:zoom
       bind:cursor
       bind:colocando
+      bind:cableActivo
+      bind:pista
       bind:puedeDeshacer
       bind:puedeRehacer
       bind:activo={editorActivo}
@@ -168,7 +177,7 @@
       onalternar={(abierto) => (propiedadesPlegadoPorUsuario = !abierto)}
     />
   </main>
-  <BarraEstado {modo} {zoom} {cursor} {aviso} />
+  <BarraEstado {modo} {zoom} {cursor} {aviso} {pista} />
 </div>
 
 {#if prueba}

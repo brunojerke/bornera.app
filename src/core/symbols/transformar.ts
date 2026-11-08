@@ -95,6 +95,27 @@ export function bornesColocados(bornes: readonly Borne[], x: number, y: number, 
   return transformarBornes(bornes, t).map((b) => ({ ...b, x: b.x + x + 0, y: b.y + y + 0 }));
 }
 
+/** Rectángulo en unidades de grilla: esquina superior izquierda, ancho y alto. */
+export interface Rect {
+  x: number;
+  y: number;
+  ancho: number;
+  alto: number;
+}
+
+/**
+ * Caja del cuerpo de un símbolo colocado con su centro en (x, y): su
+ * `tamano`, traspuesto con 90° o 270° (el espejado no la cambia). Los bornes
+ * quedan en su borde (`validarDefinicion`). Es la única cuenta: la usan la
+ * escena (elegir, dibujar) y los cables (un tramo no puede atravesarla).
+ */
+export function cajaCuerpo(tamano: { ancho: number; alto: number }, x: number, y: number, rotacion: number): Rect {
+  const girado = rotacion === 90 || rotacion === 270;
+  const ancho = girado ? tamano.alto : tamano.ancho;
+  const alto = girado ? tamano.ancho : tamano.alto;
+  return { x: x - ancho / 2, y: y - alto / 2, ancho, alto };
+}
+
 /** El borne `nombre` colocado (como `bornesColocados`), o undefined si el símbolo no lo tiene. */
 export function borneColocado(
   bornes: readonly Borne[],

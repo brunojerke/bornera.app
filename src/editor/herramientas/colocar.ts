@@ -127,6 +127,11 @@ export class HerramientaColocar implements Herramienta {
     return { redibujar: true, terminar: true };
   }
 
+  /** Termina sin colocar (otra herramienta, cambio de escena o de modo): lo mismo que Esc. */
+  terminar(): Resultado {
+    return this.cancelar();
+  }
+
   /** Lleva la previa al punto de grilla del evento; true si cambió. */
   private ubicar(ev: EventoHerramienta): boolean {
     const x = ajustarAGrilla(ev.x);

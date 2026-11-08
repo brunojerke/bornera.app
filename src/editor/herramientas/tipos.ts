@@ -17,6 +17,8 @@ export interface EventoHerramienta {
   ctrl: boolean;
   /** Píxeles CSS por unidad de grilla: para pasar distancias de pantalla a la grilla. */
   escala: number;
+  /** Al soltar: el puntero quedó fuera del lienzo (con el puntero capturado igual llega). */
+  fuera?: boolean;
 }
 
 /** Lo que pide una herramienta después de cada evento. */

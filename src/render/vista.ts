@@ -241,6 +241,7 @@ export class Vista {
       simbolo: leer("--simbolo", antes.simbolo),
       borne: leer("--borne", antes.borne),
       acento: leer("--acento", antes.acento),
+      aviso: leer("--aviso", antes.aviso ?? antes.borne),
     };
   }
 }

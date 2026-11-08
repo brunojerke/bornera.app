@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Barra de estado inferior: modo, coordenadas, zoom y avisos.
+  // Barra de estado inferior: modo, coordenadas, zoom, la pista de la
+  // herramienta (cable: qué haría el próximo clic) y avisos.
   import type { Modo } from "./tipos";
   import type { Punto } from "../render/camara";
 
@@ -8,7 +9,8 @@
     zoom,
     cursor,
     aviso = null,
-  }: { modo: Modo; zoom: number; cursor: Punto | null; aviso?: string | null } = $props();
+    pista = null,
+  }: { modo: Modo; zoom: number; cursor: Punto | null; aviso?: string | null; pista?: string | null } = $props();
 </script>
 
 <footer class="estado">
@@ -19,7 +21,11 @@
     {cursor ? `X ${Math.round(cursor.x)} · Y ${Math.round(cursor.y)}` : "X – · Y –"}
   </span>
   <span class="dato">Zoom {Math.round(zoom * 100)} %</span>
-  <span class="espacio"></span>
+  {#if pista}
+    <span class="pista-herramienta" title={pista}>{pista}</span>
+  {:else}
+    <span class="espacio"></span>
+  {/if}
   <span class="avisos" class:activo={aviso !== null} role="status" aria-live="polite">{aviso ?? "Sin avisos"}</span>
 </footer>
 
@@ -53,6 +59,14 @@
 
   .espacio {
     flex: 1;
+  }
+
+  .pista-herramienta {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--texto);
   }
 
   .avisos {

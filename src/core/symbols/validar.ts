@@ -1,7 +1,21 @@
 // Chequeos de una definición de símbolo que el sistema de tipos no puede hacer.
 // Cada símbolo nuevo debe pasar `validarDefinicion` en su test de bornes.
 
-import type { DefinicionSimbolo } from "./tipos";
+import type { DefinicionSimbolo, Direccion } from "./tipos";
+
+/**
+ * Hacia dónde queda afuera desde un punto del borde de una caja de
+ * `ancho` × `alto` centrada en el origen: una dirección en un lado, dos en una
+ * esquina, ninguna si el punto está adentro.
+ */
+export function direccionesAfuera(x: number, y: number, ancho: number, alto: number): Direccion[] {
+  const d: Direccion[] = [];
+  if (y === -alto / 2) d.push("arriba");
+  if (y === alto / 2) d.push("abajo");
+  if (x === -ancho / 2) d.push("izquierda");
+  if (x === ancho / 2) d.push("derecha");
+  return d;
+}
 
 /** Devuelve la lista de errores de la definición; vacía si está bien. */
 export function validarDefinicion(def: DefinicionSimbolo): string[] {
@@ -31,6 +45,16 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
 
     if (Math.abs(b.x) > ancho / 2 || Math.abs(b.y) > alto / 2) {
       errores.push(`Borne "${b.nombre}" fuera de la caja del símbolo: (${b.x}, ${b.y}).`);
+    } else {
+      // En el borde y apuntando hacia afuera de ese borde: un cable no puede
+      // atravesar el cuerpo (T13), así que un borne adentro sería inalcanzable.
+      // En una esquina vale cualquiera de los dos bordes.
+      const afuera = direccionesAfuera(b.x, b.y, ancho, alto);
+      if (afuera.length === 0) {
+        errores.push(`Borne "${b.nombre}" adentro de la caja del símbolo: (${b.x}, ${b.y}); tiene que estar en el borde.`);
+      } else if (!afuera.includes(b.direccion)) {
+        errores.push(`Borne "${b.nombre}" apunta hacia ${b.direccion}: tiene que apuntar hacia afuera (${afuera.join(" o ")}).`);
+      }
     }
 
     const clave = `${b.x},${b.y}`;
