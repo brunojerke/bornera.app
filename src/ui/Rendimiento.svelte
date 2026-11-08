@@ -7,7 +7,10 @@
     resumen,
     memoriaCache,
     detalle,
+    sonda = false,
   }: {
+    /** La sonda está prendida: si no, la capa dinámica no muestra ningún valor (ni el último). */
+    sonda?: boolean;
     resumen: Resumen;
     /** Bytes del caché de la capa estática. */
     memoriaCache: number;
@@ -32,7 +35,7 @@
   <span>Capa estática</span>
   <b>{ms.format(resumen.estatica)} ms · {resumen.mosaicos} mosaicos/s</b>
   <span>Capa dinámica</span>
-  <b>{resumen.dinamica === null ? "– (sonda apagada)" : `${ms.format(resumen.dinamica)} ms (sonda)`}</b>
+  <b>{!sonda || resumen.dinamica === null ? "—" : `${ms.format(resumen.dinamica)} ms (sonda)`}</b>
   <span>Dibujados</span>
   <b>{entero.format(resumen.dibujados)} de {entero.format(resumen.componentes)}</b>
   <span>Detalle</span>

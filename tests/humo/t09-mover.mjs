@@ -127,10 +127,10 @@ export default async function (p, comprobar) {
     await p.evaluar(`!bornera.activo().arrastrando && bornera.activo().diagnostico.modo === "auto" && !bornera.activo().diagnostico.sonda`),
   );
 
-  // F3 muestra la capa dinámica medida con la sonda.
+  // F3: la prueba midió con la sonda, pero la sonda quedó apagada: "—", no el último valor.
   await p.tecla("F3", "F3", 114);
   await esperar(300);
   const f3 = await p.evaluar(`document.querySelector(".rendimiento")?.innerText ?? ""`);
-  comprobar("F3 muestra la capa dinámica", f3.includes("Capa dinámica"), f3.replace(/\s+/g, " "));
+  comprobar("F3: con la sonda apagada, la capa dinámica muestra —", /Capa dinámica\s*—/.test(f3), f3.replace(/\s+/g, " "));
   await p.tecla("F3", "F3", 114);
 }

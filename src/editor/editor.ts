@@ -84,9 +84,11 @@ export const SIN_SELECCION: ResumenSeleccion = Object.freeze({ cantidad: 0, unic
 /**
  * Hasta cuántos componentes visibles se dibujan completos mientras se
  * arrastran. Con más, solo el contorno de cada uno: la capa dinámica se
- * redibuja entera en cada cuadro y no usa el caché de textos.
+ * redibuja entera en cada cuadro. Tope fijo, medido en la netbook (alpha.2):
+ * 40 completos con el caché de textos dan 5–7 ms por cuadro. Un límite por
+ * tiempo no sirve allá: hasta los contornos pasan de 5 ms con la sonda.
  */
-export const LIMITE_ARRASTRE_COMPLETO = 200;
+export const LIMITE_ARRASTRE_COMPLETO = 80;
 
 /**
  * Diagnóstico del arrastre (alpha.2, menú de desarrollo): cómo se dibujan los

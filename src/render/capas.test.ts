@@ -457,7 +457,7 @@ describe("Capas: mosaicos", () => {
     expect(llamadasA(sin.mosaicos()[0]!.llamadas, "fillText")).toHaveLength(1);
   });
 
-  it("la capa dinámica copia los textos del caché solo con su interruptor (apagado por defecto)", () => {
+  it("la capa dinámica copia los textos del caché con su interruptor (prendido por defecto)", () => {
     const textoDinamico = (r: Renderer) => {
       r.estilo({ relleno: "#000" });
       r.texto(1, 1, "K1", 1);
@@ -471,7 +471,8 @@ describe("Capas: mosaicos", () => {
       a.dibujar();
       return { fillText: llamadasA(a.principal.llamadas, "fillText").length, uso: { ...a.capas.textosDinamica } };
     };
-    expect(OPCIONES_OPTIMIZADAS.cacheTextosDinamica).toBe(false);
+    expect(OPCIONES_OPTIMIZADAS.cacheTextosDinamica).toBe(true);
+    expect(OPCIONES_SIN_OPTIMIZAR.cacheTextosDinamica).toBe(false);
     expect(fillTextDinamicos(false, false)).toEqual({ fillText: 1, uso: { aciertos: 0, fallos: 0 } });
     expect(fillTextDinamicos(false, true)).toEqual({ fillText: 0, uso: { aciertos: 1, fallos: 0 } });
     // Sin el caché general, el interruptor de la dinámica no alcanza.

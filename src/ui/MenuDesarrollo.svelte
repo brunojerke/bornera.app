@@ -26,7 +26,7 @@
   } = $props();
 
   const MODOS_ARRASTRE: { valor: ModoArrastreDiagnostico; texto: string }[] = [
-    { valor: "auto", texto: "Automático (completos hasta 200)" },
+    { valor: "auto", texto: "Automático (completos hasta 80)" },
     { valor: "completos", texto: "Completos" },
     { valor: "sinTextos", texto: "Completos sin textos" },
     { valor: "sinTextosNiBornes", texto: "Completos sin textos ni bornes" },

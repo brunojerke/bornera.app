@@ -22,7 +22,7 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 Para reproducir los tirones de la netbook (40 arrastrados completos al 58–73 %):
 
 - **Escenarios nuevos**: *Arrastrar 40 completos al 58 %* (los 40 más cercanos al centro, completos sin límite) y *Arrastrar 40 en contornos al 58 %* (referencia: la diferencia es lo que cuesta dibujarlos completos). El primero informa los aciertos y fallos del caché de textos de la capa dinámica, en el primer cuadro de cada gesto y en el resto.
-- La capa dinámica puede copiar los textos del caché (`cacheTextosDinamica`), **apagado por defecto** hasta medirlo en la netbook.
+- La capa dinámica puede copiar los textos del caché (`cacheTextosDinamica`). Quedó **prendido por defecto** después de medir en la netbook (40 completos con caché: 5–7 ms por cuadro, 0 lentos), con el tope de completos en 80. Desde ese cambio, *Mover todo* con 100 se dibuja en contornos (0,9 ms de mediana).
 
 Dos corridas con `--comparar` en la PC (mediana por cuadro, ms), con el caché de la dinámica prendido a mano para comparar:
 

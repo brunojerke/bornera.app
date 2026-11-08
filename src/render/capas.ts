@@ -82,8 +82,9 @@ export interface OpcionesCapas {
   /** Copiar los textos de un caché de imágenes en vez de dibujarlos con fillText. */
   cacheTextos: boolean;
   /**
-   * Diagnóstico (alpha.2): la capa dinámica también copia los textos del
-   * caché (hace falta `cacheTextos`). Apagado hasta medirlo en la netbook.
+   * La capa dinámica también copia los textos del
+   * caché (hace falta `cacheTextos`). Prendido: en la netbook bajó el arrastre
+   * de 40 completos a 5–7 ms (medido con la alpha.2).
    */
   cacheTextosDinamica: boolean;
 }
@@ -93,7 +94,7 @@ export const OPCIONES_OPTIMIZADAS: Readonly<OpcionesCapas> = {
   recorte: true,
   nivelDetalle: true,
   cacheTextos: true,
-  cacheTextosDinamica: false,
+  cacheTextosDinamica: true,
 };
 export const OPCIONES_SIN_OPTIMIZAR: Readonly<OpcionesCapas> = {
   cache: false,

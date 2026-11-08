@@ -259,7 +259,7 @@
 <div class="lienzo">
   <canvas bind:this={canvas} aria-label="Lienzo del circuito"></canvas>
   {#if rendimiento}
-    <Rendimiento {resumen} {memoriaCache} {detalle} />
+    <Rendimiento {resumen} {memoriaCache} {detalle} sonda={diagnostico.sonda} />
   {/if}
 </div>
 

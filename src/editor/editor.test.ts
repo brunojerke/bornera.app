@@ -11,6 +11,7 @@ import {
   documentoNuevo,
   Editor,
   esCuadroDeMuestra,
+  LIMITE_ARRASTRE_COMPLETO,
   SIMBOLO_DESCONOCIDO,
   type DestinoVista,
   type ModoArrastreDiagnostico,
@@ -571,6 +572,27 @@ describe("Editor: diagnóstico del arrastre (alpha.2)", () => {
 
     // Base: la capa dinámica vacía, ni el resaltado.
     expect(dibujarCon("nada")).toEqual([]);
+  });
+
+  it("automático: hasta 80 visibles arrastrados completos; con 81, contornos", () => {
+    expect(LIMITE_ARRASTRE_COMPLETO).toBe(80);
+    const dibujar = (n: number) => {
+      const { editor } = armar();
+      const cmds = Array.from({ length: n }, (_, i) => colocar(editor.documento, datos((i % 10) * 10, Math.floor(i / 10) * 10)));
+      editor.agrupar(cmds);
+      editor.seleccionarIds(cmds.map((c) => c.id));
+      editor.aplicar(editor.activa.presionar(ev(0, 0)));
+      editor.aplicar(editor.activa.mover(ev(3, 0)));
+      const f = rendererFalso();
+      editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, medir: MEDIR, visible: TODO });
+      return f.llamadas;
+    };
+    const ochenta = dibujar(80);
+    expect(ochenta.filter((l) => l === "simbolo")).toHaveLength(80);
+    expect(ochenta.filter((l) => l === "rectangulos")).toHaveLength(1); // solo el resaltado
+    const ochentaYUno = dibujar(81);
+    expect(ochentaYUno).not.toContain("simbolo");
+    expect(ochentaYUno.filter((l) => l === "rectangulos")).toHaveLength(2); // contornos + resaltado
   });
 
   it("los cuadros de muestra son los 3 primeros y después 1 cada 15", () => {
