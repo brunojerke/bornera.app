@@ -21,7 +21,7 @@
     onacercar,
     onalejar,
     onencuadrar,
-    escena = $bindable("simbolos"),
+    escena = $bindable("documento"),
     rendimiento = $bindable(false),
     opciones = $bindable(),
   }: {

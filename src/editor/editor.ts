@@ -1,0 +1,134 @@
+// Editor: une el documento con lo que se ve. Tiene el Documento, su Historial
+// y la EscenaEditable que dibuja la hoja activa.
+//
+// Todo cambio pasa por `ejecutar` (o `agrupar`, `deshacer`, `rehacer`). Con el
+// Cambio que devuelve cada comando, la escena copia el estado de esos
+// componentes desde el documento, y la caja afectada (vieja ∪ nueva) se pasa a
+// `invalidarRegion`: solo se rehacen los mosaicos que tocan el cambio, nunca la
+// pantalla entera.
+
+import { type Cambio, type Comando } from "../core/model/comandos";
+import { crearDocumento, type Componente, type Documento } from "../core/model/documento";
+import { Historial } from "../core/model/historial";
+import { buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
+import type { Caja } from "../render/camara";
+import type { ComponenteEscena } from "../render/escena";
+import { EscenaEditable } from "../render/escenaEditable";
+
+/**
+ * Lo que se dibuja para un componente cuyo tipo no está en la biblioteca (por
+ * ejemplo, de un .brn hecho con otra versión): un cuadrado con "?", sin bornes.
+ * No está en SIMBOLOS, así que no aparece en la paleta. Nunca se omite en
+ * silencio: el componente sigue en el documento y tiene que verse.
+ */
+export const SIMBOLO_DESCONOCIDO: DefinicionSimbolo = {
+  tipo: "desconocido",
+  nombre: "Símbolo desconocido",
+  categoria: "mando",
+  elemento: "carga",
+  tamano: { ancho: 2, alto: 2 },
+  primitivas: [
+    { forma: "rectangulo", x: -1, y: -1, ancho: 2, alto: 2 },
+    { forma: "texto", x: 0, y: 0, texto: "?", alto: 1.2, alineacion: "centro" },
+  ],
+  bornes: [],
+};
+
+/** Lo que el editor necesita de la vista (la Vista real, o un falso en los tests). */
+export interface DestinoVista {
+  /** Rehacer solo la parte de la capa estática que toca `caja` (unidades de grilla). */
+  invalidarRegion(caja: Caja): void;
+}
+
+/** Documento vacío para arrancar la app, con la fecha de hoy. */
+export function documentoNuevo(): Documento {
+  return crearDocumento({ titulo: "Sin título", autor: "", fecha: new Date().toISOString().slice(0, 10) });
+}
+
+export class Editor {
+  readonly historial: Historial;
+  readonly escena = new EscenaEditable();
+  /** Vista que muestra la escena; null si no se está mostrando (no hay nada que invalidar). */
+  vista: DestinoVista | null = null;
+  private readonly desconocidos = new Set<string>();
+
+  constructor(
+    readonly documento: Documento = documentoNuevo(),
+    /** Índice de la hoja que se dibuja. */
+    readonly hoja = 0,
+  ) {
+    this.historial = new Historial(documento);
+    for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
+  }
+
+  /** Tipos de símbolo del documento que no están en la biblioteca (se dibujan con SIMBOLO_DESCONOCIDO). */
+  get tiposDesconocidos(): ReadonlySet<string> {
+    return this.desconocidos;
+  }
+
+  get puedeDeshacer(): boolean {
+    return this.historial.puedeDeshacer;
+  }
+
+  get puedeRehacer(): boolean {
+    return this.historial.puedeRehacer;
+  }
+
+  /** Ejecuta el comando y muestra el cambio. Si el comando tira un error, no cambia nada. */
+  ejecutar(comando: Comando): Cambio {
+    return this.reflejar(this.historial.ejecutar(comando));
+  }
+
+  /** Varios comandos en un solo paso de deshacer. */
+  agrupar(comandos: readonly Comando[]): Cambio {
+    return this.reflejar(this.historial.agrupar(comandos));
+  }
+
+  deshacer(): Cambio | null {
+    const cambio = this.historial.deshacer();
+    return cambio && this.reflejar(cambio);
+  }
+
+  rehacer(): Cambio | null {
+    const cambio = this.historial.rehacer();
+    return cambio && this.reflejar(cambio);
+  }
+
+  private componentesHoja(): readonly Componente[] {
+    return this.documento.hojas[this.hoja]?.componentes ?? [];
+  }
+
+  /** Lo que dibuja la escena para un componente del documento. Avisa una vez por tipo desconocido. */
+  private aEscena(c: Componente): ComponenteEscena {
+    let def = buscarSimbolo(c.tipo);
+    if (!def) {
+      def = SIMBOLO_DESCONOCIDO;
+      if (!this.desconocidos.has(c.tipo)) {
+        this.desconocidos.add(c.tipo);
+        console.warn(`Bornera: el símbolo "${c.tipo}" no está en la biblioteca; se dibuja como desconocido.`);
+      }
+    }
+    return { def, x: c.x, y: c.y, rotacion: c.rot, espejado: c.espejado, etiqueta: c.etiqueta || undefined };
+  }
+
+  /**
+   * Lleva a la escena el estado actual de cada componente del cambio: si sigue
+   * en la hoja, se agrega o actualiza; si no (se borró, o es de otra hoja), se
+   * quita. Cada componente invalida su propia caja: unirlas todas marcaría
+   * de más si están lejos entre sí.
+   */
+  private reflejar(cambio: Cambio): Cambio {
+    if (cambio.componentes.length === 0) return cambio;
+    // Una pasada por la hoja, no una búsqueda por id.
+    const ids = new Set(cambio.componentes);
+    const actuales = new Map<string, Componente>();
+    for (const c of this.componentesHoja()) if (ids.has(c.id)) actuales.set(c.id, c);
+
+    for (const id of ids) {
+      const c = actuales.get(id);
+      const caja = c ? this.escena.actualizar(id, this.aEscena(c)) : this.escena.quitar(id);
+      if (caja) this.vista?.invalidarRegion(caja);
+    }
+    return cambio;
+  }
+}

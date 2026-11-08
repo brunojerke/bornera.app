@@ -9,7 +9,7 @@
   import type { EscenaDesarrollo } from "./tipos";
 
   let {
-    escena = $bindable("simbolos"),
+    escena = $bindable("documento"),
     rendimiento = $bindable(false),
     opciones = $bindable(),
   }: {
@@ -22,6 +22,7 @@
   let raiz: HTMLDivElement;
 
   const ESCENAS: { valor: EscenaDesarrollo; texto: string }[] = [
+    { valor: "documento", texto: "Documento" },
     { valor: "simbolos", texto: "Revisión de símbolos" },
     ...CANTIDADES_BANCO.map((n) => ({ valor: n, texto: `Banco: ${n.toLocaleString("es-AR")} símbolos` })),
     { valor: "vacia", texto: "Escena vacía" },

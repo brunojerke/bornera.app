@@ -1,7 +1,6 @@
-// TEMPORAL: escena de prueba para revisar los símbolos a ojo.
+// Escena de prueba para revisar los símbolos a ojo (menú de desarrollo).
 // Una fila por símbolo y una columna por rotación (0°, 90°, 180°, 270°), con
 // cada borne marcado: punto en su posición y un trazo hacia donde sale el cable.
-// Borrar cuando el documento tenga componentes de verdad.
 
 import { SIMBOLOS, type Rotacion } from "../core/symbols";
 import type { Caja } from "./camara";

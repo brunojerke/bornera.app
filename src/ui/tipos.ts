@@ -6,8 +6,8 @@ import type { CantidadBanco } from "../render/banco";
 export type Modo = "editar" | "simular";
 
 /**
- * Escena elegida en el menú de desarrollo (o con Ctrl+Shift+B): la de revisión
- * de símbolos, un banco de pruebas con esa cantidad de componentes o la escena
- * vacía. TEMPORAL, hasta que el documento tenga componentes.
+ * Lo que muestra el lienzo: el documento (lo normal) o, desde el menú de
+ * desarrollo o con Ctrl+Shift+B, una escena de prueba: la de revisión de
+ * símbolos, un banco con esa cantidad de componentes o la escena vacía.
  */
-export type EscenaDesarrollo = "simbolos" | CantidadBanco | "vacia";
+export type EscenaDesarrollo = "documento" | "simbolos" | CantidadBanco | "vacia";

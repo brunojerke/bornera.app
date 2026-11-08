@@ -18,8 +18,9 @@
   let cursor = $state<Punto | null>(null);
   let lienzo: ReturnType<typeof Lienzo>;
 
-  // Desarrollo: escena de prueba, contador de rendimiento y optimizaciones.
-  let escena = $state<EscenaDesarrollo>("simbolos");
+  // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
+  // prueba), contador de rendimiento y optimizaciones.
+  let escena = $state<EscenaDesarrollo>("documento");
   let rendimiento = $state(false);
   let opciones = $state<OpcionesCapas>({ ...OPCIONES_OPTIMIZADAS });
 

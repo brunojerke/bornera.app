@@ -1,6 +1,7 @@
 <script lang="ts">
   // Lienzo central: un <canvas> que ocupa todo el espacio libre.
-  // El dibujo lo hace la Vista (src/render) y la navegación src/editor.
+  // El dibujo lo hace la Vista (src/render); la navegación y el Editor (el
+  // documento con su historial) viven en src/editor.
   // No hay bucle: solo se redibuja cuando algo cambia.
   import { untrack } from "svelte";
   import { Vista, PASO_ZOOM } from "../render/vista";
@@ -11,15 +12,16 @@
   import { Escena, type Contenido } from "../render/escena";
   import { MedidorRendimiento, type Resumen } from "../render/rendimiento";
   import { crearEscenaBanco } from "../render/banco";
-  // TEMPORAL: escenas de prueba, hasta que el documento tenga componentes.
   import { ESCENA_PRUEBA } from "../render/escenaPrueba";
+  import { Editor } from "../editor/editor";
+  import * as comandos from "../core/model/comandos";
   import Rendimiento from "./Rendimiento.svelte";
   import type { EscenaDesarrollo } from "./tipos";
 
   let {
     zoom = $bindable(1),
     cursor = $bindable(null),
-    escena = "simbolos",
+    escena = "documento",
     rendimiento = false,
     opciones = OPCIONES_OPTIMIZADAS,
   }: {
@@ -27,7 +29,7 @@
     zoom?: number;
     /** Posición del mouse en unidades de grilla; null fuera del lienzo. */
     cursor?: Punto | null;
-    /** Escena de prueba que se dibuja. */
+    /** Qué se dibuja: el documento o una escena de prueba. */
     escena?: EscenaDesarrollo;
     /** Muestra el contador de rendimiento (F3). */
     rendimiento?: boolean;
@@ -38,7 +40,20 @@
   let canvas: HTMLCanvasElement;
   let vista: Vista | null = null;
 
+  // El editor dura lo que dura el lienzo: cambiar a una escena de prueba y
+  // volver no pierde el documento ni su historial.
+  const editor = new Editor();
+
+  // Desarrollo: ejecutar comandos desde la consola hasta que haya herramientas
+  // (T7). Por ejemplo:
+  //   const { editor, comandos: c } = bornera;
+  //   editor.ejecutar(c.colocar(editor.documento, { tipo: "contactor.bobina",
+  //     x: 0, y: 0, rot: 0, espejado: false, etiqueta: "K1", params: {} }));
+  //   editor.deshacer();
+  if (import.meta.env.DEV) (globalThis as Record<string, unknown>).bornera = { editor, comandos };
+
   function crearContenido(e: EscenaDesarrollo): Contenido {
+    if (e === "documento") return editor.escena;
     if (e === "simbolos") return ESCENA_PRUEBA;
     if (e === "vacia") return new Escena([]);
     return crearEscenaBanco(e);
@@ -98,8 +113,11 @@
   // ── Vista ────────────────────────────────────────────────────────────────
 
   $effect(() => {
-    const v = new Vista(canvas, untrack(() => crearContenido(escena)));
+    const e = untrack(() => escena);
+    const v = new Vista(canvas, crearContenido(e));
     vista = v;
+    // Solo con el documento a la vista sus cambios invalidan regiones.
+    editor.vista = e === "documento" ? v : null;
     v.alDibujar = (m) => {
       medidor.registrar(performance.now(), m);
       if (rendimiento) programarResumen();
@@ -112,6 +130,7 @@
     });
     return () => {
       desconectar();
+      editor.vista = null;
       v.destruir();
       vista = null;
       clearTimeout(temporizador);
@@ -129,6 +148,7 @@
       escenaActual = e;
       if (primera) return; // la Vista ya se creó con esta escena
       vista.contenido = crearContenido(e);
+      editor.vista = e === "documento" ? vista : null;
       encuadrar();
     });
   });
