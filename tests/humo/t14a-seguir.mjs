@@ -427,4 +427,28 @@ export default async function (p, comprobar) {
   d = await distintos("corrida-movida");
   comprobar("con la escena corrida, Ctrl+Y sin restos", d === 0, `${d} píxeles distintos`);
   await volver();
+
+  // ── La prueba automática de la netbook, corta, sobre la escena con cables ──
+  // Los 40 del grupo del centro: mayoría de pasos válidos (si no, falla), un
+  // soltar que da paso, soltar con todo y el tope. 0,4 s por combinación, al 58 %.
+  for (let i = 0; i < 4; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
+  await p.esperarA("bornera.activo()?.escena.cantidadCables === 3030");
+  const docCables = await p.evaluar("JSON.stringify(bornera.activo().documento.hojas)");
+  const tabla = await p.evaluar(`bornera.diagnosticarArrastre({ duracionMs: 400, zooms: [0.58] }).catch((e) => "FALLÓ: " + e.message)`);
+  const fila = tabla.split("\n").find((l) => l.includes("completos con caché")) ?? "";
+  const validos = Number(/· (\d+) válidos · ✕ (\d+)/.exec(fila)?.[1] ?? 0);
+  const rechazados = Number(/· (\d+) válidos · ✕ (\d+)/.exec(fila)?.[2] ?? 0);
+  comprobar(
+    "la prueba de la netbook con cables corre: mayoría de pasos válidos, soltar los 40 da paso, tope y aceptación",
+    !tabla.startsWith("FALLÓ") &&
+      validos > rechazados &&
+      tabla.includes("**Soltar los 40 en (3, 2)**: un paso") &&
+      tabla.includes("| 300 |") &&
+      tabla.includes("**Aceptación T14a**"),
+    tabla.startsWith("FALLÓ") ? tabla : fila,
+  );
+  console.log(`  ·   prueba de la netbook (corta) en la PC: ${validos} pasos válidos, ${rechazados} rechazados`);
+  comprobar("y deja la escena como estaba", (await p.evaluar("JSON.stringify(bornera.activo().documento.hojas)")) === docCables);
+  for (let i = 0; i < 2; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
+  await p.esperarA("bornera.activo() === bornera.editor");
 }

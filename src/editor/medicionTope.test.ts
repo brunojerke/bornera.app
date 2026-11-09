@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validarHoja } from "../core/model/cables";
-import { corrimientoTope, documentoTope, medirTope } from "./medicionTope";
+import { corrimientoTope, documentoTope, medirTope, OBJETIVOS_TOPE } from "./medicionTope";
 
 describe("medición del tope de la previa", () => {
   it("cada paso cambia de punto de grilla", () => {
@@ -13,8 +13,8 @@ describe("medición del tope de la previa", () => {
 
   it("acomoda exactamente los cables pedidos, y ningún paso se rechaza (el plan es completo)", () => {
     let t = 0;
-    const medidas = medirTope([50, 100, 150, 300, 600], 8, () => (t += 1));
-    expect(medidas.map((m) => m.cables)).toEqual([50, 100, 150, 300, 600]);
+    const medidas = medirTope(OBJETIVOS_TOPE, 8, () => (t += 1));
+    expect(medidas.map((m) => m.cables)).toEqual([50, 100, 150, 200, 300]);
     for (const m of medidas) {
       expect(m.rechazados, `${m.cables}`).toBe(0);
       expect(m.pasos).toBe(8);

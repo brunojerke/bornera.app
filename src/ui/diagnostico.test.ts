@@ -50,7 +50,7 @@ describe("Diagnóstico del arrastre", () => {
       aciertos: 10,
       fallos: 1,
       pasos: [2, 9, 1],
-      rechazados: 1,
+      rechazados: 4,
     });
     expect(r.cuadros).toBe(4);
     expect(r.entreCuadros.maximo).toBe(37);
@@ -58,7 +58,7 @@ describe("Diagnóstico del arrastre", () => {
     expect(r.lentos).toBe(2); // 16 justo no es lento
     expect(r.dinamica.promedio).toBe(3.5);
     expect(r.muestras).toBe(2);
-    expect(r.paso).toEqual({ mediana: 2, maximo: 9, cantidad: 3, rechazados: 1 });
+    expect(r.paso).toEqual({ mediana: 2, maximo: 9, cantidad: 3, rechazados: 4 });
   });
 
   it("la tabla tiene una fila por zoom y combinación, con el costo de medir", () => {
@@ -113,13 +113,15 @@ describe("Diagnóstico del arrastre", () => {
       conReferencia([10, 12, 14], [3, 4, 5]),
       {
         soltar: soltar(120, 60),
+        soltarGrupo: { comando: 12.5 },
         tope: [{ cables: 152, mediana: 3.04, maximo: 5, rechazados: 0, pasos: 20 }],
       },
     );
     expect(tabla).toContain("escena 2000 + 3000 cables + 30 T");
-    expect(tabla.split("\n").find((l) => l.includes("completos con caché"))).toContain("| 4,0 / 5,0 · ✕ 0 de 3 |");
+    expect(tabla.split("\n").find((l) => l.includes("completos con caché"))).toContain("| 4,0 / 5,0 · 3 válidos · ✕ 0 |");
     expect(tabla).toContain("**Soltar con todo seleccionado** (5030): comando 120,0 ms · primer cuadro 60,0 ms");
-    expect(tabla).toContain("| 152 | 3,0 | 5,0 | 0,020 | 0 de 20 |");
+    expect(tabla).toContain("| 152 | 3,0 | 5,0 | 0,020 | 20 de 20 |");
+    expect(tabla).toContain("**Soltar los 40 en (3, 2)**: un paso, comando 12,5 ms");
     expect(tabla).toContain("- ✓ paso mediano 4,0 ms < 8");
     expect(tabla).toContain("- ✓ soltar con todo seleccionado 180,0 ms (comando + primer cuadro) ≤ 200");
   });

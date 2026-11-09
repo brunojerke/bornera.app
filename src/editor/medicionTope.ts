@@ -15,7 +15,7 @@ import { prepararTransformacion } from "../core/model/seguir";
 import { Editor } from "./editor";
 
 /** Cables que se acomodan en cada medición: alrededor del tope, de un lado y del otro. */
-export const OBJETIVOS_TOPE = [50, 100, 150, 300, 600] as const;
+export const OBJETIVOS_TOPE = [50, 100, 150, 200, 300] as const;
 
 /** Puntos de grilla planeados por medición (más uno de calentamiento). */
 export const PASOS_TOPE = 20;
@@ -31,7 +31,7 @@ export interface MedidaTope {
   /** ms por punto de grilla: mediana y máximo. */
   mediana: number;
   maximo: number;
-  /** Puntos donde el plan se rechazó: tiene que dar 0 (si no, la medida no vale). */
+  /** Puntos donde el plan se rechazó: siempre 0 (con uno solo, `medirTope` falla en lugar de medir). */
   rechazados: number;
   pasos: number;
 }
@@ -93,14 +93,18 @@ export function medirTope(
     const ids = Array.from({ length: n }, (_, i) => `c${2 * i + 1}`);
     const prep = prepararTransformacion(hoja, ids, editor.entornoPlan());
     prep.planear({ tipo: "mover", ...corrimientoTope(0) }); // calentamiento
+    // Solo pasos válidos: un rechazo corta el plan antes y mediría de menos.
     const tiempos: number[] = [];
     let rechazados = 0;
     for (let i = 1; i <= pasos; i++) {
       const t0 = ahora();
       const r = prep.planear({ tipo: "mover", ...corrimientoTope(i) });
-      tiempos.push(ahora() - t0);
+      const ms = ahora() - t0;
       if (r.rechazo) rechazados++;
+      else tiempos.push(ms);
     }
+    if (rechazados > 0 || prep.rehechos !== n)
+      throw new Error(`Medición del tope con ${n} cables: ${rechazados} de ${pasos} pasos rechazados y ${prep.rehechos} cables que se acomodan; no se informa.`);
     tiempos.sort((a, b) => a - b);
     salida.push({
       cables: prep.rehechos,

@@ -89,7 +89,7 @@ function informe(r, sinGpu) {
   if (conPaso.length > 0) {
     lineas.push("");
     lineas.push("Tiempo de cada paso, fuera del cuadro (comando, selección, resumen del panel, plan de la previa), en ms:");
-    const filas = [["Escena", "Escenario", "Mediana", "Máx.", "Cables que se acomodan", "Comandos", "Pasos con ✕"]];
+    const filas = [["Escena", "Escenario", "Mediana", "Máx.", "Cables que se acomodan", "Pasos válidos / con ✕", "Comandos"]];
     for (const m of conPaso)
       filas.push([
         String(m.componentes),
@@ -97,10 +97,17 @@ function informe(r, sinGpu) {
         ms.format(m.paso.mediana),
         ms.format(m.paso.maximo),
         m.acomodados === undefined ? "–" : String(m.acomodados),
+        m.rechazados === undefined ? "–" : `${m.rechazados.pasos - m.rechazados.rechazados} / ${m.rechazados.rechazados}`,
         m.comandos === undefined ? "–" : String(m.comandos),
-        m.rechazados === undefined ? "–" : `${m.rechazados.rechazados} de ${m.rechazados.pasos}`,
       ]);
     lineas.push(tabla(filas));
+  }
+
+  // Notas de los escenarios (por ejemplo, por qué se rechaza).
+  const conNota = r.mediciones.filter((m) => m.nota && m.modo === modos[0]);
+  if (conNota.length > 0) {
+    lineas.push("");
+    for (const m of conNota) lineas.push(`Nota · ${m.componentes} · ${m.escenario}: ${m.nota}`);
   }
 
   // Mosaicos por fase de un gesto con el editor: el criterio de 0 vale solo para los intermedios.
@@ -126,14 +133,14 @@ function informe(r, sinGpu) {
   if (r.tope?.length > 0) {
     lineas.push("");
     lineas.push("Paso de la previa (plan de un punto de grilla) según los cables que se acomodan, en ms (escena propia, todo vale):");
-    const filas = [["Cables", "Mediana", "Máx.", "ms por cable", "Rechazados"]];
+    const filas = [["Cables", "Mediana", "Máx.", "ms por cable", "Pasos válidos"]];
     for (const t of r.tope)
       filas.push([
         String(t.cables),
         ms.format(t.mediana),
         ms.format(t.maximo),
         new Intl.NumberFormat("es-AR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(t.mediana / t.cables),
-        `${t.rechazados} de ${t.pasos}`,
+        `${t.pasos - t.rechazados} de ${t.pasos}`,
       ]);
     lineas.push(tabla(filas));
   }

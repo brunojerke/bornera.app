@@ -80,11 +80,12 @@ export interface Pasada {
   aciertos: number;
   fallos: number;
   /**
-   * ms de cada movimiento del mouse que cambió de punto de grilla (la
-   * herramienta, el plan de la previa con cables y la pista), fuera del cuadro.
+   * ms de cada movimiento del mouse que cambió de punto de grilla y donde la
+   * previa vale (la herramienta, el plan con cables y la pista), fuera del
+   * cuadro. Los rechazados no cuentan: cortan el plan antes.
    */
   pasos: number[];
-  /** De esos movimientos, en cuántos la previa quedó rechazada (a rayas con ✕). */
+  /** Movimientos que cambiaron de punto de grilla y donde la previa quedó rechazada (a rayas con ✕). */
   rechazados: number;
 }
 
@@ -98,7 +99,7 @@ export interface ResumenPasada {
   muestras: number;
   aciertos: number;
   fallos: number;
-  /** Movimientos que cambiaron de punto de grilla: mediana y máximo (ms). */
+  /** Movimientos que cambiaron de punto de grilla: mediana y máximo de los válidos (ms), cuántos válidos y cuántos rechazados. */
   paso: { mediana: number; maximo: number; cantidad: number; rechazados: number };
 }
 
@@ -161,6 +162,8 @@ export interface ResultadoSoltar {
 /** Lo que mide la prueba además de las combinaciones (con la escena con cables). */
 export interface ExtrasDiagnostico {
   soltar: ResultadoSoltar | null;
+  /** Los 40 del grupo soltados en un lugar que vale: el comando (ms). */
+  soltarGrupo?: { comando: number } | null;
   tope: readonly MedidaTope[];
 }
 
@@ -233,7 +236,8 @@ export function tablaDiagnostico(
   );
   l.push(
     "- Paso = cada movimiento del mouse que cambia de punto de grilla (herramienta, plan de la previa y pista), " +
-      "fuera del cuadro: mediana / máx. ✕ = de esos, cuántos quedaron rechazados (a rayas): un rechazo corta el plan antes.",
+      "fuera del cuadro: mediana / máx. de los válidos, cuántos válidos y cuántos rechazados (✕, a rayas; " +
+      "no cuentan para el tiempo porque un rechazo corta el plan antes).",
   );
   l.push("");
   l.push(
@@ -245,12 +249,16 @@ export function tablaDiagnostico(
     const c = r.conSonda;
     l.push(
       `| ${Math.round(r.zoom * 100)} % | ${r.combinacion.nombre} | ${s.cuadros} | ${tres(s.entreCuadros)} | ${tres(s.dibujo)} | ` +
-        `${s.lentos} | ${s.paso.cantidad ? `${f1(s.paso.mediana)} / ${f1(s.paso.maximo)} · ✕ ${s.paso.rechazados} de ${s.paso.cantidad}` : "–"} | ` +
+        `${s.lentos} | ${s.paso.cantidad + s.paso.rechazados ? `${f1(s.paso.mediana)} / ${f1(s.paso.maximo)} · ${s.paso.cantidad} válidos · ✕ ${s.paso.rechazados}` : "–"} | ` +
         `${c.muestras ? tres(c.dinamica) : "–"} | ${c.muestras} | ${conSigno(c.dibujo.promedio - s.dibujo.promedio)} | ` +
         `${r.combinacion.cache ? `${s.aciertos} / ${s.fallos}` : "–"} |`,
     );
   }
-  const { soltar, tope } = extras;
+  const { soltar, tope, soltarGrupo } = extras;
+  if (soltarGrupo) {
+    l.push("");
+    l.push(`**Soltar los ${equipo.arrastrados} en (3, 2)**: un paso, comando ${f1(soltarGrupo.comando)} ms (después se deshace).`);
+  }
   if (soltar) {
     l.push("");
     l.push(
@@ -262,13 +270,13 @@ export function tablaDiagnostico(
   }
   if (tope.length > 0) {
     l.push("");
-    l.push("**Paso de la previa según los cables que se acomodan** (plan de un punto de grilla, ms; escena propia donde todo vale):");
+    l.push("**Paso de la previa según los cables que se acomodan** (plan de un punto de grilla, ms; escena propia donde todo vale, solo pasos válidos):");
     l.push("");
-    l.push("| Cables | Mediana | Máx. | ms por cable | Rechazados |");
+    l.push("| Cables | Mediana | Máx. | ms por cable | Pasos válidos |");
     l.push("|---:|---:|---:|---:|---:|");
     for (const t of tope) {
       const porCable = (t.cables ? t.mediana / t.cables : 0).toLocaleString("es-AR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-      l.push(`| ${t.cables} | ${f1(t.mediana)} | ${f1(t.maximo)} | ${porCable} | ${t.rechazados} de ${t.pasos} |`);
+      l.push(`| ${t.cables} | ${f1(t.mediana)} | ${f1(t.maximo)} | ${porCable} | ${t.pasos - t.rechazados} de ${t.pasos} |`);
     }
   }
   const criterios = criteriosT14a(resultados, soltar);

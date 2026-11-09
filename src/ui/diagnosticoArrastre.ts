@@ -3,19 +3,23 @@
 // tiempos de verdad.
 //
 // A cada zoom: selecciona los mismos 40 (los más cercanos al centro, enteros
-// en pantalla; en la escena con cables, solo cableados) y, por cada
-// combinación, los arrastra con el mismo recorrido durante 5 s, como lo
-// haría el mouse (por la herramienta Seleccionar). Termina con Esc: el
-// documento no cambia. Cada movimiento que cambia de punto de grilla se mide
-// aparte (el paso: herramienta, plan de la previa y pista).
+// en pantalla; en la escena con cables, el grupo del centro, con lugar
+// alrededor) y, por cada combinación, los arrastra con el mismo recorrido
+// durante 5 s, como lo haría el mouse (por la herramienta Seleccionar).
+// Termina con Esc: el documento no cambia. Cada movimiento que cambia de
+// punto de grilla se mide aparte (el paso: herramienta, plan de la previa y
+// pista), solo si la previa vale: uno rechazado corta el plan antes y
+// mediría de menos. Con cables, si la mayoría se rechaza la prueba falla.
 //
 // Dos pasadas por combinación: una sin sonda, de donde salen los tiempos
 // (la sonda no los contamina), y otra con la sonda por muestreo, de donde
 // sale "dinámica X ms" y cuánto cuesta medir.
 //
-// Con cables, al final: soltar con todo seleccionado (y deshacer) y el paso
-// de la previa según los cables que se acomodan (para TOPE_CABLES_PREVIA).
+// Con cables, al final: soltar los 40 en un lugar que vale (tiene que dar un
+// paso; se deshace), soltar con todo seleccionado (y deshacer) y el paso de
+// la previa según los cables que se acomodan (para TOPE_CABLES_PREVIA).
 
+import { grupoCentralBanco } from "../editor/banco";
 import type { DiagnosticoArrastre, Editor } from "../editor/editor";
 import type { EventoHerramienta } from "../editor/herramientas/tipos";
 import { medirTope } from "../editor/medicionTope";
@@ -101,7 +105,10 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
 
   const resultados: ResultadoCombinacion[] = [];
   let soltar: ResultadoSoltar | null = null;
+  let soltarGrupo: ExtrasDiagnostico["soltarGrupo"] = null;
   let tope: ExtrasDiagnostico["tope"] = [];
+  /** Con cables, los 40 del grupo del centro (los mismos en los dos zooms). */
+  const grupo = conCables ? grupoCentralBanco(editor.documento).filter((id) => editor.escena.obtener(id)) : null;
   try {
     for (const zoom of zooms) {
       const caja = vista.contenido?.caja;
@@ -118,12 +125,14 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
         const c = editor.escena.obtener(id)!;
         return (c.x - cx) ** 2 + (c.y - cy) ** 2;
       };
-      // Con cables, solo cableados: el caso de T14a (sus cables siguen en la previa).
-      const ids = editor.escena
-        .idsEnCaja(v, "contiene")
-        .filter((id) => !editor.escena.esCable(id) && (!conCables || editor.tieneCables([id])))
-        .sort((a, b) => distancia(a) - distancia(b))
-        .slice(0, ARRASTRADOS_DIAGNOSTICO);
+      // Con cables, el grupo del centro: el caso de T14a (sus cables siguen en la previa).
+      const ids =
+        grupo ??
+        editor.escena
+          .idsEnCaja(v, "contiene")
+          .filter((id) => !editor.escena.esCable(id))
+          .sort((a, b) => distancia(a) - distancia(b))
+          .slice(0, ARRASTRADOS_DIAGNOSTICO);
       if (ids.length === 0) throw new Error("No hay componentes en pantalla.");
       const ancla = anclaDe(ids);
       if (!ancla) throw new Error("No hay un componente donde apretar.");
@@ -152,9 +161,10 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
             // Solo los que cambian de punto de grilla: los otros no planean.
             const nuevo = `${Math.round(dx)},${Math.round(dy)}`;
             if (nuevo !== punto) {
-              pasada.pasos.push(ms);
-              // La pista dice por qué no se puede soltar ahí: la previa quedó a rayas con ✕.
+              // La pista dice por qué no se puede soltar ahí: la previa quedó a
+              // rayas con ✕. Ese paso no cuenta para el tiempo.
               if (editor.pista !== null) pasada.rechazados++;
+              else pasada.pasos.push(ms);
             }
             punto = nuevo;
             await cuadro();
@@ -167,6 +177,11 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
           pasada.fallos = vista.textosDinamica.fallos - textos.fallos;
           filas[sonda ? "conSonda" : "sinSonda"] = pasada;
           await nitida();
+          if (conCables && 2 * pasada.rechazados > pasada.rechazados + pasada.pasos.length)
+            throw new Error(
+              `El arrastre de los ${ids.length} se rechazó en ${pasada.rechazados} de ${pasada.rechazados + pasada.pasos.length} puntos ` +
+                `(${Math.round(zoom * 100)} %, ${comb.nombre}): no mide el arrastre.`,
+            );
         }
         resultados.push({
           zoom,
@@ -180,6 +195,7 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
     if (conCables) {
       vista.opciones = { ...opcionesAntes };
       editor.diagnostico = { ...diagnosticoAntes };
+      soltarGrupo = await soltarLosDelGrupo(grupo!);
       soltar = await soltarTodo();
       op.progreso?.("paso de la previa según los cables que se acomodan");
       await cuadro();
@@ -195,7 +211,35 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
     editor.diagnostico = diagnosticoAntes;
     editor.tomarMuestras();
   }
-  return { combinaciones: resultados, extras: { soltar, tope } };
+  return { combinaciones: resultados, extras: { soltar, soltarGrupo, tope } };
+
+  /** Los 40 del grupo, soltados en (3, 2): tiene que dar un paso (si no, falla). Mide el soltar y deshace. */
+  async function soltarLosDelGrupo(ids: readonly string[]): Promise<{ comando: number }> {
+    op.progreso?.(`soltar los ${ids.length} en un lugar que vale`);
+    const caja = vista.contenido!.caja!;
+    camara.zoom = zooms[0]!;
+    camara.centrar(caja.x + caja.ancho / 2, caja.y + caja.alto / 2, vista.ancho, vista.alto);
+    editor.seleccionarIds(ids);
+    await nitida();
+    const ancla = anclaDe(ids);
+    if (!ancla) throw new Error("No hay un componente donde apretar.");
+    const hechos = () => (editor.historial as unknown as { hechos: unknown[] }).hechos.length;
+    const antes = hechos();
+    editor.aplicar(editor.activa.presionar(evento(ancla.x, ancla.y)));
+    editor.aplicar(editor.activa.mover(evento(ancla.x + 1, ancla.y)));
+    await cuadro();
+    editor.aplicar(editor.activa.mover(evento(ancla.x + 3, ancla.y + 2)));
+    await nitida();
+    const t0 = performance.now();
+    editor.aplicar(editor.activa.soltar(evento(ancla.x + 3, ancla.y + 2)));
+    const comando = performance.now() - t0;
+    if (hechos() === antes) throw new Error(`Soltar los ${ids.length} en (3, 2) no dio un paso: no mide el arrastre.`);
+    await nitida();
+    editor.deshacer();
+    editor.seleccionarIds([]);
+    await nitida();
+    return { comando };
+  }
 
   /**
    * Todo seleccionado, al primer zoom: se aprieta, se arrastra dos puntos y

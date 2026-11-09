@@ -29,7 +29,8 @@ import { dibujarSeleccion } from "../../src/render/resaltado";
 import { nivelDetalle } from "../../src/render/detalle";
 import { Editor, LIMITE_ARRASTRE_COMPLETO } from "../../src/editor/editor";
 import { planearTransformacion, prepararTransformacion } from "../../src/core/model/seguir";
-import { ARRASTRADOS_BANCO, BANCO_CABLES, BANCO_CABLES_T12, documentoBancoCables } from "../../src/editor/banco";
+import { ARRASTRADOS_BANCO, BANCO_CABLES, BANCO_CABLES_T12, documentoBancoCables, grupoCentralBanco } from "../../src/editor/banco";
+import { recorrido } from "../../src/ui/diagnostico";
 import { medirTope, type MedidaTope } from "../../src/editor/medicionTope";
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
@@ -91,6 +92,8 @@ export interface Medicion {
   rechazados?: { rechazados: number; pasos: number };
   /** Invalidaciones de mosaicos pedidas en los pasos del medio de un gesto (tiene que dar 0). */
   invalidacionesIntermedias?: number;
+  /** Lo que conviene saber del escenario (por ejemplo, por qué se rechaza). */
+  nota?: string;
 }
 
 export interface Resultado {
@@ -137,6 +140,8 @@ interface Escenario {
   comandos?(): number;
   /** Pasos rechazados de los medidos, si el escenario los cuenta. */
   rechazados?(): { rechazados: number; pasos: number };
+  /** Nota para el informe, si el escenario la tiene (después de medir). */
+  nota?(): string | undefined;
 }
 
 /** Aciertos y fallos del caché de textos de la capa dinámica. */
@@ -500,17 +505,26 @@ function soltarGesto(c: Camara, x: number, y: number, medido: boolean): void {
 }
 
 /**
- * Arrastrar los 40 cableados (T14a): 60 pasos, cada uno en otro punto de
- * grilla (ida y vuelta en x, alternando y), y al final se suelta. En cada
- * paso la previa planea con la consulta indexada.
+ * Arrastrar los 40 cableados (T14a): 60 pasos y al final se suelta. En cada
+ * paso la previa planea con la consulta indexada. Dos trayectorias: la de la
+ * prueba de la netbook (dentro del lugar que deja el anillo; suelta en
+ * (3, 2)) y una contra los vecinos (sale del anillo: casi todo se rechaza).
  */
 const PASOS_ARRASTRE_CABLES = 60;
+type Trayectoria = (i: number) => { dx: number; dy: number };
+const POR_EL_ANILLO: Trayectoria = (i) => {
+  if (i === PASOS_ARRASTRE_CABLES - 1) return { dx: 3, dy: 2 };
+  const { dx, dy } = recorrido(100 * (i + 1));
+  return { dx: Math.round(dx), dy: Math.round(dy) };
+};
+// Sale del anillo (4 pasos, 32 unidades) hacia los vecinos: de 30 a 59 unidades y vuelta.
+const CONTRA_LOS_VECINOS: Trayectoria = (i) => ({ dx: 30 + Math.min(i, PASOS_ARRASTRE_CABLES - 1 - i), dy: i % 2 });
+let trayectoria: Trayectoria = POR_EL_ANILLO;
 let repeticionGesto = 0;
 function arrastrarCableados(c: Camara, _: Capas, __: Escena, i: number): void {
   const ed = editorCables!;
   const p = gesto.ancla!;
-  const dx = 1 + Math.min(i, PASOS_ARRASTRE_CABLES - 1 - i);
-  const dy = i % 2;
+  const { dx, dy } = trayectoria(i);
   if (i === 0) ed.aplicar(ed.seleccionar.presionar(evento(c, p.x, p.y)));
   ed.aplicar(ed.seleccionar.mover(evento(c, p.x + dx, p.y + dy)));
   // La pista dice por qué no se puede soltar ahí: la previa está a rayas con ✕.
@@ -526,7 +540,7 @@ function arrastrarCableados(c: Camara, _: Capas, __: Escena, i: number): void {
  * rechaza el banco se frena con el motivo; sin, se mide el rechazo (lo que
  * tarda en planear y avisar) y no hay nada que deshacer.
  */
-const girar = { aceptar: true, comandos: 0, rechazos: 0, medido: false, repeticion: 0 };
+const girar = { aceptar: true, comandos: 0, rechazos: 0, medido: false, repeticion: 0, motivo: "" };
 function girarYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
   const ed = editorCables!;
   if (i % 2 === 1) {
@@ -537,6 +551,7 @@ function girarYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
   gesto.pendiente = ed.accion("rotar");
   if (gesto.pendiente && girar.medido) girar.comandos++;
   if (!gesto.pendiente && girar.medido) girar.rechazos++;
+  if (!gesto.pendiente) girar.motivo = ultimoAviso;
   if (!gesto.pendiente && girar.aceptar) throw new Error(`Girar: se rechaza ("${ultimoAviso}").`);
 }
 
@@ -548,6 +563,7 @@ function prepararGirar(ids: Iterable<string>, aceptar: boolean): void {
   girar.rechazos = 0;
   girar.medido = false;
   girar.repeticion = 0;
+  girar.motivo = "";
 }
 
 /**
@@ -706,16 +722,26 @@ const escenariosCables = (t12: boolean): Escenario[] => [
       ]
     : []),
   {
-    // T14a: los 40 cableados del centro, arrastrados con el editor (previa
-    // con cables, plan en cada punto de grilla) y soltados. El caso de la netbook.
+    // T14a: los 40 del centro (el grupo con lugar alrededor), arrastrados con
+    // el editor por el recorrido de la prueba de la netbook (previa con
+    // cables, plan en cada punto de grilla) y soltados en (3, 2). Si no hay
+    // comando o la mayoría de los pasos se rechaza, el banco falla: mediría
+    // previas rechazadas, no el arrastre.
     nombre: `Arrastrar ${ARRASTRADOS_BANCO} cableados al 58 %`,
     preparar: (c, e) => {
       centrar(c, e, ZOOM_ARRASTRE);
       repeticionGesto = 0;
-      prepararGesto(cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true));
+      trayectoria = POR_EL_ANILLO;
+      prepararGesto(t12 ? cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true) : grupoCentralBanco(editorCables!.documento));
     },
     reiniciar: () => volverGesto(),
-    terminar: () => volverGesto(),
+    terminar: () => {
+      volverGesto();
+      if (t12) return; // la escena de T12 es solo para comparar: ahí todo se rechaza
+      const { comandos, rechazados, pasos } = gesto;
+      if (comandos === 0 || 2 * rechazados > pasos)
+        throw new Error(`Arrastrar ${ARRASTRADOS_BANCO} cableados: ${pasos - rechazados} pasos válidos, ${rechazados} rechazados y ${comandos} comandos; no mide el arrastre.`);
+    },
     cuadros: PASOS_ARRASTRE_CABLES,
     paso: arrastrarCableados,
     repeticiones: 3,
@@ -729,14 +755,41 @@ const escenariosCables = (t12: boolean): Escenario[] => [
     rechazados: () => ({ rechazados: gesto.rechazados, pasos: gesto.pasos }),
   },
   {
-    // R sobre los mismos 40: en el banco (denso) siempre se rechaza, porque
-    // el grupo girado pisa a los vecinos. Mide lo que tarda en planear y
-    // avisar (el paso de R); no hay mosaicos.
+    // Rechazos aparte: los mismos 40 arrastrados contra los vecinos (fuera
+    // del anillo). Mide lo que cuesta una previa rechazada (a rayas con ✕).
+    nombre: `Arrastrar ${ARRASTRADOS_BANCO} cableados contra los vecinos (se rechaza) al 58 %`,
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_ARRASTRE);
+      repeticionGesto = 0;
+      trayectoria = CONTRA_LOS_VECINOS;
+      prepararGesto(t12 ? cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true) : grupoCentralBanco(editorCables!.documento));
+    },
+    reiniciar: () => volverGesto(),
+    terminar: () => {
+      volverGesto();
+      trayectoria = POR_EL_ANILLO;
+    },
+    cuadros: PASOS_ARRASTRE_CABLES,
+    paso: arrastrarCableados,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    pasoMedido: (i) => i > 0 && i < PASOS_ARRASTRE_CABLES - 1,
+    acomodados: () => gesto.acomodados,
+    comandos: () => gesto.comandos,
+    rechazados: () => ({ rechazados: gesto.rechazados, pasos: gesto.pasos }),
+  },
+  {
+    // R sobre los mismos 40. Con los 8 cruces de la escena se rechaza: cada
+    // cruce da un cuarto de vuelta alrededor del grupo y con hasta 2 codos no
+    // hay ruta que no lo atraviese (con 2 cruces se acepta: banco.test.ts).
+    // Mide lo que tarda en planear y avisar; no hay mosaicos.
     nombre: `Girar ${ARRASTRADOS_BANCO} cableados (se rechaza) al 58 %`,
     preparar: (c, e) => {
       centrar(c, e, ZOOM_ARRASTRE);
-      prepararGirar(cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true), false);
+      prepararGirar(t12 ? cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true) : grupoCentralBanco(editorCables!.documento), false);
     },
+    nota: () => (girar.motivo ? `R se rechaza: "${girar.motivo}"` : girar.comandos > 0 ? "R se acepta" : undefined),
     // Antes de cada repetición: la primera es de calentamiento.
     reiniciar: () => void (girar.medido = girar.repeticion++ > 0),
     terminar: () => volverGesto(),
@@ -974,6 +1027,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     ...(escenario.medirPaso ? { paso: { mediana: percentil(pasos, 0.5), maximo: pasos.at(-1) ?? 0 } } : {}),
     ...(escenario.fases ? { fases, invalidacionesIntermedias } : {}),
     ...(escenario.rechazados ? { rechazados: escenario.rechazados() } : {}),
+    ...(escenario.nota?.() ? { nota: escenario.nota() } : {}),
     ...(escenario.acomodados ? { acomodados: escenario.acomodados() } : {}),
     ...(escenario.comandos ? { comandos: escenario.comandos() } : {}),
   };
