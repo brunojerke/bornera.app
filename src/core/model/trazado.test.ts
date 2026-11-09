@@ -135,6 +135,36 @@ describe("problemasTrazado", () => {
       "El cable tocaría otro cable sin conectarse.",
     ]);
   });
+
+  const TOCA = "El cable tocaría otro cable sin conectarse.";
+  const ENCIMA = "El cable se encimaría con otro cable.";
+  it.each([
+    // El extremo libre de w2 vuelve a caer sobre w1, lejos de la T.
+    ["con el extremo libre", [0, 0, 10, 0], [2, 0, 2, 3, 6, 3, 6, 0], [6, 0], "El cable pasaría por el extremo suelto de otro cable.", TOCA],
+    // Un tramo de w2 encimado sobre w1.
+    ["con un tramo encimado", [0, 0, 10, 0], [2, 0, 2, 3, 6, 3, 6, 0, 8, 0], [6, 0], ENCIMA, ENCIMA],
+    // Un codo de w2 sobre el codo de w1 (w1 en L), sin encimarse.
+    ["con un codo sobre un codo", [0, 0, 10, 0, 10, 10], [2, 0, 2, -4, 10, -4, 10, 0, 13, 0, 13, 5], [10, 0], TOCA, TOCA],
+  ] as const)("la T de w2 sobre w1 no tapa otro toque de w2 sobre w1 fuera de su punto (%s): se rechaza de los dos lados", (_, p1, p2, [x, y], mensajeW1, mensajeW2) => {
+    const enT = { tipo: "cable", cable: "w1", x: 2, y: 0 } as const;
+    const fin2 = libre(p2.at(-2)!, p2.at(-1)!);
+    const fin1 = libre(p1.at(-2)!, p1.at(-1)!);
+    const codos = (p: readonly number[]) => {
+      const c: [number, number][] = [];
+      for (let i = 2; i + 3 < p.length; i += 2) c.push([p[i]!, p[i + 1]!]);
+      return c;
+    };
+    // Visto desde el anfitrión (w1 cambia; w2 ya está en la hoja).
+    const conW2 = hojaCon([], [cable("w2", enT, fin2, codos(p2))]);
+    const desdeW1 = problemasTrazado({ id: "w1", desde: libre(0, 0), hasta: fin1, puntos: [...p1] }, consultaHoja(conW2));
+    // Visto desde el derivado (w2 cambia; w1 ya está en la hoja).
+    const conW1 = hojaCon([], [cable("w1", libre(0, 0), fin1, codos(p1))]);
+    const desdeW2 = problemasTrazado({ id: "w2", desde: enT, hasta: fin2, puntos: [...p2] }, consultaHoja(conW1));
+    expect(desdeW1).toContainEqual(expect.objectContaining({ mensaje: mensajeW1, x, y }));
+    expect(desdeW2).toContainEqual(expect.objectContaining({ mensaje: mensajeW2, x, y }));
+    // Ninguno es en el punto de la T: ahí están unidos.
+    for (const c of [...desdeW1, ...desdeW2]) expect([c.x, c.y]).not.toEqual([2, 0]);
+  });
 });
 
 describe("puente A1-A2 de una bobina", () => {

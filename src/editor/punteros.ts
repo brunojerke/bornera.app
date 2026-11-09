@@ -10,6 +10,10 @@
 //
 // Con el botón izquierdo apretado sobre el lienzo, el puntero se captura: el
 // rectángulo de selección sigue al mouse y termina aunque se suelte afuera.
+// Si igual se pierde el pointerup (la captura se pierde, o la ventana pierde
+// el foco con el botón apretado), el gesto se corta como con pointercancel:
+// un arrastre vuelve a su lugar. Y si aun así queda uno abierto, el próximo
+// apretar lo descarta (Seleccionar).
 //
 // Teclado: Esc y los atajos del editor (atajos.ts: R, M, Supr, Ctrl+Z…) van
 // por un solo listener en window, así andan aunque el foco quede en la
@@ -149,6 +153,25 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     actualizarCursor();
   };
 
+  // La captura se pierde también después de un pointerup normal: ahí ya no
+  // hay gesto y no se hace nada.
+  const alPerderCaptura = () => {
+    if (editor.enGesto) alCortar();
+  };
+
+  // La ventana pierde el foco (Alt+Tab, otra app) con el botón apretado: el
+  // pointerup puede no llegar nunca. Se corta el gesto del lienzo y el
+  // arrastre desde la paleta.
+  const alPerderFoco = () => {
+    if (arrastrando) {
+      terminarArrastre();
+      editor.cancelarHerramienta();
+      actualizarCursor();
+      return;
+    }
+    if (editor.enGesto) alCortar();
+  };
+
   const alSalir = () => {
     ultimo = null;
     if (!arrastrando && editando()) editor.aplicar(editor.activa.salir());
@@ -249,7 +272,9 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   canvas.addEventListener("pointercancel", alCortar);
   canvas.addEventListener("pointerleave", alSalir);
   canvas.addEventListener("contextmenu", alMenu);
+  canvas.addEventListener("lostpointercapture", alPerderCaptura);
   window.addEventListener("keydown", alTecla);
+  window.addEventListener("blur", alPerderFoco);
 
   return {
     desdePaleta,
@@ -268,7 +293,9 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
       canvas.removeEventListener("pointercancel", alCortar);
       canvas.removeEventListener("pointerleave", alSalir);
       canvas.removeEventListener("contextmenu", alMenu);
+      canvas.removeEventListener("lostpointercapture", alPerderCaptura);
       window.removeEventListener("keydown", alTecla);
+      window.removeEventListener("blur", alPerderFoco);
     },
   };
 }

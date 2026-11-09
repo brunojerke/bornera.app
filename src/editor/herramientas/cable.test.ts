@@ -13,7 +13,7 @@ import { cajasCable } from "../../render/escenaEditable";
 import { documentoBancoCables } from "../banco";
 import { BornesConCable } from "../bornesConCable";
 import { documentoNuevo, Editor, type DestinoVista } from "../editor";
-import { MENSAJE_MISMO_BORNE, MENSAJE_SIN_LARGO, radioBorne } from "./cable";
+import { MENSAJE_MISMO_BORNE, MENSAJE_SIN_LARGO, mensajeTramo, radioBorne, SALIDA_TOQUE_PROPIO } from "./cable";
 import type { EventoHerramienta } from "./tipos";
 
 class VistaFalsa implements DestinoVista {
@@ -397,9 +397,37 @@ describe("herramienta cable: casos inválidos (la previa y el clic dan lo mismo)
     editor.accion("cable");
     clic(editor, 30, 0);
     clic(editor, 35, 0);
+    // Con el tramo en curso, la barra ya dice por qué y cómo salir; la ✕ lleva el motivo del núcleo.
+    mover(editor, 32, 0);
+    const conSalida = `El cable se tocaría consigo mismo: ${SALIDA_TOQUE_PROPIO}`;
+    expect(editor.cable!.pista).toBe(conSalida);
     const r = probar(editor, doc, avisos, 32, 0);
     expect(r).toMatchObject({ valido: false, previa: "El cable se tocaría consigo mismo.", creo: false, fijo: false });
-    expect(r.clic).toBe(r.previa);
+    expect(r.clic).toBe(conSalida);
+  });
+
+  it("la que se cruzaría consigo misma: la barra y el aviso dicen cómo salir", () => {
+    const { editor, doc, avisos } = armar();
+    editor.accion("cable");
+    for (const [x, y] of [[30, 0], [35, 0], [35, 5], [33, 5]] as const) clic(editor, x, y);
+    mover(editor, 33, -3);
+    const conSalida = `El cable se cruzaría consigo mismo: ${SALIDA_TOQUE_PROPIO}`;
+    expect(editor.cable!.pista).toBe(conSalida);
+    const r = probar(editor, doc, avisos, 33, -3);
+    expect(r).toMatchObject({ valido: false, previa: "El cable se cruzaría consigo mismo.", clic: conSalida, creo: false, fijo: false });
+    // Retroceso (lo que dice el aviso) quita el último codo: queda el tramo hasta (35, 5).
+    expect(editor.accion("borrarAtras")).toBe(true);
+    expect(editor.cable!.fijados.at(-1)).toEqual([35, 5]);
+  });
+
+  it("mensajeTramo: solo los toques propios llevan cómo salir; el texto del núcleo no cambia", () => {
+    for (const v of ["tocaría", "cruzaría", "encimaría"]) {
+      expect(mensajeTramo({ mensaje: `El cable se ${v} consigo mismo.`, x: 0, y: 0, clave: "mismo|cable:|cable:" })).toBe(
+        `El cable se ${v} consigo mismo: fijá el codo en otro lado, o quitá el último con Retroceso (Esc cancela el cable).`,
+      );
+    }
+    const otro = { mensaje: "El cable se encimaría con otro cable.", x: 0, y: 0, clave: "encimado|cable:|cable:w1" };
+    expect(mensajeTramo(otro)).toBe(otro.mensaje);
   });
 
   it("ningún cable creado por la herramienta es inválido", () => {

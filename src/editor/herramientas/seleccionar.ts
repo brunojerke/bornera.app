@@ -123,7 +123,9 @@ export class HerramientaSeleccionar implements Herramienta {
 
   presionar(ev: EventoHerramienta): Resultado {
     // El botón derecho en medio de un gesto lo corta, como Esc.
-    if (ev.boton === 2 && this.gesto) {
+    // Un apretar con un gesto abierto (el pointerup se perdió: se soltó fuera
+    // de la ventana o en otra app) también: solo lo descarta, no empieza otro.
+    if (this.gesto) {
       const g = this.gesto;
       this.gesto = null;
       return this.descartar(g);

@@ -14,7 +14,7 @@ describe("medición del tope de la previa", () => {
   it("acomoda exactamente los cables pedidos, y ningún paso se rechaza (el plan es completo)", () => {
     let t = 0;
     const medidas = medirTope(OBJETIVOS_TOPE, 8, () => (t += 1));
-    expect(medidas.map((m) => m.cables)).toEqual([50, 100, 150, 200, 300]);
+    expect(medidas.map((m) => m.cables)).toEqual([25, 40, 50, 100, 150, 300]);
     for (const m of medidas) {
       expect(m.rechazados, `${m.cables}`).toBe(0);
       expect(m.pasos).toBe(8);

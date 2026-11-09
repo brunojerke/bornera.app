@@ -64,6 +64,17 @@ export const MENSAJE_SIN_LARGO = "El cable no tiene largo.";
 export const MENSAJE_MISMO_BORNE = "No se puede terminar en el mismo borne.";
 export const MENSAJE_SIN_CAMINO = "Sin camino: fijá un codo.";
 export const MENSAJE_DOCUMENTO_CAMBIO = "El documento cambió: se canceló el cable en curso.";
+/**
+ * Lo que W suma al motivo del núcleo cuando el cable en curso se tocaría,
+ * cruzaría o encimaría consigo mismo: cómo salir. El texto del núcleo no
+ * cambia (mover y girar lo usan sin esto).
+ */
+export const SALIDA_TOQUE_PROPIO = "fijá el codo en otro lado, o quitá el último con Retroceso (Esc cancela el cable).";
+
+/** El motivo que muestra W para un problema del tramo en curso. */
+export function mensajeTramo(c: Conflicto): string {
+  return c.clave.startsWith("mismo|") ? `${c.mensaje.replace(/\.$/, "")}: ${SALIDA_TOQUE_PROPIO}` : c.mensaje;
+}
 
 /** Lo que necesita la herramienta del editor. */
 export interface EntornoCable {
@@ -309,7 +320,7 @@ export class HerramientaCable implements Herramienta {
     const c = this.calcular(obj);
     if (c.problemas.length > 0) {
       this.actualizar();
-      return { redibujar: true, aviso: c.problemas[0]!.mensaje };
+      return { redibujar: true, aviso: mensajeTramo(c.problemas[0]!) };
     }
     if (c.datos) {
       // Termina: el id se da recién acá.
@@ -460,7 +471,8 @@ export class HerramientaCable implements Herramienta {
     const terminaLibre = c.datos?.hasta.tipo === "libre";
     if (terminaLibre) libres.push(obj.x, obj.y);
     this._dibujo = { puntos: c.puntos, valido: c.problemas.length === 0, conflictos: c.problemas, objetivo: obj, libres };
-    this._pista = c.problemas[0]?.mensaje ?? this.pistaTramo(obj, terminaLibre);
+    const primero = c.problemas[0];
+    this._pista = primero ? mensajeTramo(primero) : this.pistaTramo(obj, terminaLibre);
     return true;
   }
 

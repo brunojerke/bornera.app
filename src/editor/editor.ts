@@ -180,10 +180,11 @@ export const SIN_SELECCION: ResumenSeleccion = Object.freeze({
 /**
  * Con más cables que se acomodan (no rígidos) que esto, la previa del
  * arrastre no planea en cada punto de grilla: dibuja gomas rectas y el plan
- * se calcula al soltar. Valor inicial; se fija con la medición del banco en
- * la netbook (T14a).
+ * se calcula al soltar. Fijado con la medición de la netbook (v0.1.3-alpha.5,
+ * 2026-11-09, una corrida): paso mediano 50 → 9 · 100 → 19 · 150 → 31 ms,
+ * ~0,18 ms por cable; con 40 da ~7,2 ms, debajo del criterio de 8 ms.
  */
-export const TOPE_CABLES_PREVIA = 150;
+export const TOPE_CABLES_PREVIA = 40;
 
 /** Pista del modo reducido: la previa no los revisa; se revisan todos al soltar. */
 export function textoReducido(cables: number): string {

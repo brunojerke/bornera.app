@@ -6,7 +6,9 @@
 // modo y de escena en medio del gesto (todo vuelve exacto, sin restos); el
 // menú contextual se suprime durante el gesto y fuera de él no; selección
 // mezclada con R, Mayús+R, M, Supr, Ctrl+Z y Ctrl+Y; colocar sobre un cable
-// no coloca; y sin restos tras soltar, deshacer y rehacer, también con la
+// no coloca; el arrastre no queda colgado si se pierde el pointerup (la
+// ventana pierde el foco, se pierde la captura o llega otro apretar); W dice
+// en la barra cómo salir de un toque propio; y sin restos tras soltar, deshacer y rehacer, también con la
 // escena corrida (10, 20).
 
 import { CTRL, esperar, MAYUS } from "./cdp.mjs";
@@ -20,6 +22,7 @@ const Z = ["z", "KeyZ", 90];
 const Y = ["y", "KeyY", 89];
 const F5 = ["F5", "F5", 116];
 const B = ["B", "KeyB", 66];
+const W = ["w", "KeyW", 87];
 /** Ids internos en un texto ("w3", "c7"): los avisos no los muestran. */
 const CON_IDS = /\b[wc]\d+\b/;
 
@@ -325,6 +328,31 @@ export default async function (p, comprobar) {
         await esperar(50);
       },
     ],
+    // El pointerup se pierde: la ventana pierde el foco, se pierde la captura
+    // del puntero, o llega otro apretar sin haber soltado.
+    [
+      "la ventana pierde el foco (blur)",
+      async () => {
+        await p.evaluar(`window.dispatchEvent(new Event("blur"))`);
+        await esperar(30);
+      },
+    ],
+    [
+      "se pierde la captura (lostpointercapture)",
+      async () => {
+        await p.evaluar(`document.querySelector("canvas").dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 1 }))`);
+        await esperar(30);
+      },
+    ],
+    [
+      "pointerup perdido (otro apretar)",
+      async () => {
+        const q = await a(-6, 3);
+        await p.evaluar(`document.querySelector("canvas").dispatchEvent(new PointerEvent("pointerdown",
+          { pointerId: 1, isPrimary: true, pointerType: "mouse", button: 0, buttons: 1, clientX: ${q.x}, clientY: ${q.y}, bubbles: true, cancelable: true }))`);
+        await esperar(30);
+      },
+    ],
     [
       "cambio de escena (Ctrl+Shift+B)",
       async () => {
@@ -440,6 +468,26 @@ export default async function (p, comprobar) {
   await p.esc();
   d = await distintos("ref");
   comprobar("después de Esc, sin restos de la previa", (await documento()) === docRef && d === 0, `${d} píxeles distintos`);
+
+  // ── W: con el tramo en curso, un toque propio dice en la barra cómo salir ──
+  n = await pasos();
+  await tecla(W);
+  for (const [x, y] of [[3, -10], [8, -10], [8, -7], [6, -7]]) await p.clic(await a(x, y));
+  const cruce = await a(6, -13);
+  await p.mouse("mouseMoved", cruce.x, cruce.y);
+  await esperar(30);
+  const pistaW = (await pista()) ?? "";
+  await p.esc();
+  await p.esc();
+  comprobar(
+    "W: la barra dice por qué se rechaza un toque propio y cómo salir",
+    pistaW === "El cable se cruzaría consigo mismo: fijá el codo en otro lado, o quitá el último con Retroceso (Esc cancela el cable)." &&
+      (await pasos()) === n &&
+      (await documento()) === docRef,
+    pistaW,
+  );
+  d = await distintos("ref");
+  comprobar("después de Esc, sin restos del cable en curso", d === 0, `${d} píxeles distintos${await donde("ref")}`);
 
   // ── Sin restos con la escena corrida (10, 20): soltar, deshacer y rehacer ──
   await volver();

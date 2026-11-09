@@ -283,6 +283,8 @@ describe("arrastrar con cables", () => {
     ["botón derecho", (e: Editor) => e.aplicar(e.seleccionar.presionar(ev(3, 4, 2)))],
     ["cambio de escena o de modo", (e: Editor) => e.cancelarHerramienta()],
     ["gesto cortado", (e: Editor) => e.aplicar(e.seleccionar.soltar(null))],
+    // El pointerup se perdió (se soltó fuera de la ventana): llega otro apretar.
+    ["pointerup perdido", (e: Editor) => e.aplicar(e.seleccionar.presionar(ev(3, 4)))],
   ] as const)("%s en medio del arrastre: todo vuelve exacto, sin paso y sin restos", (_, cortar) => {
     const { editor, pasos, vista } = armar();
     const antes = copia(editor.documento);
@@ -300,6 +302,45 @@ describe("arrastrar con cables", () => {
     expect(nadaOculto(editor, editor.documento)).toBe(true);
     expect(escenaAlDia(editor)).toBe(true);
     for (const k of alEmpezar) expect(vista.regiones.slice(alEmpezar.length)).toContainEqual(k);
+  });
+
+  it("pointerup perdido: el apretar siguiente solo descarta el gesto colgado (no empieza otro); el que sigue anda normal", () => {
+    const { editor, pasos } = armar();
+    const antes = copia(editor.documento);
+    editor.seleccionarIds(["c1", "w1"]);
+    const n = pasos();
+    arrastrar(editor, 0.2, 0, 3, 4);
+    expect(editor.arrastrando).toBe(true);
+    // Apretar en vacío: no deselecciona ni empieza un rectángulo.
+    editor.aplicar(editor.seleccionar.presionar(ev(60, 60)));
+    expect(editor.arrastrando).toBe(false);
+    expect(editor.enGesto).toBe(false);
+    expect([...editor.seleccion].sort()).toEqual(["c1", "w1"]);
+    editor.aplicar(editor.seleccionar.mover(ev(70, 70)));
+    expect(editor.seleccionar.rectangulo).toBeNull();
+    editor.aplicar(editor.seleccionar.soltar(ev(70, 70)));
+    expect(pasos()).toBe(n);
+    expect(editor.documento).toEqual(antes);
+    expect(nadaOculto(editor, editor.documento)).toBe(true);
+    expect(escenaAlDia(editor)).toBe(true);
+    // El próximo arrastre empieza y termina normal.
+    arrastrar(editor, 0.2, 0, 0.2, -3);
+    expect(editor.arrastrando).toBe(true);
+    editor.aplicar(editor.seleccionar.soltar(ev(0.2, -3)));
+    expect(pasos()).toBe(n + 1);
+  });
+
+  it("pointerup perdido con un rectángulo: el apretar siguiente lo borra sin cambiar la selección", () => {
+    const { editor } = armar();
+    editor.seleccionarIds(["c1"]);
+    arrastrar(editor, 60, 60, -20, -20);
+    expect(editor.seleccionar.rectangulo).not.toBeNull();
+    const r = editor.seleccionar.presionar(ev(60, 60));
+    expect(r.redibujar).toBe(true);
+    editor.aplicar(r);
+    expect(editor.seleccionar.rectangulo).toBeNull();
+    expect(editor.enGesto).toBe(false);
+    expect([...editor.seleccion]).toEqual(["c1"]);
   });
 
   it("si el documento cambia en el medio, el plan de la previa no se usa: el arrastre se cancela", () => {
@@ -359,6 +400,10 @@ describe("tope de la previa (TOPE_CABLES_PREVIA)", () => {
     const historial = editor.historial as unknown as { hechos: unknown[] };
     return { editor, vista, avisos, pasos: () => historial.hechos.length };
   }
+
+  it("vale 40: lo fijó la medición de la netbook (paso mediano < 8 ms; ~0,18 ms por cable)", () => {
+    expect(TOPE_CABLES_PREVIA).toBe(40);
+  });
 
   it(`justo por debajo (${TOPE_CABLES_PREVIA} cables): la previa planea y coincide con el resultado`, () => {
     const { editor, pasos } = fila(TOPE_CABLES_PREVIA);

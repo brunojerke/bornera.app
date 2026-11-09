@@ -14,8 +14,11 @@ import { crearDocumento, type Documento } from "../core/model/documento";
 import { prepararTransformacion } from "../core/model/seguir";
 import { Editor } from "./editor";
 
-/** Cables que se acomodan en cada medición: alrededor del tope, de un lado y del otro. */
-export const OBJETIVOS_TOPE = [50, 100, 150, 200, 300] as const;
+/**
+ * Cables que se acomodan en cada medición: alrededor del tope (40), de un lado
+ * y del otro; 50, 100, 150 y 300 para comparar con la medición de alpha.5.
+ */
+export const OBJETIVOS_TOPE = [25, 40, 50, 100, 150, 300] as const;
 
 /** Puntos de grilla planeados por medición (más uno de calentamiento). */
 export const PASOS_TOPE = 20;
