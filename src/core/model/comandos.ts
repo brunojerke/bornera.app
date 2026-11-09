@@ -138,9 +138,18 @@ export interface OpcionesTransformar {
 
 /** La hoja donde están todos los ids; tira si falta alguno o están en hojas distintas. */
 function hojaDe(doc: Documento, ids: readonly string[]): number {
+  // Una pasada por las hojas, no una búsqueda por id: con todo seleccionado
+  // son miles de ids y buscar cada uno recorría la hoja entera. Cada id va a
+  // la primera hoja donde está, como antes.
+  const buscados = new Set(ids);
+  const hojaPorId = new Map<string, number>();
+  doc.hojas.forEach((k, h) => {
+    for (const c of k.componentes) if (buscados.has(c.id) && !hojaPorId.has(c.id)) hojaPorId.set(c.id, h);
+    for (const w of k.cables) if (buscados.has(w.id) && !hojaPorId.has(w.id)) hojaPorId.set(w.id, h);
+  });
   let hoja = -1;
   for (const id of ids) {
-    const h = doc.hojas.findIndex((k) => k.componentes.some((c) => c.id === id) || k.cables.some((w) => w.id === id));
+    const h = hojaPorId.get(id) ?? -1;
     if (h < 0) throw new Error(`No existe "${id}".`);
     if (hoja >= 0 && h !== hoja) throw new Error("Los elementos están en hojas distintas.");
     hoja = h;
@@ -148,16 +157,42 @@ function hojaDe(doc: Documento, ids: readonly string[]): number {
   return hoja;
 }
 
+/**
+ * Igualdad de datos del documento (objetos, listas y valores simples), como
+ * comparar sus JSON pero sin armar los textos: con todo seleccionado son
+ * miles de copias. Una clave con `undefined` cuenta como ausente, como en JSON.
+ */
+function igualesDatos(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const l = b as unknown[];
+    if (a.length !== l.length) return false;
+    for (let i = 0; i < a.length; i++) if (!igualesDatos(a[i], l[i])) return false;
+    return true;
+  }
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  let n = 0;
+  for (const k in x) {
+    if (x[k] === undefined) continue;
+    n++;
+    if (!igualesDatos(x[k], y[k])) return false;
+  }
+  for (const k in y) if (y[k] !== undefined) n--;
+  return n === 0;
+}
+
 /** True si lo que el plan toca está en la hoja igual que cuando se calculó. */
-function planVigente(hoja: Hoja, plan: Plan): boolean {
-  const indice = indexarHoja(hoja);
+function planVigente(indice: IndiceHoja, plan: Plan): boolean {
   for (const c of plan.antes.componentes) {
     const actual = indice.componentes.get(c.id);
-    if (!actual || JSON.stringify(actual) !== JSON.stringify(c)) return false;
+    if (!actual || !igualesDatos(actual, c)) return false;
   }
   for (const w of plan.antes.cables) {
     const actual = indice.cables.get(w.id);
-    if (!actual || JSON.stringify(actual) !== JSON.stringify(w)) return false;
+    if (!actual || !igualesDatos(actual, w)) return false;
   }
   return true;
 }
@@ -188,16 +223,17 @@ abstract class Transformar implements Comando {
   aplicar(doc: Documento): Cambio {
     const h = hojaDe(doc, this.ids);
     const hoja = doc.hojas[h]!;
+    // Un solo índice para comprobar el plan y aplicarlo (planear no cambia la hoja).
+    const indice = indexarHoja(hoja);
     let plan: Plan | null = null;
-    if (this.hecho?.hoja === h && planVigente(hoja, this.hecho.plan)) plan = this.hecho.plan;
-    else if (this.opciones.plan && planVigente(hoja, this.opciones.plan)) plan = this.opciones.plan;
+    if (this.hecho?.hoja === h && planVigente(indice, this.hecho.plan)) plan = this.hecho.plan;
+    else if (this.opciones.plan && planVigente(indice, this.opciones.plan)) plan = this.opciones.plan;
     if (!plan) {
       const entorno = this.opciones.entorno?.(hoja) ?? entornoLineal(hoja);
       const r = planearTransformacion(hoja, this.ids, this.operacion, entorno);
       if (r.rechazo) throw new Error(r.rechazo.motivo);
       plan = r.plan;
     }
-    const indice = indexarHoja(hoja);
     for (const { id, pose } of plan.componentes) Object.assign(indice.componentes.get(id)!, pose);
     for (const c of plan.cables) {
       const w = indice.cables.get(c.id)!;

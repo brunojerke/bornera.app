@@ -558,11 +558,29 @@ export interface Preparacion {
   readonly mueveAlgo: boolean;
   /** El aviso si no mueve nada; null si mueve algo. */
   readonly motivoNada: string | null;
+  /**
+   * True si se transforma la hoja entera: todos los componentes y todos los
+   * cables, rígidos. Entonces no hay nada fijo contra qué chocar y `planear`
+   * no busca conflictos nuevos (atajo; el resultado es el mismo).
+   */
+  readonly todaLaHoja: boolean;
   planear(op: Operacion): ResultadoPlan;
 }
 
 /** Prepara `planearTransformacion` para varias operaciones sobre los mismos ids y el mismo documento. */
 export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorno: EntornoPlan): Preparacion {
+  return preparar(hoja, ids, entorno, true);
+}
+
+/**
+ * Solo para tests: `planearTransformacion` sin el atajo de la hoja entera,
+ * por el camino de siempre (para comprobar que el atajo da lo mismo).
+ */
+export function planearSinAtajoParaTests(hoja: Hoja, ids: Iterable<string>, op: Operacion, entorno: EntornoPlan): ResultadoPlan {
+  return preparar(hoja, ids, entorno, false).planear(op);
+}
+
+function preparar(hoja: Hoja, ids: Iterable<string>, entorno: EntornoPlan, conAtajo: boolean): Preparacion {
   const { indice, consulta: base } = entorno;
   const comps: Componente[] = [];
   const seleccionados = new Set<string>();
@@ -731,7 +749,15 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
 
   const mueveAlgo = movidos.size > 0 || rigidos.size > 0;
   const motivoNada = mueveAlgo ? null : seleccionados.size > 1 ? MENSAJE_NADA_SE_MUEVE_VARIOS : MENSAJE_NADA_SE_MUEVE_UNO;
-  return { zona, rigidos, rehechos: resto.length, movidos, mueveAlgo, motivoNada, planear };
+  // La hoja entera se transforma rígida (todo seleccionado): la misma
+  // transformación para todo conserva cada relación entre dos elementos, y no
+  // queda nada fijo. Un conflicto de un elemento consigo mismo (un cable que
+  // se toca) también se conserva, y ya estaba antes. No puede haber uno nuevo.
+  const todaLaHoja = mueveAlgo && movidos.size === hoja.componentes.length && rigidos.size === hoja.cables.length;
+  const atajo = conAtajo && todaLaHoja;
+  /** Con el atajo, lo que cambia es siempre todo: las copias de antes no dependen de la operación. */
+  let antesTodo: Plan["antes"] | null = null;
+  return { zona, rigidos, rehechos: resto.length, movidos, mueveAlgo, motivoNada, todaLaHoja, planear };
 
   function planear(op: Operacion): ResultadoPlan {
     const t = transformacionGrupo(op, op.tipo === "mover" ? null : caja);
@@ -757,7 +783,7 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
     const rigidoPorId = new Map(finalesRigidos.map((c) => [c.id, c]));
 
     const resultado = (cables: CableCambiado[], rechazo: Rechazo | null): ResultadoPlan => {
-      const antes = {
+      const copiar = () => ({
         componentes: comps.map((c) => ({ ...c, params: { ...c.params } })),
         cables: cables.map((c) => {
           const w = cableDe(c.id);
@@ -768,7 +794,9 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
             codos: w.codos.map(([x, y]) => [x, y] as [number, number]),
           };
         }),
-      };
+      });
+      // Con el atajo no hay rechazo y `cables` son todos los de la hoja, en su orden.
+      const antes = atajo ? (antesTodo ??= copiar()) : copiar();
       return {
         plan: { t, componentes: poses, cables, rigidos, zona, antes },
         rechazo,
@@ -1094,7 +1122,8 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
       return rechazar(cambiados(r.estado), MENSAJE_CICLO, conflictos);
     }
     if (r.falla) return rechazarConflictos(r.falla.conflictos, cambiados(r.estado, r.falla.intento));
-    let conflictos = verificar(r.estado);
+    // Atajo: con la hoja entera transformada no hay conflictos nuevos (ver `todaLaHoja`).
+    let conflictos = atajo ? [] : verificar(r.estado);
     if (conflictos.length > 0 && conflictos.some(entreRehechos)) {
       const r2 = resolver(r.estado);
       if (r2.falla) return rechazarConflictos(r2.falla.conflictos, cambiados(r2.estado, r2.falla.intento));

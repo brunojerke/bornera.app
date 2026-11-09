@@ -351,6 +351,30 @@ describe("errores: el documento no cambia", () => {
     expect(doc).toEqual(antes);
   });
 
+  it("Mover, Rotar y Espejar: cada id en su hoja; uno que no está o dos hojas distintas avisan igual que siempre", () => {
+    const doc = docBase();
+    doc.hojas.push({ nombre: "Hoja 2", componentes: [], cables: [] });
+    const a = colocar(doc, datos("pulsador.na", 0, 0), 1);
+    a.aplicar(doc);
+    const b = colocar(doc, datos("pulsador.nc", 8, 4), 1);
+    b.aplicar(doc);
+    const antes = copia(doc);
+    expect(() => new Mover(["c1", a.id], 1, 0).aplicar(doc)).toThrow("Los elementos están en hojas distintas.");
+    expect(() => new Rotar([a.id, "c1"], 90).aplicar(doc)).toThrow("Los elementos están en hojas distintas.");
+    // El primero que falta, en el orden pedido.
+    expect(() => new Espejar([a.id, "c98", "c99"]).aplicar(doc)).toThrow('No existe "c98".');
+    expect(doc).toEqual(antes);
+    const mover = new Mover([b.id, a.id], 2, -1);
+    mover.aplicar(doc);
+    expect(doc.hojas[1]!.componentes.map((c) => [c.x, c.y])).toEqual([
+      [2, -1],
+      [10, 3],
+    ]);
+    expect(doc.hojas[0]).toEqual(antes.hojas[0]);
+    mover.deshacer(doc);
+    expect(doc).toEqual(antes);
+  });
+
   it("coordenadas no enteras: se rechazan al construir, sin gastar un id", () => {
     const doc = docBase();
     const antes = copia(doc);

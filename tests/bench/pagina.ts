@@ -594,6 +594,29 @@ function soltarTodo(c: Camara, _: Capas, __: Escena, i: number): void {
   }
 }
 
+/**
+ * Todo seleccionado, arrastrado sin soltar: cada paso cambia de punto de
+ * grilla (la previa planea en cada uno). El primero aprieta y pasa el umbral.
+ */
+const CUADROS_ARRASTRE_TODO = 20;
+function arrastrarTodo(c: Camara, _: Capas, __: Escena, i: number): void {
+  const ed = editorCables!;
+  const p = gesto.ancla!;
+  if (i === 0) {
+    ed.aplicar(ed.seleccionar.presionar(evento(c, p.x, p.y)));
+    ed.aplicar(ed.seleccionar.mover(evento(c, p.x + 1, p.y)));
+    return;
+  }
+  ed.aplicar(ed.seleccionar.mover(evento(c, p.x + 1 + (i % 4), p.y + (i % 2))));
+  if (ed.pista !== null) throw new Error(`Arrastrar todo seleccionado: la previa se rechaza ("${ed.pista}").`);
+}
+
+/** Esc: corta el gesto en curso, si lo hay (sin comando). */
+function cancelarGesto(): void {
+  const ed = editorCables!;
+  if (ed.arrastrando) ed.aplicar(ed.seleccionar.cancelar());
+}
+
 /** Todo seleccionado y el resumen del panel, alternando con nada seleccionado. */
 function seleccionarTodo(_: Camara, __: Capas, e: Escena, i: number): void {
   const ed = editorCables!;
@@ -864,6 +887,28 @@ const escenariosCables = (t12: boolean): Escenario[] => [
     pasoMedido: (i) => i === 2,
     fases: true,
     comandos: () => gesto.comandos,
+  },
+  {
+    // Todo seleccionado (2000 + 3030), arrastrado con el editor: el paso es
+    // el plan de la previa en cada punto de grilla (todo rígido). Termina con
+    // Esc, sin comando. Criterio de T14a en la netbook: mediana < 33 ms.
+    nombre: "Arrastrar todo seleccionado al 31 %",
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_TEXTOS);
+      prepararGesto(e.idsEnCaja(e.caja!, "toca"));
+    },
+    reiniciar: () => cancelarGesto(),
+    terminar: () => {
+      cancelarGesto();
+      editorCables!.seleccionarIds([]);
+    },
+    cuadros: CUADROS_ARRASTRE_TODO,
+    paso: arrastrarTodo,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    // Sin el primero: aprieta, pasa el umbral y oculta todo.
+    pasoMedido: (i) => i > 0,
   },
   {
     // Supr y Ctrl+Z sobre un componente con cables, con la vista quieta.

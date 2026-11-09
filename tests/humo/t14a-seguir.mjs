@@ -529,6 +529,19 @@ export default async function (p, comprobar) {
     tabla.startsWith("FALLÓ") ? tabla : fila,
   );
   console.log(`  ·   prueba de la netbook (corta) en la PC: ${validos} pasos válidos, ${rechazados} rechazados`);
+  // Arrastrar con todo seleccionado: fila con el paso de la previa y su criterio (< 33 ms en la netbook).
+  const filaTodo = tabla.split("\n").find((l) => l.startsWith("**Arrastrar con todo seleccionado**")) ?? "";
+  const pasoTodo = /previa ([\d,]+) \/ ([\d,]+) ms \(mediana \/ máx\., (\d+) puntos/.exec(filaTodo);
+  comprobar(
+    "la prueba de la netbook mide el paso de la previa con todo seleccionado (12 puntos) y lo suma a la aceptación",
+    pasoTodo !== null && pasoTodo[3] === "12" && /^- [✓✗] paso de la previa con todo seleccionado [\d,]+ ms \(mediana\) < 33$/m.test(tabla),
+    filaTodo || tabla,
+  );
+  const soltarTodo = /\*\*Soltar con todo seleccionado\*\* \(\d+\): comando ([\d,]+) ms · primer cuadro ([\d,]+) ms/.exec(tabla);
+  if (pasoTodo && soltarTodo)
+    console.log(
+      `  ·   con todo seleccionado en la PC: paso de la previa ${pasoTodo[1]} / ${pasoTodo[2]} ms, soltar ${soltarTodo[1]} + ${soltarTodo[2]} ms`,
+    );
   comprobar("y deja la escena como estaba", (await p.evaluar("JSON.stringify(bornera.activo().documento.hojas)")) === docCables);
   for (let i = 0; i < 2; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
   await p.esperarA("bornera.activo() === bornera.editor");

@@ -9,7 +9,9 @@ import {
   MENSAJE_NADA_SE_MUEVE_UNO,
   MENSAJE_NADA_SE_MUEVE_VARIOS,
   entornoLineal,
+  planearSinAtajoParaTests,
   planearTransformacion,
+  prepararTransformacion,
   puntosParaT,
   transformacionGrupo,
   type Operacion,
@@ -974,5 +976,99 @@ describe("los codos no se acumulan", () => {
     for (let k = 0; k < 4; k++) new Rotar([km1], 90).aplicar(doc);
     expect(doc.hojas[0]!.cables.find((w) => w.id === "w4")!.codos).toEqual(antes.hojas[0]!.cables.find((w) => w.id === "w4")!.codos);
     expect(doc.hojas[0]!.cables.find((w) => w.id === "w7")!.codos).toEqual(antes.hojas[0]!.cables.find((w) => w.id === "w7")!.codos);
+  });
+});
+
+// ── Atajo: la hoja entera transformada ─────────────────────────────────────
+
+/** Todos los ids de la hoja: componentes y cables. */
+function todoDe(doc: Documento): string[] {
+  const hoja = doc.hojas[0]!;
+  return [...hoja.componentes.map((c) => c.id), ...hoja.cables.map((w) => w.id)];
+}
+
+const OPERACIONES_ATAJO: Operacion[] = [
+  { tipo: "mover", dx: 3, dy: -2 },
+  { tipo: "rotar", sentido: 90 },
+  { tipo: "rotar", sentido: -90 },
+  { tipo: "espejar" },
+];
+
+/** Marcha-parada con H1 en T y, aparte, un cable suelto que se toca a sí mismo (como puede venir de un .brn viejo). */
+function docConToqueViejo(): Documento {
+  const { doc } = docMarchaParada(true);
+  tender(doc, "w20", libre(40, 0), libre(43, -2), [
+    [46, 0],
+    [46, 4],
+    [43, 4],
+  ]);
+  expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+  expect(seTocaASiMismo(recorrido(doc, "w20"))).toBe(true);
+  return doc;
+}
+
+describe("atajo con la hoja entera transformada", () => {
+  const DOCS: [string, () => Documento][] = [
+    ["marcha-parada con T", () => docMarchaParada(true).doc],
+    ["T en cadena", docCadena],
+    ["ciclo de apoyos", docCiclo],
+    ["al azar", () => docAzar(generador(SEMILLA))],
+    ["un cable que ya se tocaba a sí mismo", docConToqueViejo],
+  ];
+
+  it.each(DOCS)("%s: el plan es el mismo con y sin atajo, para Mover, R, Mayús+R y M", (_, crear) => {
+    const doc = crear();
+    const hoja = doc.hojas[0]!;
+    const ids = todoDe(doc);
+    expect(prepararTransformacion(hoja, ids, entornoLineal(hoja)).todaLaHoja).toBe(true);
+    for (const op of OPERACIONES_ATAJO) {
+      const con = planearTransformacion(hoja, ids, op, entornoLineal(hoja));
+      const sin = planearSinAtajoParaTests(hoja, ids, op, entornoLineal(hoja));
+      expect(con.rechazo, `${op.tipo}`).toBeNull();
+      expect(con, `${op.tipo}`).toEqual(sin);
+    }
+  });
+
+  it.each(DOCS)("%s: Mover, R, Mayús+R y M con todo, deshacer y rehacer exactos", (_, crear) => {
+    const doc = crear();
+    const ids = todoDe(doc);
+    aplicarYVolver(doc, new Mover(ids, 3, -2));
+    aplicarYVolver(doc, new Rotar(ids, 90));
+    aplicarYVolver(doc, new Rotar(ids, -90));
+    aplicarYVolver(doc, new Espejar(ids));
+  });
+
+  it("solo rígidos no alcanza: con algo fijo en la hoja no hay atajo y se sigue rechazando", () => {
+    // c1 y c2 con un cable interno (rígido), y un cable suelto que no se mueve.
+    const doc = crearDocumento(meta);
+    const c1 = poner(doc, datos("contactor.bobina", 0, 0));
+    const c2 = poner(doc, datos("pulsador.na", 8, 0));
+    rutear(doc, "w1", borne(c1, "A1"), borne(c2, "13"));
+    tender(doc, "w9", libre(-10, -30), libre(10, -30));
+    const hoja = doc.hojas[0]!;
+    const ids = [c1, c2, "w1"];
+    const prep = prepararTransformacion(hoja, ids, entornoLineal(hoja));
+    expect([...prep.rigidos]).toEqual(["w1"]);
+    expect(prep.rehechos).toBe(0);
+    expect(prep.todaLaHoja).toBe(false);
+    // Se sube el grupo hasta que el borne A1 cae sobre el tramo de w9.
+    const a1 = borneDe(indexarHoja(hoja).componentes.get(c1)!, "A1")!;
+    const op: Operacion = { tipo: "mover", dx: 0, dy: -30 - a1.y };
+    const r = planearTransformacion(hoja, ids, op, entornoLineal(hoja));
+    expect(r.rechazo).not.toBeNull();
+    expect(r).toEqual(planearSinAtajoParaTests(hoja, ids, op, entornoLineal(hoja)));
+    rechazado(doc, new Mover(ids, op.dx, op.dy));
+  });
+
+  it("con todo seleccionado menos un componente suelto, no hay atajo y el plan es el de siempre", () => {
+    const doc = docMarchaParada(true).doc;
+    poner(doc, datos("senalizacion.lampara", 60, 60));
+    const hoja = doc.hojas[0]!;
+    const ids = todoDe(doc).filter((id) => id !== hoja.componentes.at(-1)!.id);
+    expect(prepararTransformacion(hoja, ids, entornoLineal(hoja)).todaLaHoja).toBe(false);
+    for (const op of OPERACIONES_ATAJO)
+      expect(planearTransformacion(hoja, ids, op, entornoLineal(hoja)), `${op.tipo}`).toEqual(
+        planearSinAtajoParaTests(hoja, ids, op, entornoLineal(hoja)),
+      );
   });
 });

@@ -157,7 +157,12 @@ export interface ResultadoSoltar {
   hastaNitida: number;
   /** False si el Mover se rechazó (no debería: todo se mueve rígido). */
   aplicado: boolean;
+  /** Paso de la previa antes de soltar (ms por punto de grilla): mediana, máximo y cuántos. */
+  paso: { mediana: number; maximo: number; cantidad: number };
 }
+
+/** Puntos de grilla que recorre la previa con todo seleccionado antes de soltar. */
+export const PASOS_ARRASTRE_TODO = 12;
 
 /** Lo que mide la prueba además de las combinaciones (con la escena con cables). */
 export interface ExtrasDiagnostico {
@@ -178,6 +183,8 @@ export const CRITERIOS_T14A = {
   lentos: 10,
   pasoMediano: 8,
   soltar: 200,
+  /** Paso mediano de la previa con todo seleccionado (2000 + 3030), ms. */
+  pasoTodo: 33,
 } as const;
 
 export interface Criterio {
@@ -202,6 +209,10 @@ export function criteriosT14a(resultados: readonly ResultadoCombinacion[], solta
     l.push({
       texto: `soltar con todo seleccionado ${f1(t)} ms (comando + primer cuadro) ≤ ${k.soltar}`,
       ok: soltar.aplicado && t <= k.soltar,
+    });
+    l.push({
+      texto: `paso de la previa con todo seleccionado ${f1(soltar.paso.mediana)} ms (mediana) < ${k.pasoTodo}`,
+      ok: soltar.paso.cantidad > 0 && soltar.paso.mediana < k.pasoTodo,
     });
   }
   return l;
@@ -260,6 +271,11 @@ export function tablaDiagnostico(
     l.push(`**Soltar los ${equipo.arrastrados} en (3, 2)**: un paso, comando ${f1(soltarGrupo.comando)} ms (después se deshace).`);
   }
   if (soltar) {
+    l.push("");
+    l.push(
+      `**Arrastrar con todo seleccionado** (${soltar.seleccionados}): paso de la previa ` +
+        `${f1(soltar.paso.mediana)} / ${f1(soltar.paso.maximo)} ms (mediana / máx., ${soltar.paso.cantidad} puntos de grilla).`,
+    );
     l.push("");
     l.push(
       `**Soltar con todo seleccionado** (${soltar.seleccionados}): ` +

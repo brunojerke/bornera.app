@@ -95,15 +95,24 @@ describe("Diagnóstico del arrastre", () => {
       return { zoom: 0.58, combinacion, sinSonda, conSonda: vacia };
     });
   }
-  const soltar = (comando: number, primerCuadro: number, aplicado = true) => ({ seleccionados: 5030, comando, primerCuadro, hastaNitida: 400, aplicado });
+  const soltar = (comando: number, primerCuadro: number, aplicado = true, pasoTodo = 20) => ({
+    seleccionados: 5030,
+    comando,
+    primerCuadro,
+    hastaNitida: 400,
+    aplicado,
+    paso: { mediana: pasoTodo, maximo: pasoTodo + 5, cantidad: 12 },
+  });
 
-  it("criterios de T14a sobre 58 %, completos con caché: promedio, máximo, lentos, paso mediano y soltar", () => {
+  it("criterios de T14a sobre 58 %, completos con caché: promedio, máximo, lentos, paso mediano, soltar y paso con todo", () => {
     const bien = criteriosT14a(conReferencia([10, 12, 14], [3, 4, 5]), soltar(120, 60));
-    expect(bien.map((k) => k.ok)).toEqual([true, true, true, true, true]);
-    const mal = criteriosT14a(conReferencia([10, 30, ...Array(10).fill(17)], [9, 9, 2]), soltar(150, 60));
-    expect(mal.map((k) => k.ok)).toEqual([false, false, false, false, false]);
+    expect(bien.map((k) => k.ok)).toEqual([true, true, true, true, true, true]);
+    const mal = criteriosT14a(conReferencia([10, 30, ...Array(10).fill(17)], [9, 9, 2]), soltar(150, 60, true, 33));
+    expect(mal.map((k) => k.ok)).toEqual([false, false, false, false, false, false]);
     // Un soltar rechazado no pasa aunque sea rápido; sin pasos, el paso no pasa.
-    expect(criteriosT14a(conReferencia([10], []), soltar(1, 1, false)).map((k) => k.ok)).toEqual([true, true, true, false, false]);
+    expect(criteriosT14a(conReferencia([10], []), soltar(1, 1, false)).map((k) => k.ok)).toEqual([true, true, true, false, false, true]);
+    const sinPasos = { ...soltar(1, 1), paso: { mediana: 0, maximo: 0, cantidad: 0 } };
+    expect(criteriosT14a(conReferencia([10], [3]), sinPasos).map((k) => k.ok)).toEqual([true, true, true, true, true, false]);
     expect(criteriosT14a([], null)).toEqual([]);
   });
 
@@ -124,5 +133,7 @@ describe("Diagnóstico del arrastre", () => {
     expect(tabla).toContain("**Soltar los 40 en (3, 2)**: un paso, comando 12,5 ms");
     expect(tabla).toContain("- ✓ paso mediano 4,0 ms < 8");
     expect(tabla).toContain("- ✓ soltar con todo seleccionado 180,0 ms (comando + primer cuadro) ≤ 200");
+    expect(tabla).toContain("**Arrastrar con todo seleccionado** (5030): paso de la previa 20,0 / 25,0 ms (mediana / máx., 12 puntos de grilla).");
+    expect(tabla).toContain("- ✓ paso de la previa con todo seleccionado 20,0 ms (mediana) < 33");
   });
 });

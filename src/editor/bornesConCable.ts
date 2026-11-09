@@ -22,7 +22,11 @@ export class BornesConCable {
 
   /** Pone el estado actual de un cable: `w` undefined si ya no está en la hoja. */
   poner(id: string, w: Cable | undefined): void {
+    const nuevas: string[] = [];
+    if (w) for (const e of [w.desde, w.hasta]) if (e.tipo === "borne") nuevas.push(claveBorne(e.comp, e.borne));
     const viejas = this.porCable.get(id);
+    // Mover, girar o espejar no cambia a qué bornes llega: no hay nada que tocar.
+    if (viejas ? viejas.length === nuevas.length && viejas.every((k, i) => k === nuevas[i]) : nuevas.length === 0) return;
     if (viejas) {
       for (const k of viejas) {
         const n = (this.cuenta.get(k) ?? 0) - 1;
@@ -31,9 +35,6 @@ export class BornesConCable {
       }
       this.porCable.delete(id);
     }
-    if (!w) return;
-    const nuevas: string[] = [];
-    for (const e of [w.desde, w.hasta]) if (e.tipo === "borne") nuevas.push(claveBorne(e.comp, e.borne));
     if (nuevas.length === 0) return;
     for (const k of nuevas) this.cuenta.set(k, (this.cuenta.get(k) ?? 0) + 1);
     this.porCable.set(id, nuevas);

@@ -11,7 +11,7 @@ import { consultaHoja, MENSAJE_SIN_SALIDAS } from "../../core/model/trazado";
 import type { Caja } from "../../render/camara";
 import { cajasCable } from "../../render/escenaEditable";
 import { documentoBancoCables } from "../banco";
-import { BornesConCable } from "../bornesConCable";
+import { BornesConCable, claveBorne } from "../bornesConCable";
 import { documentoNuevo, Editor, type DestinoVista } from "../editor";
 import { MENSAJE_MISMO_BORNE, MENSAJE_SIN_LARGO, mensajeTramo, radioBorne, SALIDA_TOQUE_PROPIO } from "./cable";
 import type { EventoHerramienta } from "./tipos";
@@ -609,6 +609,26 @@ describe("índices al día", () => {
       editor.accion(a);
       expect(editor.bornesConCable.entradas()).toEqual(bornesDesdeCero(doc));
     }
+  });
+
+  it("bornes con cable: volver a poner un cable con los mismos bornes no cuenta dos veces; cambiar o quitar sí actualiza", () => {
+    const b = new BornesConCable();
+    const w = { id: "w1", desde: { tipo: "borne", comp: "c1", borne: "A1" }, hasta: { tipo: "libre", x: 4, y: 4 }, codos: [] } as const;
+    const copiaW = () => ({ ...w, desde: { ...w.desde }, hasta: { ...w.hasta }, codos: [] as [number, number][] });
+    b.poner("w1", copiaW());
+    b.poner("w1", { ...copiaW(), codos: [[4, -2]] });
+    expect(b.entradas()).toEqual([[claveBorne("c1", "A1"), 1]]);
+    b.poner("w1", { ...copiaW(), hasta: { tipo: "borne", comp: "c2", borne: "13" } });
+    expect(b.entradas()).toEqual([
+      [claveBorne("c1", "A1"), 1],
+      [claveBorne("c2", "13"), 1],
+    ]);
+    b.poner("w1", { ...copiaW(), desde: { tipo: "libre", x: 0, y: 0 } });
+    expect(b.entradas()).toEqual([]);
+    b.poner("w1", undefined);
+    expect(b.entradas()).toEqual([]);
+    b.poner("w2", undefined);
+    expect(b.entradas()).toEqual([]);
   });
 
   it("la consulta con el índice de la escena da lo mismo que la lineal, en 2000 + 3000", () => {

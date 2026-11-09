@@ -16,8 +16,9 @@
 // sale "dinámica X ms" y cuánto cuesta medir.
 //
 // Con cables, al final: soltar los 40 en un lugar que vale (tiene que dar un
-// paso; se deshace), soltar con todo seleccionado (y deshacer) y el paso de
-// la previa según los cables que se acomodan (para TOPE_CABLES_PREVIA).
+// paso; se deshace), arrastrar y soltar con todo seleccionado (el paso de la
+// previa y el soltar; después se deshace) y el paso de la previa según los
+// cables que se acomodan (para TOPE_CABLES_PREVIA).
 
 import { grupoCentralBanco } from "../editor/banco";
 import type { DiagnosticoArrastre, Editor } from "../editor/editor";
@@ -29,6 +30,8 @@ import {
   ARRASTRADOS_DIAGNOSTICO,
   COMBINACIONES,
   DURACION_DIAGNOSTICO_MS,
+  mediana,
+  PASOS_ARRASTRE_TODO,
   recorrido,
   resumirPasada,
   ZOOMS_DIAGNOSTICO,
@@ -261,6 +264,15 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
     editor.aplicar(editor.activa.presionar(evento(ancla.x, ancla.y)));
     editor.aplicar(editor.activa.mover(evento(ancla.x + 1, ancla.y)));
     await cuadro();
+    // El paso de la previa con todo seleccionado: cada movimiento cambia de
+    // punto de grilla (el primero, que pasa el umbral y oculta todo, no cuenta).
+    const pasosPrevia: number[] = [];
+    for (let k = 1; k <= PASOS_ARRASTRE_TODO; k++) {
+      const p0 = performance.now();
+      editor.aplicar(editor.activa.mover(evento(ancla.x + 1 + (k % 4), ancla.y + (k % 2))));
+      pasosPrevia.push(performance.now() - p0);
+      await cuadro();
+    }
     editor.aplicar(editor.activa.mover(evento(ancla.x + 2, ancla.y + 1)));
     await nitida();
     // El primer cuadro después de soltar y el momento en que queda nítida.
@@ -286,6 +298,13 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
     if (aplicado) editor.deshacer();
     editor.seleccionarIds([]);
     await nitida();
-    return { seleccionados: todos.length, comando, primerCuadro: Math.max(0, primero), hastaNitida, aplicado };
+    return {
+      seleccionados: todos.length,
+      comando,
+      primerCuadro: Math.max(0, primero),
+      hastaNitida,
+      aplicado,
+      paso: { mediana: mediana(pasosPrevia), maximo: Math.max(...pasosPrevia), cantidad: pasosPrevia.length },
+    };
   }
 }
