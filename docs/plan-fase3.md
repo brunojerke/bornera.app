@@ -345,15 +345,15 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
     - **Banco y prueba de la netbook:** el arrastre de los 40 va por el recorrido de la netbook y suelta en (3, 2); falla si no hay comando o la mayoría de los pasos se rechaza; informa válidos, rechazados y comandos. El arrastre contra los vecinos queda como escenario de rechazo aparte. Paso solo con pasos válidos. Tope: 50, 100, 150, 200 y 300, solo pasos válidos (falla si alguno se rechaza). La prueba de la netbook también corre corta en el humo t14a.
     - **Banco en la PC:** *Arrastrar 40 cableados al 58 %* 174 pasos válidos, 0 rechazados, 3 comandos; cuadro 2,9 / 4,3 / 8,3 ms, 0 lentos; paso 0,9 / 2,2 ms; 24 cables se acomodan; 0 invalidaciones intermedias (cumple el criterio de la PC). Contra los vecinos: 12 válidos, 162 rechazados. Tope (paso mediano): 50 → 1,4 · 100 → 2,8 · 150 → 5,0 · 200 → 7,5 · 300 → 14,6 ms.
   - **Para cerrar T14a:**
-    - **Tope fijado en 40 (2026-11-09):** netbook, v0.1.3-alpha.5, una corrida: paso mediano / máx. de la previa 50 → 9 / 17 · 100 → 19 / 21 · 150 → 31 / 35 · 200 → 48 / 51 · 300 → 95 / 106 ms (~0,18 ms por cable; con 40, ~7,2 ms, debajo del criterio de 8 ms). `OBJETIVOS_TOPE` pasa a 25, 40, 50, 100, 150 y 300 (300 para comparar). Ver "Medición 0.1.3-alpha.5 - netbook" en Obsidian.
+    - **Tope fijado en 40 (2026-11-09):** netbook, v0.1.3-alpha.5, una corrida: completos con caché al 58 %: dibujo 6,9 / 12 / 15 ms (prom. / p95 / máx.), paso 6,0 / 14,0 ms (mediana / máx.), 0 lentos; al 73 %: dibujo 6,5 / 13 / 16 ms (prom. / p95 / máx.). Paso mediano / máx. de la previa 50 → 9 / 17 · 100 → 19 / 21 · 150 → 31 / 35 · 200 → 48 / 51 · 300 → 95 / 106 ms (~0,18 ms por cable; con 40, ~7,2 ms, debajo del criterio de 8 ms). `OBJETIVOS_TOPE` pasa a 25, 40, 50, 100, 150 y 300 (300 para comparar). Ver "Medición 0.1.3-alpha.5 - netbook" en Obsidian.
     - **Arrastre colgado (2026-11-09):** si se pierde el `pointerup`, el gesto quedaba abierto y lo arrastrado oculto. Ahora `Seleccionar.presionar` con un gesto abierto solo lo descarta (lo arrastrado vuelve; no empieza otro), y `punteros.ts` corta el gesto en `lostpointercapture` (si hay gesto) y en el `blur` de la ventana (también el arrastre desde la paleta). Tests y humo: blur, captura perdida y otro apretar.
     - **W ante un toque propio:** la barra y el aviso suman cómo salir ("…consigo mismo: fijá el codo en otro lado, o quitá el último con Retroceso (Esc cancela el cable)."); el texto del núcleo no cambia. Test que faltaba de 8efdba8: la T de w2 sobre w1 no tapa otro toque de w2 sobre w1 fuera de su punto (extremo libre, tramo encimado, codo sobre codo), de los dos lados.
     - Banco en la PC con estos cambios: *Arrastrar 40 cableados al 58 %* cuadro 3,4 / 5,1 / 11,5 ms, 0 lentos, paso 1,3 / 3,5 ms, 24 cables (debajo del tope: previa completa); tope 25 → 1,2 · 40 → 1,4 · 50 → 2,4 · 100 → 6,0 · 150 → 6,8 · 300 → 20,3 ms. `npm test` 905, humo 307 de 307.
     - Quedan pendientes:
       1. Cuerpo sobre cuerpo.
-      2. Soltar con todo seleccionado: 435 ms en la netbook (criterio ≤ 200).
+      2. Soltar con todo seleccionado: 454 ms en la netbook (comando 435 ms + primer cuadro 19 ms; el criterio ≤ 200 ms se compara con 454).
       3. Corridas 2 y 3 de la medición en la netbook.
-      4. Repetir la prueba a mano en la netbook con 8efdba8 y este commit.
+      4. Repetir la prueba a mano en la netbook con 8efdba8 y este commit, sumando Alt+Tab real y soltar fuera de la ventana en medio de un arrastre (WebKitGTK).
   - **Pendientes (no se resuelven en T14a):** el resaltado con ~1000 componentes y ~1500 cables seleccionados tarda ~18,7 ms en la netbook; los cables pueden pasar sobre etiquetas; mover tramos de cable.
 
 ### T14b. Uniones
