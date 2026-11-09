@@ -861,11 +861,12 @@ describe("Editor: atajos (T10)", () => {
     editor.cancelarHerramienta();
 
     const a = editor.iniciarColocar(buscarSimbolo("contactor.bobina")!, "arrastre")!;
-    editor.aplicar(a.mover(ev(1, 1)));
+    // En un lugar libre: en (1, 1) se le encimaría a K1 (T14a).
+    editor.aplicar(a.mover(ev(20, 20)));
     expect(editor.accion("deshacer")).toBe(false);
     expect(editor.accion("rehacer")).toBe(false);
     expect(editor.accion("rotar")).toBe(true); // girar la previa sí
-    editor.aplicar(a.soltar(ev(1, 1)));
+    editor.aplicar(a.soltar(ev(20, 20)));
     expect(editor.documento.hojas[0]!.componentes.at(-1)).toMatchObject({ rot: 90 });
   });
 

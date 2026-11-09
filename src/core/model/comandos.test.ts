@@ -38,7 +38,8 @@ function docCon(posiciones: readonly (readonly [number, number])[]): Documento {
 
 /** Los 7 símbolos, uno de cada uno, con params para ver que se copian. */
 function docBase(): Documento {
-  const doc = docCon(SIMBOLOS.map((_, i) => [i * 4, (i % 3) * 5] as const));
+  // A 6 unidades: girados o espejados en grupo, los cuerpos no se enciman (T14a).
+  const doc = docCon(SIMBOLOS.map((_, i) => [i * 6, (i % 3) * 6] as const));
   doc.hojas[0]!.componentes[0]!.params = { tension: "230" };
   return doc;
 }

@@ -1072,3 +1072,97 @@ describe("atajo con la hoja entera transformada", () => {
       );
   });
 });
+
+// ── Cuerpo sobre cuerpo ────────────────────────────────────────────────────
+
+describe("cuerpo sobre cuerpo", () => {
+  /** S1 pulsador NA en (0, 0), caja x −2…2; KM1 bobina en (x, 0), caja x x−1…x+1. Sin cables. */
+  function docCuerpos(xKM1: number): Documento {
+    const doc = crearDocumento(meta);
+    poner(doc, { ...datos("pulsador.na", 0, 0), etiqueta: "S1" });
+    poner(doc, { ...datos("contactor.bobina", xKM1, 0), etiqueta: "KM1" });
+    return doc;
+  }
+  const MENSAJE = "KM1 quedaría encima de S1.";
+
+  it("mover encima se rechaza sin paso, con el motivo sin ids", () => {
+    const doc = docCuerpos(10);
+    const hoja = doc.hojas[0]!;
+    const r = planearTransformacion(hoja, ["c2"], { tipo: "mover", dx: -8, dy: 0 }, entornoLineal(hoja));
+    expect(r.rechazo?.motivo).toBe(`No se puede mover acá: ${MENSAJE}`);
+    expect(r.rechazo!.conflictos.map((c) => c.clave)).toEqual(["cuerpoCuerpo|cuerpo:c1|cuerpo:c2"]);
+    // La ✕ en el centro de lo encimado: x 1…2, y −2…2.
+    expect(r.rechazo!.conflictos[0]).toMatchObject({ x: 1.5, y: 0 });
+    expect(rechazado(doc, new Mover(["c2"], -8, 0))).toBe(`No se puede mover acá: ${MENSAJE}`);
+  });
+
+  it("tocarse por el borde vale", () => {
+    aplicarYVolver(docCuerpos(10), new Mover(["c2"], -7, 0));
+    // De arriba: KM2 en (1, −5), caja y −7…−3; bajando 1 toca a S1 (y −2) por el borde, bajando 2 se le encima.
+    const conKM2 = () => {
+      const doc = docCuerpos(10);
+      poner(doc, { ...datos("contactor.bobina", 1, -5), etiqueta: "KM2" });
+      return doc;
+    };
+    aplicarYVolver(conKM2(), new Mover(["c3"], 0, 1));
+    expect(rechazado(conKM2(), new Mover(["c3"], 0, 2))).toBe("No se puede mover acá: KM2 quedaría encima de S1.");
+  });
+
+  it.each([
+    ["R", () => new Rotar(["c2"], 90), "No se puede girar"],
+    ["Mayús+R", () => new Rotar(["c2"], -90), "No se puede girar"],
+  ] as const)("%s encima se rechaza sin paso", (_, cmd, prefijo) => {
+    // KM1 en (3, 0) toca a S1 por el borde; girada mide 4 × 2 (x 1…5) y se le encima.
+    const doc = docCuerpos(3);
+    expect(rechazado(doc, cmd())).toBe(`${prefijo}: ${MENSAJE}`);
+  });
+
+  it("M encima se rechaza sin paso", () => {
+    // KM1 (4, 0) y H1 (2, 10) espejados juntos: x → 6 − x, KM1 cae en (2, 0).
+    const doc = docCuerpos(4);
+    poner(doc, { ...datos("senalizacion.lampara", 2, 10), etiqueta: "H1" });
+    const hoja = doc.hojas[0]!;
+    const r = planearTransformacion(hoja, ["c2", "c3"], { tipo: "espejar" }, entornoLineal(hoja));
+    expect(r.rechazo?.motivo).toBe(`No se puede espejar: ${MENSAJE}`);
+    expect(rechazado(doc, new Espejar(["c2", "c3"]))).toBe(`No se puede espejar: ${MENSAJE}`);
+  });
+
+  it("un componente sin etiqueta se nombra con su símbolo", () => {
+    const doc = crearDocumento(meta);
+    poner(doc, datos("pulsador.na", 0, 0));
+    poner(doc, datos("contactor.bobina", 10, 0));
+    expect(rechazado(doc, new Mover(["c2"], -9, 0))).toBe("No se puede mover acá: Bobina de contactor quedaría encima de Pulsador NA.");
+  });
+
+  describe("dos que ya estaban encimados", () => {
+    it("separarlos vale", () => {
+      aplicarYVolver(docCuerpos(1), new Mover(["c2"], 10, 0));
+    });
+    it("moverlos juntos vale (también girarlos y espejarlos)", () => {
+      aplicarYVolver(docCuerpos(1), new Mover(["c1", "c2"], 5, 3));
+      aplicarYVolver(docCuerpos(1), new Rotar(["c1", "c2"], 90));
+      aplicarYVolver(docCuerpos(1), new Espejar(["c1", "c2"]));
+    });
+    it("mover uno sin terminar de separarlo vale: es el mismo par", () => {
+      aplicarYVolver(docCuerpos(1), new Mover(["c2"], 1, 1));
+    });
+    it("el par viejo no tapa uno nuevo con otro componente", () => {
+      const doc = docCuerpos(1);
+      poner(doc, { ...datos("senalizacion.lampara", 3, 0), etiqueta: "H1" }); // x 2…4: borde con S1 y con KM1
+      const msg = rechazado(doc, new Mover(["c2"], 1, 0)); // KM1 x 1…3: sigue sobre S1 y se encima con H1
+      expect(msg).toBe("No se puede mover acá: KM1 quedaría encima de H1.");
+    });
+  });
+
+  it("la misma clave vista desde cada uno de los dos componentes", () => {
+    const doc = docCuerpos(1);
+    const hoja = doc.hojas[0]!;
+    const consulta = consultaHoja(hoja);
+    const sin = (id: string) => ({ ...consulta, cuerposEn: (k: Parameters<typeof consulta.cuerposEn>[0]) => [...consulta.cuerposEn(k)].filter((c) => c.comp !== id) });
+    const a = problemasComponente(geometriaComponente(hoja.componentes[0]!)!, sin("c1"));
+    const b = problemasComponente(geometriaComponente(hoja.componentes[1]!)!, sin("c2"));
+    expect(a.map((c) => c.clave)).toEqual(["cuerpoCuerpo|cuerpo:c1|cuerpo:c2"]);
+    expect(b.map((c) => c.clave)).toEqual(a.map((c) => c.clave));
+    expect(a[0]!.mensaje).toBe("S1 quedaría encima de KM1.");
+  });
+});

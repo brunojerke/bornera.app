@@ -57,7 +57,8 @@ export default async function (p, comprobar) {
 
   // 3) Arrastrar y soltar fuera del lienzo (de vuelta sobre la paleta): no coloca.
   const antes = (await componentes(p)).length;
-  await p.arrastrar(lista[0], { x: lienzo.cx, y: lienzo.cy });
+  // Arriba, en un lugar libre: en el centro caería encima de un símbolo del paso 1 (T14a).
+  await p.arrastrar(lista[0], { x: lienzo.cx, y: lienzo.cy - 150 });
   // El arrastre de arriba coloca; ahora uno que vuelve y se suelta sobre la paleta.
   const conUno = (await componentes(p)).length;
   await p.mouse("mouseMoved", lista[0].x, lista[0].y);

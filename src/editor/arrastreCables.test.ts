@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { indexarHoja, recorridoCable, validarHoja } from "../core/model/cables";
-import { cablear, CambiarEtiqueta, colocar, type DatosCable } from "../core/model/comandos";
+import { cablear, CambiarEtiqueta, colocar, Mover, type DatosCable } from "../core/model/comandos";
 import type { Componente, Documento, Extremo } from "../core/model/documento";
 import { geometriaComponente, problemasComponente, consultaHoja } from "../core/model/trazado";
 import { buscarSimbolo } from "../core/symbols";
@@ -531,5 +531,75 @@ describe("Colocar con la regla de conexiones aparentes", () => {
     expect(editor.documento.hojas[0]!.componentes).toEqual([]);
     expect(editor.herramienta).toBeNull();
     expect(avisos.at(-1)).toMatch(/^No se puede colocar acá: /);
+  });
+});
+
+describe("cuerpo sobre cuerpo", () => {
+  // En `armar`: S1 pulsador NA en (10, 0), caja x 8…12. K2 bobina en (40, 0), sin cables.
+
+  it("colocar un contacto auxiliar a 3 de S1 (las cajas se tocan por el borde) vale; a 2, se rechaza con el motivo en la barra", () => {
+    const { editor, pasos, avisos } = armar();
+    const h = editor.iniciarColocar(buscarSimbolo("contactor.auxiliar_na")!, "clic")!;
+    editor.aplicar(h.mover(ev(12, 0)));
+    expect(h.previa!.conflictos.map((c) => c.clave)).toEqual(["cuerpoCuerpo|cuerpo:c2|cuerpo:nuevo"]);
+    expect(h.previa!.conflictos[0]).toMatchObject({ x: 11.5, y: 0 });
+    const motivo = "No se puede colocar acá: Contacto auxiliar NA quedaría encima de S1.";
+    expect(editor.pista).toBe(motivo);
+    let n = pasos();
+    editor.aplicar(h.presionar(ev(12, 0)));
+    expect(pasos()).toBe(n);
+    expect(editor.pista).toBe(motivo);
+
+    editor.aplicar(h.mover(ev(13, 0)));
+    expect(h.previa!.conflictos).toEqual([]);
+    expect(editor.pista).toBeNull();
+    n = pasos();
+    editor.aplicar(h.presionar(ev(13, 0)));
+    expect(pasos()).toBe(n + 1);
+    expect(editor.documento.hojas[0]!.componentes.at(-1)).toMatchObject({ tipo: "contactor.auxiliar_na", x: 13, y: 0 });
+    expect(sinIds(avisos)).toBe(true);
+  });
+
+  it("arrastrar K2 sobre S1: la previa marca la ✕, soltar no da paso y deja todo como antes; la previa coincide con el comando", () => {
+    const { editor, pasos, avisos } = armar();
+    const antes = copia(editor.documento);
+    editor.seleccionarIds(["c3"]);
+    const n = pasos();
+    // K2 a (11, 0): caja x 10…12, sobre S1; sus bornes (11, ±2) no caen sobre nada.
+    arrastrar(editor, 40, 0, 11, 0);
+    const previa = planPrevia(editor) as unknown as { r: { rechazo: { motivo: string; conflictos: { clave: string }[] } | null } };
+    const motivo = "No se puede mover acá: K2 quedaría encima de S1.";
+    expect(previa.r.rechazo?.motivo).toBe(motivo);
+    expect(previa.r.rechazo!.conflictos.map((c) => c.clave)).toContain("cuerpoCuerpo|cuerpo:c2|cuerpo:c3");
+    expect(editor.pista).toBe(motivo);
+    editor.aplicar(editor.seleccionar.soltar(ev(11, 0)));
+    expect(pasos()).toBe(n);
+    expect(editor.documento).toEqual(antes);
+    expect(avisos.at(-1)).toBe(motivo);
+    expect(nadaOculto(editor, editor.documento)).toBe(true);
+    // El mismo movimiento como comando, con la consulta del editor: el mismo motivo.
+    expect(() => editor.ejecutar(new Mover(["c3"], -29, 0))).toThrow(motivo);
+    expect(editor.documento).toEqual(antes);
+    // Al lado, tocándose por el borde (x 12…14), vale.
+    arrastrar(editor, 40, 0, 13, 0);
+    expect(planPrevia(editor)!.r.rechazo).toBeNull();
+    editor.aplicar(editor.seleccionar.soltar(ev(13, 0)));
+    expect(pasos()).toBe(n + 1);
+    expect(sinIds(avisos)).toBe(true);
+  });
+
+  it("R sobre K2 al lado de S1 se rechaza con el motivo; deshacer y rehacer de lo aceptado, exactos", () => {
+    const { editor, pasos, avisos } = armar();
+    editor.seleccionarIds(["c3"]);
+    editor.ejecutar(new Mover(["c3"], -27, 0)); // K2 en (13, 0): toca a S1 por el borde
+    const antes = copia(editor.documento);
+    const n = pasos();
+    expect(editor.accion("rotar")).toBe(false);
+    expect(pasos()).toBe(n);
+    expect(editor.documento).toEqual(antes);
+    expect(avisos.at(-1)).toBe("No se puede girar: K2 quedaría encima de S1.");
+    editor.accion("deshacer");
+    editor.accion("rehacer");
+    expect(editor.documento).toEqual(antes);
   });
 });

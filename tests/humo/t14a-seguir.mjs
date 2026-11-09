@@ -304,6 +304,29 @@ export default async function (p, comprobar) {
     `${d} píxeles distintos${await donde("ref")}`,
   );
 
+  // ── Cuerpo sobre cuerpo: K1 a (1, 0), su caja (x 0…2) sobre la de S1 (x −2…2), sin bornes encima ──
+  n = await pasos();
+  await apretar(-6, 0);
+  await llevar(-6, 0, 1, 0);
+  const pistaEncima = (await pista()) ?? "";
+  const cruces = await p.evaluar(
+    `JSON.stringify((bornera.editor.planArrastre()?.r.rechazo?.conflictos ?? []).filter((c) => c.clave.startsWith("cuerpoCuerpo|")).map((c) => [c.x, c.y]))`,
+  );
+  await soltar(1, 0);
+  const avisoEncima = (await aviso()) ?? "";
+  await p.esc();
+  d = await distintos("ref");
+  comprobar(
+    "K1 sobre S1: la previa marca la ✕ y la barra dice por qué, sin ids",
+    pistaEncima === "No se puede mover acá: K1 quedaría encima de S1." && cruces === "[[1,0]]" && avisoEncima === pistaEncima,
+    `${pistaEncima} / ${cruces} / ${avisoEncima}`,
+  );
+  comprobar(
+    "y soltar no da paso, el documento queda igual y sin restos",
+    (await pasos()) === n && (await documento()) === docRef && d === 0 && (await limpio()),
+    `${d} píxeles distintos${await donde("ref")}`,
+  );
+
   // ── El menú contextual: se suprime durante el gesto; fuera, no ──
   await p.evaluar(`(() => { globalThis.__menu = []; if (!globalThis.__menuPuesto) { globalThis.__menuPuesto = true;
     addEventListener("contextmenu", (ev) => globalThis.__menu.push(ev.defaultPrevented)); } })()`);

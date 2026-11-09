@@ -44,6 +44,7 @@ import {
   consultaSinCable,
   consultaSuperpuesta,
   geometriaComponente,
+  MENSAJE_ENCIMA,
   problemasComponente,
   problemasTrazado,
   type CableHoja,
@@ -226,9 +227,14 @@ export function prefijoRechazo(op: Operacion): string {
   return op.tipo === "mover" ? "No se puede mover acá" : op.tipo === "rotar" ? "No se puede girar" : "No se puede espejar";
 }
 
-/** "El cable pasaría…" → "un cable pasaría…"; "El borne…" → "el borne…". */
+/**
+ * "El cable pasaría…" → "un cable pasaría…"; "El borne…" → "el borne…". Un
+ * mensaje que empieza con el nombre de un componente ("KM1 quedaría encima
+ * de S1.") queda igual.
+ */
 export function enMinuscula(mensaje: string): string {
   if (mensaje.startsWith("El cable ")) return `un cable ${mensaje.slice("El cable ".length)}`;
+  if (mensaje.includes(MENSAJE_ENCIMA)) return mensaje;
   return mensaje.charAt(0).toLowerCase() + mensaje.slice(1);
 }
 
@@ -1083,24 +1089,30 @@ function preparar(hoja: Hoja, ids: Iterable<string>, entorno: EntornoPlan, conAt
 
     /**
      * Bornes de un componente transformado que caen sobre bornes de uno que
-     * no se mueve (nuevos). No dependen de los cables: si hay, son la causa
-     * de un rechazo antes que el cable que, por eso, no tiene por dónde ir.
+     * no se mueve, y cuerpos que se le enciman (nuevos; primero los bornes).
+     * No dependen de los cables: si hay, son la causa de un rechazo antes que
+     * el cable que, por eso, no tiene por dónde ir.
      */
-    const borneSobreBorne = (): Conflicto[] => {
-      const l: Conflicto[] = [];
+    const choquesDeComponentes = (): Conflicto[] => {
+      const bornes: Conflicto[] = [];
+      const cuerpos: Conflicto[] = [];
       let fijos: ConsultaTrazado | null = null;
       comps.forEach((comp, i) => {
         const g = geometriaComponente({ ...comp, ...poses[i]!.pose });
         if (!g) return;
         fijos ??= consultaSuperpuesta(base, { quitar });
         const viejas = clavesViejasComp(comp);
-        for (const k of problemasComponente(g, fijos)) if (k.clave.startsWith("borneBorne|") && !viejas.has(k.clave)) l.push(k);
+        for (const k of problemasComponente(g, fijos)) {
+          if (viejas.has(k.clave)) continue;
+          if (k.clave.startsWith("borneBorne|")) bornes.push(k);
+          else if (k.clave.startsWith("cuerpoCuerpo|")) cuerpos.push(k);
+        }
       });
-      return l;
+      return [...bornes, ...cuerpos];
     };
-    /** Un rechazo: el motivo de borne sobre borne va primero, si lo hay. */
+    /** Un rechazo: el motivo de borne sobre borne o cuerpo sobre cuerpo va primero, si lo hay. */
     const rechazar = (cables: CableCambiado[], motivo: string, conflictos: Conflicto[]): ResultadoPlan => {
-      const primero = borneSobreBorne();
+      const primero = choquesDeComponentes();
       if (primero.length === 0) return resultado(cables, { motivo, conflictos });
       const claves = new Set(primero.map((k) => k.clave));
       return resultado(cables, {

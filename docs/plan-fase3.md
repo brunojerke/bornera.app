@@ -350,7 +350,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
     - **W ante un toque propio:** la barra y el aviso suman cómo salir ("…consigo mismo: fijá el codo en otro lado, o quitá el último con Retroceso (Esc cancela el cable)."); el texto del núcleo no cambia. Test que faltaba de 8efdba8: la T de w2 sobre w1 no tapa otro toque de w2 sobre w1 fuera de su punto (extremo libre, tramo encimado, codo sobre codo), de los dos lados.
     - Banco en la PC con estos cambios: *Arrastrar 40 cableados al 58 %* cuadro 3,4 / 5,1 / 11,5 ms, 0 lentos, paso 1,3 / 3,5 ms, 24 cables (debajo del tope: previa completa); tope 25 → 1,2 · 40 → 1,4 · 50 → 2,4 · 100 → 6,0 · 150 → 6,8 · 300 → 20,3 ms. `npm test` 905, humo 307 de 307.
     - Quedan pendientes:
-      1. Cuerpo sobre cuerpo.
+      1. ~~Cuerpo sobre cuerpo~~ **hecho (2026-11-09)**, ver "Cuerpo sobre cuerpo" abajo.
       2. ~~Soltar con todo seleccionado: 454 ms en la netbook~~ **hecho en la PC (2026-11-09), falta medir en la netbook** (ver "Soltar con todo seleccionado" abajo).
       3. Corridas 2 y 3 de la medición en la netbook.
       4. Repetir la prueba a mano en la netbook con 8efdba8 y este commit, sumando Alt+Tab real y soltar fuera de la ventana en medio de un arrastre (WebKitGTK).
@@ -367,6 +367,11 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
     - **Banco en la PC (paso mediano, 3 corridas, antes → después):** *Soltar con todo* 31,8 / 31,1 / 23,7 → 9,1 / 9,2 / 9,2 ms · *Arrastrar todo* 27,6 / 27,4 / 17,9 → 1,2 / 1,1 / 1,2 ms · *Girar todo* 94,4 / 84,7 / 56,9 → 15,3 / 16,1 / 19,0 ms. Sin cuadros lentos; *Arrastrar 40 cableados* sin cambio (1,2 / 1,4 / 0,8 → 0,8 / 0,8 / 0,8 ms).
     - **App real en la PC** (prueba de la netbook corta en el humo, dev): soltar 214–215 → 27–47 ms de comando; paso de la previa con todo 47–49 → 2,5–3,1 ms. En la netbook se espera (×2 como hasta ahora, sin medir) ~55–95 ms + primer cuadro.
     - **Falta:** medir en la netbook (3 corridas) soltar con todo (≤ 200, y > 170 abre la tarea de la traslación en bloque) y el paso con todo (< 33).
+  - **Cuerpo sobre cuerpo (2026-11-09):** antes se podía encimar una bobina sobre un contacto al mover, girar, espejar o colocar.
+    - **Regla:** `problemasComponente` suma cuerpo sobre cuerpo: los interiores de las cajas `tamano` se superponen con área > 0 (tocarse por el borde vale; las etiquetas no cuentan). Clave `cuerpoCuerpo|cuerpo:a|cuerpo:b`, ✕ en el centro de lo encimado, mensaje "KM1 quedaría encima de S1." (sin etiqueta, el nombre del símbolo; `enMinuscula` no lo toca). Como el resto, solo rechaza un par nuevo: dos que ya estaban encimados se separan, se mueven juntos o se corren sin separarse del todo. Vale para Mover, R, Mayús+R, M (dentro del plan, contra lo fijo) y Colocar (previa y clic, con la consulta indexada); deshacer y rehacer no validan. En un rechazo, el motivo va después de borne sobre borne y antes que los cables (`choquesDeComponentes`).
+    - **Cajas contra el dibujo:** bobina, lámpara, fase y neutro coinciden. Pulsador NA (dibujo x −1,75…0), pulsador NC (−1,75…0,9) y contacto auxiliar NA (−0,9…0) tienen la caja más ancha a la derecha (2, 1,1 y 1 unidades), donde van los nombres de bornes. **Decisión (Bruno): `tamano` tal cual** (la misma caja que la selección y que "cable por el cuerpo"); descartado usar la caja del dibujo solo para esta regla. Ajustar `tamano` al dibujo con cajas descentradas queda para después de T15 ("UI y símbolos"). Efecto: un contacto auxiliar a 3 unidades a la derecha de S1 vale (bordes), a 2 se rechaza aunque no se vea dibujo encimado.
+    - **Tests:** mover, R, Mayús+R, M y colocar encima → rechazo sin paso y sin ids; borde (de costado y de arriba) vale; ya encimados: separar, mover, girar y espejar juntos, correr sin separar → vale; el par viejo no tapa uno nuevo con otro componente; misma clave vista desde los dos; contacto auxiliar a 3 / a 2 de S1; arrastre de K2 sobre S1: previa = comando, sin paso, nada oculto; deshacer y rehacer exactos. Cambiaron (encimaban cuerpos sin querer): `comandos.test.ts` (T4, escena base de 4 a 6 unidades), `editor.test.ts` (T10, soltar desde la paleta en (20, 20) en vez de sobre K1) y el humo t07 (T7, el arrastre del paso 3 suelta arriba, no sobre un símbolo del paso 1). Humo t14a: K1 sobre S1 → ✕ en (1, 0), barra y aviso, sin paso.
+    - **Banco en la PC (paso mediano; antes 3 corridas → después 5):** previa 25 cables 1,2 / 1,2 / 1,2 → 1,2 (las 5) · 40 cables 2,1 / 1,8 / 1,8 → 2,0 / 1,9 / 2,9 / 1,9 / 1,8 (mediana de medianas 1,8 → 1,9, +6 %) · 150 cables 12,5 / 13,6 / 13,3 → 12,8 / 12,6 / 13,3 / 13,3 / 12,7 · *Arrastrar todo seleccionado* 2,4 / 2,1 / 2,2 → 2,1 / 2,1 / 2,2 / 2,4 / 2,2 · *Soltar con todo* 27,7 / 27,8 / 28,5 → 27,1 / 19,1 / 18,0 / 27,0 / 27,0. Ninguno sube más de 10 %. `npm test` 935, `npm run check` sin errores, humo 310 de 310.
   - **Pendientes (no se resuelven en T14a):** el resaltado con ~1000 componentes y ~1500 cables seleccionados tarda ~18,7 ms en la netbook; los cables pueden pasar sobre etiquetas; mover tramos de cable.
 
 ### T14b. Uniones
@@ -414,6 +419,9 @@ Están en la sección "Editor" del plan, pero el criterio de la fase no los pide
 - validaciones en vivo (bornes y cables sueltos en naranja).
 
 Propuesta: hacerlos después de T15, como T16–T19, antes de abrir la fase 4.
+
+### UI y símbolos (después de T15)
+- Ajustar `tamano` al dibujo con cajas descentradas (pulsadores y contacto auxiliar: la caja sobra a la derecha). Toca el pivote, la selección, el render, el índice y la regla de cuerpo sobre cuerpo de T14a (que hoy rechaza donde no se ve dibujo encimado).
 
 ---
 

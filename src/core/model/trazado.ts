@@ -103,6 +103,11 @@ export interface CableNuevo {
 export const MENSAJE_SIN_SALIDAS = "El borne no tiene más salidas libres: derivá con una T sobre uno de sus cables.";
 export const MENSAJE_EXTREMO_SUELTO = "Ese extremo está suelto: todavía no se puede conectar a él.";
 export const MENSAJE_CRUCE = "Ahí se cruzan dos cables sin unirse: elegí otro punto.";
+/**
+ * Medio del mensaje de cuerpo sobre cuerpo ("KM1 quedaría encima de S1."). El
+ * mensaje empieza con un nombre: `enMinuscula` no lo toca.
+ */
+export const MENSAJE_ENCIMA = " quedaría encima de ";
 
 /** Clave de un conflicto entre dos elementos (en cualquier orden). */
 export function claveConflicto(tipo: string, a: string, b: string): string {
@@ -417,7 +422,8 @@ export interface ComponenteNuevo {
  * - un borne sobre un tramo de un cable que no termina en ese borne;
  * - un borne sobre el extremo suelto de un cable;
  * - un borne sobre otro borne;
- * - un tramo de cable por el interior de su cuerpo.
+ * - un tramo de cable por el interior de su cuerpo;
+ * - su cuerpo encimado con el de otro componente (área > 0; el borde vale).
  * Las claves son las mismas que da `problemasTrazado` para el mismo par: un
  * conflicto se reconoce igual lo vea el cable o el componente.
  */
@@ -470,6 +476,23 @@ export function problemasComponente(comp: ComponenteNuevo, consulta: ConsultaTra
   const c = comp.cuerpo;
   if (c) {
     const k = c.caja;
+    // Cuerpo sobre cuerpo: los interiores de las cajas se superponen con área
+    // > 0 (tocarse por el borde vale; las etiquetas no cuentan).
+    for (const otro of consulta.cuerposEn(k)) {
+      if (otro.comp === c.comp) continue;
+      const o = otro.caja;
+      const x0 = Math.max(k.x, o.x);
+      const x1 = Math.min(k.x + k.ancho, o.x + o.ancho);
+      const y0 = Math.max(k.y, o.y);
+      const y1 = Math.min(k.y + k.alto, o.y + o.alto);
+      if (x1 <= x0 || y1 <= y0) continue;
+      anotar(
+        `${c.nombre}${MENSAJE_ENCIMA}${otro.nombre}.`,
+        (x0 + x1) / 2,
+        (y0 + y1) / 2,
+        claveConflicto("cuerpoCuerpo", elCuerpo(c.comp), elCuerpo(otro.comp)),
+      );
+    }
     for (const w of consulta.cablesEn(k)) {
       const p = w.puntos;
       for (let i = 0; i + 3 < p.length; i += 2) {
