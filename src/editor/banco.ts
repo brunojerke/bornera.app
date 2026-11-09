@@ -5,8 +5,9 @@
 // Se arma de cero, como al abrir un archivo: no es un cambio a un documento
 // que ya existe, por eso no pasa por comandos (no hay nada que deshacer).
 
-import { borneDe } from "../core/model/cables";
-import { crearDocumento, generarId, PREFIJO_CABLE, type Componente, type Documento } from "../core/model/documento";
+import { borneDe, indexarHoja, recorridoCable } from "../core/model/cables";
+import { crearDocumento, generarId, PREFIJO_CABLE, type Cable, type Componente, type Documento } from "../core/model/documento";
+import { consultaHoja, consultaSuperpuesta, problemasTrazado, type CableHoja } from "../core/model/trazado";
 import { buscarSimbolo, type Borne, type Direccion } from "../core/symbols";
 import { azar, generarBanco, PASO_BANCO } from "../render/banco";
 
@@ -25,12 +26,29 @@ export function documentoBanco(cantidad: number, semilla = 1): Documento {
   return doc;
 }
 
+/** Opciones de la escena con cables. */
+export interface OpcionesBancoCables {
+  /** Componentes más cercanos al centro que quedan sin cables. */
+  centroSinCables: number;
+  /** Derivaciones en T (cables que terminan sobre otro cable) que se agregan. */
+  derivaciones: number;
+}
+
 /**
- * Componentes del centro de la escena con cables que quedan sin cables: el
- * grupo que se puede arrastrar mientras mover lo cableado está bloqueado
- * (hasta T14a). Son los mismos 40 del diagnóstico del arrastre.
+ * La escena con cables desde T14a: los 40 del centro cableados (se arrastran
+ * con sus cables) y unas 30 derivaciones en T alrededor, con cadenas
+ * A ← B ← C.
  */
-export const SIN_CABLES_BANCO = 40;
+export const BANCO_CABLES: OpcionesBancoCables = { centroSinCables: 0, derivaciones: 30 };
+
+/**
+ * La escena con cables de T12 y T13 (40 del centro sin cables, sin T). Solo
+ * para comparar el banco con mediciones anteriores (`npm run bench -- --escena-t12`).
+ */
+export const BANCO_CABLES_T12: OpcionesBancoCables = { centroSinCables: 40, derivaciones: 0 };
+
+/** Arrastrados del banco y del diagnóstico: los más cercanos al centro. */
+export const ARRASTRADOS_BANCO = 40;
 
 /** Cables por componente en la escena con cables. */
 export const CABLES_POR_COMPONENTE = 1.5;
@@ -88,10 +106,10 @@ export function codosBanco(a: Borne, b: Borne): [number, number][] {
 /**
  * El documento del banco con cables: CABLES_POR_COMPONENTE × `cantidad`
  * cables entre bornes de componentes vecinos (a la derecha y abajo), con 0 a
- * 3 codos. Los SIN_CABLES_BANCO componentes más cercanos al centro quedan
- * sin cables. Mismo azar con la misma semilla.
+ * 3 codos, y las derivaciones en T de `opciones` (ver `derivar`). Mismo azar
+ * con la misma semilla.
  */
-export function documentoBancoCables(cantidad: number, semilla = 1): Documento {
+export function documentoBancoCables(cantidad: number, semilla = 1, opciones: OpcionesBancoCables = BANCO_CABLES): Documento {
   const doc = documentoBanco(cantidad, semilla);
   doc.meta.titulo = `Banco de ${cantidad} con cables`;
   const hoja = doc.hojas[0]!;
@@ -113,7 +131,7 @@ export function documentoBancoCables(cantidad: number, semilla = 1): Documento {
   const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
   const d = (c: Componente) => (c.x - cx) ** 2 + (c.y - cy) ** 2;
-  const sinCables = new Set([...comps].sort((a, b) => d(a) - d(b)).slice(0, SIN_CABLES_BANCO).map((c) => c.id));
+  const sinCables = new Set([...comps].sort((a, b) => d(a) - d(b)).slice(0, opciones.centroSinCables).map((c) => c.id));
 
   const objetivo = Math.round(cantidad * CABLES_POR_COMPONENTE);
   const bornes = (c: Componente) => (buscarSimbolo(c.tipo)?.bornes ?? []).map((b) => borneDe(c, b.nombre)!);
@@ -143,5 +161,94 @@ export function documentoBancoCables(cantidad: number, semilla = 1): Documento {
       });
     }
   }
+  if (opciones.derivaciones > 0) {
+    const centro = new Set([...comps].sort((a, b) => d(a) - d(b)).slice(0, ARRASTRADOS_BANCO).map((c) => c.id));
+    derivar(doc, cx, cy, centro, opciones.derivaciones);
+  }
   return doc;
+}
+
+/** Largo de una derivación que lleva otra encima (tiene puntos adentro) y de una suelta. */
+const LARGO_CON_OTRA = 4;
+const LARGO_SUELTA = 3;
+
+/**
+ * Agrega `cantidad` derivaciones en T, cada una un tramo recto que sale de un
+ * punto de adentro de un cable y termina libre: un tercio en cadenas A ← B ←
+ * C (C sobre B) y el resto sueltas. Los anfitriones son primero los cables
+ * de los componentes de `centro` (al arrastrarlos se corre la T) y después
+ * los más cercanos al centro. Cada una se valida con `problemasTrazado`
+ * contra la hoja como está: sin conexiones aparentes.
+ */
+function derivar(doc: Documento, cx: number, cy: number, centro: ReadonlySet<string>, cantidad: number): void {
+  const hoja = doc.hojas[0]!;
+  const indice = indexarHoja(hoja);
+  const base = consultaHoja(hoja, indice);
+  /** Las derivaciones ya puestas, encima de la hoja de antes (sin reindexar). */
+  const agregadas: CableHoja[] = [];
+  let consulta = base;
+  const delCentro = (w: Cable) => [w.desde, w.hasta].some((e) => e.tipo === "borne" && centro.has(e.comp));
+  const distancia = (w: Cable) => {
+    const p = recorridoCable(indice, w)!;
+    return (p[0]! - cx) ** 2 + (p[1]! - cy) ** 2;
+  };
+  const anfitriones = hoja.cables
+    .map((w) => ({ w, centro: delCentro(w), d: distancia(w) }))
+    .sort((a, b) => Number(b.centro) - Number(a.centro) || a.d - b.d)
+    .map((x) => x.w);
+
+  /** Una T recta de `largo` sobre un punto de adentro de `anfitrion`; null si no hay lugar. */
+  const derivacion = (anfitrion: Cable | CableHoja, largo: number): CableHoja | null => {
+    const P = "puntos" in anfitrion ? anfitrion.puntos : recorridoCable(indice, anfitrion)!;
+    for (let i = 0; i + 3 < P.length; i += 2) {
+      const [ax, ay, bx, by] = [P[i]!, P[i + 1]!, P[i + 2]!, P[i + 3]!];
+      const n = Math.abs(bx - ax) + Math.abs(by - ay);
+      if (n < 4) continue;
+      const ux = Math.sign(bx - ax);
+      const uy = Math.sign(by - ay);
+      // Del medio hacia afuera, sin las puntas del tramo.
+      const medio = Math.floor(n / 2);
+      for (let k = 0; k < n - 1; k++) {
+        const t = medio + (k % 2 === 0 ? k / 2 : -(k + 1) / 2);
+        if (t <= 0 || t >= n) continue;
+        const px = ax + ux * t;
+        const py = ay + uy * t;
+        for (const s of [1, -1]) {
+          const qx = px - uy * s * largo;
+          const qy = py + ux * s * largo;
+          const nuevo = {
+            desde: { tipo: "cable" as const, cable: anfitrion.id, x: px, y: py },
+            hasta: { tipo: "libre" as const, x: qx, y: qy },
+            puntos: [px, py, qx, qy],
+          };
+          if (problemasTrazado(nuevo, consulta).length > 0) continue;
+          const id = generarId(doc, PREFIJO_CABLE);
+          hoja.cables.push({ id, desde: nuevo.desde, hasta: nuevo.hasta, codos: [] });
+          const w: CableHoja = { id, ...nuevo };
+          agregadas.push(w);
+          consulta = consultaSuperpuesta(base, { cables: agregadas });
+          return w;
+        }
+      }
+    }
+    return null;
+  };
+
+  const cadenas = Math.floor(cantidad / 3);
+  let hechas = 0;
+  let enCadena = 0;
+  for (const a of anfitriones) {
+    if (hechas >= cantidad) break;
+    if (enCadena < cadenas && hechas + 2 <= cantidad) {
+      const b = derivacion(a, LARGO_CON_OTRA);
+      if (!b) continue;
+      hechas++;
+      if (derivacion(b, LARGO_SUELTA)) {
+        hechas++;
+        enCadena++;
+      }
+    } else if (derivacion(a, LARGO_SUELTA)) {
+      hechas++;
+    }
+  }
 }

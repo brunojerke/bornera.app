@@ -7,6 +7,7 @@ import { codos, direccionDe, opuesta, type ExtremoRuta } from "./ruteo";
 import {
   MENSAJE_CICLO,
   MENSAJE_NADA_SE_MUEVE_UNO,
+  MENSAJE_NADA_SE_MUEVE_VARIOS,
   entornoLineal,
   planearTransformacion,
   puntosParaT,
@@ -383,6 +384,78 @@ describe("grupo con cables internos y externos", () => {
     tender(doc, "w2", borne("c1", "A1"), borne("c3", "X2"), [[10, -2]]);
     aplicarYVolver(doc, new Mover(["c1"], 0, -3));
     aplicarYVolver(doc, new Mover(["c1"], 2, 1));
+  });
+});
+
+// ── Caja del grupo ─────────────────────────────────────────────────────────
+
+/**
+ * La escena de t12: c1 bobina K1 (−6, 0), c2 pulsador S1 (0, 0); w1 de A1 a
+ * 13 recto, w2 de A2 a 14 por abajo. w9 suelto, con los dos extremos libres
+ * (rígido si se lo selecciona), lejos.
+ */
+function docCaja(): Documento {
+  const doc = crearDocumento(meta);
+  poner(doc, datos("contactor.bobina", -6, 0));
+  poner(doc, datos("pulsador.na", 0, 0));
+  tender(doc, "w1", borne("c1", "A1"), borne("c2", "13"));
+  tender(doc, "w2", borne("c1", "A2"), borne("c2", "14"), [
+    [-6, 5],
+    [0, 5],
+  ]);
+  tender(doc, "w9", libre(20, 0), libre(25, 3), [[25, 0]]);
+  return doc;
+}
+
+const OPS_CAJA: [string, Operacion, (ids: string[]) => Comando][] = [
+  ["R", { tipo: "rotar", sentido: 90 }, (ids) => new Rotar(ids, 90)],
+  ["Mayús+R", { tipo: "rotar", sentido: -90 }, (ids) => new Rotar(ids, -90)],
+  ["M", { tipo: "espejar" }, (ids) => new Espejar(ids)],
+];
+
+describe("caja del grupo: solo lo que se transforma", () => {
+  it.each(OPS_CAJA)("%s con un componente y sus cables seleccionados (que no son rígidos) = el componente solo", (_, op, crear) => {
+    const doc = docCaja();
+    const hoja = doc.hojas[0]!;
+    const mezcla = planearTransformacion(hoja, ["c1", "w1", "w2"], op, entornoLineal(hoja));
+    const solo = planearTransformacion(hoja, ["c1"], op, entornoLineal(hoja));
+    expect(mezcla.rechazo).toBeNull();
+    expect(mezcla.plan.rigidos.size).toBe(0);
+    expect(mezcla.plan.componentes).toEqual(solo.plan.componentes);
+    expect(mezcla.plan.cables).toEqual(solo.plan.cables);
+    // Antes, la caja sumaba w1 y w2: el eje caía en x = −3 y K1 terminaba sobre S1.
+    if (op.tipo === "espejar") expect(mezcla.plan.componentes[0]!.pose).toMatchObject({ x: -6, y: 0 });
+    aplicarYVolver(doc, crear(["c1", "w1", "w2"]));
+  });
+
+  it.each(OPS_CAJA)("%s con solo cables: la caja es la de los rígidos", (_, op, crear) => {
+    const doc = docCaja();
+    const hoja = doc.hojas[0]!;
+    const conAtado = planearTransformacion(hoja, ["w9", "w1"], op, entornoLineal(hoja));
+    const soloRigido = planearTransformacion(hoja, ["w9"], op, entornoLineal(hoja));
+    expect(conAtado.rechazo).toBeNull();
+    expect([...conAtado.plan.rigidos]).toEqual(["w9"]);
+    expect(conAtado.plan.cables).toEqual(soloRigido.plan.cables);
+    aplicarYVolver(doc, crear(["w9", "w1"]));
+  });
+
+  it.each(OPS_CAJA)("%s con solo cables y ninguno rígido: avisa y no cambia nada", (_, op, crear) => {
+    const doc = docCaja();
+    const hoja = doc.hojas[0]!;
+    const r = planearTransformacion(hoja, ["w1", "w2"], op, entornoLineal(hoja));
+    expect(r.rechazo?.motivo).toBe(MENSAJE_NADA_SE_MUEVE_VARIOS);
+    expect(rechazado(doc, crear(["w1", "w2"]))).toBe(MENSAJE_NADA_SE_MUEVE_VARIOS);
+  });
+
+  it("un borne que cae sobre otro borne es el motivo, antes que el cable sin camino", () => {
+    const doc = docCaja();
+    const hoja = doc.hojas[0]!;
+    const r = planearTransformacion(hoja, ["c1"], { tipo: "mover", dx: 6, dy: 0 }, entornoLineal(hoja));
+    expect(r.rechazo).not.toBeNull();
+    expect(r.rechazo!.conflictos[0]!.clave.startsWith("borneBorne|")).toBe(true);
+    expect(r.rechazo!.motivo).toMatch(/^No se puede mover acá: el borne .* quedaría sobre el borne .* sin conectarse\.$/);
+    expect(r.rechazo!.motivo).not.toMatch(/\b[cw]\d+\b/);
+    expect(rechazado(doc, new Mover(["c1"], 6, 0))).toBe(r.rechazo!.motivo);
   });
 });
 

@@ -115,6 +115,14 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   const alMover = (e: PointerEvent) => {
     ultimo = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
     if (arrastrando || !editando()) return;
+    // Un botón que se aprieta con otro ya apretado (en acorde) no da
+    // pointerdown sino pointermove con ese `button`: el derecho con el
+    // izquierdo apretado corta el gesto, como un pointerdown del derecho.
+    if (e.button === 2 && (e.buttons & 2) !== 0) {
+      editor.aplicar(editor.activa.presionar(evento(e)));
+      actualizarCursor();
+      return;
+    }
     editor.aplicar(editor.activa.mover(evento(e)));
     actualizarCursor(); // "move" mientras se arrastra la selección
   };

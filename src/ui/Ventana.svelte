@@ -60,9 +60,10 @@
 
   async function probarArrastre() {
     if (prueba?.corriendo) return;
-    prueba = { corriendo: true, texto: "Abriendo la escena de 2000…" };
+    prueba = { corriendo: true, texto: "Abriendo la escena de 2000 con cables…" };
     try {
-      escena = 2000;
+      // Desde T14a, la prueba de aceptación es con 40 cableados.
+      escena = "cables";
       await tick();
       // Dos cuadros: la escena nueva ya está conectada y dibujada.
       for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(r));

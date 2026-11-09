@@ -185,6 +185,11 @@ export const SIN_SELECCION: ResumenSeleccion = Object.freeze({
  */
 export const TOPE_CABLES_PREVIA = 150;
 
+/** Pista del modo reducido: la previa no los revisa; se revisan todos al soltar. */
+export function textoReducido(cables: number): string {
+  return `${cables} cables se acomodan al soltar; recién ahí se revisa si se puede.`;
+}
+
 /** Aviso cuando el documento cambia por otra vía en medio de un arrastre. */
 export const AVISO_ARRASTRE_CANCELADO = "El documento cambió: se canceló el arrastre.";
 
@@ -198,6 +203,13 @@ interface ArrastreEditor {
   cambios: number;
   /** Zona de cables, ocultos en la capa estática mientras dura el arrastre. */
   cables: readonly string[];
+  /**
+   * Componentes que no se mueven pero tienen un borne donde termina un cable
+   * de la zona: también salen de la estática y la dinámica los dibuja
+   * después de los cables, como la estática (si no, el cable de la previa
+   * tapa la marca del borne). Vacío si serían más de LIMITE_ARRASTRE_COMPLETO.
+   */
+  fijos: ReadonlySet<string>;
   /** Último plan, del punto de grilla (dx, dy). */
   plan: PlanArrastre | null;
 }
@@ -713,11 +725,14 @@ export class Editor {
     return a.plan;
   }
 
-  /** Pista del arrastre: por qué no se puede soltar acá, o cuántos cables se acomodan al soltar. */
+  /**
+   * Pista del arrastre: por qué no se puede soltar acá o, en modo reducido,
+   * que esos cables se acomodan y se revisan recién al soltar.
+   */
   private pistaArrastre(): string | null {
     const a = this.arrastre;
     if (!a || !this.seleccionar.arrastre) return null;
-    if (this.reducido(a)) return `${a.prep!.rehechos} cables se acomodan al soltar.`;
+    if (this.reducido(a)) return textoReducido(a.prep!.rehechos);
     return this.planArrastre()?.r.rechazo?.motivo ?? null;
   }
 
@@ -909,13 +924,26 @@ export class Editor {
     this.preparado = null;
     this.limpiarCruces();
     const cables = prep ? [...prep.zona] : [];
-    this.arrastre = { ids, prep, cambios: this._cambios, cables, plan: null };
+    const fijos = this.fijosDeLaZona(ids, cables);
+    this.arrastre = { ids, prep, cambios: this._cambios, cables, fijos, plan: null };
     this.cuadrosArrastre = 0;
-    for (const id of ids) {
+    for (const id of [...ids, ...fijos]) {
       const k = this.escena.ocultar(id);
       if (k) this.vista?.invalidarRegion(k);
     }
     for (const id of cables) for (const k of this.escena.ocultarCable(id)) this.vista?.invalidarRegion(k);
+  }
+
+  /** Los componentes que no se mueven con un borne donde termina un cable de `cables` (ver ArrastreEditor.fijos). */
+  private fijosDeLaZona(ids: ReadonlySet<string>, cables: readonly string[]): ReadonlySet<string> {
+    const fijos = new Set<string>();
+    for (const id of cables) {
+      const w = this.indiceHoja.cables.get(id);
+      if (!w) continue;
+      for (const e of [w.desde, w.hasta]) if (e.tipo === "borne" && !ids.has(e.comp)) fijos.add(e.comp);
+      if (fijos.size > LIMITE_ARRASTRE_COMPLETO) return new Set();
+    }
+    return fijos;
   }
 
   /** Vuelve los arrastrados y su zona de cables a la capa estática, como estén ahora: cada uno invalida sus cajas. */
@@ -923,7 +951,7 @@ export class Editor {
     const a = this.arrastre;
     this.arrastre = null;
     if (!a) return;
-    for (const id of a.ids) {
+    for (const id of [...a.ids, ...a.fijos]) {
       const k = this.escena.mostrar(id);
       if (k) this.vista?.invalidarRegion(k);
     }
@@ -1020,9 +1048,12 @@ export class Editor {
       const limite = modo === "auto" ? LIMITE_ARRASTRE_COMPLETO : modo === "contornos" ? 0 : Infinity;
       const datos = { ...info, detalle };
       const dibujar = () => {
-        // Como en la capa estática: primero los cables, después los componentes.
+        // Como en la capa estática: primero los cables, después los componentes
+        // (los arrastrados y los fijos donde terminan cables de la zona, quietos
+        // y completos: son lo que se ve en la estática).
         this.dibujarCablesDelArrastre(r, info, ae, a.dx, a.dy, detalle.bornes);
         this.escena.dibujarDesplazados(r, datos, a.ids, a.dx, a.dy, limite);
+        if (ae.fijos.size > 0) this.escena.dibujarDesplazados(r, datos, ae.fijos, 0, 0, modo === "auto" ? Infinity : limite);
       };
       if (sonda && esCuadroDeMuestra(this.cuadrosArrastre)) this.muestras.push(info.medir(dibujar));
       else dibujar();

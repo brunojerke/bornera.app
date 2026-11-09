@@ -2,10 +2,12 @@
 // (la herramienta W es de T13). Se ven en las 8 orientaciones de los bornes;
 // un clic los elige (por encima del componente), Supr los borra y Ctrl+Z los
 // devuelve sin restos; borrar un componente con dos cables los suelta y
-// deshacer y rehacer dejan la pantalla exacta; girar y arrastrar con cables
-// avisan y no dan paso; el panel muestra "Cable" y las cantidades; y no hay
+// deshacer y rehacer dejan la pantalla exacta; R sobre un cable entre
+// componentes que no se mueven avisa y no da paso, y arrastrar o espejar un
+// componente con sus cables da un paso (T14a); el panel muestra "Cable" y
+// las cantidades; y no hay
 // cortes en los bordes de mosaico (la misma escena corrida da los mismos
-// píxeles). Al final, la escena de 2000 símbolos y 3000 cables.
+// píxeles). Al final, la escena de 2000 símbolos y 3030 cables (3000 y 30 T).
 
 import { CTRL, esperar, MAYUS } from "./cdp.mjs";
 
@@ -177,13 +179,18 @@ export default async function (p, comprobar) {
   comprobar("el panel cuenta componentes y cables", (await texto(".nombre")) === "1 componente y 2 cables seleccionados", await texto(".nombre"));
   await tecla(["m", "KeyM", 77]);
   await esperar(50);
-  // Espejar K1 (con w1 y w2) sobre su lugar no deja recorrido válido hasta S1: se rechaza, sin ids en el aviso.
-  const avisoM = (await aviso()) ?? "";
+  // T14a: la caja del grupo es la de lo que se transforma (K1; w1 y w2 no son
+  // rígidos, sus otros extremos están en S1): K1 se espeja en su lugar y sus
+  // cables lo siguen. Antes, la caja sumaba w1 y w2 y K1 caía sobre S1.
   comprobar(
-    "M con la selección mezclada avisa por qué y no da paso",
-    (await pasos()) === antesArr && avisoM.startsWith("No se puede espejar: ") && !/[wc]\d+/.test(avisoM),
-    avisoM,
+    "M con la selección mezclada espeja K1 en su lugar, en un paso, y la hoja queda válida",
+    (await pasos()) === antesArr + 1 &&
+      (await p.evaluar(`(() => { const k = bornera.editor.documento.hojas[0].componentes.find((c) => c.id === "${e.K1}"); return k.x === -6 && k.y === 0 && k.espejado; })()`)) &&
+      (await p.evaluar("bornera.cables.validarHoja(bornera.editor.documento.hojas[0]).length")) === 0,
+    (await aviso()) ?? "",
   );
+  await tecla(Z, CTRL);
+  comprobar("Ctrl+Z lo devuelve exacto", (await documento()) === docAntes);
 
   // ── Borrar un componente con dos cables: los suelta; deshacer y rehacer, exactos ──
   await seleccionar([e.K1]);
@@ -254,21 +261,21 @@ export default async function (p, comprobar) {
   );
   await volver();
 
-  // ── 2000 símbolos y 3000 cables: seleccionar todo y el resumen del panel ──
+  // ── 2000 símbolos y 3000 cables (más 30 derivaciones en T desde T14a): seleccionar todo y el resumen del panel ──
   for (let i = 0; i < 4; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
-  await p.esperarA("bornera.activo()?.escena.cantidadCables === 3000");
+  await p.esperarA("bornera.activo()?.escena.cantidadCables === 3030");
   await reposo();
   const t = await p.evaluar(`(() => { const ed = bornera.activo(); const ids = ed.escena.idsEnCaja(ed.escena.caja, "toca");
     const t0 = performance.now(); ed.seleccionarIds(ids); const t1 = performance.now(); const r = ed.resumenSeleccion();
     return { n: ids.length, seleccionar: t1 - t0, resumen: performance.now() - t1, componentes: r.componentes, cables: r.cables }; })()`);
   comprobar(
-    `seleccionar todo con 2000 + 3000 cables: ${t.seleccionar.toFixed(1)} ms, resumen ${t.resumen.toFixed(1)} ms`,
-    t.componentes === 2000 && t.cables === 3000 && t.seleccionar < 50 && t.resumen < 50,
+    `seleccionar todo con 2000 + 3030 cables: ${t.seleccionar.toFixed(1)} ms, resumen ${t.resumen.toFixed(1)} ms`,
+    t.componentes === 2000 && t.cables === 3030 && t.seleccionar < 50 && t.resumen < 50,
     JSON.stringify(t),
   );
-  console.log(`  ·   seleccionar todo (5000): ${t.seleccionar.toFixed(1)} ms · resumen ${t.resumen.toFixed(1)} ms`);
+  console.log(`  ·   seleccionar todo (5030): ${t.seleccionar.toFixed(1)} ms · resumen ${t.resumen.toFixed(1)} ms`);
   await esperar(50);
-  comprobar("el panel muestra las dos cantidades", (await texto(".nombre")) === "2000 componentes y 3000 cables seleccionados", await texto(".nombre"));
+  comprobar("el panel muestra las dos cantidades", (await texto(".nombre")) === "2000 componentes y 3030 cables seleccionados", await texto(".nombre"));
   await p.captura("cables-2000");
   for (let i = 0; i < 2; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
   await p.esperarA("bornera.activo() === bornera.editor");

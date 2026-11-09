@@ -1,7 +1,9 @@
 // Banco de dibujado: corre dentro del navegador headless que abre correr.mjs.
 // Dibuja las escenas de 100, 500 y 2000 símbolos con las mismas Capas que usa
 // la app y manda los tiempos al script por POST. Después, la de 2000 con 3000
-// cables (T12), abierta en un Editor como en la app (Ctrl+Shift+B).
+// cables y 30 derivaciones en T (T14a), abierta en un Editor como en la app
+// (Ctrl+Shift+B), y el paso de la previa según los cables que se acomodan.
+// Con `?escena-t12`, la de cables es la de T12 (para comparar).
 //
 // Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
 // repite varias veces. Un gesto son cuadros seguidos, uno cada 16,7 ms, y
@@ -26,7 +28,9 @@ import type { EscenaEditable as Escena } from "../../src/render/escenaEditable";
 import { dibujarSeleccion } from "../../src/render/resaltado";
 import { nivelDetalle } from "../../src/render/detalle";
 import { Editor, LIMITE_ARRASTRE_COMPLETO } from "../../src/editor/editor";
-import { documentoBancoCables, SIN_CABLES_BANCO } from "../../src/editor/banco";
+import { planearTransformacion, prepararTransformacion } from "../../src/core/model/seguir";
+import { ARRASTRADOS_BANCO, BANCO_CABLES, BANCO_CABLES_T12, documentoBancoCables } from "../../src/editor/banco";
+import { medirTope, type MedidaTope } from "../../src/editor/medicionTope";
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 import { bornesColocados } from "../../src/core/symbols";
@@ -74,6 +78,19 @@ export interface Medicion {
   textos?: { primero: UsoTextos; resto: UsoTextos };
   /** ms de cada paso (fuera del cuadro), en los escenarios que lo piden: mediana y máximo. */
   paso?: { mediana: number; maximo: number };
+  /**
+   * Mosaicos rehechos en un solo cuadro, como máximo, por fase del gesto: el
+   * primer cuadro, los del medio y el último con su cola (en los que lo piden).
+   */
+  fases?: { inicio: number; intermedios: number; soltar: number };
+  /** Cables que se acomodan (no rígidos) con la selección del escenario. */
+  acomodados?: number;
+  /** Gestos que terminaron en un comando (al soltar), de los medidos. */
+  comandos?: number;
+  /** Pasos del medio de un arrastre con el editor donde la previa se rechazaba (a rayas con ✕), de cuántos. */
+  rechazados?: { rechazados: number; pasos: number };
+  /** Invalidaciones de mosaicos pedidas en los pasos del medio de un gesto (tiene que dar 0). */
+  invalidacionesIntermedias?: number;
 }
 
 export interface Resultado {
@@ -84,6 +101,10 @@ export interface Resultado {
   mediciones: Medicion[];
   /** MB de heap JS con cada escena armada (null si el navegador no lo informa). */
   memoria: { componentes: number | string; heapMB: number | null }[];
+  /** Paso de la previa según los cables que se acomodan (para TOPE_CABLES_PREVIA). */
+  tope: MedidaTope[];
+  /** La escena con cables medida. */
+  escenaCables: "T14a" | "T12";
 }
 
 interface Escenario {
@@ -104,6 +125,18 @@ interface Escenario {
   textos?: boolean;
   /** Medir también lo que tarda cada paso (fuera del cuadro). */
   medirPaso?: boolean;
+  /** Qué pasos cuentan para el tiempo de paso (por defecto, todos). */
+  pasoMedido?(i: number): boolean;
+  /** Informar los mosaicos por fase (inicio, intermedios, soltar). */
+  fases?: boolean;
+  /** Después de la última repetición (sin medir): deja la escena como estaba. */
+  terminar?(e: Escena): void;
+  /** Cables que se acomodan, si el escenario lo sabe (después de preparar). */
+  acomodados?(): number;
+  /** Comandos que dieron los gestos medidos, si el escenario los cuenta. */
+  comandos?(): number;
+  /** Pasos rechazados de los medidos, si el escenario los cuenta. */
+  rechazados?(): { rechazados: number; pasos: number };
 }
 
 /** Aciertos y fallos del caché de textos de la capa dinámica. */
@@ -227,16 +260,16 @@ const ARRASTRADOS = 40;
 
 /**
  * Los `n` componentes más cercanos al centro de la escena que están enteros
- * en pantalla. En la escena con cables, solo los que se pueden mover (los del
- * centro, sin cables).
+ * en pantalla. En la escena con cables, `cableados` elige solo los que tienen
+ * cables (true) o solo los que no (false).
  */
-function cercanosAlCentro(c: Camara, e: Escena, n: number): Set<string> {
+function cercanosAlCentro(c: Camara, e: Escena, n: number, cableados: boolean | null = null): Set<string> {
   const v = c.visible(ANCHO, ALTO);
   const cx = v.x + v.ancho / 2;
   const cy = v.y + v.alto / 2;
   const ids = e
     .idsEnCaja(v, "contiene")
-    .filter((id) => !e.esCable(id) && (editorCables?.escena !== e || !editorCables.tieneCables([id])));
+    .filter((id) => !e.esCable(id) && (cableados === null || editorCables?.escena !== e || editorCables.tieneCables([id]) === cableados));
   const d = (id: string) => {
     const k = e.obtener(id)!;
     return (k.x - cx) ** 2 + (k.y - cy) ** 2;
@@ -397,12 +430,152 @@ const ESCENARIOS: Escenario[] = [
 
 let editorCables: Editor | null = null;
 let capasActivas: Capas | null = null;
+/** El último aviso del editor (para explicar un rechazo que frena el banco). */
+let ultimoAviso = "";
+/** Invalidaciones de mosaicos que pidió el editor de cables. */
+let invalidaciones = 0;
 
-function abrirEditorCables(): Editor {
-  const ed = new Editor(documentoBancoCables(SIMBOLOS_BANCO_CABLES));
-  ed.vista = { invalidarRegion: (k) => void capasActivas?.invalidarRegion(k), invalidar: () => {} };
+function abrirEditorCables(t12: boolean): Editor {
+  const ed = new Editor(documentoBancoCables(SIMBOLOS_BANCO_CABLES, 1, t12 ? BANCO_CABLES_T12 : BANCO_CABLES));
+  ed.vista = {
+    invalidarRegion: (k) => {
+      invalidaciones++;
+      capasActivas?.invalidarRegion(k);
+    },
+    invalidar: () => {},
+  };
+  ed.alAvisar = (t) => (ultimoAviso = t);
   editorCables = ed;
   return ed;
+}
+
+/** Pasos del historial del editor de cables. */
+const hechos = () => (editorCables!.historial as unknown as { hechos: unknown[] }).hechos.length;
+
+/** Un evento de la herramienta en el punto de grilla (x, y), con el botón apretado. */
+const evento = (c: Camara, x: number, y: number) => ({ x, y, boton: 0, botones: 1, mayus: false, ctrl: false, escala: c.escala });
+
+/**
+ * Gesto con la herramienta Seleccionar sobre lo seleccionado, como el mouse:
+ * se aprieta sobre `ancla` (un seleccionado que se elige con un clic en su
+ * posición), se arrastra y se suelta. Si el soltar dio un comando, se
+ * deshace al reiniciar o al terminar (sin medir), así la escena vuelve.
+ */
+const gesto = { ancla: null as { x: number; y: number } | null, pendiente: false, comandos: 0, acomodados: 0, rechazados: 0, pasos: 0 };
+
+/** Selecciona `ids` en el editor y, si el gesto aprieta con el mouse, elige el ancla. */
+function prepararGesto(ids: Iterable<string>, conAncla = true): void {
+  const ed = editorCables!;
+  const lista = [...ids];
+  ed.cancelarHerramienta();
+  ed.seleccionarIds(lista);
+  const e = ed.escena;
+  const id = lista.find((x) => {
+    const k = e.obtener(x);
+    return k !== undefined && e.idEnPunto(k.x, k.y, 0) === x;
+  });
+  const c = id === undefined ? undefined : e.obtener(id);
+  if (!c && conAncla) throw new Error("El gesto no tiene un componente donde apretar.");
+  gesto.ancla = c ? { x: c.x, y: c.y } : null;
+  gesto.pendiente = false;
+  gesto.comandos = 0;
+  gesto.rechazados = 0;
+  gesto.pasos = 0;
+  gesto.acomodados = prepararTransformacion(ed.documento.hojas[0]!, lista, ed.entornoPlan()).rehechos;
+}
+
+/** Deshace el comando del último gesto, si lo hubo (sin medir). */
+function volverGesto(): void {
+  if (gesto.pendiente) editorCables!.deshacer();
+  gesto.pendiente = false;
+}
+
+/** Suelta en (x, y) y anota si dio un comando. */
+function soltarGesto(c: Camara, x: number, y: number, medido: boolean): void {
+  const ed = editorCables!;
+  const n = hechos();
+  ed.aplicar(ed.seleccionar.soltar(evento(c, x, y)));
+  gesto.pendiente = hechos() > n;
+  if (gesto.pendiente && medido) gesto.comandos++;
+}
+
+/**
+ * Arrastrar los 40 cableados (T14a): 60 pasos, cada uno en otro punto de
+ * grilla (ida y vuelta en x, alternando y), y al final se suelta. En cada
+ * paso la previa planea con la consulta indexada.
+ */
+const PASOS_ARRASTRE_CABLES = 60;
+let repeticionGesto = 0;
+function arrastrarCableados(c: Camara, _: Capas, __: Escena, i: number): void {
+  const ed = editorCables!;
+  const p = gesto.ancla!;
+  const dx = 1 + Math.min(i, PASOS_ARRASTRE_CABLES - 1 - i);
+  const dy = i % 2;
+  if (i === 0) ed.aplicar(ed.seleccionar.presionar(evento(c, p.x, p.y)));
+  ed.aplicar(ed.seleccionar.mover(evento(c, p.x + dx, p.y + dy)));
+  // La pista dice por qué no se puede soltar ahí: la previa está a rayas con ✕.
+  if (repeticionGesto > 0 && i > 0 && i < PASOS_ARRASTRE_CABLES - 1) {
+    gesto.pasos++;
+    if (ed.pista !== null) gesto.rechazados++;
+  }
+  if (i === PASOS_ARRASTRE_CABLES - 1) soltarGesto(c, p.x + dx, p.y + dy, repeticionGesto++ > 0);
+}
+
+/**
+ * R sobre lo seleccionado y Ctrl+Z, alternando. Con `aceptar`, si R se
+ * rechaza el banco se frena con el motivo; sin, se mide el rechazo (lo que
+ * tarda en planear y avisar) y no hay nada que deshacer.
+ */
+const girar = { aceptar: true, comandos: 0, rechazos: 0, medido: false, repeticion: 0 };
+function girarYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 1) {
+    if (gesto.pendiente) ed.deshacer();
+    gesto.pendiente = false;
+    return;
+  }
+  gesto.pendiente = ed.accion("rotar");
+  if (gesto.pendiente && girar.medido) girar.comandos++;
+  if (!gesto.pendiente && girar.medido) girar.rechazos++;
+  if (!gesto.pendiente && girar.aceptar) throw new Error(`Girar: se rechaza ("${ultimoAviso}").`);
+}
+
+/** Prepara un escenario de girar: selección, si se espera que se acepte y los contadores. */
+function prepararGirar(ids: Iterable<string>, aceptar: boolean): void {
+  prepararGesto(ids, false);
+  girar.aceptar = aceptar;
+  girar.comandos = 0;
+  girar.rechazos = 0;
+  girar.medido = false;
+  girar.repeticion = 0;
+}
+
+/**
+ * El componente cableado más cercano al centro que se puede girar (con R)
+ * sin rechazo. En el banco, denso, R de uno se rechaza en ~4 de cada 10.
+ */
+function cableadoQueGira(c: Camara, e: Escena): string {
+  const ed = editorCables!;
+  const hoja = ed.documento.hojas[0]!;
+  for (const id of cercanosAlCentro(c, e, 200, true)) {
+    if (!planearTransformacion(hoja, [id], { tipo: "rotar", sentido: 90 }, ed.entornoPlan()).rechazo) return id;
+  }
+  throw new Error("Girar 1 cableado: ninguno de los 200 del centro se puede girar.");
+}
+
+/** Todo seleccionado: se aprieta, se arrastra dos puntos y se suelta (un Mover con todo rígido). */
+function soltarTodo(c: Camara, _: Capas, __: Escena, i: number): void {
+  const ed = editorCables!;
+  const p = gesto.ancla!;
+  if (i === 0) {
+    ed.aplicar(ed.seleccionar.presionar(evento(c, p.x, p.y)));
+    ed.aplicar(ed.seleccionar.mover(evento(c, p.x + 1, p.y)));
+  } else if (i === 1) {
+    ed.aplicar(ed.seleccionar.mover(evento(c, p.x + 2, p.y + 1)));
+  } else {
+    soltarGesto(c, p.x + 2, p.y + 1, repeticionGesto++ > 0);
+    if (!gesto.pendiente) throw new Error(`Soltar con todo seleccionado: se rechaza ("${ultimoAviso}").`);
+  }
 }
 
 /** Todo seleccionado y el resumen del panel, alternando con nada seleccionado. */
@@ -483,8 +656,8 @@ function moverCable(c: Camara, _: Capas, __: Escena, i: number): void {
   ed.aplicar(ed.activa.mover({ x, y, boton: 0, botones: 0, mayus: false, ctrl: false, escala: c.escala }));
 }
 
-/** Escenarios de la escena con cables: los de dibujo de siempre y los de edición que se pueden hacer. */
-const ESCENARIOS_CABLES: Escenario[] = [
+/** Escenarios de la escena con cables: los de dibujo de siempre y los de edición. `t12`: la escena de T12. */
+const escenariosCables = (t12: boolean): Escenario[] => [
   ...ESCENARIOS.filter((x) =>
     ["Rehacer al 100 %", "Rehacer al 31 %", "Encuadrar (F)", "Zoom con la rueda", "Desplazar al 100 %", "Arrastre al 31 %"].includes(x.nombre),
   ),
@@ -514,19 +687,130 @@ const ESCENARIOS_CABLES: Escenario[] = [
     repeticiones: 2,
     dinamico: () => editorCables!.dibujarDinamico,
   },
+  ...(t12
+    ? [
+        {
+          // El arrastre que se podía hacer hasta T14a: los 40 del centro, sin
+          // cables, por la escena (sin el editor). Solo en la escena de T12.
+          nombre: `Mover ${BANCO_CABLES_T12.centroSinCables} sin cables al 58 %`,
+          preparar: (c: Camara, e: Escena) => {
+            editorCables!.seleccionarIds([]);
+            centrar(c, e, ZOOM_ARRASTRE);
+            seleccion = cercanosAlCentro(c, e, ARRASTRADOS, false);
+          },
+          cuadros: CUADROS_ARRASTRE,
+          paso: moverArrastrando,
+          repeticiones: 3,
+          dinamico: dibujarArrastre,
+        } satisfies Escenario,
+      ]
+    : []),
   {
-    // El arrastre que se puede hacer hasta T14a: los 40 del centro, sin cables.
-    // Es el mismo caso que el criterio de la netbook.
-    nombre: `Mover ${SIN_CABLES_BANCO} sin cables al 58 %`,
+    // T14a: los 40 cableados del centro, arrastrados con el editor (previa
+    // con cables, plan en cada punto de grilla) y soltados. El caso de la netbook.
+    nombre: `Arrastrar ${ARRASTRADOS_BANCO} cableados al 58 %`,
     preparar: (c, e) => {
-      editorCables!.seleccionarIds([]);
       centrar(c, e, ZOOM_ARRASTRE);
-      seleccion = cercanosAlCentro(c, e, ARRASTRADOS);
+      repeticionGesto = 0;
+      prepararGesto(cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true));
     },
-    cuadros: CUADROS_ARRASTRE,
-    paso: moverArrastrando,
+    reiniciar: () => volverGesto(),
+    terminar: () => volverGesto(),
+    cuadros: PASOS_ARRASTRE_CABLES,
+    paso: arrastrarCableados,
     repeticiones: 3,
-    dinamico: dibujarArrastre,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    // Solo los movimientos: sin el primero (aprieta y oculta) ni el último (suelta).
+    pasoMedido: (i) => i > 0 && i < PASOS_ARRASTRE_CABLES - 1,
+    fases: true,
+    acomodados: () => gesto.acomodados,
+    comandos: () => gesto.comandos,
+    rechazados: () => ({ rechazados: gesto.rechazados, pasos: gesto.pasos }),
+  },
+  {
+    // R sobre los mismos 40: en el banco (denso) siempre se rechaza, porque
+    // el grupo girado pisa a los vecinos. Mide lo que tarda en planear y
+    // avisar (el paso de R); no hay mosaicos.
+    nombre: `Girar ${ARRASTRADOS_BANCO} cableados (se rechaza) al 58 %`,
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_ARRASTRE);
+      prepararGirar(cercanosAlCentro(c, e, ARRASTRADOS_BANCO, true), false);
+    },
+    // Antes de cada repetición: la primera es de calentamiento.
+    reiniciar: () => void (girar.medido = girar.repeticion++ > 0),
+    terminar: () => volverGesto(),
+    cuadros: 10,
+    paso: girarYDeshacer,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    pasoMedido: (i) => i % 2 === 0,
+    acomodados: () => gesto.acomodados,
+    comandos: () => girar.comandos,
+  },
+  {
+    // R y Ctrl+Z sobre el cableado más cercano al centro que se puede girar: comando y mosaicos.
+    nombre: "Girar 1 cableado al 58 %",
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_ARRASTRE);
+      prepararGirar([cableadoQueGira(c, e)], true);
+    },
+    // Antes de cada repetición: la primera es de calentamiento.
+    reiniciar: () => void (girar.medido = girar.repeticion++ > 0),
+    terminar: () => volverGesto(),
+    cuadros: 10,
+    paso: girarYDeshacer,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    pasoMedido: (i) => i % 2 === 0,
+    acomodados: () => gesto.acomodados,
+    comandos: () => girar.comandos,
+  },
+  {
+    // R y Ctrl+Z con todo seleccionado (todo rígido): el peor caso del comando y de los mosaicos.
+    nombre: "Girar todo al 31 %",
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_TEXTOS);
+      prepararGirar(e.idsEnCaja(e.caja!, "toca"), true);
+    },
+    // Antes de cada repetición: la primera es de calentamiento.
+    reiniciar: () => void (girar.medido = girar.repeticion++ > 0),
+    terminar: () => {
+      volverGesto();
+      editorCables!.seleccionarIds([]);
+    },
+    cuadros: 4,
+    paso: girarYDeshacer,
+    repeticiones: 2,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    pasoMedido: (i) => i % 2 === 0,
+    comandos: () => girar.comandos,
+  },
+  {
+    // Todo seleccionado (2000 + 3030): soltar es un Mover con todo rígido. El
+    // paso medido es el soltar (comando e invalidaciones).
+    nombre: "Soltar con todo seleccionado al 31 %",
+    preparar: (c, e) => {
+      centrar(c, e, ZOOM_TEXTOS);
+      repeticionGesto = 0;
+      prepararGesto(e.idsEnCaja(e.caja!, "toca"));
+    },
+    reiniciar: () => volverGesto(),
+    terminar: () => {
+      volverGesto();
+      editorCables!.seleccionarIds([]);
+    },
+    cuadros: 3,
+    paso: soltarTodo,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    pasoMedido: (i) => i === 2,
+    fases: true,
+    comandos: () => gesto.comandos,
   },
   {
     // Supr y Ctrl+Z sobre un componente con cables, con la vista quieta.
@@ -592,6 +876,10 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
   let cache = 0;
   let mosaicosMax = 0;
   let midiendo = false;
+  /** Fase del cuadro que se dibuja (para los mosaicos por fase). */
+  let fase: "inicio" | "intermedios" | "soltar" = "inicio";
+  const fases = { inicio: 0, intermedios: 0, soltar: 0 };
+  let invalidacionesIntermedias = 0;
   /** Dibuja un cuadro en el instante simulado `t`; devuelve la medida y el tiempo real. */
   const cuadro = (): [MedidaCuadro, number] => {
     const t0 = performance.now();
@@ -599,7 +887,10 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     ctx.getImageData(0, 0, 1, 1); // fuerza el rasterizado
     const ms = performance.now() - t0;
     cache = Math.max(cache, capas.memoriaCache);
-    if (midiendo) mosaicosMax = Math.max(mosaicosMax, m.mosaicos);
+    if (midiendo) {
+      mosaicosMax = Math.max(mosaicosMax, m.mosaicos);
+      fases[fase] = Math.max(fases[fase], m.mosaicos);
+    }
     return [m, ms];
   };
   /** Cuadros que la app pediría sola después de un gesto, hasta quedar nítida. */
@@ -645,9 +936,12 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     midiendo = medido;
     let m: MedidaCuadro | null = null;
     for (let i = 0; i < escenario.cuadros; i++) {
+      fase = i === 0 ? "inicio" : i === escenario.cuadros - 1 ? "soltar" : "intermedios";
       const p0 = performance.now();
+      const inv0 = invalidaciones;
       escenario.paso(camara, capas, escena, i);
-      if (medido && escenario.medirPaso) pasos.push(performance.now() - p0);
+      if (medido && fase === "intermedios") invalidacionesIntermedias += invalidaciones - inv0;
+      if (medido && escenario.medirPaso && (escenario.pasoMedido?.(i) ?? true)) pasos.push(performance.now() - p0);
       t += CUADRO;
       const antes = { ...capas.textosDinamica };
       const [m2, ms] = cuadro();
@@ -656,9 +950,12 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
       m = m2;
     }
     const antes = { ...capas.textosDinamica };
+    fase = "soltar";
     if (m) cola(m, anotar);
     if (medido) sumarTextos(usoResto, antes);
   }
+  midiendo = false;
+  escenario.terminar?.(escena);
   capas.liberarCache();
   capasActivas = null;
   canvas.width = canvas.height = 0;
@@ -675,6 +972,10 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     mosaicosMax,
     ...(escenario.textos ? { textos: { primero: usoPrimero, resto: usoResto } } : {}),
     ...(escenario.medirPaso ? { paso: { mediana: percentil(pasos, 0.5), maximo: pasos.at(-1) ?? 0 } } : {}),
+    ...(escenario.fases ? { fases, invalidacionesIntermedias } : {}),
+    ...(escenario.rechazados ? { rechazados: escenario.rechazados() } : {}),
+    ...(escenario.acomodados ? { acomodados: escenario.acomodados() } : {}),
+    ...(escenario.comandos ? { comandos: escenario.comandos() } : {}),
   };
 }
 
@@ -694,7 +995,9 @@ const respirar = () => new Promise((r) => setTimeout(r, 0));
 
 async function correr(): Promise<void> {
   const estado = document.getElementById("estado")!;
-  const comparar = new URLSearchParams(location.search).has("comparar");
+  const parametros = new URLSearchParams(location.search);
+  const comparar = parametros.has("comparar");
+  const t12 = parametros.has("escena-t12");
   const modos: Modo[] = comparar ? ["optimizado", "sin caché de textos", "sin optimizar"] : ["optimizado"];
   const resultado: Resultado = {
     navegador: navigator.userAgent,
@@ -703,6 +1006,8 @@ async function correr(): Promise<void> {
     dpr: DPR,
     mediciones: [],
     memoria: [],
+    tope: [],
+    escenaCables: t12 ? "T12" : "T14a",
   };
 
   for (const n of CANTIDADES_BANCO) {
@@ -723,16 +1028,22 @@ async function correr(): Promise<void> {
     }
   }
   // La de 2000 con cables, en un Editor.
-  const ed = abrirEditorCables();
-  const nombre = `${SIMBOLOS_BANCO_CABLES} + ${ed.escena.cantidadCables} cables`;
+  const ed = abrirEditorCables(t12);
+  const derivaciones = ed.documento.hojas[0]!.cables.filter((w) => w.desde.tipo === "cable" || w.hasta.tipo === "cable").length;
+  const nombre = `${SIMBOLOS_BANCO_CABLES} + ${ed.escena.cantidadCables - derivaciones} cables` + (derivaciones > 0 ? ` + ${derivaciones} T` : "");
   resultado.memoria.push({ componentes: nombre, heapMB: heapMB() });
-  for (const escenario of ESCENARIOS_CABLES) {
+  for (const escenario of escenariosCables(t12)) {
     for (const modo of modos) {
       estado.textContent = `${nombre} · ${escenario.nombre} · ${modo}`;
       await respirar();
       resultado.mediciones.push({ componentes: nombre, escenario: escenario.nombre, modo, ...medir(ed.escena, escenario, OPCIONES[modo]) });
     }
   }
+
+  // Paso de la previa según los cables que se acomodan (para fijar el tope).
+  estado.textContent = `${nombre} · paso de la previa por cables acomodados`;
+  await respirar();
+  resultado.tope = medirTope();
 
   await enviar(resultado);
   estado.textContent = "Listo.";

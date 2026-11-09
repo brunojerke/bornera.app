@@ -10,8 +10,7 @@ import type { Componente, Documento, Extremo } from "../core/model/documento";
 import { geometriaComponente, problemasComponente, consultaHoja } from "../core/model/trazado";
 import { buscarSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
-import { documentoBancoCables } from "./banco";
-import { AVISO_ARRASTRE_CANCELADO, documentoNuevo, Editor, TOPE_CABLES_PREVIA, type DestinoVista } from "./editor";
+import { AVISO_ARRASTRE_CANCELADO, documentoNuevo, Editor, textoReducido, TOPE_CABLES_PREVIA, type DestinoVista } from "./editor";
 import type { EventoHerramienta } from "./herramientas/tipos";
 
 class VistaFalsa implements DestinoVista {
@@ -204,6 +203,25 @@ describe("arrastrar con cables", () => {
     expect(escenaAlDia(editor)).toBe(true);
   });
 
+  it("los componentes fijos donde terminan cables de la zona salen de la estática mientras se arrastra (su marca de borne va encima del cable)", () => {
+    const { editor, vista } = armar();
+    editor.seleccionarIds(["c1"]);
+    editor.aplicar(editor.seleccionar.presionar(ev(0.2, 0)));
+    editor.aplicar(editor.seleccionar.mover(ev(0.2, 2)));
+    // S1 (c2) no se mueve, pero w1 y w2 terminan en sus bornes; H1 (c4) y K2 (c3) no tocan la zona.
+    expect(editor.escena.oculto("c2")).toBe(true);
+    expect(editor.escena.oculto("c3") || editor.escena.oculto("c4")).toBe(false);
+    const alEmpezar = vista.regiones.slice();
+    for (let i = 0; i < 10; i++) editor.aplicar(editor.seleccionar.mover(ev(0.2, 2 + i * 0.3)));
+    expect(vista.regiones.length).toBe(alEmpezar.length);
+    editor.aplicar(editor.seleccionar.soltar(ev(0.2, 5)));
+    expect(nadaOculto(editor, editor.documento)).toBe(true);
+    // S1 vuelve a la estática: su caja (alrededor de (10, 0)) se invalida al empezar y al terminar.
+    const tieneS1 = (k: Caja) => k.x <= 10 && k.x + k.ancho >= 10 && k.y <= 0 && k.y + k.alto >= 0;
+    expect(alEmpezar.some(tieneS1)).toBe(true);
+    expect(vista.regiones.slice(alEmpezar.length).some(tieneS1)).toBe(true);
+  });
+
   it("la previa coincide con el resultado final en 100 posiciones", () => {
     const { editor, pasos } = armar();
     let a = 7;
@@ -311,29 +329,83 @@ describe("arrastrar con cables", () => {
     expect(vista.regiones).toEqual([]);
   });
 
-  it("con más de TOPE_CABLES_PREVIA cables que se acomodan, la previa no planea y lo dice; al soltar se planea", () => {
-    const editor = new Editor(documentoBancoCables(500));
-    editor.vista = new VistaFalsa();
+});
+
+describe("tope de la previa (TOPE_CABLES_PREVIA)", () => {
+  /**
+   * `n` bobinas en fila (cada 8, en y = 0), cada una con un cable recto de A2
+   * (y = 2) al X1 de una lámpara fija debajo (y = 8). Arrastrar las bobinas
+   * acomoda exactamente `n` cables. Se arma de cero, como el banco.
+   */
+  function fila(n: number) {
+    const doc = documentoNuevo();
+    const hoja = doc.hojas[0]!;
+    for (let i = 0; i < n; i++) {
+      hoja.componentes.push(
+        { id: `c${2 * i + 1}`, ...comp("contactor.bobina", 8 * i, 0, `K${i + 1}`) },
+        { id: `c${2 * i + 2}`, ...comp("senalizacion.lampara", 8 * i, 10, `H${i + 1}`) },
+      );
+      hoja.cables.push({ id: `w${i + 1}`, desde: borne(`c${2 * i + 1}`, "A2"), hasta: borne(`c${2 * i + 2}`, "X1"), codos: [] });
+    }
+    // Los contadores guardan el próximo número a dar.
+    doc.contadores = { c: 2 * n + 1, w: n + 1 };
+    expect(validarHoja(hoja)).toEqual([]);
+    const editor = new Editor(doc);
+    const vista = new VistaFalsa();
+    editor.vista = vista;
     const avisos: string[] = [];
     editor.alAvisar = (t) => avisos.push(t);
-    const hoja = editor.documento.hojas[0]!;
-    // Componentes salteados: casi todos sus cables van a uno que no se mueve.
-    const ids = hoja.componentes.filter((_, i) => i % 2 === 0).map((c) => c.id);
-    editor.seleccionarIds(ids);
-    // Se aprieta sobre uno seleccionado que se elige con un clic en su centro.
-    const c = hoja.componentes.find((k) => editor.seleccion.has(k.id) && editor.escena.idEnPunto(k.x, k.y, 0.15) === k.id)!;
-    arrastrar(editor, c.x, c.y, c.x + 2, c.y + 1);
+    editor.seleccionarIds(hoja.componentes.filter((c) => c.tipo === "contactor.bobina").map((c) => c.id));
+    const historial = editor.historial as unknown as { hechos: unknown[] };
+    return { editor, vista, avisos, pasos: () => historial.hechos.length };
+  }
+
+  it(`justo por debajo (${TOPE_CABLES_PREVIA} cables): la previa planea y coincide con el resultado`, () => {
+    const { editor, pasos } = fila(TOPE_CABLES_PREVIA);
+    const n = pasos();
+    arrastrar(editor, 0.2, 0, 0.2, -2);
+    expect(editor.pista).toBeNull();
+    const previa = planPrevia(editor);
+    expect(previa?.r.rechazo).toBeNull();
+    expect(previa!.cambiados.size).toBe(TOPE_CABLES_PREVIA);
+    editor.aplicar(editor.seleccionar.soltar(ev(0.2, -2)));
+    expect(pasos()).toBe(n + 1);
+    for (const [id, c] of previa!.cambiados) expect(editor.escena.obtenerCable(id)?.puntos).toEqual(c.puntos);
+    expect(validarHoja(editor.documento.hojas[0]!)).toEqual([]);
+  });
+
+  it(`justo por encima (${TOPE_CABLES_PREVIA + 1} cables): la previa no planea y la barra dice que se revisa al soltar; soltar donde vale da un paso`, () => {
+    const { editor, pasos } = fila(TOPE_CABLES_PREVIA + 1);
+    const n = pasos();
+    arrastrar(editor, 0.2, 0, 0.2, -2);
     expect(editor.arrastrando).toBe(true);
-    const pista = editor.pista ?? "";
-    expect(pista).toMatch(/^\d+ cables se acomodan al soltar\.$/);
-    expect(Number(pista.split(" ")[0])).toBeGreaterThan(TOPE_CABLES_PREVIA);
+    expect(editor.pista).toBe(textoReducido(TOPE_CABLES_PREVIA + 1));
+    expect(editor.pista).toMatch(/al soltar.*se revisa/);
     expect(planPrevia(editor)).toBeNull();
-    const antes = copia(editor.documento);
-    editor.aplicar(editor.seleccionar.soltar(ev(c.x + 2, c.y + 1)));
-    // Se aplicó o se rechazó con aviso, pero siempre limpio.
-    if (JSON.stringify(editor.documento) === JSON.stringify(antes)) expect(avisos.length).toBeGreaterThan(0);
-    else expect(validarHoja(hoja)).toEqual([]);
+    editor.aplicar(editor.seleccionar.soltar(ev(0.2, -2)));
+    expect(pasos()).toBe(n + 1);
+    expect(validarHoja(editor.documento.hojas[0]!)).toEqual([]);
+    expect(escenaAlDia(editor)).toBe(true);
     expect(nadaOculto(editor, editor.documento)).toBe(true);
+  });
+
+  it("por encima, si se rechaza al soltar: todo vuelve exacto, sin paso, sin restos y con el motivo sin ids", () => {
+    const { editor, vista, avisos, pasos } = fila(TOPE_CABLES_PREVIA + 1);
+    const antes = copia(editor.documento);
+    const n = pasos();
+    // Bajar 6: el A2 de cada bobina (y = 8) cae sobre el X1 de su lámpara.
+    arrastrar(editor, 0.2, 0, 0.2, 6);
+    expect(editor.pista).toBe(textoReducido(TOPE_CABLES_PREVIA + 1));
+    const alEmpezar = vista.regiones.slice();
+    editor.aplicar(editor.seleccionar.soltar(ev(0.2, 6)));
+    expect(pasos()).toBe(n);
+    expect(editor.documento).toEqual(antes);
+    expect(avisos.at(-1)).toMatch(/^No se puede mover acá: el borne K\d+ · A2 quedaría sobre el borne H\d+ · X1 sin conectarse\.$/);
+    expect(sinIds(avisos)).toBe(true);
+    expect(editor.pista).toBeNull();
+    expect(nadaOculto(editor, editor.documento)).toBe(true);
+    expect(escenaAlDia(editor)).toBe(true);
+    for (const k of alEmpezar) expect(vista.regiones.slice(alEmpezar.length)).toContainEqual(k);
   });
 });
 

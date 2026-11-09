@@ -4,6 +4,7 @@
 // tiempos reales) está en diagnosticoArrastre.ts.
 
 import type { ModoArrastreDiagnostico } from "../editor/editor";
+import type { MedidaTope } from "../editor/medicionTope";
 import { LIMITE_LENTO_MS } from "../render/rendimiento";
 
 /** Zooms del caso que dio tirones en la netbook. */
@@ -48,6 +49,13 @@ export interface Estadisticas {
   maximo: number;
 }
 
+/** Mediana; 0 sin valores. */
+export function mediana(valores: readonly number[]): number {
+  if (valores.length === 0) return 0;
+  const orden = [...valores].sort((a, b) => a - b);
+  return orden[Math.floor(orden.length / 2)]!;
+}
+
 /** Promedio, p95 y máximo; todo 0 sin valores. */
 export function estadisticas(valores: readonly number[]): Estadisticas {
   if (valores.length === 0) return { promedio: 0, p95: 0, maximo: 0 };
@@ -71,6 +79,13 @@ export interface Pasada {
   /** Caché de textos de la capa dinámica. */
   aciertos: number;
   fallos: number;
+  /**
+   * ms de cada movimiento del mouse que cambió de punto de grilla (la
+   * herramienta, el plan de la previa con cables y la pista), fuera del cuadro.
+   */
+  pasos: number[];
+  /** De esos movimientos, en cuántos la previa quedó rechazada (a rayas con ✕). */
+  rechazados: number;
 }
 
 export interface ResumenPasada {
@@ -83,6 +98,8 @@ export interface ResumenPasada {
   muestras: number;
   aciertos: number;
   fallos: number;
+  /** Movimientos que cambiaron de punto de grilla: mediana y máximo (ms). */
+  paso: { mediana: number; maximo: number; cantidad: number; rechazados: number };
 }
 
 export function resumirPasada(p: Pasada): ResumenPasada {
@@ -97,6 +114,12 @@ export function resumirPasada(p: Pasada): ResumenPasada {
     muestras: p.muestras.length,
     aciertos: p.aciertos,
     fallos: p.fallos,
+    paso: {
+      mediana: mediana(p.pasos),
+      maximo: p.pasos.length ? Math.max(...p.pasos) : 0,
+      cantidad: p.pasos.length,
+      rechazados: p.rechazados,
+    },
   };
 }
 
@@ -117,6 +140,68 @@ export interface DatosEquipo {
   fecha: string;
   arrastrados: number;
   duracionMs: number;
+  /** La escena medida ("2000 + 3000 cables + 30 T"). */
+  escena?: string;
+}
+
+/** Soltar con todo seleccionado (T14a): un Mover con todo, y lo que tarda en verse. */
+export interface ResultadoSoltar {
+  /** Componentes y cables seleccionados. */
+  seleccionados: number;
+  /** ms del soltar: el comando y las invalidaciones. */
+  comando: number;
+  /** ms de dibujo del primer cuadro después de soltar. */
+  primerCuadro: number;
+  /** ms desde soltar hasta que la pantalla queda nítida (mosaicos al día). */
+  hastaNitida: number;
+  /** False si el Mover se rechazó (no debería: todo se mueve rígido). */
+  aplicado: boolean;
+}
+
+/** Lo que mide la prueba además de las combinaciones (con la escena con cables). */
+export interface ExtrasDiagnostico {
+  soltar: ResultadoSoltar | null;
+  tope: readonly MedidaTope[];
+}
+
+/**
+ * Aceptación de T14a en la netbook: 40 cableados al 58 %, en la combinación
+ * que se comporta como la app con 40 visibles (completos con caché).
+ */
+export const CRITERIOS_T14A = {
+  zoom: 0.58,
+  promedio: 16,
+  maximo: 25,
+  lentos: 10,
+  pasoMediano: 8,
+  soltar: 200,
+} as const;
+
+export interface Criterio {
+  texto: string;
+  ok: boolean;
+}
+
+/** Los criterios de T14a contra los resultados; vacío si falta la fila de referencia. */
+export function criteriosT14a(resultados: readonly ResultadoCombinacion[], soltar: ResultadoSoltar | null): Criterio[] {
+  const k = CRITERIOS_T14A;
+  const fila = resultados.find((r) => r.zoom === k.zoom && r.combinacion.modo === "completos" && r.combinacion.cache);
+  if (!fila) return [];
+  const s = fila.sinSonda;
+  const l: Criterio[] = [
+    { texto: `dibujo promedio ${f1(s.dibujo.promedio)} ms < ${k.promedio}`, ok: s.dibujo.promedio < k.promedio },
+    { texto: `dibujo máximo ${f1(s.dibujo.maximo)} ms < ${k.maximo}`, ok: s.dibujo.maximo < k.maximo },
+    { texto: `${s.lentos} cuadros lentos < ${k.lentos}`, ok: s.lentos < k.lentos },
+    { texto: `paso mediano ${f1(s.paso.mediana)} ms < ${k.pasoMediano}`, ok: s.paso.cantidad > 0 && s.paso.mediana < k.pasoMediano },
+  ];
+  if (soltar) {
+    const t = soltar.comando + soltar.primerCuadro;
+    l.push({
+      texto: `soltar con todo seleccionado ${f1(t)} ms (comando + primer cuadro) ≤ ${k.soltar}`,
+      ok: soltar.aplicado && t <= k.soltar,
+    });
+  }
+  return l;
 }
 
 const f1 = (n: number) => n.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -124,12 +209,16 @@ const tres = (e: Estadisticas) => `${f1(e.promedio)} / ${f1(e.p95)} / ${f1(e.max
 const conSigno = (n: number) => (n >= 0 ? "+" : "−") + f1(Math.abs(n));
 
 /** Tabla en Markdown, para copiar y pegar. */
-export function tablaDiagnostico(equipo: DatosEquipo, resultados: readonly ResultadoCombinacion[]): string {
+export function tablaDiagnostico(
+  equipo: DatosEquipo,
+  resultados: readonly ResultadoCombinacion[],
+  extras: ExtrasDiagnostico = { soltar: null, tope: [] },
+): string {
   const l: string[] = [];
   l.push(`## Diagnóstico del arrastre · Bornera ${equipo.version} · ${equipo.fecha}`);
   l.push("");
   l.push(`- Equipo: ${equipo.navegador}`);
-  l.push(`- Lienzo ${equipo.ancho}×${equipo.alto}, dpr ${equipo.dpr}`);
+  l.push(`- Lienzo ${equipo.ancho}×${equipo.alto}, dpr ${equipo.dpr}` + (equipo.escena ? ` · escena ${equipo.escena}` : ""));
   l.push(
     `- ${equipo.arrastrados} arrastrados (los más cercanos al centro), el mismo recorrido durante ` +
       `${f1(equipo.duracionMs / 1000)} s por combinación.`,
@@ -142,19 +231,51 @@ export function tablaDiagnostico(equipo: DatosEquipo, resultados: readonly Resul
     "- Dinámica = capa dinámica medida con la sonda en una pasada aparte (3 primeros cuadros y 1 cada 15). " +
       "Costo de medir = dibujo prom. con sonda − sin sonda.",
   );
+  l.push(
+    "- Paso = cada movimiento del mouse que cambia de punto de grilla (herramienta, plan de la previa y pista), " +
+      "fuera del cuadro: mediana / máx. ✕ = de esos, cuántos quedaron rechazados (a rayas): un rechazo corta el plan antes.",
+  );
   l.push("");
   l.push(
-    "| Zoom | Combinación | Cuadros | Entre cuadros | Dibujo | Lentos | Dinámica (sonda) | Muestras | Costo de medir | Textos aciertos / fallos |",
+    "| Zoom | Combinación | Cuadros | Entre cuadros | Dibujo | Lentos | Paso | Dinámica (sonda) | Muestras | Costo de medir | Textos aciertos / fallos |",
   );
-  l.push("|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+  l.push("|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
   for (const r of resultados) {
     const s = r.sinSonda;
     const c = r.conSonda;
     l.push(
       `| ${Math.round(r.zoom * 100)} % | ${r.combinacion.nombre} | ${s.cuadros} | ${tres(s.entreCuadros)} | ${tres(s.dibujo)} | ` +
-        `${s.lentos} | ${c.muestras ? tres(c.dinamica) : "–"} | ${c.muestras} | ${conSigno(c.dibujo.promedio - s.dibujo.promedio)} | ` +
+        `${s.lentos} | ${s.paso.cantidad ? `${f1(s.paso.mediana)} / ${f1(s.paso.maximo)} · ✕ ${s.paso.rechazados} de ${s.paso.cantidad}` : "–"} | ` +
+        `${c.muestras ? tres(c.dinamica) : "–"} | ${c.muestras} | ${conSigno(c.dibujo.promedio - s.dibujo.promedio)} | ` +
         `${r.combinacion.cache ? `${s.aciertos} / ${s.fallos}` : "–"} |`,
     );
+  }
+  const { soltar, tope } = extras;
+  if (soltar) {
+    l.push("");
+    l.push(
+      `**Soltar con todo seleccionado** (${soltar.seleccionados}): ` +
+        (soltar.aplicado
+          ? `comando ${f1(soltar.comando)} ms · primer cuadro ${f1(soltar.primerCuadro)} ms · hasta nítida ${f1(soltar.hastaNitida)} ms.`
+          : "se rechazó (no debería)."),
+    );
+  }
+  if (tope.length > 0) {
+    l.push("");
+    l.push("**Paso de la previa según los cables que se acomodan** (plan de un punto de grilla, ms; escena propia donde todo vale):");
+    l.push("");
+    l.push("| Cables | Mediana | Máx. | ms por cable | Rechazados |");
+    l.push("|---:|---:|---:|---:|---:|");
+    for (const t of tope) {
+      const porCable = (t.cables ? t.mediana / t.cables : 0).toLocaleString("es-AR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+      l.push(`| ${t.cables} | ${f1(t.mediana)} | ${f1(t.maximo)} | ${porCable} | ${t.rechazados} de ${t.pasos} |`);
+    }
+  }
+  const criterios = criteriosT14a(resultados, soltar);
+  if (criterios.length > 0) {
+    l.push("");
+    l.push(`**Aceptación T14a** (${Math.round(CRITERIOS_T14A.zoom * 100)} %, completos con caché):`);
+    for (const k of criterios) l.push(`- ${k.ok ? "✓" : "✗"} ${k.texto}`);
   }
   return l.join("\n");
 }

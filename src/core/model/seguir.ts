@@ -556,28 +556,6 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
     return p;
   };
 
-  // Para girar y espejar: la caja de lo seleccionado.
-  const caja: CajaPuntos = {
-    x0: Infinity,
-    y0: Infinity,
-    x1: -Infinity,
-    y1: -Infinity,
-  };
-  {
-    const k = caja;
-    const sumar = (x: number, y: number) => {
-      k.x0 = Math.min(k.x0, x);
-      k.y0 = Math.min(k.y0, y);
-      k.x1 = Math.max(k.x1, x);
-      k.y1 = Math.max(k.y1, y);
-    };
-    for (const c of comps) sumar(c.x, c.y);
-    for (const id of seleccionados) {
-      const p = recorrido(id);
-      for (let i = 0; i + 1 < p.length; i += 2) sumar(p[i]!, p[i + 1]!);
-    }
-  }
-
   // Zona: lo que toca a lo movido y lo que se apoya en eso. Una pasada por los cables.
   const apoyados = new Map<string, string[]>();
   const zona = new Set<string>();
@@ -614,6 +592,32 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
     if (!fijo(w, w.desde) && !fijo(w, w.hasta)) continue;
     rigidos.delete(id);
     for (const d of apoyados.get(id) ?? []) if (rigidos.has(d)) revisar.push(d);
+  }
+
+  // Para girar y espejar: la caja de lo que se transforma de lo seleccionado,
+  // es decir, los componentes y los cables seleccionados que se mueven
+  // rígidos. Uno seleccionado que no puede ser rígido se acomoda como uno no
+  // seleccionado y tampoco corre el eje (si no, con K1 y sus dos cables
+  // hasta S1, espejar llevaba K1 encima de S1). Si no se mueve nada, la de
+  // todo lo seleccionado: no se usa, pero la transformación queda definida.
+  const caja: CajaPuntos = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  {
+    const k = caja;
+    const sumar = (x: number, y: number) => {
+      k.x0 = Math.min(k.x0, x);
+      k.y0 = Math.min(k.y0, y);
+      k.x1 = Math.max(k.x1, x);
+      k.y1 = Math.max(k.y1, y);
+    };
+    const sumarCables = (ids: Iterable<string>) => {
+      for (const id of ids) {
+        const p = recorrido(id);
+        for (let i = 0; i + 1 < p.length; i += 2) sumar(p[i]!, p[i + 1]!);
+      }
+    };
+    for (const c of comps) sumar(c.x, c.y);
+    sumarCables([...seleccionados].filter((id) => rigidos.has(id)));
+    if (k.x0 === Infinity) sumarCables(seleccionados);
   }
 
   // Los que no son rígidos: orden topológico (anfitrión primero), con
@@ -1000,11 +1004,35 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
       return enResto.has(a.slice(6)) && enResto.has(b.slice(6));
     };
 
-    const rechazarConflictos = (conflictos: Conflicto[], cables: CableCambiado[]): ResultadoPlan =>
-      resultado(cables, {
-        motivo: textoConflicto(op, conflictos[0]!),
-        conflictos,
+    /**
+     * Bornes de un componente transformado que caen sobre bornes de uno que
+     * no se mueve (nuevos). No dependen de los cables: si hay, son la causa
+     * de un rechazo antes que el cable que, por eso, no tiene por dónde ir.
+     */
+    const borneSobreBorne = (): Conflicto[] => {
+      const l: Conflicto[] = [];
+      let fijos: ConsultaTrazado | null = null;
+      comps.forEach((comp, i) => {
+        const g = geometriaComponente({ ...comp, ...poses[i]!.pose });
+        if (!g) return;
+        fijos ??= consultaSuperpuesta(base, { quitar });
+        const viejas = clavesViejasComp(comp);
+        for (const k of problemasComponente(g, fijos)) if (k.clave.startsWith("borneBorne|") && !viejas.has(k.clave)) l.push(k);
       });
+      return l;
+    };
+    /** Un rechazo: el motivo de borne sobre borne va primero, si lo hay. */
+    const rechazar = (cables: CableCambiado[], motivo: string, conflictos: Conflicto[]): ResultadoPlan => {
+      const primero = borneSobreBorne();
+      if (primero.length === 0) return resultado(cables, { motivo, conflictos });
+      const claves = new Set(primero.map((k) => k.clave));
+      return resultado(cables, {
+        motivo: textoConflicto(op, primero[0]!),
+        conflictos: [...primero, ...conflictos.filter((k) => !claves.has(k.clave))],
+      });
+    };
+    const rechazarConflictos = (conflictos: Conflicto[], cables: CableCambiado[]): ResultadoPlan =>
+      rechazar(cables, textoConflicto(op, conflictos[0]!), conflictos);
 
     let r = resolver(null);
     if (r.ciclo) {
@@ -1014,10 +1042,7 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
         y: recorrido(id)[1]!,
         clave: `ciclo|cable:${id}`,
       }));
-      return resultado(cambiados(r.estado), {
-        motivo: MENSAJE_CICLO,
-        conflictos,
-      });
+      return rechazar(cambiados(r.estado), MENSAJE_CICLO, conflictos);
     }
     if (r.falla) return rechazarConflictos(r.falla.conflictos, cambiados(r.estado, r.falla.intento));
     let conflictos = verificar(r.estado);
@@ -1039,17 +1064,14 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
         if (e.tipo !== "cable") continue;
         if (!puntoSobreRecorrido(puntosDe(e.cable, r.estado), e.x, e.y)) {
           const p = recorrido(id);
-          return resultado(cambiados(r.estado), {
-            motivo: MENSAJE_NO_SE_ACOMODA,
-            conflictos: [
-              {
-                mensaje: MENSAJE_NO_SE_ACOMODA,
-                x: p[0]!,
-                y: p[1]!,
-                clave: `noSeAcomoda|cable:${id}`,
-              },
-            ],
-          });
+          return rechazar(cambiados(r.estado), MENSAJE_NO_SE_ACOMODA, [
+            {
+              mensaje: MENSAJE_NO_SE_ACOMODA,
+              x: p[0]!,
+              y: p[1]!,
+              clave: `noSeAcomoda|cable:${id}`,
+            },
+          ]);
         }
       }
     }

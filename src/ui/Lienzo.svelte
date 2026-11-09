@@ -154,15 +154,19 @@
   }
 
   /**
-   * Prueba automática del arrastre (diagnóstico de la alpha.2) sobre lo que
-   * se muestra (la escena de 2000). Devuelve la tabla en Markdown.
+   * Prueba automática del arrastre (diagnóstico de la alpha.2; con cables
+   * desde T14a) sobre lo que se muestra (la escena de 2000 con cables).
+   * Devuelve la tabla en Markdown.
    */
   export async function diagnosticarArrastre(op: OpcionesDiagnostico = {}): Promise<string> {
     const v = vista;
     const ed = editor;
     if (!v || !ed) throw new Error("No hay una escena editable a la vista.");
     ed.cancelarHerramienta();
-    const resultados = await probarArrastre(v, ed, op);
+    const { combinaciones, extras } = await probarArrastre(v, ed, op);
+    const hoja = ed.documento.hojas[0];
+    const derivaciones = hoja?.cables.filter((w) => w.desde.tipo === "cable" || w.hasta.tipo === "cable").length ?? 0;
+    const nCables = ed.escena.cantidadCables;
     return tablaDiagnostico(
       {
         version: VERSION,
@@ -173,8 +177,11 @@
         fecha: new Date().toISOString().slice(0, 16).replace("T", " "),
         arrastrados: Math.min(ARRASTRADOS_DIAGNOSTICO, ed.escena.cantidad),
         duracionMs: op.duracionMs ?? DURACION_DIAGNOSTICO_MS,
+        escena:
+          `${ed.escena.cantidad}` + (nCables > 0 ? ` + ${nCables - derivaciones} cables` : "") + (derivaciones > 0 ? ` + ${derivaciones} T` : ""),
       },
-      resultados,
+      combinaciones,
+      extras,
     );
   }
 

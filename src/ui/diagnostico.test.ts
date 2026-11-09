@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LIMITE_LENTO_MS } from "../render/rendimiento";
 import {
   COMBINACIONES,
+  criteriosT14a,
   estadisticas,
   recorrido,
   resumirPasada,
@@ -48,6 +49,8 @@ describe("Diagnóstico del arrastre", () => {
       muestras: [3, 4],
       aciertos: 10,
       fallos: 1,
+      pasos: [2, 9, 1],
+      rechazados: 1,
     });
     expect(r.cuadros).toBe(4);
     expect(r.entreCuadros.maximo).toBe(37);
@@ -55,11 +58,12 @@ describe("Diagnóstico del arrastre", () => {
     expect(r.lentos).toBe(2); // 16 justo no es lento
     expect(r.dinamica.promedio).toBe(3.5);
     expect(r.muestras).toBe(2);
+    expect(r.paso).toEqual({ mediana: 2, maximo: 9, cantidad: 3, rechazados: 1 });
   });
 
   it("la tabla tiene una fila por zoom y combinación, con el costo de medir", () => {
     const pasada = (dibujo: number, muestras: number[]) =>
-      resumirPasada({ instantes: [0, 17, 34], dibujo: [dibujo, dibujo, dibujo], muestras, aciertos: 5, fallos: 0 });
+      resumirPasada({ instantes: [0, 17, 34], dibujo: [dibujo, dibujo, dibujo], muestras, aciertos: 5, fallos: 0, pasos: [], rechazados: 0 });
     const resultados: ResultadoCombinacion[] = ZOOMS_DIAGNOSTICO.flatMap((zoom) =>
       COMBINACIONES.map((combinacion) => ({ zoom, combinacion, sinSonda: pasada(10, []), conSonda: pasada(10.5, [4]) })),
     );
@@ -76,5 +80,47 @@ describe("Diagnóstico del arrastre", () => {
     expect(filas[4]).toMatch(/\| – \|$/);
     expect(tabla).toContain("0.1.3-alpha.2");
     expect(tabla).toContain(`más de ${LIMITE_LENTO_MS} ms de dibujo`);
+    // Sin cables no hay soltar ni tope; los criterios igual se informan.
+    expect(tabla).not.toContain("Soltar con todo seleccionado");
+    expect(tabla).not.toContain("Paso de la previa");
+  });
+
+  /** Resultados con la fila de referencia (58 %, completos con caché) dada. */
+  function conReferencia(dibujo: number[], pasos: number[]): ResultadoCombinacion[] {
+    const vacia = resumirPasada({ instantes: [0, 17], dibujo: [1, 1], muestras: [], aciertos: 0, fallos: 0, pasos: [], rechazados: 0 });
+    return COMBINACIONES.map((combinacion) => {
+      const ref = combinacion.modo === "completos" && combinacion.cache;
+      const instantes = dibujo.map((_, i) => i * 17);
+      const sinSonda = ref ? resumirPasada({ instantes, dibujo, muestras: [], aciertos: 0, fallos: 0, pasos, rechazados: 0 }) : vacia;
+      return { zoom: 0.58, combinacion, sinSonda, conSonda: vacia };
+    });
+  }
+  const soltar = (comando: number, primerCuadro: number, aplicado = true) => ({ seleccionados: 5030, comando, primerCuadro, hastaNitida: 400, aplicado });
+
+  it("criterios de T14a sobre 58 %, completos con caché: promedio, máximo, lentos, paso mediano y soltar", () => {
+    const bien = criteriosT14a(conReferencia([10, 12, 14], [3, 4, 5]), soltar(120, 60));
+    expect(bien.map((k) => k.ok)).toEqual([true, true, true, true, true]);
+    const mal = criteriosT14a(conReferencia([10, 30, ...Array(10).fill(17)], [9, 9, 2]), soltar(150, 60));
+    expect(mal.map((k) => k.ok)).toEqual([false, false, false, false, false]);
+    // Un soltar rechazado no pasa aunque sea rápido; sin pasos, el paso no pasa.
+    expect(criteriosT14a(conReferencia([10], []), soltar(1, 1, false)).map((k) => k.ok)).toEqual([true, true, true, false, false]);
+    expect(criteriosT14a([], null)).toEqual([]);
+  });
+
+  it("con cables, la tabla suma el paso, el soltar, el tope y la aceptación", () => {
+    const tabla = tablaDiagnostico(
+      { version: "0.1.3-alpha.5", navegador: "Prueba", ancho: 1024, alto: 600, dpr: 1, fecha: "2026-11-09 12:00", arrastrados: 40, duracionMs: 5000, escena: "2000 + 3000 cables + 30 T" },
+      conReferencia([10, 12, 14], [3, 4, 5]),
+      {
+        soltar: soltar(120, 60),
+        tope: [{ cables: 152, mediana: 3.04, maximo: 5, rechazados: 0, pasos: 20 }],
+      },
+    );
+    expect(tabla).toContain("escena 2000 + 3000 cables + 30 T");
+    expect(tabla.split("\n").find((l) => l.includes("completos con caché"))).toContain("| 4,0 / 5,0 · ✕ 0 de 3 |");
+    expect(tabla).toContain("**Soltar con todo seleccionado** (5030): comando 120,0 ms · primer cuadro 60,0 ms");
+    expect(tabla).toContain("| 152 | 3,0 | 5,0 | 0,020 | 0 de 20 |");
+    expect(tabla).toContain("- ✓ paso mediano 4,0 ms < 8");
+    expect(tabla).toContain("- ✓ soltar con todo seleccionado 180,0 ms (comando + primer cuadro) ≤ 200");
   });
 });
