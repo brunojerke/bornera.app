@@ -382,14 +382,24 @@ describe("herramienta cable: casos inválidos (la previa y el clic dan lo mismo)
     editor.accion("cable");
     clic(editor, 30, 0);
     clic(editor, 35, 0);
-    clic(editor, 32, 0);
-    clic(editor, 32, 0);
+    clic(editor, 28, 0);
+    clic(editor, 28, 0);
     expect(validarHoja(doc.hojas[0]!)).toEqual([]);
     expect(ultimo(doc).codos).toEqual([
       [35, 0],
       [35, -1],
-      [32, -1],
+      [28, -1],
     ]);
+  });
+
+  it("la U que termina sobre su propio primer tramo se toca consigo misma y se bloquea", () => {
+    const { editor, doc, avisos } = armar();
+    editor.accion("cable");
+    clic(editor, 30, 0);
+    clic(editor, 35, 0);
+    const r = probar(editor, doc, avisos, 32, 0);
+    expect(r).toMatchObject({ valido: false, previa: "El cable se tocaría consigo mismo.", creo: false, fijo: false });
+    expect(r.clic).toBe(r.previa);
   });
 
   it("ningún cable creado por la herramienta es inválido", () => {
@@ -398,7 +408,11 @@ describe("herramienta cable: casos inválidos (la previa y el clic dan lo mismo)
     // Muchos clics al azar (con semilla): lo que se crea siempre es válido.
     let s = 7;
     const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647) * 30 - 15;
-    for (let i = 0; i < 400; i++) clic(editor, rnd(), rnd());
+    // Cada 8 clics, Esc: un cable en curso que ya no puede seguir sin tocarse a sí mismo no traba la prueba.
+    for (let i = 0; i < 400; i++) {
+      clic(editor, rnd(), rnd());
+      if (i % 8 === 7 && editor.cable!.enTramo) editor.escape();
+    }
     expect(validarHoja(doc.hojas[0]!)).toEqual([]);
     expect(cables(doc).length).toBeGreaterThan(1);
   });

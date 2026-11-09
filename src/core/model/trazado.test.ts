@@ -106,11 +106,34 @@ describe("problemasTrazado", () => {
     expect(mensajes(hoja, { desde: { tipo: "cable", cable: "w1", x: 5, y: 0 }, hasta: libre(5, -4), puntos: [5, 0, 5, -4] })).toEqual([]);
   });
 
-  it("el cable no puede encimarse consigo mismo", () => {
-    expect(mensajes(hojaCon([]), { desde: libre(0, 0), hasta: libre(1, 0), puntos: [0, 0, 6, 0, 6, 3, 3, 3, 3, 0, 1, 0] }).length).toBeGreaterThan(0);
-    expect(
-      mensajes(hojaCon([]), { desde: libre(0, 0), hasta: libre(2, -2), puntos: [0, 0, 6, 0, 6, 3, 3, 3, 3, -2] }),
-    ).toEqual([]);
+  it("el cable no puede encimarse, cruzarse ni tocarse consigo mismo", () => {
+    const sola = hojaCon([]);
+    expect(mensajes(sola, { desde: libre(0, 0), hasta: libre(1, 0), puntos: [0, 0, 6, 0, 6, 3, 3, 3, 3, 0, 1, 0] })).toContain(
+      "El cable se encimaría consigo mismo.",
+    );
+    // Cruce en X de dos tramos no vecinos (antes valía).
+    expect(mensajes(sola, { desde: libre(0, 0), hasta: libre(3, -2), puntos: [0, 0, 6, 0, 6, 3, 3, 3, 3, -2] })).toEqual([
+      "El cable se cruzaría consigo mismo.",
+    ]);
+    // Un codo sobre otro codo propio: vuelve a pasar por (4, 0).
+    expect(mensajes(sola, { desde: libre(0, 0), hasta: libre(4, -2), puntos: [0, 0, 4, 0, 4, 2, 6, 2, 6, 0, 4, 0, 4, -2] })).toEqual([
+      "El cable se tocaría consigo mismo.",
+    ]);
+    // El extremo sobre un tramo propio.
+    expect(mensajes(sola, { desde: libre(0, 0), hasta: libre(3, 0), puntos: [0, 0, 6, 0, 6, 3, 3, 3, 3, 0] })).toEqual([
+      "El cable se tocaría consigo mismo.",
+    ]);
+    // Una U que no vuelve a tocarse vale.
+    expect(mensajes(sola, { desde: libre(0, 0), hasta: libre(3, 1), puntos: [0, 0, 6, 0, 6, 3, 3, 3, 3, 1] })).toEqual([]);
+  });
+
+  it("la T de otro cable sobre este, en su punto, no es un toque (visto desde el anfitrión)", () => {
+    const hoja = hojaCon([], [cable("w2", { tipo: "cable", cable: "w1", x: 5, y: 0 }, libre(5, 5))]);
+    expect(mensajes(hoja, { id: "w1", desde: libre(0, 0), hasta: libre(10, 0), puntos: [0, 0, 10, 0] })).toEqual([]);
+    // Si la T es sobre otro cable, el toque sigue contando.
+    expect(mensajes(hoja, { id: "w9", desde: libre(0, 0), hasta: libre(10, 0), puntos: [0, 0, 10, 0] })).toEqual([
+      "El cable tocaría otro cable sin conectarse.",
+    ]);
   });
 });
 

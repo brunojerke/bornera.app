@@ -4,10 +4,12 @@
 //
 // Bloquean, para el cable nuevo entero (lo fijado más la vista previa):
 // - un tramo o codo sobre un borne que no es el de su extremo;
-// - un tramo encimado (colineal, más de un punto) con otro cable o consigo
-//   mismo;
+// - un tramo encimado (colineal, más de un punto) con otro cable;
 // - un contacto en un punto que es codo o extremo de alguno de los dos
-//   (incluye pasar por el extremo libre de otro cable);
+//   (incluye pasar por el extremo libre de otro cable), salvo la T de otro
+//   cable sobre este, en su punto;
+// - el cable consigo mismo: dos tramos no vecinos con algún punto en común
+//   (encimados, cruzados o tocándose);
 // - una T sobre un cruce de cables que no están unidos ahí, o sobre el
 //   extremo libre de otro cable;
 // - un tramo por el interior abierto del cuerpo de un componente, propio o
@@ -369,6 +371,8 @@ export function problemasTrazado(nuevo: CableNuevo, consulta: ConsultaTrazado): 
         }
         const enVertice = (t.x === sx0 && t.y === sy0) || (t.x === sx1 && t.y === sy1) || (t.x === tx0 && t.y === ty0) || (t.x === tx1 && t.y === ty1);
         if (!enVertice) continue; // cruce simple: no conecta
+        // La T de `w` sobre este cable, en su punto: está unida, no es un toque.
+        if (nuevo.id !== undefined && terminaEnTSobre(w, nuevo.id, t.x, t.y)) continue;
         const m = p.length;
         const suelto =
           (w.desde.tipo === "libre" && p[0] === t.x && p[1] === t.y) || (w.hasta.tipo === "libre" && p[m - 2] === t.x && p[m - 1] === t.y);
@@ -377,10 +381,25 @@ export function problemasTrazado(nuevo: CableNuevo, consulta: ConsultaTrazado): 
       }
     }
 
-    // Consigo mismo: un tramo no vecino encimado.
+    // Consigo mismo: un tramo no vecino encimado, cruzado o tocándose.
     for (let j = i + 4; j + 3 < n; j += 2) {
-      const t = toque(sx0, sy0, sx1, sy1, P[j]!, P[j + 1]!, P[j + 2]!, P[j + 3]!);
-      if (t?.tipo === "encimado") anotar("El cable se encimaría consigo mismo.", t.x, t.y, claveConflicto("mismo", yo, yo));
+      const tx0 = P[j]!;
+      const ty0 = P[j + 1]!;
+      const tx1 = P[j + 2]!;
+      const ty1 = P[j + 3]!;
+      const t = toque(sx0, sy0, sx1, sy1, tx0, ty0, tx1, ty1);
+      if (!t) continue;
+      const enVertice = (t.x === sx0 && t.y === sy0) || (t.x === sx1 && t.y === sy1) || (t.x === tx0 && t.y === ty0) || (t.x === tx1 && t.y === ty1);
+      anotar(
+        t.tipo === "encimado"
+          ? "El cable se encimaría consigo mismo."
+          : enVertice
+            ? "El cable se tocaría consigo mismo."
+            : "El cable se cruzaría consigo mismo.",
+        t.x,
+        t.y,
+        claveConflicto("mismo", yo, yo),
+      );
     }
   }
   return salida;

@@ -3,7 +3,7 @@ import { SIMBOLOS, borneColocado, buscarSimbolo, type Direccion, type Rotacion }
 import { borneDe, indexarHoja, puntoSobreRecorrido, recorridoCable, validarHoja } from "./cables";
 import { Cablear, Espejar, Mover, Rotar, colocar, type Comando } from "./comandos";
 import { crearDocumento, type Cable, type Componente, type Documento, type Extremo, type Hoja } from "./documento";
-import { codos, direccionDe, opuesta, type ExtremoRuta } from "./ruteo";
+import { codos, direccionDe, opuesta, seTocaASiMismo, type ExtremoRuta } from "./ruteo";
 import {
   MENSAJE_CICLO,
   MENSAJE_NADA_SE_MUEVE_UNO,
@@ -215,10 +215,12 @@ describe("un componente con cables, en las 8 orientaciones", () => {
         aplicarYVolver(doc, cmd);
         // Espejar uno solo da vuelta de qué lado tiene que llegar el cable: a
         // veces la salida preferida pide 3 codos (el ruteo llega a 2) y queda
-        // de costado, como en W. Con el resto, sale como salía.
+        // de costado, como en W. Con el resto, sale como salía, o por la
+        // dirección propia del borne si el fresco tiene menos codos (un cable
+        // que salía de costado no hereda el costado).
         if (!(cmd instanceof Espejar)) {
-          expect(salida(doc, "w1", "desde")).toBe(esperado.w1);
-          expect(salida(doc, "w2", "desde")).toBe(esperado.w2);
+          expect([esperado.w1, direccionBorne(doc, "c1", "A1")]).toContain(salida(doc, "w1", "desde"));
+          expect([esperado.w2, direccionBorne(doc, "c1", "A2")]).toContain(salida(doc, "w2", "desde"));
         }
         // Ninguno entra al cuerpo: sale por su dirección o de costado.
         for (const [id, b] of [
@@ -848,5 +850,129 @@ describe("al azar, con semilla fija", () => {
     // Que la prueba pruebe algo: hay de las dos.
     expect(aceptadas).toBeGreaterThan(100);
     expect(rechazadas).toBeGreaterThan(10);
+  });
+});
+
+// ── Codos que no se acumulan ───────────────────────────────────────────────
+
+/**
+ * Marcha-parada tendida como W, con KM1 en el medio: L, S0 (NC), S1 (NA),
+ * K1 13-14 en paralelo con S1, bobina KM1 y Neutro. `conLampara`: H1 en
+ * paralelo con la bobina, colgada en T de los cables de A1 y de A2; sin
+ * ella, cada borne de KM1 tiene un solo cable directo (la escena de las
+ * fotos de la acumulación de codos).
+ */
+function docMarchaParada(conLampara: boolean): { doc: Documento; km1: string } {
+  const doc = crearDocumento(meta);
+  const L = poner(doc, datos("fuente.fase", 0, 0));
+  const S0 = poner(doc, datos("pulsador.nc", 0, 5));
+  const S1 = poner(doc, datos("pulsador.na", 0, 11));
+  const K1 = poner(doc, datos("contactor.auxiliar_na", 10, 11));
+  const KM1 = poner(doc, datos("contactor.bobina", 0, 22));
+  const N = poner(doc, datos("fuente.neutro", 0, 33, 180));
+  rutear(doc, "w1", borne(L, "L"), borne(S0, "11"));
+  rutear(doc, "w2", borne(S0, "12"), borne(S1, "13"));
+  rutear(doc, "w3", borne(S0, "12"), borne(K1, "13"));
+  rutear(doc, "w4", borne(S1, "14"), borne(KM1, "A1"));
+  rutear(doc, "w5", borne(K1, "14"), borne(S1, "14"));
+  rutear(doc, "w7", borne(KM1, "A2"), borne(N, "N"));
+  if (conLampara) {
+    const H1 = poner(doc, datos("senalizacion.lampara", 16, 22));
+    rutear(doc, "w6", enCable("w4", 0, 16), borne(H1, "X1"));
+    rutear(doc, "w8", enCable("w7", 0, 28), borne(H1, "X2"));
+  }
+  expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+  return { doc, km1: KM1 };
+}
+
+/** Conflictos de toda la hoja por par y punto ("clave@x,y"), sin "sin salidas" (regla de W). */
+function conflictosHoja(hoja: Hoja): Set<string> {
+  const indice = indexarHoja(hoja);
+  const consulta = consultaHoja(hoja, indice);
+  const s = new Set<string>();
+  const anotar = (c: { clave: string; x: number; y: number }) => {
+    if (!c.clave.startsWith("sinSalidas|")) s.add(`${c.clave}@${c.x},${c.y}`);
+  };
+  for (const w of hoja.cables) {
+    const puntos = recorridoCable(indice, w)!;
+    const sin = {
+      ...consulta,
+      cablesEn: (k: Parameters<typeof consulta.cablesEn>[0]) => [...consulta.cablesEn(k)].filter((x) => x.id !== w.id),
+    };
+    for (const c of problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos }, sin)) anotar(c);
+  }
+  for (const c of hoja.componentes) {
+    const g = geometriaComponente(c);
+    if (g) for (const k of problemasComponente(g, consulta)) anotar(k);
+  }
+  return s;
+}
+
+/** Codos del ruteo fresco de W para `w` (contra el resto de la hoja), o null si no hay uno válido de 2 codos o menos. */
+function codosFresco(hoja: Hoja, w: Cable): number | null {
+  const consulta = consultaHoja({ ...hoja, cables: hoja.cables.filter((k) => k.id !== w.id) });
+  const d = rutaDe(hoja, w.desde);
+  const h = rutaDe(hoja, w.hasta);
+  const c = codos(d, h, (k) => problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos: [d.x, d.y, ...k.flat(), h.x, h.y] }, consulta).length === 0);
+  return c ? c.length : null;
+}
+
+/**
+ * Aplica `cmd` y comprueba: rechazado sin cambios, o aceptado con la hoja
+ * válida, cada cable con codos ≤ fresco + 2 (4 sin fresco), sin tocarse a sí
+ * mismo, sin conflictos nuevos por par y punto, y deshacer y rehacer exactos.
+ * Devuelve si se aceptó.
+ */
+function operarSinAcumular(doc: Documento, cmd: Comando, contexto: string): boolean {
+  const antes = copia(doc);
+  const conflictosAntes = conflictosHoja(doc.hojas[0]!);
+  try {
+    cmd.aplicar(doc);
+  } catch (e) {
+    expect(doc, `${contexto}: ${(e as Error).message}`).toEqual(antes);
+    return false;
+  }
+  const hoja = doc.hojas[0]!;
+  expect(validarHoja(hoja), contexto).toEqual([]);
+  const indice = indexarHoja(hoja);
+  for (const w of hoja.cables) {
+    const f = codosFresco(hoja, w);
+    expect(w.codos.length, `${contexto}, ${w.id} (fresco ${f ?? "—"})`).toBeLessThanOrEqual(f === null ? 4 : f + 2);
+    expect(seTocaASiMismo(recorridoCable(indice, w)!), `${contexto}, ${w.id} se toca a sí mismo`).toBe(false);
+  }
+  const nuevos = [...conflictosHoja(hoja)].filter((c) => !conflictosAntes.has(c));
+  expect(nuevos, contexto).toEqual([]);
+  const despues = copia(doc);
+  cmd.deshacer(doc);
+  expect(doc, contexto).toEqual(antes);
+  cmd.aplicar(doc);
+  expect(doc, contexto).toEqual(despues);
+  return true;
+}
+
+describe("los codos no se acumulan", () => {
+  it("marcha-parada con H1 en T: 10 × R, 10 × M y 10 movimientos de KM1 (semilla fija)", () => {
+    const { doc, km1 } = docMarchaParada(true);
+    const azar = generador(SEMILLA);
+    let aceptadas = 0;
+    for (let k = 0; k < 30; k++) {
+      const cmd =
+        k < 10 ? new Rotar([km1], 90) : k < 20 ? new Espejar([km1]) : new Mover([km1], Math.floor(azar() * 7) - 3, Math.floor(azar() * 7) - 3);
+      if (operarSinAcumular(doc, cmd, `semilla ${SEMILLA}, operación ${k}`)) aceptadas++;
+    }
+    expect(aceptadas).toBeGreaterThanOrEqual(20);
+  });
+
+  it("marcha-parada sin H1 (un cable directo por borne de KM1): 10 × R, todas aceptadas", () => {
+    const { doc, km1 } = docMarchaParada(false);
+    for (let k = 0; k < 10; k++) expect(operarSinAcumular(doc, new Rotar([km1], 90), `R número ${k + 1}`), `R número ${k + 1}`).toBe(true);
+  });
+
+  it("4 × R sobre KM1 sin H1 vuelve a los cables rectos", () => {
+    const { doc, km1 } = docMarchaParada(false);
+    const antes = copia(doc);
+    for (let k = 0; k < 4; k++) new Rotar([km1], 90).aplicar(doc);
+    expect(doc.hojas[0]!.cables.find((w) => w.id === "w4")!.codos).toEqual(antes.hojas[0]!.cables.find((w) => w.id === "w4")!.codos);
+    expect(doc.hojas[0]!.cables.find((w) => w.id === "w7")!.codos).toEqual(antes.hojas[0]!.cables.find((w) => w.id === "w7")!.codos);
   });
 });

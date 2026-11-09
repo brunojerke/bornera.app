@@ -155,7 +155,13 @@ function salidas(p: readonly number[]): { inicio: Direccion; fin: Direccion } | 
   return inicio && fin ? { inicio, fin } : null;
 }
 
-/** True si el recorrido (x, y seguidos) tiene tramos de largo cero, diagonales o vueltas de 180°. */
+/**
+ * True si el recorrido (x, y seguidos) tiene tramos de largo cero,
+ * diagonales o vueltas de 180°, o si se toca a sí mismo: dos tramos no
+ * vecinos con algún punto en común (un cruce, o un codo o un extremo sobre
+ * un tramo propio). Lo usan los candidatos de `rutas` y de T14a; la
+ * validación del documento no, así los estados viejos se pueden deshacer.
+ */
 export function formaInvalida(p: readonly number[]): boolean {
   let anterior: Direccion | null = null;
   for (let i = 0; i + 3 < p.length; i += 2) {
@@ -163,6 +169,27 @@ export function formaInvalida(p: readonly number[]): boolean {
     if (d === null) return true;
     if (anterior !== null && d === opuesta(anterior)) return true;
     anterior = d;
+  }
+  return seTocaASiMismo(p);
+}
+
+/**
+ * True si dos tramos no vecinos de un recorrido ortogonal tienen algún punto
+ * en común. Un tramo ortogonal es su propia caja: alcanza con ver si las
+ * cajas se tocan.
+ */
+export function seTocaASiMismo(p: readonly number[]): boolean {
+  const n = p.length / 2 - 1;
+  for (let i = 0; i < n; i++) {
+    const ax0 = Math.min(p[2 * i]!, p[2 * i + 2]!);
+    const ax1 = Math.max(p[2 * i]!, p[2 * i + 2]!);
+    const ay0 = Math.min(p[2 * i + 1]!, p[2 * i + 3]!);
+    const ay1 = Math.max(p[2 * i + 1]!, p[2 * i + 3]!);
+    for (let j = i + 2; j < n; j++) {
+      if (Math.max(p[2 * j]!, p[2 * j + 2]!) < ax0 || Math.min(p[2 * j]!, p[2 * j + 2]!) > ax1) continue;
+      if (Math.max(p[2 * j + 1]!, p[2 * j + 3]!) < ay0 || Math.min(p[2 * j + 1]!, p[2 * j + 3]!) > ay1) continue;
+      return true;
+    }
   }
   return false;
 }

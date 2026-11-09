@@ -214,6 +214,39 @@ export default async function (p, comprobar) {
   d = await distintos("ref");
   comprobar("dos Ctrl+Z devuelven todo exacto y sin restos", (await documento()) === docRef && d === 0, `${d} píxeles distintos`);
 
+  // ── 4 × R sobre una bobina con un cable recto por borne: los codos no se acumulan ──
+  {
+    const docAntes = await documento();
+    const nAntes = await pasos();
+    const r = await p.evaluar(`(() => { const { editor: ed, comandos: c } = bornera; const d = ed.documento;
+      const comp = (tipo, x, y, rot) => { const k = c.colocar(d, { tipo, x, y, rot, espejado: false, etiqueta: "", params: {} }); ed.ejecutar(k); return k.id; };
+      const b = (comp, borne) => ({ tipo: "borne", comp, borne });
+      const cab = (desde, hasta) => { const k = c.cablear(d, { desde, hasta, codos: [] }); ed.ejecutar(k); return k.id; };
+      const KX = comp("contactor.bobina", 200, 0, 0);
+      const HA = comp("senalizacion.lampara", 200, -8, 0);
+      const HB = comp("senalizacion.lampara", 200, 8, 180);
+      return { KX, wa: cab(b(HA, "X2"), b(KX, "A1")), wb: cab(b(KX, "A2"), b(HB, "X2")) }; })()`);
+    comprobar("la bobina de prueba es válida", (await sana()) === "bien", await sana());
+    await seleccionar([r.KX]);
+    const n4 = await pasos();
+    const sanas = [];
+    for (let i = 0; i < 4; i++) {
+      await tecla(R);
+      sanas.push(await sana());
+    }
+    const codos = await p.evaluar(
+      `JSON.stringify(bornera.editor.documento.hojas[0].cables.filter((w) => ${JSON.stringify([r.wa, r.wb])}.includes(w.id)).map((w) => w.codos))`,
+    );
+    comprobar(
+      "4 × R sobre una bobina cableada: 4 pasos, todo sano y los cables vuelven rectos",
+      (await pasos()) === n4 + 4 && sanas.every((s) => s === "bien") && codos === "[[],[]]",
+      `${(await pasos()) - n4} pasos, ${sanas.join(", ")}, codos ${codos}`,
+    );
+    await p.esc();
+    await p.evaluar(`(() => { const ed = bornera.editor; while (ed.historial.hechos.length > ${nAntes}) ed.deshacer(); })()`);
+    comprobar("deshacer todo deja el documento como antes", (await documento()) === docAntes);
+  }
+
   // ── Grupo con cables internos (w1, w2: se trasladan) y externos (w3: se acomoda) ──
   const w1Antes = await recorrido(e.w1);
   await seleccionar([e.K1, e.S1]);

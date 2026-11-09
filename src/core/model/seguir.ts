@@ -13,8 +13,11 @@
 // - Parcial (se mueve un solo extremo): se conserva el dibujo desde el
 //   extremo fijo y se rehace el final. Primero se prueba estirar (correr solo
 //   el último codo); después, rutear con `rutas` desde el codo j, con j de
-//   k−1 a 0. Gana el primero que pasa todo, por la clave (salida preferida
-//   cumplida, más dibujo conservado, menos codos, más corto, orden).
+//   k−1 a 0. Se toma el primero que pasa todo, por la clave (salida preferida
+//   cumplida, más dibujo conservado, menos codos, más corto, orden). Después
+//   se prueba el fresco (lo que tendería W, con la dirección propia de cada
+//   borne y no la salida heredada): gana si pasa todo y tiene menos codos.
+//   Así un cable que quedó saliendo de costado vuelve a la recta.
 // - Sus dos extremos se mueven distinto (un borne movido y una T que se
 //   corrió): se rehace entero.
 // - Una T sobre un cable que cambió: si el punto sigue sobre él, no cambia;
@@ -270,6 +273,30 @@ function salidas(p: readonly number[]): {
   };
 }
 
+/** 1 si la salida `d` no es una de las preferidas de `e` (sin preferidas, 0). */
+function incumpleSalida(d: Direccion | null, e: ExtremoRuta): number {
+  return d && e.preferidas && e.preferidas.length > 0 && !e.preferidas.includes(d) ? 1 : 0;
+}
+
+/**
+ * Cota de abajo de los codos de una ruta de `a` a `b`: 0 si va recta, 1 si
+ * alcanza una L, si no 2. Con `cumpliendo`, solo cuentan las rutas que salen
+ * por las preferidas de los dos extremos.
+ */
+function minimoCodosFresco(a: ExtremoRuta, b: ExtremoRuta, cumpliendo: boolean): number {
+  const vale = (d: Direccion | null, e: ExtremoRuta) => d !== null && (!cumpliendo || incumpleSalida(d, e) === 0);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 || dy === 0) {
+    const d = direccionDe(dx, dy);
+    return d !== null && vale(d, a) && vale(opuesta(d), b) ? 0 : 2;
+  }
+  // L por (b.x, a.y): sale de a en x y llega a b en y; o por (a.x, b.y).
+  if (vale(direccionDe(dx, 0), a) && vale(direccionDe(0, -dy), b)) return 1;
+  if (vale(direccionDe(0, dy), a) && vale(direccionDe(-dx, 0), b)) return 1;
+  return 2;
+}
+
 /**
  * Las salidas de un extremo en un borne: prefiere `salida` (la que tiene el
  * cable, o la transformada), y entrar al cuerpo está prohibido. La misma
@@ -489,10 +516,14 @@ function componentesFuertes(nodos: readonly string[], vecinos: (id: string) => r
 // ── Planear ────────────────────────────────────────────────────────────────
 
 /** Cómo queda un extremo de un cable que no es rígido. */
+/**
+ * `ruta`: con la salida que tiene el cable (o la transformada). `fresca`: la
+ * que usaría W, con la dirección propia del borne; sin borne, igual a `ruta`.
+ */
 type Movimiento =
-  | { tipo: "fijo"; ruta: ExtremoRuta }
+  | { tipo: "fijo"; ruta: ExtremoRuta; fresca: ExtremoRuta }
   /** Opciones de punto nuevo, de la mejor a la peor (una sola, salvo una T que se corre). */
-  | { tipo: "movido"; opciones: { extremo: Extremo; ruta: ExtremoRuta }[] };
+  | { tipo: "movido"; opciones: { extremo: Extremo; ruta: ExtremoRuta; fresca: ExtremoRuta }[] };
 
 /** Lo que salió al acomodar un cable: sin cambios, el cambio, o por qué no se pudo. */
 type Acomodo =
@@ -766,14 +797,17 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
             return {
               tipo: "fijo",
               ruta: extremoRutaBorne(x, y, b.direccion, salida),
+              fresca: extremoRutaBorne(x, y, b.direccion, b.direccion),
             };
           const q = t.punto(x, y);
+          const d = t.direccion(b.direccion);
           return {
             tipo: "movido",
             opciones: [
               {
                 extremo: e,
-                ruta: extremoRutaBorne(q.x, q.y, t.direccion(b.direccion), t.direccion(salida)),
+                ruta: extremoRutaBorne(q.x, q.y, d, t.direccion(salida)),
+                fresca: extremoRutaBorne(q.x, q.y, d, d),
               },
             ],
           };
@@ -781,9 +815,10 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
         if (e.tipo === "cable") {
           if (rigidos.has(e.cable)) {
             const q = t.punto(e.x, e.y);
+            const ruta = { x: q.x, y: q.y };
             return {
               tipo: "movido",
-              opciones: [{ extremo: { ...e, ...q }, ruta: { x: q.x, y: q.y } }],
+              opciones: [{ extremo: { ...e, ...q }, ruta, fresca: ruta }],
             };
           }
           if (enResto.has(e.cable) && estado.get(e.cable)) {
@@ -791,15 +826,15 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
             if (!puntoSobreRecorrido(Q, e.x, e.y)) {
               return {
                 tipo: "movido",
-                opciones: puntosParaT(Q, e.x, e.y).map((q) => ({
-                  extremo: { ...e, x: q.x, y: q.y },
-                  ruta: { x: q.x, y: q.y },
-                })),
+                opciones: puntosParaT(Q, e.x, e.y).map((q) => {
+                  const ruta = { x: q.x, y: q.y };
+                  return { extremo: { ...e, x: q.x, y: q.y }, ruta, fresca: ruta };
+                }),
               };
             }
           }
         }
-        return { tipo: "fijo", ruta: { x, y } };
+        return { tipo: "fijo", ruta: { x, y }, fresca: { x, y } };
       };
       return {
         desde: uno(w.desde, P[0]!, P[1]!, P[2]!, P[3]!),
@@ -851,17 +886,31 @@ export function prepararTransformacion(hoja: Hoja, ids: Iterable<string>, entorn
         const fijoM = (alReves ? m.hasta : m.desde) as Extract<Movimiento, { tipo: "fijo" }>;
         const movidoM = (alReves ? m.desde : m.hasta) as Extract<Movimiento, { tipo: "movido" }>;
         const P = alReves ? invertir(recorrido(id)) : recorrido(id);
+        const enSentido = (l: Candidato[]): Candidato[] => (alReves ? l.map((c) => ({ puntos: invertir(c.puntos), clave: c.clave })) : l);
         for (const o of movidoM.opciones) {
-          let lista = candidatosParcial(P, o.ruta, fijoM.ruta, o.ruta);
-          if (lista.length === 0) sinCandidatos ??= { x: o.ruta.x, y: o.ruta.y };
-          if (alReves)
-            lista = lista.map((c) => ({
-              puntos: invertir(c.puntos),
-              clave: c.clave,
-            }));
+          const lista = enSentido(candidatosParcial(P, o.ruta, fijoM.ruta, o.ruta));
           const desde = alReves ? o.extremo : w.desde;
           const hasta = alReves ? w.hasta : o.extremo;
+          // El mejor que conserva dibujo. El fresco gana solo con menos codos y
+          // sin incumplir más salidas propias de los bornes (medidas igual en los dos).
           const r = probar({ ...desde }, { ...hasta }, lista);
+          const [ini, fin] = alReves ? [o.fresca, fijoM.fresca] : [fijoM.fresca, o.fresca];
+          const incumplidas = (p: readonly number[]): number => {
+            const s = salidas(p);
+            return incumpleSalida(s.inicio, ini) + incumpleSalida(s.fin, fin);
+          };
+          const tope = r ? { codos: contarCodos(r.puntos), incumplidas: incumplidas(r.puntos) } : null;
+          // Si ningún fresco puede tener menos codos, no se arman (es lo que más cuesta).
+          if (r && tope && minimoCodosFresco(ini, fin, tope.incumplidas === 0) >= tope.codos) return { tipo: "cambia", cable: r };
+          // Fresco: lo que tendería W, con la dirección propia de cada borne.
+          const frescos = enSentido(candidatosEntero(fijoM.fresca, o.fresca));
+          if (lista.length === 0 && frescos.length === 0) sinCandidatos ??= { x: o.ruta.x, y: o.ruta.y };
+          const f = probar(
+            { ...desde },
+            { ...hasta },
+            tope ? frescos.filter((c) => contarCodos(c.puntos) < tope.codos && incumplidas(c.puntos) <= tope.incumplidas) : frescos,
+          );
+          if (f) return { tipo: "cambia", cable: f };
           if (r) return { tipo: "cambia", cable: r };
         }
       }
