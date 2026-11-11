@@ -224,7 +224,8 @@ Humo `tests/humo/t14c-reconectar.mjs` (1024×600):
   - **Extremo libre y borne dentro de la tolerancia:** gana el más cercano (punto 1, Prioridad). Con su test.
   - **Esc** devuelve la selección de antes del arrastre (punto 6, Selección). Con su test.
 - Detalles de la etapa 2 que el plan no fijaba (ninguno lo contradice):
-  - "Antes del arrastre" es la selección de antes de **apretar** (apretar sobre el extremo ya elige el cable, como un clic). Solo Esc la devuelve; el botón derecho, un `pointerup` perdido y un cambio del documento dejan seleccionado el cable, como dice el punto 6.
+  - "Antes del arrastre" es la selección de antes de **apretar** (apretar sobre el extremo ya elige el cable, como un clic).
+  - **Ajuste (Bruno, después de la etapa 2):** el botón derecho y un `pointerup` perdido (gesto cortado u otro apretar con el gesto abierto) cancelan igual que Esc y también devuelven esa selección. Un cambio del documento corta sin paso y deja seleccionado el cable.
   - Sobre vacío, y sobre algo bloqueado o un destino rechazado antes de rutear, la previa dibuja el cable como estaba, a rayas (lo que pasa si se suelta ahí); con un intento rechazado, el intento a rayas con la ✕.
   - Soltar en el punto donde estaba el extremo cuenta como vacío: sin paso ni aviso. En cualquier otro punto del mismo cable, "El cable no puede terminar sobre sí mismo." (el objetivo se busca sin ese cable y después se mira su recorrido).
   - El documento que cambia en medio avisa con el texto del arrastre de T14a ("El documento cambió: se canceló el arrastre.").

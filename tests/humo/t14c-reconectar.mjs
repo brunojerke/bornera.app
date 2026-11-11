@@ -232,6 +232,24 @@ export default async function (p, comprobar) {
     dEsc === 0 && (await pasos()) === pasosRef && (await documento()) === docRef && (await seleccion()) === JSON.stringify([e.k2]),
     `${dEsc} px · selección ${await seleccion()}`,
   );
+  // Botón derecho en medio (con el izquierdo apretado): cancela igual que Esc.
+  await agarrar(8, -3, [
+    [9, -3],
+    [12, -2],
+  ]);
+  {
+    const q = await p.punto(12, -2);
+    await p.mouse("mousePressed", q.x, q.y, { boton: "right", botones: 3 });
+    await p.mouse("mouseReleased", q.x, q.y, { boton: "right", botones: 1 });
+    await p.mouse("mouseReleased", q.x, q.y);
+    await esperar(60);
+  }
+  const dDerecho = await distintos("conK2");
+  comprobar(
+    "73 %: el botón derecho en medio cancela igual que Esc: sin paso, igual al píxel y la selección de antes (K2)",
+    dDerecho === 0 && (await pasos()) === pasosRef && (await documento()) === docRef && (await seleccion()) === JSON.stringify([e.k2]),
+    `${dDerecho} px · selección ${await seleccion()} · reconectando ${await p.evaluar("bornera.editor.reconectando")}`,
+  );
   await deseleccionar();
   await foto("ref73");
 

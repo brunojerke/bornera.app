@@ -24,9 +24,9 @@
 //   `Reconectar.extremoEn`. Apretar y soltar sin pasar el umbral es un clic
 //   sobre el cable. Con Mayús no se reconecta. Desde un extremo libre no
 //   empieza un rectángulo. Al pasar el umbral queda seleccionado solo ese
-//   cable, y así sigue después de soltar; con Esc vuelve la selección de antes
-//   de apretar. El botón derecho, un `pointerup` perdido o un cambio del
-//   documento cortan sin paso.
+//   cable, y así sigue después de soltar. Esc, el botón derecho y un
+//   `pointerup` perdido cancelan sin paso y vuelven la selección de antes de
+//   apretar; un cambio del documento corta sin paso y deja la del cable.
 //
 // La selección no es parte del documento: no pasa por comandos ni se
 // deshace. La herramienta no la guarda: la lee del editor y devuelve la nueva
@@ -198,7 +198,7 @@ export class HerramientaSeleccionar implements Herramienta {
     if (this.gesto) {
       const g = this.gesto;
       this.gesto = null;
-      return this.descartar(g);
+      return this.cancelarGesto(g);
     }
     if (ev.boton !== 0) return NADA;
     this._sobre = null;
@@ -277,8 +277,8 @@ export class HerramientaSeleccionar implements Herramienta {
     const g = this.gesto;
     this.gesto = null;
     if (!g) return NADA;
-    // Gesto cortado (pointercancel): se descarta sin cambiar nada.
-    if (!ev) return this.descartar(g);
+    // Gesto cortado (pointercancel, captura perdida, ventana sin foco): se cancela como con Esc.
+    if (!ev) return this.cancelarGesto(g);
 
     if (g.tipo === "extremo") {
       if (!g.activo) return g.reducir ? this.con(new Set([g.extremo.id])) : NADA;
@@ -323,9 +323,17 @@ export class HerramientaSeleccionar implements Herramienta {
   cancelar(): Resultado {
     const g = this.gesto;
     this.gesto = null;
-    if (g?.tipo === "extremo" && g.activo) return { ...this.descartar(g), seleccion: g.previa };
-    if (g) return this.descartar(g);
+    if (g) return this.cancelarGesto(g);
     return this.seleccion().size > 0 ? this.con(VACIA) : NADA;
+  }
+
+  /**
+   * Cancela un gesto (Esc, botón derecho, `pointerup` perdido): sin cambiar
+   * el documento; reconectando, vuelve la selección de antes de apretar.
+   */
+  private cancelarGesto(g: Gesto): Resultado {
+    if (g.tipo === "extremo" && g.activo) return { ...this.descartar(g), seleccion: g.previa };
+    return this.descartar(g);
   }
 
   /** Corta el gesto en curso sin tocar la selección (el documento cambió por otra vía). */

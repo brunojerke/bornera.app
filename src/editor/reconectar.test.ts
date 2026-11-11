@@ -252,11 +252,14 @@ describe("Reconectar con Seleccionar: el gesto", () => {
     }
   });
 
-  it("ajuste: Esc vuelve la selección de antes del arrastre; el botón derecho y un pointerup perdido la dejan en el cable", () => {
+  it("ajuste: Esc, el botón derecho y un pointerup perdido cancelan igual y vuelven la selección de antes del arrastre", () => {
     const cortes: [string, (ed: Editor) => void, string[]][] = [
       ["Esc", (ed) => ed.aplicar(ed.seleccionar.cancelar()), ["c2"]],
-      ["botón derecho", (ed) => ed.aplicar(ed.seleccionar.presionar(ev(12, -2, { boton: 2 }))), ["w1"]],
-      ["pointerup perdido", (ed) => ed.aplicar(ed.seleccionar.soltar(null)), ["w1"]],
+      ["botón derecho", (ed) => ed.aplicar(ed.seleccionar.presionar(ev(12, -2, { boton: 2 }))), ["c2"]],
+      // Captura perdida, ventana sin foco o pointercancel: punteros.ts manda soltar(null).
+      ["pointerup perdido (gesto cortado)", (ed) => ed.aplicar(ed.seleccionar.soltar(null)), ["c2"]],
+      // El pointerup no llegó nunca y se vuelve a apretar: ese apretar solo cancela.
+      ["pointerup perdido (otro apretar)", (ed) => ed.aplicar(ed.seleccionar.presionar(ev(20, 20))), ["c2"]],
     ];
     for (const [nombre, cortar, seleccion] of cortes) {
       const { ed, doc } = armar();
@@ -276,8 +279,9 @@ describe("Reconectar con Seleccionar: el gesto", () => {
     }
   });
 
-  it("el documento cambia en medio: se corta sin paso, con aviso, y el cable vuelve", () => {
+  it("el documento cambia en medio: se corta sin paso, con aviso, el cable vuelve y queda seleccionado", () => {
     const { ed, doc, avisos } = armar();
+    ed.seleccionarIds(["c2"]);
     arrastrar(ed, 8, -3, [
       [9, -3],
       [12, -2],
@@ -287,6 +291,7 @@ describe("Reconectar con Seleccionar: el gesto", () => {
     expect(ed.reconectando).toBe(false);
     expect(ed.escena.cableOculto("w1")).toBe(false);
     expect(w(doc, "w1").hasta).toEqual(libre(8, -3));
+    expect(ed.seleccion).toEqual(new Set(["w1"]));
     // Soltar después ya no hace nada.
     ed.aplicar(ed.seleccionar.soltar(ev(12, -2)));
     expect(w(doc, "w1").hasta).toEqual(libre(8, -3));
