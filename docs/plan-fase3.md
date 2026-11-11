@@ -20,6 +20,8 @@ Desde T8 (2026-11-08), cada tarea con algo visible en la app suma su prueba `tes
 
 **Pendiente aparte (2026-11-11, visto en T14c y no se toca ahí):** `npm run humo` a veces termina con `EPERM, Permission denied` al borrar el perfil temporal de Edge (`rmSync` del `finally` de `tests/humo/correr.mjs`, con 10 reintentos de 200 ms). Las comprobaciones salen todas bien (411 OK y ninguna mal en la etapa 1 de T14c), pero la excepción corta antes del resumen ("N de N comprobaciones bien") y el código de salida queda en 1. Quedan carpetas `bornera-humo-*` en `%TEMP%` (hay del 2026-11-08). Lo probable: procesos de Edge que siguen con el perfil tomado después del `kill`. A decidir: esperar a que terminen, o informar la limpieza fallida sin tratarla como falla de las pruebas.
 
+**Pendiente aparte (2026-11-11, visto en T14c y no se toca ahí):** Transformar (T14a) vuelve a rutear al rehacer; debería repetir el resultado guardado o fallar. Hoy `Mover`, `Rotar` y `Espejar` reaplican el plan guardado solo si lo que tocan sigue igual (`planVigente`) y, si no, planean de nuevo y pueden dar otro recorrido. `CambiarExtremo` (T14c) ya lo hace bien: repite el resultado guardado, revisado sin rutear, o tira sin cambiar nada.
+
 Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fase 4 queda para el autoguardado, las migraciones y los circuitos de referencia.
 
 ---
