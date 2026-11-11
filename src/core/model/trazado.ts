@@ -33,7 +33,7 @@
 
 import { bornesColocados, buscarSimbolo, cajaCuerpo, type DefinicionSimbolo, type Direccion, type Rect } from "../symbols";
 import { indexarHoja, puntoExtremo, recorridoCable, validarCable, type IndiceHoja } from "./cables";
-import type { Componente, Extremo, Hoja } from "./documento";
+import type { Cable, Componente, Extremo, Hoja } from "./documento";
 import type { DatosCable } from "./comandos";
 import { perpendiculares } from "./ruteo";
 
@@ -103,6 +103,10 @@ export interface CableNuevo {
 export const MENSAJE_SIN_SALIDAS = "El borne no tiene más salidas libres: derivá con una T sobre uno de sus cables.";
 export const MENSAJE_EXTREMO_SUELTO = "Ese extremo está suelto: todavía no se puede conectar a él.";
 export const MENSAJE_CRUCE = "Ahí se cruzan dos cables sin unirse: elegí otro punto.";
+/** Los dos extremos en el mismo punto (W y reconectar, T14c). */
+export const MENSAJE_SIN_LARGO = "El cable no tiene largo.";
+/** Los dos extremos en el mismo borne (W y reconectar, T14c). */
+export const MENSAJE_MISMO_BORNE = "No se puede terminar en el mismo borne.";
 /**
  * Medio del mensaje de cuerpo sobre cuerpo ("KM1 quedaría encima de S1."). El
  * mensaje empieza con un nombre: `enMinuscula` no lo toca.
@@ -633,4 +637,22 @@ export function prepararCable(indice: IndiceHoja, consulta: ConsultaTrazado, dat
   }
   const puntos = recorridoCable(indice, w)!;
   return { puntos, problemas: problemasTrazado({ desde: datos.desde, hasta: datos.hasta, puntos }, consulta) };
+}
+
+/**
+ * La variante de `prepararCable` para un cable que ya está en la hoja y
+ * cambia (T14c, reconectar un extremo): la misma estructura y el trazado con
+ * su `id`, contra `consulta` sin ese cable. Así las T de otros cables
+ * apoyadas en él cuentan como unidas y no como un toque. `consulta` puede
+ * tenerlo o no; `indice` resuelve sus extremos (no hace falta que tenga la
+ * versión nueva del cable).
+ */
+export function prepararCableExistente(indice: IndiceHoja, consulta: ConsultaTrazado, w: Cable): CablePreparado {
+  const estructura = validarCable(indice, w);
+  if (estructura.length > 0) {
+    const p = puntoExtremo(indice, w.hasta) ?? puntoExtremo(indice, w.desde) ?? { x: 0, y: 0 };
+    return { puntos: null, problemas: estructura.map((e) => ({ mensaje: e.mensaje, x: p.x, y: p.y, clave: `estructura|${e.mensaje}` })) };
+  }
+  const puntos = recorridoCable(indice, w)!;
+  return { puntos, problemas: problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos }, consultaSinCable(consulta, w.id)) };
 }

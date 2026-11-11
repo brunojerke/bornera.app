@@ -7,6 +7,7 @@ import {
   indexarHoja,
   nodoExtremo,
   recorridoCable,
+  seApoyaEn,
   validarCable,
   validarHoja,
 } from "./cables";
@@ -345,5 +346,55 @@ describe("conexión (base de las redes de T15)", () => {
     // Un extremo libre sobre un tramo de otro cable (w3 pasa por (5, −4)) tampoco.
     const w = tender(doc, { desde: libre(5, -4), hasta: libre(8, -4), codos: [] });
     expect(nodos(doc)[w]).toEqual([null, null]);
+  });
+});
+
+describe("apoyos de T (T14c, D7-C)", () => {
+  /** Índice con solo estos cables. */
+  const indiceDe = (...cables: Cable[]) => indexarHoja({ nombre: "Hoja 1", componentes: [], cables });
+  const w1: Cable = { id: "w1", desde: libre(0, 0), hasta: libre(10, 0), codos: [] };
+  const w2: Cable = { id: "w2", desde: enCable("w1", 4, 0), hasta: libre(4, 6), codos: [] };
+  const w3: Cable = { id: "w3", desde: enCable("w2", 4, 3), hasta: libre(8, 3), codos: [] };
+  const w4: Cable = { id: "w4", desde: libre(0, 9), hasta: libre(10, 9), codos: [] };
+
+  it("directo: la T se apoya en su anfitrión, no al revés", () => {
+    const i = indiceDe(w1, w2);
+    expect(seApoyaEn(i, "w2", "w1")).toBe(true);
+    expect(seApoyaEn(i, "w1", "w2")).toBe(false);
+  });
+
+  it("cadena de 3: se apoya en el anfitrión de su anfitrión", () => {
+    const i = indiceDe(w1, w2, w3);
+    expect(seApoyaEn(i, "w3", "w1")).toBe(true);
+    expect(seApoyaEn(i, "w3", "w2")).toBe(true);
+    expect(seApoyaEn(i, "w1", "w3")).toBe(false);
+    expect(seApoyaEn(i, "w2", "w3")).toBe(false);
+  });
+
+  it("sin relación: false", () => {
+    const i = indiceDe(w1, w2, w3, w4);
+    expect(seApoyaEn(i, "w3", "w4")).toBe(false);
+    expect(seApoyaEn(i, "w4", "w1")).toBe(false);
+    // Un cable solo no se apoya en sí mismo.
+    expect(seApoyaEn(i, "w1", "w1")).toBe(false);
+    expect(seApoyaEn(i, "w3", "w3")).toBe(false);
+  });
+
+  it("un anfitrión que no existe corta el camino, sin tirar", () => {
+    const i = indiceDe(w2, w3);
+    expect(seApoyaEn(i, "w3", "w2")).toBe(true);
+    expect(seApoyaEn(i, "w3", "w1")).toBe(true);
+    expect(seApoyaEn(i, "w2", "w4")).toBe(false);
+    expect(seApoyaEn(i, "w9", "w1")).toBe(false);
+  });
+
+  it("una hoja que ya tiene un ciclo (de un .brn): termina", () => {
+    const a: Cable = { id: "a", desde: enCable("c", 0, 0), hasta: libre(5, 0), codos: [] };
+    const b: Cable = { id: "b", desde: enCable("a", 2, 0), hasta: libre(2, 5), codos: [] };
+    // Solo cuentan los extremos: la geometría no se mira.
+    const c: Cable = { id: "c", desde: enCable("b", 2, 3), hasta: libre(0, 3), codos: [] };
+    const i = indiceDe(a, b, c);
+    expect(seApoyaEn(i, "a", "a")).toBe(true);
+    expect(seApoyaEn(i, "a", "w4")).toBe(false);
   });
 });

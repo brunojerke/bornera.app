@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { SIMBOLOS, buscarSimbolo, transformarBornes, transformarDireccion } from "../symbols";
 import type { Direccion, Rotacion } from "../symbols/tipos";
+import { validarHoja } from "./cables";
 import {
   Borrar,
   CambiarEtiqueta,
+  CambiarExtremo,
   Colocar,
   Espejar,
   Grupo,
@@ -13,6 +15,9 @@ import {
   type Comando,
 } from "./comandos";
 import { buscarComponente, crearDocumento, type Componente, type Documento } from "./documento";
+import { Historial } from "./historial";
+import { planearReconexion } from "./reconectar";
+import { entornoLineal } from "./seguir";
 
 const meta = { titulo: "Prueba", autor: "Bruno Jerke", fecha: "2026-11-08" };
 const ROTACIONES: Rotacion[] = [0, 90, 180, 270];
@@ -398,5 +403,96 @@ describe("errores: el documento no cambia", () => {
     expect(() => new Rotar(["c1"], 90).deshacer(doc)).toThrow(Error);
     expect(() => new Borrar(["c1"]).deshacer(doc)).toThrow(Error);
     expect(() => new CambiarEtiqueta("c1", "K1").deshacer(doc)).toThrow(Error);
+  });
+});
+
+describe("CambiarExtremo (T14c)", () => {
+  const bobina = (id: string, x: number, y: number): Componente => ({ ...datos("contactor.bobina", x, y), id, etiqueta: id.toUpperCase() });
+  const borne = (comp: string, b: string) => ({ tipo: "borne" as const, comp, borne: b });
+  const libre = (x: number, y: number) => ({ tipo: "libre" as const, x, y });
+  const enCable = (cable: string, x: number, y: number) => ({ tipo: "cable" as const, cable, x, y });
+
+  /** K1 en (0, 0) y K2 en (12, 0); w1 de K1·A1 a (8, −3), suelto; w2 horizontal en y = 2, suelto. */
+  function doc(): Documento {
+    const d = crearDocumento(meta);
+    const h = d.hojas[0]!;
+    h.componentes.push(bobina("k1", 0, 0), bobina("k2", 12, 0));
+    h.cables.push(
+      { id: "w1", desde: borne("k1", "A1"), hasta: libre(8, -3), codos: [[0, -6], [8, -6]] },
+      { id: "w2", desde: libre(4, 2), hasta: libre(16, 2), codos: [] },
+    );
+    d.contadores = { c: 3, w: 3 };
+    expect(validarHoja(h)).toEqual([]);
+    return d;
+  }
+
+  for (const [nombre, destino, codos] of [
+    ["libre → borne", borne("k2", "A1"), [[0, -6], [12, -6]]],
+    ["libre → T", enCable("w2", 8, 2), [[0, -6], [8, -6]]],
+  ] as const) {
+    it(`${nombre}: un paso; deshacer y rehacer dejan el documento igual al de antes y al de después`, () => {
+      const d = doc();
+      const h = new Historial(d);
+      const antes = copia(d);
+      const cambio = h.ejecutar(new CambiarExtremo("w1", "hasta", destino));
+      expect(cambio).toEqual({ componentes: [], cables: ["w1"] });
+      expect(d.hojas[0]!.cables[0]).toEqual({ id: "w1", desde: borne("k1", "A1"), hasta: destino, codos });
+      expect(validarHoja(d.hojas[0]!)).toEqual([]);
+      // No da ids nuevos.
+      expect(d.contadores).toEqual(antes.contadores);
+      const despues = copia(d);
+      expect(h.deshacer()).toEqual({ componentes: [], cables: ["w1"] });
+      expect(d).toEqual(antes);
+      h.rehacer();
+      expect(d).toEqual(despues);
+      h.deshacer();
+      expect(d).toEqual(antes);
+    });
+  }
+
+  it("con el resultado de la vista previa: lo usa si el cable sigue como entonces, y si no, planea de nuevo", () => {
+    const d = doc();
+    const previa = planearReconexion(entornoLineal(d.hojas[0]!), "w1", "hasta", borne("k2", "A1"));
+    // Un resultado distinto (válido) para saber cuál se aplicó.
+    const marcado = { ...previa, cable: { ...previa.cable!, codos: [[0, -4], [12, -4]] as [number, number][] } };
+    new CambiarExtremo("w1", "hasta", borne("k2", "A1"), { plan: marcado }).aplicar(d);
+    expect(d.hojas[0]!.cables[0]!.codos).toEqual([[0, -4], [12, -4]]);
+    // El cable cambió desde la previa: se ignora y se planea de nuevo.
+    const otro = doc();
+    otro.hojas[0]!.cables[0]!.hasta = libre(8, -2);
+    new CambiarExtremo("w1", "hasta", borne("k2", "A1"), { plan: marcado }).aplicar(otro);
+    expect(otro.hojas[0]!.cables[0]!.codos).not.toEqual([[0, -4], [12, -4]]);
+    // Uno de otro destino tampoco se usa.
+    const tercero = doc();
+    new CambiarExtremo("w1", "hasta", enCable("w2", 8, 2), { plan: marcado }).aplicar(tercero);
+    expect(tercero.hojas[0]!.cables[0]!.hasta).toEqual(enCable("w2", 8, 2));
+  });
+
+  it("rehacer con el cable cambiado: planea de nuevo, o tira sin cambiar nada", () => {
+    const d = doc();
+    const cmd = new CambiarExtremo("w1", "hasta", borne("k2", "A1"));
+    cmd.aplicar(d);
+    cmd.deshacer(d);
+    // Otro camino lo cambia (fuera del historial): rehacer planea de nuevo.
+    d.hojas[0]!.cables[0]!.codos = [[0, -5], [8, -5]];
+    cmd.aplicar(d);
+    expect(d.hojas[0]!.cables[0]!.hasta).toEqual(borne("k2", "A1"));
+    expect(d.hojas[0]!.cables[0]!.codos[0]).toEqual([0, -5]);
+    cmd.deshacer(d);
+    // Ahora el extremo ya no está suelto: tira y no cambia nada.
+    d.hojas[0]!.cables[0]!.hasta = enCable("w2", 8, 2);
+    d.hojas[0]!.cables[0]!.codos = [[0, -6], [8, -6]];
+    const antes = copia(d);
+    expect(() => cmd.aplicar(d)).toThrow("no está suelto");
+    expect(d).toEqual(antes);
+  });
+
+  it("errores: un cable que no existe, y deshacer sin aplicar", () => {
+    const d = doc();
+    const antes = copia(d);
+    expect(() => new CambiarExtremo("w9", "hasta", borne("k2", "A1")).aplicar(d)).toThrow('No existe "w9"');
+    expect(() => new CambiarExtremo("k1", "hasta", borne("k2", "A1")).aplicar(d)).toThrow('No existe el cable "k1"');
+    expect(() => new CambiarExtremo("w1", "hasta", borne("k2", "A1")).deshacer(d)).toThrow("no se aplicó");
+    expect(d).toEqual(antes);
   });
 });

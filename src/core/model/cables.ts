@@ -172,6 +172,31 @@ export function validarHoja(hoja: Hoja): Problema[] {
   return problemas;
 }
 
+/**
+ * True si el cable `id` se apoya en `base`, directa o indirectamente (T14c,
+ * D7-C): subiendo por los anfitriones de sus T se llega a `base`. Cada cable
+ * tiene 2 anfitriones como mucho; sube sin recursión y con un conjunto de
+ * visitados, así termina aunque la hoja ya tenga un ciclo. No recorre la hoja.
+ * Un anfitrión que no existe corta ese camino. Con `id` igual a `base`, es
+ * true solo si `id` está en un ciclo de apoyos.
+ */
+export function seApoyaEn(indice: IndiceHoja, id: string, base: string): boolean {
+  const vistos = new Set<string>([id]);
+  const pila = [id];
+  while (pila.length > 0) {
+    const w = indice.cables.get(pila.pop()!);
+    if (!w) continue;
+    for (const e of [w.desde, w.hasta]) {
+      if (e.tipo !== "cable") continue;
+      if (e.cable === base) return true;
+      if (vistos.has(e.cable)) continue;
+      vistos.add(e.cable);
+      pila.push(e.cable);
+    }
+  }
+  return false;
+}
+
 /** True si algún cable de la hoja tiene un extremo en un borne de alguno de `comps`. Una pasada por los cables. */
 export function hayCablesEn(hoja: Hoja, comps: ReadonlySet<string>): boolean {
   for (const w of hoja.cables) {

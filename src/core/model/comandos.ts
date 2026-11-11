@@ -23,7 +23,8 @@ import {
   type Extremo,
   type Hoja,
 } from "./documento";
-import { entornoLineal, planearTransformacion, type EntornoPlan, type Operacion, type Plan } from "./seguir";
+import { planearReconexion, type DestinoExtremo, type LadoCable, type ResultadoReconexion } from "./reconectar";
+import { entornoLineal, planearTransformacion, type CableCambiado, type EntornoPlan, type Operacion, type Plan } from "./seguir";
 
 /** Lo que cambió un comando. */
 export interface Cambio {
@@ -417,6 +418,81 @@ export function cablear(doc: Documento, datos: DatosCable, hoja = 0): Cablear {
     exigirEntero(y, "y del codo");
   }
   return new Cablear({ ...datos, id: generarId(doc, PREFIJO_CABLE) }, hoja);
+}
+
+// ── Reconectar un extremo libre ────────────────────────────────────────────
+
+/** Lo que el editor le puede dar a CambiarExtremo. */
+export interface OpcionesCambiarExtremo {
+  /** Índice y consulta de la hoja (los del editor). Sin esto se arman lineales sobre la hoja. */
+  entorno?: (hoja: Hoja) => EntornoPlan;
+  /**
+   * Resultado ya calculado con el mismo cable, lado y destino (la vista previa
+   * del arrastre). Se usa si el cable sigue como entonces.
+   */
+  plan?: ResultadoReconexion;
+}
+
+/**
+ * Conecta el extremo libre `lado` del cable `id` a un borne o a otro cable
+ * (T14c), con `planearReconexion`. Un solo paso; no da ids nuevos. Si se
+ * rechaza, tira con el aviso y no cambia nada. Deshacer repone la copia de
+ * antes; rehacer vuelve a aplicar el mismo resultado si el cable sigue como
+ * entonces y, si no, planea de nuevo (o tira sin cambiar nada).
+ */
+export class CambiarExtremo implements Comando {
+  private readonly destino: DestinoExtremo;
+  private hecho: { hoja: number; resultado: ResultadoReconexion & { cable: CableCambiado } } | null = null;
+
+  constructor(
+    readonly id: string,
+    readonly lado: LadoCable,
+    destino: DestinoExtremo,
+    private readonly opciones: OpcionesCambiarExtremo = {},
+  ) {
+    this.destino = { ...destino };
+  }
+
+  aplicar(doc: Documento): Cambio {
+    const h = hojaDe(doc, [this.id]);
+    const hoja = doc.hojas[h]!;
+    const indice = indexarHoja(hoja);
+    let r: (ResultadoReconexion & { cable: CableCambiado }) | null = null;
+    if (this.hecho?.hoja === h && this.vigente(indice, this.hecho.resultado)) r = this.hecho.resultado;
+    else if (this.opciones.plan && this.vigente(indice, this.opciones.plan)) r = this.opciones.plan;
+    if (!r) {
+      const entorno = this.opciones.entorno?.(hoja) ?? entornoLineal(hoja);
+      const n = planearReconexion(entorno, this.id, this.lado, this.destino);
+      if (n.rechazo || !n.cable) throw new Error(n.rechazo?.motivo ?? `No se puede reconectar "${this.id}".`);
+      r = n as ResultadoReconexion & { cable: CableCambiado };
+    }
+    const w = indice.cables.get(this.id)!;
+    w.desde = { ...r.cable.desde };
+    w.hasta = { ...r.cable.hasta };
+    w.codos = r.cable.codos.map(([x, y]) => [x, y]);
+    this.hecho = { hoja: h, resultado: r };
+    return { componentes: [], cables: [this.id] };
+  }
+
+  deshacer(doc: Documento): Cambio {
+    const hecho = this.hecho;
+    if (!hecho) throw new Error("No se puede deshacer un comando que no se aplicó.");
+    const w = doc.hojas[hecho.hoja]?.cables.find((c) => c.id === this.id);
+    if (!w) throw new Error(`No existe el cable "${this.id}".`);
+    const { antes } = hecho.resultado;
+    w.desde = { ...antes.desde };
+    w.hasta = { ...antes.hasta };
+    w.codos = antes.codos.map(([x, y]) => [x, y]);
+    return { componentes: [], cables: [this.id] };
+  }
+
+  /** True si `r` es de este comando, vale y el cable está como cuando se calculó. */
+  private vigente(indice: IndiceHoja, r: ResultadoReconexion): r is ResultadoReconexion & { cable: CableCambiado } {
+    if (r.rechazo || !r.cable) return false;
+    if (r.id !== this.id || r.lado !== this.lado || !igualesDatos(r.destino, this.destino)) return false;
+    const actual = indice.cables.get(this.id);
+    return actual !== undefined && igualesDatos(actual, r.antes);
+  }
 }
 
 // ── Borrar ─────────────────────────────────────────────────────────────────

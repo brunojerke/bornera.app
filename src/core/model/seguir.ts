@@ -245,13 +245,13 @@ function textoConflicto(op: Operacion, c: Conflicto): string {
 // ── Geometría de recorridos ────────────────────────────────────────────────
 
 /** El recorrido al revés (x, y seguidos). */
-function invertir(p: readonly number[]): number[] {
+export function invertir(p: readonly number[]): number[] {
   const r: number[] = [];
   for (let i = p.length - 2; i >= 0; i -= 2) r.push(p[i]!, p[i + 1]!);
   return r;
 }
 
-function contarCodos(p: readonly number[]): number {
+export function contarCodos(p: readonly number[]): number {
   return p.length / 2 - 2;
 }
 
@@ -261,14 +261,14 @@ function largoDe(p: readonly number[]): number {
   return l;
 }
 
-function codosDe(p: readonly number[]): [number, number][] {
+export function codosDe(p: readonly number[]): [number, number][] {
   const codos: [number, number][] = [];
   for (let i = 2; i + 3 < p.length; i += 2) codos.push([p[i]!, p[i + 1]!]);
   return codos;
 }
 
 /** Salida desde el primer punto y desde el último (mirando hacia el cable). */
-function salidas(p: readonly number[]): {
+export function salidas(p: readonly number[]): {
   inicio: Direccion | null;
   fin: Direccion | null;
 } {
@@ -280,7 +280,7 @@ function salidas(p: readonly number[]): {
 }
 
 /** 1 si la salida `d` no es una de las preferidas de `e` (sin preferidas, 0). */
-function incumpleSalida(d: Direccion | null, e: ExtremoRuta): number {
+export function incumpleSalida(d: Direccion | null, e: ExtremoRuta): number {
   return d && e.preferidas && e.preferidas.length > 0 && !e.preferidas.includes(d) ? 1 : 0;
 }
 
@@ -289,7 +289,7 @@ function incumpleSalida(d: Direccion | null, e: ExtremoRuta): number {
  * alcanza una L, si no 2. Con `cumpliendo`, solo cuentan las rutas que salen
  * por las preferidas de los dos extremos.
  */
-function minimoCodosFresco(a: ExtremoRuta, b: ExtremoRuta, cumpliendo: boolean): number {
+export function minimoCodosFresco(a: ExtremoRuta, b: ExtremoRuta, cumpliendo: boolean): number {
   const vale = (d: Direccion | null, e: ExtremoRuta) => d !== null && (!cumpliendo || incumpleSalida(d, e) === 0);
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -333,7 +333,7 @@ function formaValida(p: readonly number[], inicio: ExtremoRuta, fin: ExtremoRuta
   return cumple(s.inicio, inicio.preferidas) && cumple(s.fin, fin.preferidas);
 }
 
-interface Candidato {
+export interface Candidato {
   puntos: number[];
   clave: number[];
 }
@@ -380,7 +380,7 @@ function estirar(P: readonly number[], m: { x: number; y: number }): number[] | 
  * Candidatos de un cable que se mueve por un solo extremo: `P` va del
  * extremo fijo (F) al que se mueve, que pasa a `m`. Ordenados de mejor a peor.
  */
-function candidatosParcial(P: readonly number[], m: { x: number; y: number }, rutaF: ExtremoRuta, rutaM: ExtremoRuta): Candidato[] {
+export function candidatosParcial(P: readonly number[], m: { x: number; y: number }, rutaF: ExtremoRuta, rutaM: ExtremoRuta): Candidato[] {
   const lista: Candidato[] = [];
   const e = estirar(P, m);
   if (e && formaValida(e, rutaF, rutaM, true)) lista.push({ puntos: e, clave: [-1] });
@@ -412,7 +412,7 @@ function candidatosParcial(P: readonly number[], m: { x: number; y: number }, ru
 }
 
 /** Candidatos de un cable que se rehace entero, de `d` a `h`. */
-function candidatosEntero(d: ExtremoRuta, h: ExtremoRuta): Candidato[] {
+export function candidatosEntero(d: ExtremoRuta, h: ExtremoRuta): Candidato[] {
   const lista: Candidato[] = [];
   rutas(d, h).forEach((r, orden) => {
     const p = simplificar([d.x, d.y, ...r.codos.flat(), h.x, h.y]);

@@ -153,6 +153,57 @@ describe("Uniones de a poco", () => {
     expect(u.cantidad).toBe(0);
   });
 
+  it("un extremo que cambia de tipo con solo el id del cable en el cambio (T14c): libre → T, libre → borne y la vuelta", () => {
+    const k: Hoja["componentes"][number] = { id: "c1", tipo: "contactor.bobina", x: 0, y: 20, rot: 0, espejado: false, etiqueta: "K1", params: {} };
+    const a1 = borneDe(k, "A1")!;
+    const hoja: Hoja = {
+      nombre: "Hoja 1",
+      componentes: [k],
+      cables: [
+        { id: "w1", desde: libre(0, 0), hasta: libre(10, 0), codos: [] },
+        // Extremo libre justo sobre el anfitrión: cambia solo el tipo.
+        { id: "w2", desde: libre(4, 0), hasta: libre(4, 5), codos: [] },
+        // Extremo libre fuera del anfitrión: cambian el tipo y el punto.
+        { id: "w3", desde: libre(7, 3), hasta: libre(7, 6), codos: [] },
+        // Otro cable que ya llega a A1: con un segundo, A1 es unión.
+        { id: "w4", desde: borne("c1", "A1"), hasta: libre(a1.x - 6, a1.y), codos: [] },
+        { id: "w5", desde: libre(a1.x + 6, a1.y - 4), hasta: libre(a1.x + 6, a1.y), codos: [] },
+      ],
+    };
+    let indice = indexarHoja(hoja);
+    const u = new Uniones(indice, hoja.cables);
+    expect(u.todas()).toEqual([]);
+    expect(u.todas()).toEqual(uniones(hoja));
+    /** Cambia los extremos del cable `id` y pone al día las uniones con solo ese id. */
+    const cambiar = (id: string, cambios: Partial<Cable>) => {
+      const i = hoja.cables.findIndex((w) => w.id === id);
+      hoja.cables[i] = { ...hoja.cables[i]!, ...cambios };
+      indice = indexarHoja(hoja);
+      const cambio = u.actualizar([id], indice);
+      expect(u.todas(), id).toEqual(uniones(hoja));
+      return { quitadas: cambio.quitadas.map((x) => [x.x, x.y]), puestas: cambio.puestas.map((x) => [x.x, x.y]) };
+    };
+
+    // libre → T, mismo punto: aparece la unión.
+    expect(cambiar("w2", { desde: enCable("w1", 4, 0) })).toEqual({ quitadas: [], puestas: [[4, 0]] });
+    // libre → T, con otro punto: aparece la unión.
+    expect(cambiar("w3", { desde: enCable("w1", 7, 0) })).toEqual({ quitadas: [], puestas: [[7, 0]] });
+    // libre → borne con otro cable en ese borne: aparece la unión.
+    expect(cambiar("w5", { hasta: borne("c1", "A1"), codos: [[a1.x + 6, a1.y]] })).toEqual({ quitadas: [], puestas: [[a1.x, a1.y]] });
+    expect(u.cantidad).toBe(3);
+
+    // La vuelta: desaparecen.
+    expect(cambiar("w5", { hasta: libre(a1.x + 6, a1.y), codos: [] })).toEqual({ quitadas: [[a1.x, a1.y]], puestas: [] });
+    expect(cambiar("w3", { desde: libre(7, 3) })).toEqual({ quitadas: [[7, 0]], puestas: [] });
+    expect(cambiar("w2", { desde: libre(4, 0) })).toEqual({ quitadas: [[4, 0]], puestas: [] });
+    expect(u.cantidad).toBe(0);
+    // Y otra vez a T: el registro viejo no queda pegado.
+    expect(cambiar("w2", { desde: enCable("w1", 4, 0) })).toEqual({ quitadas: [], puestas: [[4, 0]] });
+    // El anfitrión cambia solo después de la vuelta: el punto de la T sigue bien.
+    expect(cambiar("w1", { hasta: libre(4, 0) }).puestas).toEqual([]);
+    expect(u.cantidad).toBe(0);
+  });
+
   it("borrar el anfitrión saca la unión (la T queda libre); deshacer y rehacer", () => {
     const ed = new Editor(documentoNuevo());
     const doc = ed.documento;

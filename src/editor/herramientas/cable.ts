@@ -36,6 +36,8 @@ import { direccionDe, opuesta, perpendiculares, rutas, simplificar, type Extremo
 import {
   MENSAJE_CRUCE,
   MENSAJE_EXTREMO_SUELTO,
+  MENSAJE_MISMO_BORNE,
+  MENSAJE_SIN_LARGO,
   MENSAJE_SIN_SALIDAS,
   prepararCable,
   salidasLibres,
@@ -60,8 +62,8 @@ export function radioBorne(escala: number): number {
   return Math.min(Math.max(TOLERANCIA_BORNE_PX / escala, 0.5), 0.9);
 }
 
-export const MENSAJE_SIN_LARGO = "El cable no tiene largo.";
-export const MENSAJE_MISMO_BORNE = "No se puede terminar en el mismo borne.";
+// Viven en el núcleo desde T14c (reconectar los usa también); acá se re-exportan.
+export { MENSAJE_MISMO_BORNE, MENSAJE_SIN_LARGO };
 export const MENSAJE_SIN_CAMINO = "Sin camino: fijá un codo.";
 export const MENSAJE_DOCUMENTO_CAMBIO = "El documento cambió: se canceló el cable en curso.";
 /**
