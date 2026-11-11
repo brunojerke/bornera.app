@@ -257,6 +257,25 @@ class Cables {
   }
 
   /**
+   * El extremo libre más cercano a (x, y), a distancia de Chebyshev ≤ `radio`
+   * (T14c); con empate, el del cable de arriba. Sin los ocultos. Null si no hay.
+   */
+  extremoLibreEn(x: number, y: number, radio: number): { id: string; x: number; y: number; distancia: number } | null {
+    const candidatos = this.indice.enCaja({ x: x - radio, y: y - radio, ancho: 2 * radio, alto: 2 * radio });
+    let mejor: { id: string; x: number; y: number; distancia: number } | null = null;
+    // De menor a mayor lugar (orden de dibujo): con `<=`, en un empate gana el de arriba.
+    for (const n of candidatos) {
+      if (this.ocultos.has(n)) continue;
+      const l = this.lugares[n]!.libres;
+      for (let i = 0; i + 1 < l.length; i += 2) {
+        const d = Math.max(Math.abs(l[i]! - x), Math.abs(l[i + 1]! - y));
+        if (d <= radio && (!mejor || d <= mejor.distancia)) mejor = { id: this.ids[n]!, x: l[i]!, y: l[i + 1]!, distancia: d };
+      }
+    }
+    return mejor;
+  }
+
+  /**
    * Dibuja los cables que tocan `info.visible`: solo sus tramos que la tocan,
    * todos en un solo trazo, y después los círculos de los extremos libres.
    */
@@ -734,6 +753,15 @@ export class EscenaEditable implements Contenido {
   cablesEn(caja: Caja): [string, CableEscena][] {
     const c = this.cables;
     return c.indice.enCaja(caja).map((n) => [c.ids[n]!, c.lugares[n]!]);
+  }
+
+  /**
+   * El extremo libre de cable más cercano a (x, y), a distancia de Chebyshev
+   * ≤ `radio` (T14c: reconectar); con empate, el del cable de arriba. Los
+   * cables ocultos no cuentan. Usa el índice de los cables: una consulta.
+   */
+  extremoLibreEn(x: number, y: number, radio: number): { id: string; x: number; y: number; distancia: number } | null {
+    return this.cables.extremoLibreEn(x, y, radio);
   }
 
   /** Ids de los elementos cuya caja de dibujo toca `caja` (candidatos, sin el filtro fino). */

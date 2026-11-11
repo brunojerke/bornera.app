@@ -107,7 +107,18 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   const contenedor = canvas.parentElement;
   let cursor = "";
   const actualizarCursor = () => {
-    const nuevo = editor.cable ? "crosshair" : editor.herramienta ? "copy" : editor.arrastrando ? "move" : "";
+    // Reconectar (T14c): cruz mientras se arrastra el extremo; mano sobre un extremo libre que se puede agarrar.
+    const nuevo = editor.cable
+      ? "crosshair"
+      : editor.herramienta
+        ? "copy"
+        : editor.reconectando
+          ? "crosshair"
+          : editor.arrastrando
+            ? "move"
+            : editor.sobreExtremo
+              ? "pointer"
+              : "";
     if (contenedor && nuevo !== cursor) contenedor.style.cursor = cursor = nuevo;
   };
   const avisoAnterior = editor.alCambiarHerramienta;

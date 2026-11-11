@@ -65,9 +65,23 @@
 // cables por id), qué bornes tienen cable y un contador de cambios: la
 // herramienta los usa para la vista previa y el comando final, y para
 // cancelar el tramo si el documento cambia por otra vía.
+//
+// Reconectar un extremo libre (T14c): con Seleccionar, apretar sobre el
+// extremo libre de un cable y arrastrarlo. Al pasar el umbral el cable sale de
+// la capa estática con las uniones que lo tocan (una invalidación por caja) y
+// queda seleccionado solo. En cada punto de grilla se busca el objetivo
+// (`objetivoEn`, sin ese cable) y se planea con `planearReconexion`, con caché
+// por objetivo y contador de cambios; la capa dinámica dibuja el recorrido
+// entero (acento si vale; aviso, a rayas y con la ✕ si no) y las marcas de los
+// bornes, y solo pide cuadro si cambió el objetivo. Al soltar con un destino
+// válido va un `CambiarExtremo` con ese mismo resultado, mientras el cable
+// sigue oculto, y después vuelve a la estática. Soltar en vacío o en un destino
+// que no vale, Esc, el botón derecho o un cambio del documento: vuelve como
+// estaba, sin paso. Las uniones nuevas aparecen al soltar.
 
-import { hayCablesEn, indexarHoja, recorridoCable, type IndiceHoja } from "../core/model/cables";
-import { Borrar, CambiarEtiqueta, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import { hayCablesEn, indexarHoja, puntoSobreRecorrido, recorridoCable, type IndiceHoja } from "../core/model/cables";
+import { Borrar, CambiarEtiqueta, CambiarExtremo, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import { planearReconexion, type DestinoExtremo, type LadoCable, type ResultadoReconexion } from "../core/model/reconectar";
 import {
   enMinuscula,
   MENSAJE_NO_SE_ACOMODA,
@@ -79,7 +93,7 @@ import {
   type Preparacion,
   type ResultadoPlan,
 } from "../core/model/seguir";
-import { geometriaComponente, problemasComponente, type Conflicto } from "../core/model/trazado";
+import { consultaSinCable, geometriaComponente, problemasComponente, type Conflicto } from "../core/model/trazado";
 import {
   crearDocumento,
   type Cable,
@@ -96,7 +110,7 @@ import { nivelDetalle } from "../render/detalle";
 import { grosorLinea, type ComponenteEscena } from "../render/escena";
 import { anotarTramos, EscenaEditable, type CableEscena } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
-import { dibujarCablesArrastre, dibujarCableEnCurso, dibujarCruces, dibujarMarcasCable } from "../render/cableEnCurso";
+import { dibujarCablesArrastre, dibujarCableEnCurso, dibujarCruces, dibujarMarcasCable, type DibujoCableEnCurso } from "../render/cableEnCurso";
 import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
 import type { Accion } from "./atajos";
@@ -105,7 +119,8 @@ import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
 import { HerramientaCable } from "./herramientas/cable";
 import { HerramientaColocar, type ModoColocar, type Previa } from "./herramientas/colocar";
-import { HerramientaSeleccionar } from "./herramientas/seleccionar";
+import { HerramientaSeleccionar, radioExtremo, type ExtremoAgarrable } from "./herramientas/seleccionar";
+import { objetivoEn, radioBorne, type Objetivo } from "./objetivo";
 import type { Herramienta, Resultado } from "./herramientas/tipos";
 
 /**
@@ -227,6 +242,40 @@ interface PlanArrastre {
   invalidos: Set<string>;
 }
 
+/** Pista sobre un extremo libre que se puede agarrar (T14c). */
+export const PISTA_SOBRE_EXTREMO = "Extremo suelto: arrastralo hasta un borne o un cable para conectarlo";
+/** Pista reconectando sobre vacío (ahí soltar no conecta). */
+export const PISTA_RECONECTAR_VACIO = "Soltalo sobre un borne o un cable · Esc cancela";
+
+/** Una reconexión de un extremo libre en curso (T14c), del lado del editor. */
+interface ReconexionEditor {
+  id: string;
+  lado: LadoCable;
+  /** El cable como estaba (oculto en la capa estática): se dibuja así si no hay destino. */
+  original: CableEscena;
+  /** Clave del objetivo de la última previa (con el contador de cambios). */
+  clave: string | null;
+  previa: PreviaReconexion | null;
+}
+
+/** La previa de un punto de grilla de la reconexión: la misma cuenta que soltar ahí. */
+interface PreviaReconexion {
+  /** A dónde iría el extremo; null en vacío o sobre algo bloqueado. */
+  destino: DestinoExtremo | null;
+  r: ResultadoReconexion | null;
+  /** Por qué no vale (se avisa al soltar); null si vale o en vacío. */
+  motivo: string | null;
+  pista: string;
+  dibujo: DibujoCableEnCurso;
+}
+
+/** Los extremos libres de un cable, x, y seguidos. */
+function libresDe(c: { desde: Extremo; hasta: Extremo }): number[] {
+  const l: number[] = [];
+  for (const e of [c.desde, c.hasta]) if (e.tipo === "libre") l.push(e.x, e.y);
+  return l;
+}
+
 /** Un plan que no se pudo hacer: solo el rechazo. */
 type PlanFallido = { plan: null; rechazo: { motivo: string; conflictos: Conflicto[] } };
 
@@ -317,6 +366,8 @@ export class Editor {
   private _seleccion: ReadonlySet<string> = new Set();
   /** El arrastre de la selección en curso; null si no hay. */
   private arrastre: ArrastreEditor | null = null;
+  /** La reconexión de un extremo libre en curso (T14c); null si no hay. */
+  private reconexion: ReconexionEditor | null = null;
   /** Preparación hecha al ver si se puede arrastrar; se usa al empezar si nada cambió. */
   private preparado: { ids: ReadonlySet<string>; prep: Preparacion; cambios: number } | null = null;
   /** Se está ejecutando el `Mover` del arrastre (no es un cambio "por otra vía"). */
@@ -358,6 +409,10 @@ export class Editor {
       () => this._seleccion,
       (ids) => this.motivoArrastre(ids),
       (ids, dx, dy) => this.comandoArrastre(ids, dx, dy),
+      {
+        extremoEn: (x, y, escala) => this.extremoAgarrable(x, y, escala),
+        crear: (x, y, escala) => this.comandoReconexion(x, y, escala),
+      },
     );
   }
 
@@ -400,7 +455,22 @@ export class Editor {
    * volver a una posición que vale.
    */
   get pista(): string | null {
-    return this.cable?.pista ?? this.colocar?.pista ?? this.pistaArrastre();
+    return this.cable?.pista ?? this.colocar?.pista ?? this.pistaReconexion() ?? this.pistaArrastre();
+  }
+
+  /** Hay una reconexión de un extremo libre en curso (cursor en cruz). */
+  get reconectando(): boolean {
+    return this.reconexion !== null;
+  }
+
+  /** Lo que dibuja la previa de la reconexión en curso; null si no hay. */
+  get dibujoReconexion(): DibujoCableEnCurso | null {
+    return this.reconexion?.previa?.dibujo ?? null;
+  }
+
+  /** El cursor está sobre un extremo libre que se puede agarrar, sin gesto ni herramienta (cursor de mano). */
+  get sobreExtremo(): boolean {
+    return !this.herramienta && this.seleccionar.sobreExtremo !== null;
   }
 
   /** Ids seleccionados. */
@@ -845,6 +915,7 @@ export class Editor {
   cancelarHerramienta(): void {
     if (this.herramienta) this.aplicar(this.herramienta.terminar());
     if (this.arrastre) this.aplicar(this.seleccionar.cancelar());
+    if (this.reconexion) this.cortarReconexion();
   }
 
   /** Esc con una herramienta: Colocar termina; Cable cancela el tramo (o termina si no hay). */
@@ -892,14 +963,19 @@ export class Editor {
   aplicar(r: Resultado): void {
     if (r.aviso) this.alAvisar?.(r.aviso);
     if (r.arrastre?.fase === "empezar") this.empezarArrastre(r.arrastre.ids);
+    const rc = r.reconexion;
+    if (rc?.fase === "empezar") this.empezarReconexion(rc.id, rc.lado, rc.x, rc.y, rc.escala);
+    else if (rc?.fase === "mover") this.moverReconexion(rc.x, rc.y, rc.escala);
     const termina = r.arrastre?.fase === "terminar";
-    this.soltando = termina;
+    const terminaReconexion = rc?.fase === "terminar";
+    this.soltando = termina || terminaReconexion;
     try {
       if (r.comando) this.ejecutar(r.comando);
     } finally {
       this.soltando = false;
       // Aunque el comando falle, lo arrastrado no puede quedar oculto.
       if (termina) this.terminarArrastre();
+      if (terminaReconexion) this.terminarReconexion();
     }
     if (r.seleccion) this.seleccionarIds(r.seleccion);
     if (r.terminar && this.herramienta) {
@@ -909,6 +985,137 @@ export class Editor {
     this.avisarTramo();
     this.avisarPista();
     if (r.redibujar || r.terminar) this.vista?.invalidar();
+  }
+
+  /**
+   * El extremo libre que se agarra en (x, y) a esta escala (T14c): el más
+   * cercano dentro de `radioExtremo`, salvo que un borne dentro de su
+   * tolerancia (`radioBorne`) esté más cerca; con empate, el extremo. Null si
+   * no hay.
+   */
+  extremoAgarrable(x: number, y: number, escala: number): ExtremoAgarrable | null {
+    const e = this.escena.extremoLibreEn(x, y, radioExtremo(escala));
+    if (!e) return null;
+    const rb = radioBorne(escala);
+    for (const b of this.consulta.bornesEn({ x: x - rb, y: y - rb, ancho: 2 * rb, alto: 2 * rb })) {
+      const d = Math.max(Math.abs(b.x - x), Math.abs(b.y - y));
+      if (d <= rb && d < e.distancia) return null;
+    }
+    const w = this.indiceHoja.cables.get(e.id);
+    if (!w) return null;
+    const es = (l: Extremo) => l.tipo === "libre" && l.x === e.x && l.y === e.y;
+    const lado: LadoCable | null = es(w.desde) ? "desde" : es(w.hasta) ? "hasta" : null;
+    return lado ? { id: e.id, lado, x: e.x, y: e.y } : null;
+  }
+
+  /**
+   * Empieza a reconectar: el cable sale de la capa estática con las uniones
+   * que lo tocan (cada caja se invalida) y se arma la previa del primer punto.
+   */
+  private empezarReconexion(id: string, lado: LadoCable, x: number, y: number, escala: number): void {
+    if (this.reconexion) this.terminarReconexion();
+    const original = this.escena.obtenerCable(id);
+    if (!original) return;
+    this.limpiarCruces();
+    this.reconexion = { id, lado, original, clave: null, previa: null };
+    for (const k of this.escena.ocultarCable(id)) this.vista?.invalidarRegion(k);
+    for (const k of this.escena.cajasUnionesDe([id])) this.vista?.invalidarRegion(k);
+    this.moverReconexion(x, y, escala);
+  }
+
+  /** El cursor se movió reconectando: pide un cuadro solo si cambió el objetivo. */
+  private moverReconexion(x: number, y: number, escala: number): void {
+    const rc = this.reconexion;
+    if (rc && this.previaReconexion(rc, x, y, escala).cambio) this.vista?.invalidar();
+  }
+
+  /** El cable vuelve a la capa estática como esté ahora, con sus uniones (cada caja se invalida). */
+  private terminarReconexion(): void {
+    const rc = this.reconexion;
+    this.reconexion = null;
+    if (!rc) return;
+    for (const k of this.escena.mostrarCable(rc.id)) this.vista?.invalidarRegion(k);
+    for (const k of this.escena.cajasUnionesDe([rc.id])) this.vista?.invalidarRegion(k);
+  }
+
+  /** Corta la reconexión sin paso y sin tocar la selección. */
+  private cortarReconexion(): void {
+    this.aplicar(this.seleccionar.cortar());
+    if (this.reconexion) this.terminarReconexion();
+  }
+
+  /**
+   * La previa de soltar en (x, y), con caché por objetivo y contador de
+   * cambios. `cambio`: es otra que la anterior (hay que pedir un cuadro).
+   */
+  private previaReconexion(rc: ReconexionEditor, x: number, y: number, escala: number): { previa: PreviaReconexion; cambio: boolean } {
+    const obj = objetivoEn(consultaSinCable(this.consulta, rc.id), x, y, escala);
+    const que = obj.tipo === "borne" ? `${obj.borne.comp}:${obj.borne.borne}` : obj.tipo === "cable" ? obj.cable : "";
+    const clave = `${obj.tipo}|${obj.x}|${obj.y}|${que}|${this._cambios}`;
+    if (rc.previa && rc.clave === clave) return { previa: rc.previa, cambio: false };
+    rc.clave = clave;
+    rc.previa = this.calcularPrevia(rc, obj);
+    return { previa: rc.previa, cambio: true };
+  }
+
+  /** Destino, plan, pista y dibujo de soltar en el objetivo `obj`. */
+  private calcularPrevia(rc: ReconexionEditor, obj: Objetivo): PreviaReconexion {
+    const p = rc.original.puntos;
+    const n = p.length;
+    const comoEstaba = (conflictos: readonly { x: number; y: number }[]): DibujoCableEnCurso => ({
+      puntos: p,
+      valido: false,
+      conflictos,
+      objetivo: obj,
+      libres: rc.original.libres,
+    });
+    let destino: DestinoExtremo | null = null;
+    if (obj.tipo === "borne") destino = { tipo: "borne", comp: obj.borne.comp, borne: obj.borne.borne };
+    else if (obj.tipo === "cable") destino = { tipo: "cable", cable: obj.cable, x: obj.x, y: obj.y };
+    else if (obj.tipo === "bloqueado") return { destino: null, r: null, motivo: obj.mensaje, pista: obj.mensaje, dibujo: comoEstaba([obj]) };
+    else {
+      // Sobre el mismo cable (fuera de donde estaba el extremo): el núcleo lo rechaza ("sobre sí mismo").
+      const [ax, ay] = rc.lado === "hasta" ? [p[n - 2]!, p[n - 1]!] : [p[0]!, p[1]!];
+      if ((obj.x !== ax || obj.y !== ay) && puntoSobreRecorrido(p, obj.x, obj.y)) destino = { tipo: "cable", cable: rc.id, x: obj.x, y: obj.y };
+    }
+    if (!destino) return { destino: null, r: null, motivo: null, pista: PISTA_RECONECTAR_VACIO, dibujo: comoEstaba([]) };
+    let r: ResultadoReconexion;
+    try {
+      r = planearReconexion(this.entornoPlan(), rc.id, rc.lado, destino);
+    } catch {
+      // Un cable que apunta a algo que no está.
+      return { destino: null, r: null, motivo: MENSAJE_NO_SE_ACOMODA, pista: MENSAJE_NO_SE_ACOMODA, dibujo: comoEstaba([]) };
+    }
+    if (!r.rechazo && r.cable) {
+      const pista = obj.tipo === "borne" ? `Conecta con ${obj.borne.nombre} · ${obj.borne.borne}` : "Derivación (T) sobre un cable";
+      return { destino, r, motivo: null, pista, dibujo: { puntos: r.cable.puntos, valido: true, conflictos: [], objetivo: obj, libres: libresDe(r.cable) } };
+    }
+    const motivo = r.rechazo!.motivo;
+    const dibujo: DibujoCableEnCurso = r.cable
+      ? { puntos: r.cable.puntos, valido: false, conflictos: r.rechazo!.conflictos, objetivo: obj, libres: libresDe(r.cable) }
+      : comoEstaba(r.rechazo!.conflictos);
+    return { destino, r, motivo, pista: motivo, dibujo };
+  }
+
+  /**
+   * El comando de soltar reconectando en (x, y), con el resultado de la
+   * previa. Null si no vale: avisa el motivo (en vacío o donde estaba, nada).
+   */
+  private comandoReconexion(x: number, y: number, escala: number): Comando | null {
+    const rc = this.reconexion;
+    if (!rc) return null;
+    const { previa } = this.previaReconexion(rc, x, y, escala);
+    if (previa.destino && previa.r && !previa.r.rechazo) {
+      return new CambiarExtremo(rc.id, rc.lado, previa.destino, { entorno: this.entornoPlan, plan: previa.r });
+    }
+    if (previa.motivo) this.alAvisar?.(previa.motivo);
+    return null;
+  }
+
+  /** Pista de reconectar: la de la previa, o la de estar sobre un extremo libre; null si no. */
+  private pistaReconexion(): string | null {
+    if (this.reconexion) return this.reconexion.previa?.pista ?? PISTA_RECONECTAR_VACIO;
+    return this.sobreExtremo ? PISTA_SOBRE_EXTREMO : null;
   }
 
   /** Devuelve las mediciones de la sonda juntadas hasta ahora y empieza de cero. */
@@ -974,6 +1181,12 @@ export class Editor {
   private cancelarArrastrePorCambio(): void {
     this.alAvisar?.(AVISO_ARRASTRE_CANCELADO);
     this.aplicar(this.seleccionar.cancelar());
+  }
+
+  /** Lo mismo reconectando: el cable vuelve como estaba, sin paso; la selección queda. */
+  private cancelarReconexionPorCambio(): void {
+    this.alAvisar?.(AVISO_ARRASTRE_CANCELADO);
+    this.cortarReconexion();
   }
 
   /**
@@ -1048,7 +1261,15 @@ export class Editor {
   readonly dibujarDinamico = (r: Renderer, info: InfoDinamico): void => {
     const ae = this.arrastre;
     const a = ae && this.seleccionar.arrastre;
-    if (ae && a) {
+    const rc = this.reconexion;
+    if (rc) {
+      // Reconectando: las marcas de los bornes (como en W) y el cable entero de la previa.
+      if (nivelDetalle(info.escala).bornes) {
+        const m = this.marcasVisibles(info.visible);
+        dibujarMarcasCable(r, info, m.libres, m.ocupados);
+      }
+      if (rc.previa) dibujarCableEnCurso(r, info, rc.previa.dibujo);
+    } else if (ae && a) {
       const { modo, sonda } = this.diagnostico;
       if (modo === "nada") return; // base: la capa dinámica vacía
       const detalle = nivelDetalle(info.escala);
@@ -1174,6 +1395,7 @@ export class Editor {
   private reflejar(cambio: Cambio): Cambio {
     // Un cambio por otra vía en medio de un arrastre: el plan de la previa ya no vale.
     if (this.arrastre && !this.soltando) this.cancelarArrastrePorCambio();
+    if (this.reconexion && !this.soltando) this.cancelarReconexionPorCambio();
     this.limpiarCruces();
     this._cambios++;
     if (cambio.componentes.length === 0 && cambio.cables.length === 0) return this.trasReflejar(cambio);

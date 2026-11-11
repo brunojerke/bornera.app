@@ -299,3 +299,25 @@ describe("EscenaEditable: elegir con el mouse", () => {
     expect(e.contorno("a")).toBeNull();
   });
 });
+
+describe("EscenaEditable: extremo libre bajo el cursor (T14c)", () => {
+  it("el más cercano dentro del radio (Chebyshev); con empate, el cable de arriba; sin los ocultos", () => {
+    const e = new EscenaEditable();
+    e.ponerCable("w1", { puntos: [0, 0, 10, 0], libres: [10, 0] });
+    e.ponerCable("w2", { puntos: [10, 1, 10, 6], libres: [10, 1, 10, 6] });
+    expect(e.extremoLibreEn(10.2, 0.2, 0.5)).toEqual({ id: "w1", x: 10, y: 0, distancia: 0.2 });
+    expect(e.extremoLibreEn(10.2, 0.7, 0.5)).toMatchObject({ id: "w2", x: 10, y: 1 });
+    // A la misma distancia de los dos: gana el de arriba (w2, el último en dibujarse).
+    expect(e.extremoLibreEn(10, 0.5, 0.5)).toMatchObject({ id: "w2" });
+    // Chebyshev: (0,45, 0,45) de distancia vale con radio 0,5.
+    expect(e.extremoLibreEn(9.55, 5.55, 0.5)).toMatchObject({ id: "w2", x: 10, y: 6 });
+    expect(e.extremoLibreEn(9.4, 6, 0.5)).toBeNull();
+    // El extremo conectado (sin círculo) no cuenta: en (0, 0) no hay nada.
+    expect(e.extremoLibreEn(0, 0, 0.5)).toBeNull();
+    e.ocultarCable("w2");
+    expect(e.extremoLibreEn(10, 0.5, 0.5)).toMatchObject({ id: "w1" });
+    e.mostrarCable("w2");
+    e.quitarCable("w2");
+    expect(e.extremoLibreEn(10, 6, 0.5)).toBeNull();
+  });
+});

@@ -2,8 +2,9 @@
 // tienen que ser las mismas que recorriendo la hoja entera (`uniones`).
 
 import { describe, expect, it } from "vitest";
-import { borneDe, indexarHoja, recorridoCable } from "../core/model/cables";
-import { Borrar, Espejar, Mover, Rotar, cablear, colocar, type Comando } from "../core/model/comandos";
+import { borneDe, indexarHoja, recorridoCable, seApoyaEn, validarHoja } from "../core/model/cables";
+import { Borrar, CambiarExtremo, Espejar, Mover, Rotar, cablear, colocar, type Comando } from "../core/model/comandos";
+import { planearReconexion, type DestinoExtremo } from "../core/model/reconectar";
 import type { Cable, Extremo, Hoja } from "../core/model/documento";
 import { codos, opuesta, type ExtremoRuta } from "../core/model/ruteo";
 import { consultaHoja, problemasTrazado } from "../core/model/trazado";
@@ -96,6 +97,63 @@ function derivar(ed: Editor, host: Cable, azar: () => number): string | null {
       : libre(p.x + Math.floor(azar() * 9) - 4, p.y + Math.floor(azar() * 9) - 4);
   if (destino.tipo === "libre" && destino.x === p.x && destino.y === p.y) return null;
   return rutear(ed, enCable(host.id, p.x, p.y), destino);
+}
+
+/**
+ * Reconecta un extremo libre al azar (T14c): a un borne, a una T en el medio
+ * de un tramo de otro cable o, a veces, a un codo o un extremo de ese cable.
+ * "si" si se reconectó, "no" si se rechazó (y el comando tira sin cambiar
+ * nada), null si no hubo qué probar.
+ */
+function reconectar(ed: Editor, azar: () => number): "si" | "no" | null {
+  const hoja = ed.documento.hojas[0]!;
+  const sueltos: [Cable, "desde" | "hasta"][] = [];
+  for (const c of hoja.cables) for (const lado of ["desde", "hasta"] as const) if (c[lado].tipo === "libre") sueltos.push([c, lado]);
+  if (sueltos.length === 0) return null;
+  const [w, lado] = sueltos[Math.floor(azar() * sueltos.length)]!;
+  const bornes = bornesDe(hoja);
+  let destino: DestinoExtremo | null = null;
+  if (bornes.length > 0 && azar() < 0.5) {
+    destino = bornes[Math.floor(azar() * bornes.length)]! as DestinoExtremo;
+  } else {
+    const host = hoja.cables[Math.floor(azar() * hoja.cables.length)]!;
+    const rec = recorridoCable(indexarHoja(hoja), host);
+    if (!rec) return null;
+    let p: { x: number; y: number } | null;
+    if (azar() < 0.2) {
+      const i = Math.floor(azar() * (rec.length / 2));
+      p = { x: rec[2 * i]!, y: rec[2 * i + 1]! };
+    } else {
+      p = puntoMedio(hoja, host, azar);
+    }
+    destino = p ? { tipo: "cable", cable: host.id, x: p.x, y: p.y } : null;
+  }
+  if (!destino) return null;
+  const r = planearReconexion(ed.entornoPlan(), w.id, lado, destino);
+  if (r.rechazo) {
+    const antes = JSON.stringify(ed.documento);
+    expect(() => ed.ejecutar(new CambiarExtremo(w.id, lado, destino, { entorno: ed.entornoPlan }))).toThrow(r.rechazo.motivo);
+    expect(JSON.stringify(ed.documento)).toBe(antes);
+    return "no";
+  }
+  ed.ejecutar(new CambiarExtremo(w.id, lado, destino, { entorno: ed.entornoPlan, plan: r }));
+  return "si";
+}
+
+/** Invariantes de la hoja (T14c): válida, sin ciclos de apoyos y sin T en el extremo de su anfitrión. */
+function revisarHoja(hoja: Hoja, contexto: string): void {
+  expect(validarHoja(hoja), contexto).toEqual([]);
+  const indice = indexarHoja(hoja);
+  for (const c of hoja.cables) {
+    expect(seApoyaEn(indice, c.id, c.id), `${contexto}: ciclo de apoyos con ${c.id}`).toBe(false);
+    for (const e of [c.desde, c.hasta]) {
+      if (e.tipo !== "cable") continue;
+      const rec = recorridoCable(indice, indice.cables.get(e.cable)!)!;
+      const m = rec.length;
+      const enExtremo = (rec[0] === e.x && rec[1] === e.y) || (rec[m - 2] === e.x && rec[m - 1] === e.y);
+      expect(enExtremo, `${contexto}: la T de ${c.id} en el extremo de ${e.cable}`).toBe(false);
+    }
+  }
 }
 
 /** Editor con componentes en una grilla, cables entre bornes y T, algunas en cascada. */
@@ -332,7 +390,17 @@ describe("Uniones de a poco", () => {
 
   it(`al azar (semilla ${SEMILLA}): después de cada operación, igual que recorrer la hoja`, () => {
     const azar = generador(SEMILLA);
-    const n = { aceptadas: 0, rechazadas: 0, anfitrionesBorrados: 0, deshechos: 0, rehechos: 0, cascadas: 0, conUniones: 0 };
+    const n = {
+      aceptadas: 0,
+      rechazadas: 0,
+      anfitrionesBorrados: 0,
+      deshechos: 0,
+      rehechos: 0,
+      cascadas: 0,
+      conUniones: 0,
+      reconectados: 0,
+      reconexionesRechazadas: 0,
+    };
     for (let d = 0; d < 25; d++) {
       const { ed, cascadas } = editorAzar(azar);
       n.cascadas += cascadas;
@@ -354,6 +422,11 @@ describe("Uniones de a poco", () => {
           if (ed.rehacer()) n.rehechos++;
         } else if (r < 0.27 && hoja.cables.length > 0) {
           derivar(ed, hoja.cables[Math.floor(azar() * hoja.cables.length)]!, azar);
+        } else if (r < 0.37) {
+          // Reconectar un extremo libre (T14c).
+          const hecho = reconectar(ed, azar);
+          if (hecho === "si") n.reconectados++;
+          else if (hecho === "no") n.reconexionesRechazadas++;
         } else if (todos.length > 0) {
           const ids = todos.filter(() => azar() < 0.25);
           if (ids.length === 0) ids.push(todos[Math.floor(azar() * todos.length)]!);
@@ -378,6 +451,7 @@ describe("Uniones de a poco", () => {
           }
         }
         expect(ed.uniones.todas(), contexto).toEqual(deHoja(ed));
+        revisarHoja(hoja, contexto);
         if (ed.uniones.cantidad > 0) n.conUniones++;
       }
     }
@@ -389,5 +463,7 @@ describe("Uniones de a poco", () => {
     expect(n.rehechos, JSON.stringify(n)).toBeGreaterThan(10);
     expect(n.cascadas, JSON.stringify(n)).toBeGreaterThan(10);
     expect(n.conUniones, JSON.stringify(n)).toBeGreaterThan(200);
+    expect(n.reconectados, JSON.stringify(n)).toBeGreaterThan(10);
+    expect(n.reconexionesRechazadas, JSON.stringify(n)).toBeGreaterThan(10);
   });
 });

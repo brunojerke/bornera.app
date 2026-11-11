@@ -4,6 +4,7 @@
 // Así se prueban en Vitest con secuencias de eventos.
 
 import type { Comando } from "../../core/model/comandos";
+import type { LadoCable } from "../../core/model/reconectar";
 
 /** Un evento de puntero, en unidades de grilla (sin redondear). */
 export interface EventoHerramienta {
@@ -37,6 +38,17 @@ export interface Resultado {
    * `comando` si lo hay (si no, quedan donde estaban).
    */
   arrastre?: { fase: "empezar"; ids: ReadonlySet<string> } | { fase: "terminar" };
+  /**
+   * Reconectar un extremo libre (T14c). "empezar": el cable sale de la capa
+   * estática y la dinámica dibuja la previa. "mover": el cursor está en
+   * (x, y) (el editor recalcula la previa y pide cuadro solo si cambió el
+   * objetivo). "terminar": el cable vuelve a la estática, después de ejecutar
+   * `comando` si lo hay.
+   */
+  reconexion?:
+    | { fase: "empezar"; id: string; lado: LadoCable; x: number; y: number; escala: number }
+    | { fase: "mover"; x: number; y: number; escala: number }
+    | { fase: "terminar" };
   /** Aviso para la barra de estado: algo que se pidió y no se puede hacer. */
   aviso?: string;
 }
