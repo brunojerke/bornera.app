@@ -399,6 +399,29 @@ class PuntosUnion {
     }
   }
 
+  /**
+   * Todas las uniones van a t(p), con lo mismo que se juntaba ahí (la hoja
+   * entera transformada): cada una se mueve en el índice en su lugar, sin
+   * quitarla y ponerla. Devuelve las cajas viejas y las nuevas.
+   */
+  transformar(t: (x: number, y: number) => { x: number; y: number }): Caja[] {
+    const cajas: Caja[] = [];
+    this.lugarDe.clear();
+    for (let n = 0; n < this.lugares.length; n++) {
+      const u = this.lugares[n];
+      if (!u) continue;
+      cajas.push(cajaUnion(u.x, u.y));
+      const q = t(u.x, u.y);
+      u.x = q.x;
+      u.y = q.y;
+      const k = cajaUnion(q.x, q.y);
+      cajas.push(k);
+      this.lugarDe.set(claveUnion(q.x, q.y), n);
+      this.indice.mover(n, k);
+    }
+    return cajas;
+  }
+
   /** Cajas de las uniones donde está alguno de `ids` (cables o componentes), sin repetir. */
   cajasDe(ids: Iterable<string>): Caja[] {
     const vistos = new Set<number>();
@@ -575,6 +598,14 @@ export class EscenaEditable implements Contenido {
   /** Quita la unión de (x, y). Devuelve su caja (vacío si no estaba). */
   quitarUnion(x: number, y: number): readonly Caja[] {
     return this.uniones.quitar(x, y);
+  }
+
+  /**
+   * La hoja entera se transformó con `t` (`Cambio.hojaEntera`): todas las
+   * uniones van a t(p) en bloque. Devuelve las cajas a rehacer, viejas y nuevas.
+   */
+  transformarUniones(t: (x: number, y: number) => { x: number; y: number }): readonly Caja[] {
+    return this.uniones.transformar(t);
   }
 
   /** Uniones cuya caja toca `caja`. */

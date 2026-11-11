@@ -31,6 +31,14 @@ export interface Cambio {
   componentes: string[];
   /** Ids de los cables agregados, quitados o modificados (también los soltados). */
   cables: string[];
+  /**
+   * Solo si el cambio transformó la hoja entera con una sola transformación
+   * (todos los componentes y todos los cables, rígidos: Mover, Rotar o
+   * Espejar con todo, o su deshacer): a dónde fue cada punto de la hoja. Lo
+   * que se calcula de la hoja (las uniones, T14b) se puede mover con esto en
+   * lugar de recalcularse.
+   */
+  hojaEntera?: (x: number, y: number) => { x: number; y: number };
 }
 
 /** Cambio que toca solo esos componentes. */
@@ -242,7 +250,10 @@ abstract class Transformar implements Comando {
       w.codos = c.codos.map(([x, y]) => [x, y]);
     }
     this.hecho = { hoja: h, plan };
-    return cambioDe(plan);
+    const cambio = cambioDe(plan);
+    const t = plan.t;
+    if (esHojaEntera(hoja, plan)) cambio.hojaEntera = (x, y) => t.punto(x, y);
+    return cambio;
   }
 
   deshacer(doc: Documento): Cambio {
@@ -268,12 +279,28 @@ abstract class Transformar implements Comando {
       actual.hasta = { ...w.hasta };
       actual.codos = w.codos.map(([x, y]) => [x, y]);
     }
-    return cambioDe(hecho.plan);
+    const cambio = cambioDe(hecho.plan);
+    const t = hecho.plan.t;
+    if (esHojaEntera(hoja, hecho.plan)) cambio.hojaEntera = (x, y) => t.inversa(x, y);
+    return cambio;
   }
 }
 
 function cambioDe(plan: Plan): Cambio {
   return { componentes: plan.componentes.map((c) => c.id), cables: plan.cables.map((c) => c.id) };
+}
+
+/**
+ * True si el plan transforma la hoja entera con su transformación: todos los
+ * componentes y todos los cables, rígidos (como `Preparacion.todaLaHoja`).
+ * Entonces todo punto de la hoja va a T(p), y nada más cambia.
+ */
+function esHojaEntera(hoja: Hoja, plan: Plan): boolean {
+  return (
+    plan.componentes.length === hoja.componentes.length &&
+    plan.cables.length === hoja.cables.length &&
+    plan.rigidos.size === hoja.cables.length
+  );
 }
 
 /**

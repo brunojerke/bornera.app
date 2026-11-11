@@ -1214,9 +1214,18 @@ export class Editor {
       }
       const indice = this.indiceHoja;
       // Con el índice al día con todo el cambio (los anfitriones de las T también).
-      const uniones = this.uniones.actualizar(idsCables, indice);
-      for (const u of uniones.quitadas) for (const k of this.escena.quitarUnion(u.x, u.y)) this.vista?.invalidarRegion(k);
-      for (const u of uniones.puestas) for (const k of this.escena.ponerUnion(u)) this.vista?.invalidarRegion(k);
+      if (cambio.hojaEntera) {
+        // La hoja entera transformada (todo seleccionado): cada unión va a T(p), sin recalcular y en bloque.
+        // Sin invalidar sus cajas: cada unión está en el extremo de un cable del cambio, y la caja de la
+        // unión (± MARGEN_UNION) cabe en la del tramo de ese cable (± MARGEN_CABLE), vieja y nueva, que
+        // ya se invalidaron arriba (o al ocultarlo para el arrastre). Con todo seleccionado eran ~3850 más.
+        this.uniones.transformar(cambio.hojaEntera);
+        this.escena.transformarUniones(cambio.hojaEntera);
+      } else {
+        const uniones = this.uniones.actualizar(idsCables, indice);
+        for (const u of uniones.quitadas) for (const k of this.escena.quitarUnion(u.x, u.y)) this.vista?.invalidarRegion(k);
+        for (const u of uniones.puestas) for (const k of this.escena.ponerUnion(u)) this.vista?.invalidarRegion(k);
+      }
       for (const id of idsCables) {
         const w = indice.cables.get(id);
         const c = w ? this.cableEscena(indice, w) : null;

@@ -8,7 +8,7 @@ import { BOBINA_CONTACTOR } from "../core/symbols";
 import { diametroPunto, grosorEnPixeles, RendererCanvas } from "./canvas2d";
 import { nivelDetalle, ESCALA_MIN_BORNES } from "./detalle";
 import { grosorLinea, type InfoDibujo } from "./escena";
-import { cajaUnion, DIAMETRO_UNION, EscenaEditable, MARGEN_UNION, margenUnion } from "./escenaEditable";
+import { cajaUnion, DIAMETRO_UNION, EscenaEditable, MARGEN_CABLE, MARGEN_UNION, margenUnion } from "./escenaEditable";
 import type { Renderer } from "./renderer";
 
 /** Contexto falso: anota en px físicos los centros y radios de los arcos y los puntos de las líneas. */
@@ -125,6 +125,10 @@ describe("caja de una unión", () => {
 
   it("ninguna escala desde 6 px/u pide más margen", () => {
     for (const k of ESCALAS) expect(margenUnion(k), `k ${k}`).toBeLessThanOrEqual(MARGEN_UNION + 1e-12);
+  });
+
+  it("la caja de una unión cabe en la del tramo del cable que llega (con la hoja entera, el editor no la invalida aparte)", () => {
+    expect(MARGEN_UNION).toBeLessThanOrEqual(MARGEN_CABLE);
   });
 
   it("a 6 px/u y en todas las escalas, lo pintado (y el suavizado del arco) queda dentro de la caja", () => {
@@ -292,6 +296,18 @@ describe("uniones en la escena", () => {
       expect(p[2]).toBe(1);
       expect(Array.from(p[1] as number[]).slice(0, 2)).toEqual([10, 10]);
     }
+  });
+
+  it("transformarUniones mueve todas en bloque: cajas viejas y nuevas, y lo demás sigue la posición nueva", () => {
+    const e = escena();
+    e.ponerUnion({ x: 10, y: 10, cables: ["w9"], componentes: [] });
+    const cajas = e.transformarUniones((x, y) => ({ x: -y, y: x }));
+    expect(cajas).toEqual([cajaUnion(0, -2), cajaUnion(2, 0), cajaUnion(10, 10), cajaUnion(-10, 10)]);
+    expect(e.unionesEn(cajaUnion(2, 0))).toEqual([{ x: 2, y: 0, cables: ["w1", "w2"], componentes: ["c1"] }]);
+    expect(e.unionesEn(cajaUnion(0, -2))).toEqual([]);
+    expect(e.cajasUnionesDe(["c1"])).toEqual([cajaUnion(2, 0)]);
+    expect(e.quitarUnion(-10, 10)).toEqual([cajaUnion(-10, 10)]);
+    expect(e.cantidadUniones).toBe(1);
   });
 
   it("con `mostrarUniones` apagado no se dibujan; cajasUnionesDe da las de cada ancla, sin repetir", () => {

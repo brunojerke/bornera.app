@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Cablear, colocar } from "./comandos";
+import { Cablear, Espejar, Mover, Rotar, colocar } from "./comandos";
 import { crearDocumento, type Documento, type Extremo } from "./documento";
 import { uniones, unionEnPunto, puntosConectados } from "./uniones";
 import { indexarHoja } from "./cables";
@@ -140,6 +140,38 @@ describe("uniones", () => {
     const antes = copia(d);
     expect(de(d)).toEqual([{ x: 2, y: 0, cables: ["w1", "w2"], componentes: ["c1"] }]);
     expect(d).toEqual(antes);
+  });
+
+  it("Cambio.hojaEntera: con la hoja entera transformada, cada unión va a T(p); al deshacer, a la inversa", () => {
+    const armar = () => {
+      const d = doc(true);
+      tender(d, "w1", borne("c1", "A1"), libre(0, -6));
+      tender(d, "w2", libre(5, -2), borne("c1", "A1"));
+      tender(d, "w3", libre(10, -6), libre(20, -6));
+      tender(d, "w4", enCable("w3", 14, -6), libre(14, -2));
+      return d;
+    };
+    for (const hacer of [
+      () => new Rotar(["c1", "w1", "w2", "w3", "w4"], 90),
+      () => new Rotar(["c1", "w1", "w2", "w3", "w4"], -90),
+      () => new Espejar(["c1", "w1", "w2", "w3", "w4"]),
+      () => new Mover(["c1", "w1", "w2", "w3", "w4"], 3, -2),
+    ]) {
+      const d = armar();
+      const antes = de(d);
+      const cmd = hacer();
+      const c = cmd.aplicar(d);
+      expect(c.hojaEntera).toBeDefined();
+      const t = c.hojaEntera!;
+      const movidas = antes.map((u) => ({ ...u, ...t(u.x, u.y) })).sort((a, b) => a.y - b.y || a.x - b.x);
+      expect(de(d)).toEqual(movidas);
+      const v = cmd.deshacer(d);
+      expect(de(d)).toEqual(movidas.map((u) => ({ ...u, ...v.hojaEntera!(u.x, u.y) })).sort((a, b) => a.y - b.y || a.x - b.x));
+      expect(de(d)).toEqual(antes);
+    }
+    // Sin un cable (o sin un componente), no es la hoja entera.
+    expect(new Mover(["c1", "w1", "w2", "w3"], 3, -2).aplicar(armar()).hojaEntera).toBeUndefined();
+    expect(new Mover(["w1", "w2", "w3", "w4"], 3, -2).aplicar(armar()).hojaEntera).toBeUndefined();
   });
 
   it("puntosConectados: solo los extremos en un borne o en T", () => {

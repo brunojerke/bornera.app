@@ -388,6 +388,46 @@ export default async function (p, comprobar) {
     );
   }
 
+  // ── Con todo seleccionado (atajo de la hoja entera): R, M y mover sin restos; Ctrl+Z exacto ──
+  // Las uniones van a T(p) sin recalcular y sin invalidar sus cajas aparte (caben en las de los cables).
+  {
+    const R = ["r", "KeyR", 82];
+    const M = ["m", "KeyM", 77];
+    await camara(0.58, 13, 6);
+    const docRef = await documento();
+    const pasosRef = await p.evaluar("bornera.editor.historial.hechos.length");
+    await foto("refTodo");
+    await p.evaluar(`(() => { const ed = bornera.activo(), h = ed.documento.hojas[0];
+      ed.seleccionarIds([...h.componentes.map((c) => c.id), ...h.cables.map((w) => w.id)]); })()`);
+    const restos = [];
+    for (const [nombre, hacer] of [
+      ["R", () => tecla(R)],
+      ["M", () => tecla(M)],
+      ["mover", () => p.evaluar(`(() => { const ed = bornera.activo(), h = ed.documento.hojas[0];
+        ed.ejecutar(new bornera.comandos.Mover([...h.componentes.map((c) => c.id), ...h.cables.map((w) => w.id)], 3, -2)); })()`)],
+    ]) {
+      await hacer();
+      await esperar(30);
+      await p.evaluar(`bornera.activo().seleccionarIds([])`);
+      const d = await sinRestos();
+      if (d !== 0) restos.push(`${nombre}: ${d} px`);
+      await p.evaluar(`(() => { const ed = bornera.activo(), h = ed.documento.hojas[0];
+        ed.seleccionarIds([...h.componentes.map((c) => c.id), ...h.cables.map((w) => w.id)]); })()`);
+    }
+    await p.evaluar(`bornera.activo().seleccionarIds([])`);
+    const hechos = (await p.evaluar("bornera.editor.historial.hechos.length")) - pasosRef;
+    const iguales = await p.evaluar(`(async () => { const { uniones } = await import("/src/core/model/uniones.ts");
+      const ed = bornera.editor; return JSON.stringify(ed.uniones.todas()) === JSON.stringify(uniones(ed.documento.hojas[0])); })()`);
+    comprobar(
+      "58 %, todo seleccionado: R, M y mover son 3 pasos, cada uno igual a redibujar de cero, y las uniones son las del cálculo completo",
+      hechos === 3 && restos.length === 0 && iguales === true,
+      `${hechos} pasos · ${restos.join(" · ")} · uniones ${iguales ? "iguales" : "distintas"}`,
+    );
+    for (let i = 0; i < hechos; i++) await tecla(Z, CTRL);
+    const d = await distintos("refTodo");
+    comprobar("58 %, todo seleccionado: 3 Ctrl+Z devuelven todo exacto y sin restos", (await documento()) === docRef && d === 0, `${d} píxeles distintos`);
+  }
+
   // ── Mientras se arrastra K9: ni el punto viejo ni uno nuevo (D6-A); al soltar, el nuevo ──
   await camara(0.73, 122, 60);
   const w = grosor(0.73);

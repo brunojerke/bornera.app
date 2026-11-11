@@ -1,22 +1,22 @@
-// Uniones de la hoja al dÃƒÂ­a, de a poco (T14b, D2-B): con cada cable que
+// Uniones de la hoja al día, de a poco (T14b, D2-B): con cada cable que
 // cambia se rehacen solo los puntos que toca, sin recorrer la hoja. La cuenta
-// de cada punto es la del nÃƒÂºcleo (`unionEnPunto`); `uniones(hoja)` recorre la
+// de cada punto es la del núcleo (`unionEnPunto`); `uniones(hoja)` recorre la
 // hoja entera y es la referencia de los tests.
 //
-// De quÃƒÂ© depende la uniÃƒÂ³n de un punto P:
+// De qué depende la unión de un punto P:
 // - de los cables con un extremo conectado en P (un borne o una T): se anotan
 //   en P;
-// - de los anfitriones de esas T (por dÃƒÂ³nde pasan y dÃƒÂ³nde terminan): cada
-//   anfitriÃƒÂ³n anota P como punto que depende de ÃƒÂ©l, y si cambia solo (sin que
+// - de los anfitriones de esas T (por dónde pasan y dónde terminan): cada
+//   anfitrión anota P como punto que depende de él, y si cambia solo (sin que
 //   cambie la T), P se rehace igual;
-// - de la posiciÃƒÂ³n de los bornes: mover, girar o espejar un componente con
+// - de la posición de los bornes: mover, girar o espejar un componente con
 //   cables rehace sus cables, que vienen en el mismo cambio.
 
 import type { IndiceHoja } from "../core/model/cables";
 import type { Cable } from "../core/model/documento";
 import { clavePunto, compararUniones, puntosConectados, unionEnPunto, type Union } from "../core/model/uniones";
 
-/** Lo que cambiÃƒÂ³: las uniones que ya no estÃƒÂ¡n (o cambiaron) y las nuevas. */
+/** Lo que cambió: las uniones que ya no están (o cambiaron) y las nuevas. */
 export interface CambioUniones {
   quitadas: Union[];
   puestas: Union[];
@@ -30,10 +30,16 @@ interface Punto {
 }
 
 interface Registro {
-  /** Claves de los puntos donde se anotÃƒÂ³. */
+  /** Claves de los puntos donde se anotó. */
   puntos: string[];
   /** Anfitriones de sus T y la clave del punto de cada una. */
   anfitriones: [string, string][];
+}
+
+/** t(p) como [x, y]. */
+function xy(t: (x: number, y: number) => { x: number; y: number }, p: { x: number; y: number }): [number, number] {
+  const q = t(p.x, p.y);
+  return [q.x, q.y];
 }
 
 function mismaUnion(a: Union, b: Union): boolean {
@@ -50,7 +56,7 @@ function mismaUnion(a: Union, b: Union): boolean {
 export class Uniones {
   private readonly puntos = new Map<string, Punto>();
   private readonly registros = new Map<string, Registro>();
-  /** Por anfitriÃƒÂ³n: los puntos con alguna T sobre ÃƒÂ©l, y cuÃƒÂ¡ntas. */
+  /** Por anfitrión: los puntos con alguna T sobre él, y cuántas. */
   private readonly dependientes = new Map<string, Map<string, number>>();
   private readonly lista = new Map<string, Union>();
 
@@ -64,19 +70,19 @@ export class Uniones {
     return this.lista.size;
   }
 
-  /** La uniÃƒÂ³n en (x, y), o undefined. */
+  /** La unión en (x, y), o undefined. */
   en(x: number, y: number): Union | undefined {
     return this.lista.get(clavePunto(x, y));
   }
 
-  /** Todas, ordenadas por y y despuÃƒÂ©s por x (como `uniones` del nÃƒÂºcleo). */
+  /** Todas, ordenadas por y y después por x (como `uniones` del núcleo). */
   todas(): Union[] {
     return [...this.lista.values()].sort(compararUniones);
   }
 
   /**
-   * Lleva al dÃƒÂ­a los cables `ids` (agregados, quitados o cambiados) con su
-   * estado en `indice`, que ya tiene que estar al dÃƒÂ­a con todo el cambio.
+   * Lleva al día los cables `ids` (agregados, quitados o cambiados) con su
+   * estado en `indice`, que ya tiene que estar al día con todo el cambio.
    * Devuelve las uniones que cambiaron.
    */
   actualizar(ids: Iterable<string>, indice: IndiceHoja): CambioUniones {
@@ -87,7 +93,7 @@ export class Uniones {
       const w = indice.cables.get(id);
       if (w) this.ponerRegistro(w, indice, sucios);
     }
-    // Los puntos que dependen de un anfitriÃƒÂ³n que cambiÃƒÂ³, aunque sus T no cambien.
+    // Los puntos que dependen de un anfitrión que cambió, aunque sus T no cambien.
     for (const id of unicos) {
       const dep = this.dependientes.get(id);
       if (!dep) continue;
@@ -115,6 +121,47 @@ export class Uniones {
         cambio.puestas.push(u);
         this.lista.set(k, u);
       }
+    }
+    return cambio;
+  }
+
+  /**
+   * La hoja entera se transform� con `t` (todos los componentes y todos los
+   * cables r�gidos, `Cambio.hojaEntera`): cada uni�n pasa a t(p) con lo mismo
+   * que se juntaba ah�, sin recalcular (con todo seleccionado, recalcular las
+   * ~1900 uniones del banco son ~28 ms en la PC). Vale para deshacer y
+   * rehacer: el cambio trae la transformaci�n de cada sentido. Devuelve todas
+   * las viejas como quitadas y todas las nuevas como puestas.
+   */
+  transformar(t: (x: number, y: number) => { x: number; y: number }): CambioUniones {
+    // Toda clave que se usa (registros, dependientes, uniones) es la de un punto anotado.
+    const nueva = new Map<string, string>();
+    const puntos = new Map<string, Punto>();
+    for (const [k, p] of this.puntos) {
+      const q = t(p.x, p.y);
+      const nk = clavePunto(q.x, q.y);
+      nueva.set(k, nk);
+      puntos.set(nk, { x: q.x, y: q.y, llegan: p.llegan });
+    }
+    const de = (k: string) => nueva.get(k) ?? clavePunto(...xy(t, this.coordenadas(k)));
+    this.puntos.clear();
+    for (const [k, p] of puntos) this.puntos.set(k, p);
+    for (const r of this.registros.values()) {
+      r.puntos = r.puntos.map(de);
+      r.anfitriones = r.anfitriones.map(([h, k]) => [h, de(k)]);
+    }
+    for (const [h, dep] of this.dependientes) {
+      const n = new Map<string, number>();
+      for (const [k, c] of dep) n.set(de(k), c);
+      this.dependientes.set(h, n);
+    }
+    const cambio: CambioUniones = { quitadas: [...this.lista.values()], puestas: [] };
+    this.lista.clear();
+    for (const u of cambio.quitadas) {
+      const q = t(u.x, u.y);
+      const n: Union = { x: q.x, y: q.y, cables: u.cables, componentes: u.componentes };
+      this.lista.set(clavePunto(q.x, q.y), n);
+      cambio.puestas.push(n);
     }
     return cambio;
   }

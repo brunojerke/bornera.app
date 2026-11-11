@@ -11,6 +11,7 @@ import { uniones } from "../core/model/uniones";
 import { SIMBOLOS, buscarSimbolo, type Rotacion } from "../core/symbols";
 import type { Caja } from "../render/camara";
 import { cajaUnion } from "../render/escenaEditable";
+import { documentoBancoCables } from "./banco";
 import { documentoNuevo, Editor, type DestinoVista } from "./editor";
 import type { EventoHerramienta } from "./herramientas/tipos";
 import { Uniones } from "./uniones";
@@ -213,6 +214,69 @@ describe("Uniones de a poco", () => {
     expect(vista.regiones).toContainEqual(cajaUnion(0, -2));
     expect(vista.regiones).toContainEqual(cajaUnion(0, 1));
     expect(ed.uniones.todas()).toEqual(deHoja(ed));
+  });
+
+  it("atajo de la hoja entera (R, Mayús+R, M y mover, con deshacer y rehacer): igual al cálculo completo, sin recalcular", () => {
+    const ops: [string, (ids: string[]) => Comando][] = [
+      ["R", (ids) => new Rotar(ids, 90)],
+      ["Mayús+R", (ids) => new Rotar(ids, -90)],
+      ["M", (ids) => new Espejar(ids)],
+      ["mover", (ids) => new Mover(ids, 3, -2)],
+    ];
+    const docs: [string, () => Editor][] = [
+      ["banco con 100", () => new Editor(documentoBancoCables(100))],
+      ["al azar con cascadas", () => editorAzar(generador(SEMILLA + 7)).ed],
+    ];
+    for (const [nombreDoc, crear] of docs) {
+      for (const [nombre, op] of ops) {
+        const ed = crear();
+        const ctx = `${nombreDoc}, ${nombre}`;
+        const h = ed.documento.hojas[0]!;
+        expect(ed.uniones.cantidad, ctx).toBeGreaterThan(0);
+        const llamadas = { actualizar: 0, transformar: 0 };
+        const u = ed.uniones as unknown as Record<"actualizar" | "transformar", (...a: unknown[]) => unknown>;
+        for (const k of ["actualizar", "transformar"] as const) {
+          const o = u[k]!.bind(ed.uniones);
+          u[k] = (...a: unknown[]) => {
+            llamadas[k]++;
+            return o(...a);
+          };
+        }
+        const enEscena = () =>
+          ed.escena
+            .unionesEn({ x: -1e6, y: -1e6, ancho: 2e6, alto: 2e6 })
+            .map((x) => ({ x: x.x, y: x.y, cables: [...x.cables], componentes: [...x.componentes] }))
+            .sort((a, b) => a.y - b.y || a.x - b.x);
+        const igualCompleto = (paso: string) => {
+          expect(ed.uniones.todas(), `${ctx}, ${paso}`).toEqual(deHoja(ed));
+          expect(enEscena(), `${ctx}, ${paso}, escena`).toEqual(deHoja(ed));
+        };
+        // Las cajas de las uniones no se invalidan aparte: tienen que caber en lo que invalidan los cables.
+        const vista = new VistaFalsa();
+        ed.vista = vista;
+        const cabe = (paso: string, antes: { x: number; y: number }[]) => {
+          for (const u of [...antes, ...ed.uniones.todas()]) {
+            const k = cajaUnion(u.x, u.y);
+            const ok = vista.regiones.some((r) => k.x >= r.x && k.y >= r.y && k.x + k.ancho <= r.x + r.ancho && k.y + k.alto <= r.y + r.alto);
+            expect(ok, `${ctx}, ${paso}: la caja de (${u.x}, ${u.y}) no cabe en ninguna invalidada`).toBe(true);
+          }
+          vista.regiones = [];
+        };
+        let antes = ed.uniones.todas();
+        ed.ejecutar(op([...h.componentes.map((c) => c.id), ...h.cables.map((w) => w.id)]));
+        igualCompleto("aplicado");
+        cabe("aplicado", antes);
+        antes = ed.uniones.todas();
+        ed.deshacer();
+        igualCompleto("deshecho");
+        cabe("deshecho", antes);
+        antes = ed.uniones.todas();
+        ed.rehacer();
+        igualCompleto("rehecho");
+        cabe("rehecho", antes);
+        expect(llamadas, ctx).toEqual({ actualizar: 0, transformar: 3 });
+      }
+    }
   });
 
   it(`al azar (semilla ${SEMILLA}): después de cada operación, igual que recorrer la hoja`, () => {
