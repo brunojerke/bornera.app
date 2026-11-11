@@ -70,6 +70,36 @@ export function trazadoSimbolo(def: DefinicionSimbolo): TrazadoSimbolo {
 const CASI_CERO = 1e-9;
 
 /**
+ * Grosor de un trazo en px físicos: entero y por lo menos 1. Con un grosor
+ * fraccionario (1,16 px al 58 %) ninguna línea llena sus píxeles: sale gris.
+ */
+export function grosorEnPixeles(px: number): number {
+  return Math.max(1, Math.round(px));
+}
+
+/**
+ * Cuántos px físicos puede sobresalir un trazo alineado al píxel de su
+ * contorno sin alinear, para un grosor nominal en px (sin redondear): lo que
+ * se corre (hasta 1 px con grosor impar, medio con par; ver `RendererCanvas`)
+ * más lo que engorda al redondear, por lado.
+ */
+export function sobranteAlineado(grosorNominalPx: number): number {
+  const w = grosorEnPixeles(grosorNominalPx);
+  return (w & 1 ? 1 : 0.5) + Math.max(0, (w - grosorNominalPx) / 2);
+}
+
+// Lugares de `RendererCanvas.m` después de la matriz (0 a 5).
+/** Traslación sin la parte entera de la que fijó `transformar` (x, y). */
+const RX = 6;
+const RY = 7;
+/** Parte entera de la traslación que fijó `transformar` (x, y). */
+const BX = 8;
+const BY = 9;
+/** Grosor de línea actual, en unidades del sistema actual. */
+const GROSOR = 10;
+const LARGO_ESTADO = 11;
+
+/**
  * Renderer sobre un contexto 2D.
  *
  * Lleva la cuenta de la transformación actual (además de aplicarla al
@@ -79,13 +109,34 @@ const CASI_CERO = 1e-9;
  * Con un caché de textos (`textos`), los textos derechos no se dibujan en el
  * momento: se anotan y se copian todos juntos del caché en `volcarTextos`,
  * encima del resto del dibujo. Quien dibuja tiene que llamarlo al terminar.
+ *
+ * Alineación al píxel (T14n). Sin ella, una línea de un cable cae en cualquier
+ * fracción de píxel y el suavizado la reparte en dos columnas grises. Mientras
+ * la transformación no esté girada (0°, 90°, 180° o 270°; espejada vale):
+ * - el grosor de todo trazo es un número entero de px físicos;
+ * - los tramos horizontales o verticales de `lineas` y de `linea`, el centro
+ *   de `circulo` y el origen de `simbolo` se llevan al píxel: un trazo de `w` px en la
+ *   posición X ocupa desde round(X) − (w >> 1), la misma cuenta que los puntos
+ *   de la grilla (grilla.ts). El centro queda en round(X), más medio píxel si
+ *   `w` es impar.
+ * El redondeo se hace sin la parte entera de la traslación que fijó
+ * `transformar` (el corrimiento del mosaico o de la pantalla): así un punto de
+ * la grilla cae en el mismo píxel en todos los mosaicos y en la capa dinámica,
+ * y el cable llega justo a la línea del borne del símbolo, también cuando la
+ * cuenta cae justo en medio píxel.
  */
 export class RendererCanvas implements Renderer {
   /** Caché de textos pre-renderizados; null: cada texto con fillText. */
   textos: CacheTextos | null = null;
-  /** Transformación actual (a, b, c, d, e, f), la misma que tiene el contexto. */
-  private readonly m = [1, 0, 0, 1, 0, 0];
+  /**
+   * Transformación actual (a, b, c, d, e, f), la misma que tiene el contexto,
+   * y después lo que hace falta para alinear al píxel (RX, RY, BX, BY, GROSOR).
+   */
+  private readonly m = [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1];
   private readonly pila: number[] = [];
+  /** Resultado de `alinear`, en coordenadas del sistema actual. */
+  private ax = 0;
+  private ay = 0;
   /** Color de relleno actual (el de los textos); null si todavía no se fijó. */
   private relleno: string | null = null;
   private readonly pilaRelleno: (string | null)[] = [];
@@ -109,6 +160,54 @@ export class RendererCanvas implements Renderer {
     m[3] = d;
     m[4] = e;
     m[5] = f;
+    m[BX] = Math.round(e);
+    m[BY] = Math.round(f);
+    m[RX] = e - m[BX];
+    m[RY] = f - m[BY];
+  }
+
+  /** Px físicos por unidad del sistema actual. */
+  private escala(): number {
+    const m = this.m;
+    return Math.sqrt(m[0]! * m[0]! + m[1]! * m[1]!);
+  }
+
+  /**
+   * Cómo quedan los ejes con la transformación actual. 1: derechos (sin girar
+   * o a 180°); 2: cruzados (a 90° o 270°); 0: girada otro ángulo, y entonces
+   * nada se alinea al píxel.
+   */
+  private ejes(): 0 | 1 | 2 {
+    const m = this.m;
+    const derechos = Math.abs(m[0]!) + Math.abs(m[3]!);
+    const cruzados = Math.abs(m[1]!) + Math.abs(m[2]!);
+    if (cruzados <= CASI_CERO * derechos) return 1;
+    if (derechos <= CASI_CERO * cruzados) return 2;
+    return 0;
+  }
+
+  /** Grosor del trazo actual en px físicos (entero). */
+  private grosorPx(): number {
+    return grosorEnPixeles(this.m[GROSOR]! * this.escala());
+  }
+
+  /**
+   * Lleva el punto (x, y) al píxel, para un trazo de `w` px, y lo deja en
+   * (`ax`, `ay`), en coordenadas del sistema actual. `ejes` es 1 o 2.
+   */
+  private alinear(x: number, y: number, w: number, ejes: 1 | 2): void {
+    const m = this.m;
+    const medio = (w & 1) / 2;
+    // En px, contados desde la traslación actual (m[4], m[5]).
+    const px = Math.round(m[0]! * x + m[2]! * y + m[RX]!) + medio + m[BX]! - m[4]!;
+    const py = Math.round(m[1]! * x + m[3]! * y + m[RY]!) + medio + m[BY]! - m[5]!;
+    if (ejes === 1) {
+      this.ax = px / m[0]!;
+      this.ay = py / m[3]!;
+    } else {
+      this.ax = py / m[1]!;
+      this.ay = px / m[2]!;
+    }
   }
 
   estilo(e: Estilo): void {
@@ -117,11 +216,30 @@ export class RendererCanvas implements Renderer {
       this.ctx.fillStyle = e.relleno;
       this.relleno = e.relleno;
     }
-    if (e.grosor !== undefined) this.ctx.lineWidth = e.grosor;
+    if (e.grosor !== undefined) {
+      // Grosor entero en px físicos (ver la clase).
+      const s = this.escala();
+      const g = s > 0 ? grosorEnPixeles(e.grosor * s) / s : e.grosor;
+      this.ctx.lineWidth = g;
+      this.m[GROSOR] = g;
+    }
   }
 
   linea(x1: number, y1: number, x2: number, y2: number): void {
     const c = this.ctx;
+    // Horizontal o vertical: al píxel, como los cables (la marca de un borne va sobre el cable).
+    if (x1 === x2 || y1 === y2) {
+      const ejes = this.ejes();
+      if (ejes !== 0) {
+        const w = this.grosorPx();
+        this.alinear(x1, y1, w, ejes);
+        x1 = this.ax;
+        y1 = this.ay;
+        this.alinear(x2, y2, w, ejes);
+        x2 = this.ax;
+        y2 = this.ay;
+      }
+    }
     c.beginPath();
     c.moveTo(x1, y1);
     c.lineTo(x2, y2);
@@ -138,6 +256,13 @@ export class RendererCanvas implements Renderer {
 
   circulo(cx: number, cy: number, r: number, relleno = false): void {
     const c = this.ctx;
+    // Centro al píxel: el punto de un borne o de un extremo libre queda centrado en su cable.
+    const ejes = this.ejes();
+    if (ejes !== 0) {
+      this.alinear(cx, cy, this.grosorPx(), ejes);
+      cx = this.ax;
+      cy = this.ay;
+    }
     c.beginPath();
     c.arc(cx, cy, r, 0, Math.PI * 2);
     if (relleno) c.fill();
@@ -152,11 +277,53 @@ export class RendererCanvas implements Renderer {
   lineas(segmentos: ArrayLike<number>, n: number): void {
     if (n === 0) return;
     const c = this.ctx;
+    const m = this.m;
+    if (this.ejes() === 0) {
+      c.beginPath();
+      for (let i = 0, j = 0; i < n; i++, j += 4) {
+        c.moveTo(segmentos[j]!, segmentos[j + 1]!);
+        c.lineTo(segmentos[j + 2]!, segmentos[j + 3]!);
+      }
+      this.trazarLineas();
+      return;
+    }
+    // Al píxel, y directamente en px físicos (sin transformación): así las
+    // coordenadas son exactas, también lejos del origen, y cada tramo llena
+    // píxeles enteros en cualquier motor.
+    const a = m[0]!;
+    const b = m[1]!;
+    const cc = m[2]!;
+    const d = m[3]!;
+    const rx = m[RX]!;
+    const ry = m[RY]!;
+    const w = this.grosorPx();
+    const dx = (w & 1) / 2 + m[BX]!;
+    const dy = (w & 1) / 2 + m[BY]!;
+    c.setTransform(1, 0, 0, 1, 0, 0);
     c.beginPath();
     for (let i = 0, j = 0; i < n; i++, j += 4) {
-      c.moveTo(segmentos[j]!, segmentos[j + 1]!);
-      c.lineTo(segmentos[j + 2]!, segmentos[j + 3]!);
+      const x0 = segmentos[j]!;
+      const y0 = segmentos[j + 1]!;
+      const x1 = segmentos[j + 2]!;
+      const y1 = segmentos[j + 3]!;
+      if (x0 === x1 || y0 === y1) {
+        c.moveTo(Math.round(a * x0 + cc * y0 + rx) + dx, Math.round(b * x0 + d * y0 + ry) + dy);
+        c.lineTo(Math.round(a * x1 + cc * y1 + rx) + dx, Math.round(b * x1 + d * y1 + ry) + dy);
+      } else {
+        // Inclinado (las gomas de un arrastre): sin alinear, o sus rayas saldrían quebradas.
+        c.moveTo(a * x0 + cc * y0 + m[4]!, b * x0 + d * y0 + m[5]!);
+        c.lineTo(a * x1 + cc * y1 + m[4]!, b * x1 + d * y1 + m[5]!);
+      }
     }
+    c.lineWidth = w;
+    this.trazarLineas();
+    c.lineWidth = m[GROSOR]!;
+    c.setTransform(a, b, cc, d, m[4]!, m[5]!);
+  }
+
+  /** Traza el recorrido que armó `lineas`. */
+  private trazarLineas(): void {
+    const c = this.ctx;
     // Tope cuadrado: en tramos horizontales y verticales llena justo la
     // esquina de cada codo (con el redondeado, la esquina de afuera queda
     // redonda) y no tiene arcos que suavizar.
@@ -238,8 +405,20 @@ export class RendererCanvas implements Renderer {
 
   simbolo(def: DefinicionSimbolo): void {
     const { trazo, relleno } = trazadoSimbolo(def);
-    this.ctx.stroke(trazo);
-    if (relleno) this.ctx.fill(relleno);
+    const c = this.ctx;
+    const m = this.m;
+    if (this.ejes() === 0) {
+      c.stroke(trazo);
+      if (relleno) c.fill(relleno);
+      return;
+    }
+    // El origen del símbolo al píxel: sus líneas por el origen (las que llegan
+    // a los bornes) caen en la columna o la fila del cable que llega a ellas.
+    const medio = (this.grosorPx() & 1) / 2;
+    c.setTransform(m[0]!, m[1]!, m[2]!, m[3]!, Math.round(m[RX]!) + medio + m[BX]!, Math.round(m[RY]!) + medio + m[BY]!);
+    c.stroke(trazo);
+    if (relleno) c.fill(relleno);
+    c.setTransform(m[0]!, m[1]!, m[2]!, m[3]!, m[4]!, m[5]!);
   }
 
   guardar(): void {
@@ -250,8 +429,8 @@ export class RendererCanvas implements Renderer {
 
   restaurar(): void {
     this.ctx.restore();
-    if (this.pila.length < 6) return;
-    for (let i = 5; i >= 0; i--) this.m[i] = this.pila.pop()!;
+    if (this.pila.length < LARGO_ESTADO) return;
+    for (let i = LARGO_ESTADO - 1; i >= 0; i--) this.m[i] = this.pila.pop()!;
     this.relleno = this.pilaRelleno.pop() ?? null;
   }
 
@@ -260,6 +439,9 @@ export class RendererCanvas implements Renderer {
     const m = this.m;
     m[4] = m[0]! * dx + m[2]! * dy + m[4]!;
     m[5] = m[1]! * dx + m[3]! * dy + m[5]!;
+    // La misma cuenta sin la parte entera: da lo mismo en todos los mosaicos.
+    m[RX] = m[0]! * dx + m[2]! * dy + m[RX]!;
+    m[RY] = m[1]! * dx + m[3]! * dy + m[RY]!;
   }
 
   escalar(sx: number, sy = sx): void {

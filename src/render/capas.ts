@@ -26,9 +26,9 @@
 // se pueden inyectar (los tests usan falsos).
 
 import { ampliarCaja, seTocan, type Camara, type Caja } from "./camara";
-import { RendererCanvas } from "./canvas2d";
+import { RendererCanvas, sobranteAlineado } from "./canvas2d";
 import { DETALLE_COMPLETO, nivelDetalle } from "./detalle";
-import type { ColoresContenido, Contenido } from "./escena";
+import { grosorLinea, type ColoresContenido, type Contenido } from "./escena";
 import { Grilla, type ColoresGrilla } from "./grilla";
 import { clave, Mosaicos, TAM_MOSAICO, type Mosaico } from "./mosaicos";
 import type { MedidaCuadro } from "./rendimiento";
@@ -180,6 +180,8 @@ export class Capas {
   /** Nivel de zoom (px físicos por unidad) del cuadro anterior, y cuándo cambió por última vez. */
   private kAnterior = NaN;
   private cambioZoom = -Infinity;
+  /** devicePixelRatio del último cuadro (para el grosor del trazo al invalidar una región). */
+  private dpr = 1;
   /** Lo que tarda un mosaico y lo que tarda componer la pantalla, promediados. */
   private estimadoMosaico = 1;
   private estimadoComposicion = 0;
@@ -249,8 +251,10 @@ export class Capas {
     let n = 0;
     const k = mos.k;
     if (!Number.isNaN(k)) {
-      // Un píxel físico de más por lado: el suavizado de los bordes del trazo.
-      const m = 1 / k;
+      // De más por lado, en px físicos: uno por el suavizado de los bordes del
+      // trazo, y lo que el trazo se corre y engorda al alinearlo al píxel, con
+      // su grosor ya redondeado (el dibujo no cae justo donde dice la caja).
+      const m = (1 + sobranteAlineado(grosorLinea(k / this.dpr) * k)) / k;
       const T = TAM_MOSAICO;
       n += mos.marcarSucios(
         Math.floor(((caja.x - m) * k) / T),
@@ -259,8 +263,9 @@ export class Capas {
         Math.floor(((caja.y + caja.alto + m) * k) / T),
       );
     }
-    // Los viejos son de cualquier nivel: una unidad de grilla de margen es
-    // siempre más de un píxel físico (con el zoom mínimo, 1 unidad = 2 px).
+    // Los viejos son de cualquier nivel: una unidad de grilla de margen
+    // alcanza siempre (con el zoom mínimo, 1 unidad = 2 px: uno del suavizado
+    // y uno de alinear un trazo de 1 px, que ahí no engorda).
     n += mos.descartarViejosEn(ampliarCaja(caja, 1));
     return n > 0;
   }
@@ -302,6 +307,7 @@ export class Capas {
     if (ancho <= 0 || alto <= 0) {
       this.pintarFondo(ctx, W, H);
     } else {
+      this.dpr = dpr;
       const k = camara.escala * dpr;
       // Esquina de la pantalla en px globales del nivel k, entera: los
       // mosaicos se copian a píxel entero (a medio píxel se desenfocarían).

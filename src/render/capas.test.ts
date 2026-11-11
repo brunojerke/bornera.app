@@ -332,6 +332,22 @@ describe("Capas: mosaicos", () => {
       expect(dibujar().mosaicos).toBe(2);
     });
 
+    it("cuenta lo que el trazo se corre al alinearlo al píxel (T14n): a 1,4 px del borde también toca al vecino", () => {
+      const { capas, dibujar, terminar } = armar();
+      terminar();
+      // Termina en x = 12,73 (254,6 px). Al 100 % el trazo mide 2 px y alineado
+      // se corre hasta medio: 1 + 0,5 px de más llegan a 256,1, la columna 1.
+      capas.invalidarRegion({ x: 10, y: 2, ancho: 2.73, alto: 1 });
+      expect(dibujar().mosaicos).toBe(2);
+    });
+
+    it("pero no más que eso: a 1,6 px del borde no toca al vecino", () => {
+      const { capas, dibujar, terminar } = armar();
+      terminar();
+      capas.invalidarRegion({ x: 10, y: 2, ancho: 2.72, alto: 1 });
+      expect(dibujar().mosaicos).toBe(1);
+    });
+
     it("los sucios se siguen mostrando: no aparece la grilla vacía", () => {
       // Cada mosaico tarda 10 ms: con 4 sucios, no entran todos en un cuadro.
       const { principal, capas, dibujar, avanzar, terminar } = armar(10);
