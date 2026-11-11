@@ -17,12 +17,14 @@
 //
 // Con cables, al final: soltar los 40 en un lugar que vale (tiene que dar un
 // paso; se deshace), arrastrar y soltar con todo seleccionado (el paso de la
-// previa y el soltar; después se deshace) y el paso de la previa según los
-// cables que se acomodan (para TOPE_CABLES_PREVIA).
+// previa y el soltar; después se deshace), reconectar un extremo libre (T14c:
+// el paso por clase de destino y el soltar; después se deshace) y el paso de
+// la previa según los cables que se acomodan (para TOPE_CABLES_PREVIA).
 
 import { grupoCentralBanco } from "../editor/banco";
 import type { DiagnosticoArrastre, Editor } from "../editor/editor";
 import type { EventoHerramienta } from "../editor/herramientas/tipos";
+import { gestoReconexion } from "../editor/medicionReconectar";
 import { medirTope } from "../editor/medicionTope";
 import type { MedidaCuadro } from "../render/rendimiento";
 import type { Vista } from "../render/vista";
@@ -34,10 +36,13 @@ import {
   PASOS_ARRASTRE_TODO,
   recorrido,
   resumirPasada,
+  VUELTAS_RECONECTAR,
   ZOOMS_DIAGNOSTICO,
   type ExtrasDiagnostico,
   type Pasada,
+  type PasoMedido,
   type ResultadoCombinacion,
+  type ResultadoReconectar,
   type ResultadoSoltar,
 } from "./diagnostico";
 
@@ -109,6 +114,7 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
   const resultados: ResultadoCombinacion[] = [];
   let soltar: ResultadoSoltar | null = null;
   let soltarGrupo: ExtrasDiagnostico["soltarGrupo"] = null;
+  let reconectar: ResultadoReconectar | null = null;
   let tope: ExtrasDiagnostico["tope"] = [];
   /** Con cables, los 40 del grupo del centro (los mismos en los dos zooms). */
   const grupo = conCables ? grupoCentralBanco(editor.documento).filter((id) => editor.escena.obtener(id)) : null;
@@ -200,6 +206,7 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
       editor.diagnostico = { ...diagnosticoAntes };
       soltarGrupo = await soltarLosDelGrupo(grupo!);
       soltar = await soltarTodo();
+      reconectar = await reconectarExtremo();
       op.progreso?.("paso de la previa según los cables que se acomodan");
       await cuadro();
       editor.seleccionarIds([]);
@@ -208,13 +215,31 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
   } finally {
     grabando = null;
     alCuadro = null;
-    if (editor.arrastrando) editor.aplicar(editor.seleccionar.cancelar());
+    if (editor.arrastrando || editor.reconectando) editor.aplicar(editor.seleccionar.cancelar());
     vista.alDibujar = alDibujarAntes;
     vista.opciones = opcionesAntes;
     editor.diagnostico = diagnosticoAntes;
     editor.tomarMuestras();
   }
-  return { combinaciones: resultados, extras: { soltar, soltarGrupo, tope } };
+  return { combinaciones: resultados, extras: { soltar, soltarGrupo, tope, reconectar } };
+
+  /** Pide un cuadro y espera el primero (devuelve su dibujo, ms) y a que la pantalla quede nítida; como mucho 5 s. */
+  function primerCuadroYNitida(): Promise<number> {
+    let primero = -1;
+    return new Promise<number>((listo) => {
+      const tope = setTimeout(fin, 5000);
+      function fin() {
+        clearTimeout(tope);
+        alCuadro = null;
+        listo(Math.max(0, primero));
+      }
+      alCuadro = (m) => {
+        if (primero < 0) primero = m.total;
+        if (!m.pendiente && m.esperar === 0) fin();
+      };
+      vista.invalidar();
+    });
+  }
 
   /** Los 40 del grupo, soltados en (3, 2): tiene que dar un paso (si no, falla). Mide el soltar y deshace. */
   async function soltarLosDelGrupo(ids: readonly string[]): Promise<{ comando: number }> {
@@ -276,24 +301,11 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
     editor.aplicar(editor.activa.mover(evento(ancla.x + 2, ancla.y + 1)));
     await nitida();
     // El primer cuadro después de soltar y el momento en que queda nítida.
-    let primero = -1;
     const t0 = performance.now();
     editor.aplicar(editor.activa.soltar(evento(ancla.x + 2, ancla.y + 1)));
     const comando = performance.now() - t0;
     const aplicado = (editor.historial as unknown as { hechos: unknown[] }).hechos.length > pasos;
-    await new Promise<void>((listo) => {
-      const tope = setTimeout(fin, 5000);
-      function fin() {
-        clearTimeout(tope);
-        alCuadro = null;
-        listo();
-      }
-      alCuadro = (m) => {
-        if (primero < 0) primero = m.total;
-        if (!m.pendiente && m.esperar === 0) fin();
-      };
-      vista.invalidar();
-    });
+    const primerCuadro = await primerCuadroYNitida();
     const hastaNitida = performance.now() - t0;
     if (aplicado) editor.deshacer();
     editor.seleccionarIds([]);
@@ -301,10 +313,73 @@ export async function probarArrastre(vista: Vista, editor: Editor, op: OpcionesD
     return {
       seleccionados: todos.length,
       comando,
-      primerCuadro: Math.max(0, primero),
+      primerCuadro,
       hastaNitida,
       aplicado,
       paso: { mediana: mediana(pasosPrevia), maximo: Math.max(...pasosPrevia), cantidad: pasosPrevia.length },
+    };
+  }
+
+  /**
+   * Reconectar un extremo libre (T14c), al primer zoom con la cámara en el
+   * extremo: el gesto de medicionReconectar. Aprieta sobre el extremo y pasa
+   * al primer destino (empieza; no cuenta); recorre los destinos
+   * VUELTAS_RECONECTAR veces, un cuadro por destino, con el paso aparte por
+   * clase (válidos y rechazados después de rutear; los de antes de rutear no
+   * se miden); suelta en el destino válido (comando, primer cuadro y hasta
+   * nítida) y deshace.
+   */
+  async function reconectarExtremo(): Promise<ResultadoReconectar> {
+    op.progreso?.("reconectar un extremo libre");
+    camara.zoom = zooms[0]!;
+    const g = gestoReconexion(editor, camara.escala);
+    camara.centrar(g.x, g.y, vista.ancho, vista.alto);
+    editor.seleccionarIds([]);
+    await nitida();
+    const hechos = () => (editor.historial as unknown as { hechos: unknown[] }).hechos.length;
+    const antes = hechos();
+    editor.aplicar(editor.activa.presionar(evento(g.x, g.y)));
+    editor.aplicar(editor.activa.mover(evento(g.recorrido[0]!.x, g.recorrido[0]!.y)));
+    if (!editor.reconectando) throw new Error(`Apretar sobre el extremo de ${g.id} en (${g.x}, ${g.y}) no empezó a reconectar.`);
+    await cuadro();
+    const validos: number[] = [];
+    const ruteados: number[] = [];
+    let rechazadosAntes = 0;
+    for (let v = 0; v < VUELTAS_RECONECTAR; v++) {
+      for (let i = v === 0 ? 1 : 0; i < g.recorrido.length; i++) {
+        const p = g.recorrido[i]!;
+        const p0 = performance.now();
+        editor.aplicar(editor.activa.mover(evento(p.x, p.y)));
+        const ms = performance.now() - p0;
+        if (p.clase === "valido") validos.push(ms);
+        else if (p.clase === "rechazoRuteado") ruteados.push(ms);
+        else rechazadosAntes++;
+        await cuadro();
+      }
+    }
+    editor.aplicar(editor.activa.mover(evento(g.soltar.x, g.soltar.y)));
+    await nitida();
+    const t0 = performance.now();
+    editor.aplicar(editor.activa.soltar(evento(g.soltar.x, g.soltar.y)));
+    const comando = performance.now() - t0;
+    const aplicado = hechos() > antes;
+    const primerCuadro = await primerCuadroYNitida();
+    const hastaNitida = performance.now() - t0;
+    if (aplicado) editor.deshacer();
+    editor.seleccionarIds([]);
+    await nitida();
+    const medido = (v: readonly number[]): PasoMedido => ({ mediana: mediana(v), maximo: v.length ? Math.max(...v) : 0, cantidad: v.length });
+    return {
+      cable: g.id,
+      lado: g.lado,
+      soltarEn: g.soltar.texto,
+      paso: medido(validos),
+      pasoRechazado: medido(ruteados),
+      rechazadosAntes,
+      comando,
+      primerCuadro,
+      hastaNitida,
+      aplicado,
     };
   }
 }

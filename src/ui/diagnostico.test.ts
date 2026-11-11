@@ -3,6 +3,7 @@ import { LIMITE_LENTO_MS } from "../render/rendimiento";
 import {
   COMBINACIONES,
   criteriosT14a,
+  criteriosT14c,
   estadisticas,
   recorrido,
   resumirPasada,
@@ -135,5 +136,56 @@ describe("Diagnóstico del arrastre", () => {
     expect(tabla).toContain("- ✓ soltar con todo seleccionado 180,0 ms (comando + primer cuadro) ≤ 200");
     expect(tabla).toContain("**Arrastrar con todo seleccionado** (5030): paso de la previa 20,0 / 25,0 ms (mediana / máx., 12 puntos de grilla).");
     expect(tabla).toContain("- ✓ paso de la previa con todo seleccionado 20,0 ms (mediana) < 33");
+    // Sin reconectar medido no hay bloque de T14c.
+    expect(tabla).not.toContain("Aceptación T14c");
+    expect(tabla).not.toContain("Paso de reconectar");
+  });
+
+  const reconectar = (paso = 3, rechazado = 5, comando = 20, primerCuadro = 30, aplicado = true) => ({
+    cable: "w3028",
+    lado: "hasta",
+    soltarEn: "una T sobre w366",
+    paso: { mediana: paso, maximo: paso + 1, cantidad: 75 },
+    pasoRechazado: { mediana: rechazado, maximo: rechazado + 2, cantidad: 21 },
+    rechazadosAntes: 36,
+    comando,
+    primerCuadro,
+    hastaNitida: 90,
+    aplicado,
+  });
+
+  it("criterios de T14c: el arrastre actual (paso de los 40 y soltar con todo) y el gesto nuevo (pasos y soltar)", () => {
+    const bien = criteriosT14c(conReferencia([10], [3, 4, 5]), { soltar: soltar(120, 60), tope: [], reconectar: reconectar() });
+    expect(bien.map((k) => k.ok)).toEqual([true, true, true, true, true]);
+    const mal = criteriosT14c(conReferencia([10], [9, 9, 2]), { soltar: soltar(150, 60), tope: [], reconectar: reconectar(8, 8, 150, 60) });
+    expect(mal.map((k) => k.ok)).toEqual([false, false, false, false, false]);
+    // Un soltar sin paso no pasa; sin rechazos medidos después de rutear, ese criterio tampoco; sin soltar con todo, esa línea no está.
+    const sinRechazos = { ...reconectar(), pasoRechazado: { mediana: 0, maximo: 0, cantidad: 0 }, aplicado: false };
+    expect(criteriosT14c(conReferencia([10], [3]), { soltar: null, tope: [], reconectar: sinRechazos }).map((k) => k.ok)).toEqual([true, true, false, false]);
+    // Sin reconectar no hay criterios de T14c.
+    expect(criteriosT14c(conReferencia([10], [3]), { soltar: soltar(1, 1), tope: [] })).toEqual([]);
+  });
+
+  it("con reconectar, la tabla suma sus tres filas y la aceptación de T14c; la de T14a no cambia", () => {
+    const equipo = { version: "0.1.3-alpha.10", navegador: "Prueba", ancho: 1024, alto: 600, dpr: 1, fecha: "2026-11-11 12:00", arrastrados: 40, duracionMs: 5000 };
+    const extras = { soltar: soltar(120, 60), soltarGrupo: { comando: 12.5 }, tope: [] };
+    const sin = tablaDiagnostico(equipo, conReferencia([10, 12, 14], [3, 4, 5]), extras);
+    const con = tablaDiagnostico(equipo, conReferencia([10, 12, 14], [3, 4, 5]), { ...extras, reconectar: reconectar() });
+    expect(con).toContain("**Paso de reconectar** (w3028, extremo hasta; destinos válidos): 3,0 / 4,0 ms (mediana / máx., 75 destinos).");
+    expect(con).toContain(
+      "**Paso de reconectar, rechazos después de rutear**: 5,0 / 7,0 ms (mediana / máx., 21 destinos). Más 36 rechazados antes de rutear, que no se miden.",
+    );
+    expect(con).toContain("**Soltar reconectando** (w3028 en una T sobre w366): comando 20,0 ms · primer cuadro 30,0 ms · hasta nítida 90,0 ms");
+    expect(con).toContain("**Aceptación T14c** (58 %; el arrastre actual no empeora y el gesto nuevo):");
+    expect(con).toContain("- ✓ paso mediano (40 cableados) 4,0 ms < 8");
+    expect(con).toContain("- ✓ soltar con todo seleccionado 180,0 ms (comando + primer cuadro) ≤ 200");
+    expect(con).toContain("- ✓ paso de reconectar 3,0 ms (mediana de 75 válidos) < 8");
+    expect(con).toContain("- ✓ paso de reconectar rechazado después de rutear 5,0 ms (mediana de 21) < 8");
+    expect(con).toContain("- ✓ soltar reconectando 50,0 ms (comando + primer cuadro) ≤ 200");
+    // El bloque de T14a es el mismo con o sin reconectar.
+    const bloqueT14a = (t: string) => t.slice(t.indexOf("**Aceptación T14a**")).split("\n\n")[0];
+    expect(bloqueT14a(con)).toBe(bloqueT14a(sin));
+    const soltarReconectando = { ...reconectar(), aplicado: false };
+    expect(tablaDiagnostico(equipo, [], { ...extras, reconectar: soltarReconectando })).toContain("**Soltar reconectando** (w3028 en una T sobre w366): no dio un paso (no debería).");
   });
 });

@@ -2,7 +2,8 @@
 // Dibuja las escenas de 100, 500 y 2000 símbolos con las mismas Capas que usa
 // la app y manda los tiempos al script por POST. Después, la de 2000 con 3000
 // cables y 30 derivaciones en T (T14a), abierta en un Editor como en la app
-// (Ctrl+Shift+B), y el paso de la previa según los cables que se acomodan.
+// (Ctrl+Shift+B), con reconectar uno de sus extremos libres (T14c) al final,
+// y el paso de la previa según los cables que se acomodan.
 // Con `?escena-t12`, la de cables es la de T12 (para comparar).
 //
 // Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
@@ -16,7 +17,7 @@
 // dibujarlas. (Los mosaicos ya los rasteriza Capas al terminar cada uno.)
 
 import { CANTIDADES_BANCO, crearEscenaBanco, idBanco } from "../../src/render/banco";
-import { Camara } from "../../src/render/camara";
+import { Camara, PX_POR_UNIDAD } from "../../src/render/camara";
 import {
   Capas,
   OPCIONES_OPTIMIZADAS,
@@ -32,6 +33,7 @@ import { planearTransformacion, prepararTransformacion } from "../../src/core/mo
 import { ARRASTRADOS_BANCO, BANCO_CABLES, BANCO_CABLES_T12, documentoBancoCables, grupoCentralBanco } from "../../src/editor/banco";
 import { recorrido } from "../../src/ui/diagnostico";
 import { medirTope, type MedidaTope } from "../../src/editor/medicionTope";
+import { clasesDelRecorrido, gestoReconexion, type ClaseReconexion, type GestoReconexion } from "../../src/editor/medicionReconectar";
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 import { bornesColocados } from "../../src/core/symbols";
@@ -695,6 +697,124 @@ function moverCable(c: Camara, _: Capas, __: Escena, i: number): void {
   ed.aplicar(ed.activa.mover({ x, y, boton: 0, botones: 0, mayus: false, ctrl: false, escala: c.escala }));
 }
 
+/**
+ * Reconectar un extremo libre (T14c): el gesto de medicionReconectar, al
+ * 58 % con la cámara en el extremo (los 30 están lejos del centro de la
+ * escena). El primer cuadro aprieta sobre el extremo y pasa al primer
+ * destino (empieza: el cable sale de la capa estática); después, un destino
+ * por cuadro; el último suelta en el destino válido (un paso, que se deshace
+ * al reiniciar).
+ */
+function prepararReconectar(c: Camara, g: GestoReconexion): void {
+  const ed = editorCables!;
+  ed.cancelarHerramienta();
+  ed.seleccionarIds([]);
+  c.zoom = ZOOM_ARRASTRE;
+  c.centrar(g.x, g.y, ANCHO, ALTO);
+  repeticionGesto = 0;
+  gesto.pendiente = false;
+  gesto.comandos = 0;
+  gesto.rechazados = 0;
+  gesto.pasos = 0;
+}
+
+/** Aprieta sobre el extremo y pasa al primer destino: empieza a reconectar. */
+function agarrarExtremo(c: Camara, g: GestoReconexion): void {
+  const ed = editorCables!;
+  ed.aplicar(ed.seleccionar.presionar(evento(c, g.x, g.y)));
+  const p = g.recorrido[0]!;
+  ed.aplicar(ed.seleccionar.mover(evento(c, p.x, p.y)));
+  if (!ed.reconectando) throw new Error(`Reconectar: apretar en (${g.x}, ${g.y}) no agarró el extremo de ${g.id}.`);
+}
+
+/** Suelta en el destino válido: tiene que dar un paso. */
+function soltarEnDestino(c: Camara, g: GestoReconexion): void {
+  soltarGesto(c, g.soltar.x, g.soltar.y, repeticionGesto++ > 0);
+  if (!gesto.pendiente) throw new Error(`Reconectar: soltar en ${g.soltar.texto} no dio un paso ("${ultimoAviso}").`);
+}
+
+/** Los escenarios de reconectar (la escena de T12 no tiene extremos libres). Se arman con la escena como está. */
+function escenariosReconectar(): Escenario[] {
+  const g = gestoReconexion(editorCables!, ZOOM_ARRASTRE * PX_POR_UNIDAD);
+  const n = g.recorrido.length;
+  const medidos = clasesDelRecorrido({ ...g, recorrido: g.recorrido.slice(1) });
+  const descripcion =
+    `${g.id} (${g.lado}) desde (${g.x}, ${g.y}): ${n - 1} destinos medidos a ±6 u (${medidos.valido} válidos, ` +
+    `${medidos.rechazoRuteado} rechazados después de rutear, ${medidos.rechazoAntes} antes de rutear); suelta en ${g.soltar.texto}`;
+  /** Un destino por cuadro y al final suelta. */
+  const recorrer = (c: Camara, _: Capas, __: Escena, i: number): void => {
+    const ed = editorCables!;
+    if (i === 0) return agarrarExtremo(c, g);
+    if (i < n) {
+      const p = g.recorrido[i]!;
+      ed.aplicar(ed.seleccionar.mover(evento(c, p.x, p.y)));
+      if (repeticionGesto > 0) {
+        gesto.pasos++;
+        if (p.clase !== "valido") gesto.rechazados++;
+      }
+      return;
+    }
+    ed.aplicar(ed.seleccionar.mover(evento(c, g.soltar.x, g.soltar.y)));
+    soltarEnDestino(c, g);
+  };
+  const terminar = (nombre: string) => () => {
+    volverGesto();
+    editorCables!.seleccionarIds([]);
+    if (gesto.comandos === 0) throw new Error(`${nombre}: ningún gesto dio un paso; no mide reconectar.`);
+  };
+  /** Solo los destinos de la clase `clase` (sin el primero, que empieza, ni el último, que suelta). */
+  const deClase = (clase: ClaseReconexion) => (i: number) => i > 0 && i < n && g.recorrido[i]!.clase === clase;
+  const comun = {
+    preparar: (c: Camara) => prepararReconectar(c, g),
+    reiniciar: () => volverGesto(),
+    cuadros: n + 1,
+    paso: recorrer,
+    repeticiones: 3,
+    dinamico: () => editorCables!.dibujarDinamico,
+    medirPaso: true,
+    comandos: () => gesto.comandos,
+    rechazados: () => ({ rechazados: gesto.rechazados, pasos: gesto.pasos }),
+  };
+  return [
+    {
+      // El paso es solo el de los destinos válidos (un rechazo corta el plan antes). Criterio en la netbook: mediana < 8 ms.
+      ...comun,
+      nombre: "Reconectar un extremo libre al 58 %",
+      terminar: terminar("Reconectar"),
+      pasoMedido: deClase("valido"),
+      fases: true,
+      nota: () => `${descripcion}. Paso = los válidos.`,
+    },
+    {
+      // El mismo gesto; el paso es el de los rechazados después de rutear (cuestan el ruteo entero). Mismo criterio.
+      ...comun,
+      nombre: "Reconectar, rechazos después de rutear, al 58 %",
+      terminar: terminar("Reconectar, rechazos después de rutear"),
+      pasoMedido: deClase("rechazoRuteado"),
+      nota: () => `el mismo gesto. Paso = los ${medidos.rechazoRuteado} rechazados después de rutear.`,
+    },
+    {
+      // Agarra, va al destino válido y suelta: el paso medido es el soltar (comando, reflejar e invalidaciones).
+      nombre: "Soltar reconectando al 58 %",
+      preparar: (c) => prepararReconectar(c, g),
+      reiniciar: () => volverGesto(),
+      terminar: terminar("Soltar reconectando"),
+      cuadros: 3,
+      paso: (c, _, __, i) => {
+        if (i === 0) agarrarExtremo(c, g);
+        else if (i === 1) editorCables!.aplicar(editorCables!.seleccionar.mover(evento(c, g.soltar.x, g.soltar.y)));
+        else soltarEnDestino(c, g);
+      },
+      repeticiones: 3,
+      dinamico: () => editorCables!.dibujarDinamico,
+      medirPaso: true,
+      pasoMedido: (i) => i === 2,
+      fases: true,
+      comandos: () => gesto.comandos,
+    },
+  ];
+}
+
 /** Escenarios de la escena con cables: los de dibujo de siempre y los de edición. `t12`: la escena de T12. */
 const escenariosCables = (t12: boolean): Escenario[] => [
   ...ESCENARIOS.filter((x) =>
@@ -938,6 +1058,8 @@ const escenariosCables = (t12: boolean): Escenario[] => [
     dinamico: () => editorCables!.dibujarDinamico,
     medirPaso: true,
   },
+  // T14c, al final: los de antes corren en el mismo orden que en la base.
+  ...(t12 ? [] : escenariosReconectar()),
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {

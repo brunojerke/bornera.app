@@ -201,8 +201,8 @@ Humo `tests/humo/t14c-reconectar.mjs` (1024×600):
 ## Supuesto (sin verificar)
 
 - `Uniones.actualizar` soporta el cambio de tipo de un extremo con solo el id del cable. Es el primer test de la etapa 1.
-- La previa de un solo cable cuesta como la de W y queda muy por debajo de 8 ms en la netbook. No hay medición.
-- Los 30 extremos libres del banco de 2000 sirven para el escenario "Reconectar" y para la prueba de la netbook. Si no, la prueba arma su propio cable y lo deshace.
+- La previa de un solo cable cuesta como la de W y queda muy por debajo de 8 ms en la netbook. **En la PC (etapa 3):** 0,1–0,2 ms de mediana en el banco y 0,2 ms en la app; la netbook falta.
+- ~~Los 30 extremos libres del banco de 2000 sirven para el escenario "Reconectar" y para la prueba de la netbook.~~ **Verificado (etapa 3):** los 30 se agarran al 58 % y todos tienen al menos un destino válido a ±6 u (de 1 a 26). No hizo falta un cable propio.
 - `dibujarCableEnCurso` sirve tal cual para dibujar el cable entero de la previa (se leyó su entrada, no todo su dibujo).
 - 8 px de tolerancia alcanzan en la netbook a 58 %. Se confirma a mano.
 
@@ -229,6 +229,12 @@ Humo `tests/humo/t14c-reconectar.mjs` (1024×600):
   - Sobre vacío, y sobre algo bloqueado o un destino rechazado antes de rutear, la previa dibuja el cable como estaba, a rayas (lo que pasa si se suelta ahí); con un intento rechazado, el intento a rayas con la ✕.
   - Soltar en el punto donde estaba el extremo cuenta como vacío: sin paso ni aviso. En cualquier otro punto del mismo cable, "El cable no puede terminar sobre sí mismo." (el objetivo se busca sin ese cable y después se mira su recorrido).
   - El documento que cambia en medio avisa con el texto del arrastre de T14a ("El documento cambió: se canceló el arrastre.").
+- Etapa 3 (Bruno, 2026-11-11):
+  - **Gesto medido:** uno solo para el banco y la netbook, en `src/editor/medicionReconectar.ts`. Elige el extremo libre con más destinos (bornes y puntos de cable) a ±6 u: en el banco, w3028 (hasta), con 44 destinos medidos (25 válidos, 7 rechazados después de rutear, 12 antes). Recorre esos destinos en zigzag y suelta en el válido más cercano (una T sobre w366).
+  - **Paso de reconectar:** la mediana es solo de los válidos, como en el arrastre (A). **Agregado:** los rechazados después de rutear (un intento con conflictos o "sin camino") se miden aparte, con el mismo criterio < 8 ms y fila propia en el banco y en el diagnóstico. Los de antes de rutear no se miden.
+  - **Diagnóstico:** el bloque "Aceptación T14c" junta el arrastre actual (paso mediano de los 40 < 8 ms, soltar con todo ≤ 200 ms) y el gesto nuevo (paso < 8 ms, rechazos después de rutear < 8 ms, soltar reconectando ≤ 200 ms). El bloque T14a no cambia.
+  - **Banco:** las subas de más de 10 % contra `56b5a9a` se toman como ruido (A). Ver la nota de medición de T14c.
+  - **Verificado:** la búsqueda del extremo bajo el cursor no corre en los movimientos de un arrastre de selección. Corre una vez al apretar y en cada movimiento sin gesto. No se cambió nada.
 
 ## Fuera de T14c (pendientes, no se hacen acá)
 

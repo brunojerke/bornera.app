@@ -443,6 +443,16 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Qué:** arrastrar el extremo libre de un cable hasta un borne o un cable (T) lo conecta, con un comando `CambiarExtremo` (un paso de deshacer). El tramo final se rehace con el ruteo de T13 y pasa por la misma validación (`prepararCable`: forma + conexiones engañosas). En T13 un extremo libre ajeno no es objetivo de la herramienta W.
 - **Terminado cuando:** un cable con un extremo libre se conecta a un borne y a otro cable sin borrarlo ni redibujarlo.
 - **Prueba:** reconectar a un borne y a una T; deshacer = igual; un destino inválido (mismo borne, conexión engañosa) no crea paso.
+- **Plan:** `docs/plan-T14c.md` (aprobado el 2026-11-11, D1 a D10; ver "Cambios después de aprobado").
+- **Estado: hecha en la PC (2026-11-11). Se cierra en la netbook con la próxima prerelease** (la autoriza Bruno aparte).
+  - Etapa 1, núcleo (`e244943`, `87d6321`, `e25dedc`). Etapa 2, editor y humo (`20f3e3e`, `de5fb53`). Etapa 3, banco y prueba de la netbook (este commit).
+  - **PC:** 1087 tests, check limpio, humo 435/435, banco con 0 cuadros lentos.
+  - **Banco alternado contra `56b5a9a`** (worktree, 5 vueltas): 0 cuadros lentos nuevos. Hay subas de más de 10 %, pero no se repiten entre la tanda de 3 vueltas y la de 5, y los rangos de las dos versiones se pisan. Casi todas son de medianas de 0,2–1,1 ms y en escenas donde el código que corre no cambió. **Decisión (Bruno): ruido.** La tabla está en la nota "Medición 0.1.3-dev (T14c) - PC Ryzen 7".
+  - **Reconectar** (solo HEAD, w3028 al 58 %): paso de los válidos 0,1–0,2 ms de mediana (máx. 0,3–1,6); rechazos después de rutear 0,1–0,3 (máx. ≤ 0,4); soltar 0,2–0,5. En la app (humo), paso 0,2 ms, rechazos después de rutear 0,3 ms, soltar 1,0 + 0,6 ms.
+  - **Verificado:** la búsqueda del extremo bajo el cursor no corre en los movimientos de un arrastre de selección (solo al apretar y sin gesto).
+  - **Falta en la netbook:**
+    - Prueba del menú de desarrollo, bloque "Aceptación T14c": paso mediano de los 40 cableados < 8 ms; soltar con todo seleccionado ≤ 200 ms; paso de reconectar < 8 ms (válidos); rechazos después de rutear < 8 ms; soltar reconectando ≤ 200 ms (comando + primer cuadro).
+    - A mano: reconectar a un borne y a una T, Ctrl+Z, agarrar el extremo a 58 % y 73 %, sin restos.
 
 ---
 

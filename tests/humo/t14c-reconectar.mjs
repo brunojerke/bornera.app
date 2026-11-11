@@ -8,9 +8,10 @@
 // - Esc en medio del arrastre: igual al píxel que antes y la selección de antes;
 // - a 58 y 73 %; a 58 % el extremo se agarra a 8 px del centro (no a 9,5);
 // - cursor de mano sobre el extremo y de cruz mientras se arrastra; la barra
-//   dice qué hacer.
+//   dice qué hacer;
+// - la prueba de la netbook, corta, suma reconectar y la aceptación de T14c.
 
-import { CTRL, esperar } from "./cdp.mjs";
+import { CTRL, esperar, MAYUS } from "./cdp.mjs";
 
 export const nombre = "Reconectar extremos libres";
 
@@ -288,4 +289,43 @@ export default async function (p, comprobar) {
   const a95 = await agarra(9.5);
   comprobar("58 %: el extremo se agarra a 8 px del centro y no a 9,5", a8 === true && a95 === false, `8 px: ${a8} · 9,5 px: ${a95}`);
   comprobar("todo quedó como al principio", (await documento()) === docRef && (await pasos()) === pasosRef);
+
+  // ── La prueba automática de la netbook, corta, sobre la escena con cables (D10-C) ──
+  // Suma reconectar un extremo libre: el paso de los válidos y el de los
+  // rechazos después de rutear, soltar reconectando y la aceptación de T14c.
+  for (let i = 0; i < 4; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
+  await p.esperarA("bornera.activo()?.escena.cantidadCables === 3030");
+  const docCables = await p.evaluar("JSON.stringify(bornera.activo().documento.hojas)");
+  const tabla = await p.evaluar(`bornera.diagnosticarArrastre({ duracionMs: 400, zooms: [0.58] }).catch((e) => "FALLÓ: " + e.message)`);
+  const lineas = tabla.split("\n");
+  const fila = (inicio) => lineas.find((l) => l.startsWith(inicio)) ?? "";
+  const paso = (l) => /: ([\d,]+) \/ ([\d,]+) ms \(mediana \/ máx\., (\d+) destinos\)/.exec(l);
+  const validos = paso(fila("**Paso de reconectar** ("));
+  const rechazados = paso(fila("**Paso de reconectar, rechazos después de rutear**"));
+  const soltarRc = /\*\*Soltar reconectando\*\* \(.+\): comando ([\d,]+) ms · primer cuadro ([\d,]+) ms/.exec(tabla);
+  comprobar(
+    "la prueba de la netbook mide reconectar: paso de los válidos, de los rechazos después de rutear y soltar reconectando",
+    !tabla.startsWith("FALLÓ") && validos !== null && Number(validos[3]) > 0 && rechazados !== null && Number(rechazados[3]) > 0 && soltarRc !== null,
+    tabla.startsWith("FALLÓ") ? tabla : [fila("**Paso de reconectar"), fila("**Soltar reconectando")].join(" · "),
+  );
+  const t14c = tabla.slice(tabla.indexOf("**Aceptación T14c**")).split("\n").filter((l) => /^- [✓✗] /.test(l));
+  comprobar(
+    "y suma la aceptación de T14c: paso de los 40 y soltar con todo, y los tres del gesto nuevo",
+    tabla.includes("**Aceptación T14c**") &&
+      tabla.includes("**Aceptación T14a**") &&
+      t14c.length === 5 &&
+      /paso mediano \(40 cableados\) [\d,]+ ms < 8$/.test(t14c[0] ?? "") &&
+      /soltar con todo seleccionado [\d,]+ ms \(comando \+ primer cuadro\) ≤ 200$/.test(t14c[1] ?? "") &&
+      /paso de reconectar [\d,]+ ms \(mediana de \d+ válidos\) < 8$/.test(t14c[2] ?? "") &&
+      /paso de reconectar rechazado después de rutear [\d,]+ ms \(mediana de \d+\) < 8$/.test(t14c[3] ?? "") &&
+      /soltar reconectando [\d,]+ ms \(comando \+ primer cuadro\) ≤ 200$/.test(t14c[4] ?? ""),
+    t14c.join(" · ") || tabla,
+  );
+  if (validos && rechazados && soltarRc)
+    console.log(
+      `  ·   reconectar en la PC: paso ${validos[1]} / ${validos[2]} ms (${validos[3]} válidos), ` +
+        `rechazos después de rutear ${rechazados[1]} / ${rechazados[2]} ms (${rechazados[3]}), soltar ${soltarRc[1]} + ${soltarRc[2]} ms`,
+    );
+  comprobar("y deja la escena con cables como estaba", (await p.evaluar("JSON.stringify(bornera.activo().documento.hojas)")) === docCables);
+  for (let i = 0; i < 2; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
 }

@@ -164,12 +164,46 @@ export interface ResultadoSoltar {
 /** Puntos de grilla que recorre la previa con todo seleccionado antes de soltar. */
 export const PASOS_ARRASTRE_TODO = 12;
 
+/** Veces que la prueba de la netbook recorre los destinos de reconectar (más muestras del paso). */
+export const VUELTAS_RECONECTAR = 3;
+
+/** Paso de la previa (ms por destino): mediana, máximo y cuántos. */
+export interface PasoMedido {
+  mediana: number;
+  maximo: number;
+  cantidad: number;
+}
+
+/** Reconectar un extremo libre (T14c): el gesto de medicionReconectar, y lo que tarda soltar. */
+export interface ResultadoReconectar {
+  /** El cable, su lado agarrado y dónde se suelta ("una T sobre w366", "K12 · A1"). */
+  cable: string;
+  lado: string;
+  soltarEn: string;
+  /** Paso en los destinos válidos. */
+  paso: PasoMedido;
+  /** Paso en los destinos que se rechazan después de rutear (cuestan el ruteo entero). */
+  pasoRechazado: PasoMedido;
+  /** Pasos en destinos que se rechazan antes de rutear (no se miden: cortan el plan antes). */
+  rechazadosAntes: number;
+  /** ms del soltar: el comando y las invalidaciones. */
+  comando: number;
+  /** ms de dibujo del primer cuadro después de soltar. */
+  primerCuadro: number;
+  /** ms desde soltar hasta que la pantalla queda nítida. */
+  hastaNitida: number;
+  /** False si soltar no dio un paso (no debería: el destino vale). */
+  aplicado: boolean;
+}
+
 /** Lo que mide la prueba además de las combinaciones (con la escena con cables). */
 export interface ExtrasDiagnostico {
   soltar: ResultadoSoltar | null;
   /** Los 40 del grupo soltados en un lugar que vale: el comando (ms). */
   soltarGrupo?: { comando: number } | null;
   tope: readonly MedidaTope[];
+  /** Reconectar un extremo libre (T14c). */
+  reconectar?: ResultadoReconectar | null;
 }
 
 /**
@@ -215,6 +249,47 @@ export function criteriosT14a(resultados: readonly ResultadoCombinacion[], solta
       ok: soltar.paso.cantidad > 0 && soltar.paso.mediana < k.pasoTodo,
     });
   }
+  return l;
+}
+
+/**
+ * Aceptación de T14c en la netbook (D10-C): que el arrastre actual no
+ * empeore y el gesto nuevo, con los mismos topes.
+ */
+export const CRITERIOS_T14C = {
+  zoom: 0.58,
+  /** Paso mediano: de los 40 cableados, de reconectar y de los rechazos después de rutear, ms. */
+  paso: 8,
+  /** Soltar (comando + primer cuadro): con todo seleccionado y reconectando, ms. */
+  soltar: 200,
+} as const;
+
+/** Los criterios de T14c contra los resultados; vacío si no se midió reconectar. */
+export function criteriosT14c(resultados: readonly ResultadoCombinacion[], extras: ExtrasDiagnostico): Criterio[] {
+  const k = CRITERIOS_T14C;
+  const rc = extras.reconectar;
+  if (!rc) return [];
+  const l: Criterio[] = [];
+  const fila = resultados.find((r) => r.zoom === k.zoom && r.combinacion.modo === "completos" && r.combinacion.cache);
+  if (fila) {
+    const p = fila.sinSonda.paso;
+    l.push({ texto: `paso mediano (40 cableados) ${f1(p.mediana)} ms < ${k.paso}`, ok: p.cantidad > 0 && p.mediana < k.paso });
+  }
+  const s = extras.soltar;
+  if (s) {
+    const t = s.comando + s.primerCuadro;
+    l.push({ texto: `soltar con todo seleccionado ${f1(t)} ms (comando + primer cuadro) ≤ ${k.soltar}`, ok: s.aplicado && t <= k.soltar });
+  }
+  l.push({
+    texto: `paso de reconectar ${f1(rc.paso.mediana)} ms (mediana de ${rc.paso.cantidad} válidos) < ${k.paso}`,
+    ok: rc.paso.cantidad > 0 && rc.paso.mediana < k.paso,
+  });
+  l.push({
+    texto: `paso de reconectar rechazado después de rutear ${f1(rc.pasoRechazado.mediana)} ms (mediana de ${rc.pasoRechazado.cantidad}) < ${k.paso}`,
+    ok: rc.pasoRechazado.cantidad > 0 && rc.pasoRechazado.mediana < k.paso,
+  });
+  const t = rc.comando + rc.primerCuadro;
+  l.push({ texto: `soltar reconectando ${f1(t)} ms (comando + primer cuadro) ≤ ${k.soltar}`, ok: rc.aplicado && t <= k.soltar });
   return l;
 }
 
@@ -265,7 +340,7 @@ export function tablaDiagnostico(
         `${r.combinacion.cache ? `${s.aciertos} / ${s.fallos}` : "–"} |`,
     );
   }
-  const { soltar, tope, soltarGrupo } = extras;
+  const { soltar, tope, soltarGrupo, reconectar } = extras;
   if (soltarGrupo) {
     l.push("");
     l.push(`**Soltar los ${equipo.arrastrados} en (3, 2)**: un paso, comando ${f1(soltarGrupo.comando)} ms (después se deshace).`);
@@ -284,6 +359,24 @@ export function tablaDiagnostico(
           : "se rechazó (no debería)."),
     );
   }
+  if (reconectar) {
+    const rc = reconectar;
+    const paso = (p: PasoMedido) => `${f1(p.mediana)} / ${f1(p.maximo)} ms (mediana / máx., ${p.cantidad} destinos)`;
+    l.push("");
+    l.push(`**Paso de reconectar** (${rc.cable}, extremo ${rc.lado}; destinos válidos): ${paso(rc.paso)}.`);
+    l.push("");
+    l.push(
+      `**Paso de reconectar, rechazos después de rutear**: ${paso(rc.pasoRechazado)}. ` +
+        `Más ${rc.rechazadosAntes} rechazados antes de rutear, que no se miden.`,
+    );
+    l.push("");
+    l.push(
+      `**Soltar reconectando** (${rc.cable} en ${rc.soltarEn}): ` +
+        (rc.aplicado
+          ? `comando ${f1(rc.comando)} ms · primer cuadro ${f1(rc.primerCuadro)} ms · hasta nítida ${f1(rc.hastaNitida)} ms (después se deshace).`
+          : "no dio un paso (no debería)."),
+    );
+  }
   if (tope.length > 0) {
     l.push("");
     l.push("**Paso de la previa según los cables que se acomodan** (plan de un punto de grilla, ms; escena propia donde todo vale, solo pasos válidos):");
@@ -300,6 +393,12 @@ export function tablaDiagnostico(
     l.push("");
     l.push(`**Aceptación T14a** (${Math.round(CRITERIOS_T14A.zoom * 100)} %, completos con caché):`);
     for (const k of criterios) l.push(`- ${k.ok ? "✓" : "✗"} ${k.texto}`);
+  }
+  const t14c = criteriosT14c(resultados, extras);
+  if (t14c.length > 0) {
+    l.push("");
+    l.push(`**Aceptación T14c** (${Math.round(CRITERIOS_T14C.zoom * 100)} %; el arrastre actual no empeora y el gesto nuevo):`);
+    for (const k of t14c) l.push(`- ${k.ok ? "✓" : "✗"} ${k.texto}`);
   }
   return l.join("\n");
 }
