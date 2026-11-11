@@ -126,11 +126,11 @@ export class Uniones {
   }
 
   /**
-   * La hoja entera se transform� con `t` (todos los componentes y todos los
-   * cables r�gidos, `Cambio.hojaEntera`): cada uni�n pasa a t(p) con lo mismo
-   * que se juntaba ah�, sin recalcular (con todo seleccionado, recalcular las
+   * La hoja entera se transformó con `t` (todos los componentes y todos los
+   * cables rígidos, `Cambio.hojaEntera`): cada unión pasa a t(p) con lo mismo
+   * que se juntaba ahí, sin recalcular (con todo seleccionado, recalcular las
    * ~1900 uniones del banco son ~28 ms en la PC). Vale para deshacer y
-   * rehacer: el cambio trae la transformaci�n de cada sentido. Devuelve todas
+   * rehacer: el cambio trae la transformación de cada sentido. Devuelve todas
    * las viejas como quitadas y todas las nuevas como puestas.
    */
   transformar(t: (x: number, y: number) => { x: number; y: number }): CambioUniones {
