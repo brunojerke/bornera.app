@@ -48,6 +48,7 @@ Descartadas: D1-B/C (agarrar T o bornes), D2-B (solo con el cable seleccionado),
   - Con varios extremos libres dentro del radio gana el más cercano; con empate, el del cable que se dibuja arriba.
   - El valor de 8 px se confirma en la prueba a mano de la netbook.
 - **Prioridad (D2-A):** dentro del radio, el extremo libre gana a cualquier otro elemento bajo el cursor y a mover la selección.
+  - **Ajuste (Bruno, después de aprobado):** si un borne también queda dentro de su tolerancia (`radioBorne`, la de W), gana el más cercano de los dos al cursor (Chebyshev); con empate, el extremo libre. Si gana el borne, apretar hace lo de siempre sobre su componente.
   - Apretar y soltar sin pasar `UMBRAL_ARRASTRE_PX` sigue siendo un clic: elige el cable, como hoy.
   - Con Mayús no se reconecta: Mayús+clic sigue sumando o quitando de la selección.
   - Desde un extremo libre no se empieza un rectángulo de selección.
@@ -76,6 +77,7 @@ Una sola función del núcleo, la misma para la previa y para el comando. Rechaz
 - **Duplicadas (D6-A):** los dos extremos en T sobre el mismo anfitrión. La regla vive en el planificador de reconectar; W no cambia.
 - **Ciclos (punto 4).**
 - **T apoyada en el extremo:** el extremo nuevo no puede caer sobre el punto de una T apoyada en el cable (quedaría una T sobre el extremo de su anfitrión).
+- **T en el extremo de su anfitrión (agregado después de la etapa 1):** el extremo nuevo, en T sobre H, no puede caer en un extremo de H que es a su vez una T sobre otro cable. `problemasTrazado` la da por unida (la T de H sobre G) y la dejaba pasar; W nunca la pide (`objetivoEn` elige G ahí). Con el extremo de H suelto o en un borne ya la frena el trazado (`MENSAJE_EXTREMO_SUELTO` o "pasaría sobre el borne"), sin cambio.
 
 ### 4. Ciclos de apoyos (D7-C)
 
@@ -94,6 +96,7 @@ Una sola función del núcleo, la misma para la previa y para el comando. Rechaz
 ### 6. Selección, pista y cursor
 
 - **Selección:** al empezar el arrastre queda seleccionado solo el cable agarrado, y sigue así después de soltar (conectado, rechazado o cancelado).
+  - **Ajuste (Bruno, después de aprobado):** con Esc, la selección vuelve a la que había antes del arrastre.
 - **Pista (barra de estado):**
   - Sobre un extremo libre, sin gesto: "Extremo suelto: arrastralo hasta un borne o un cable para conectarlo".
   - Arrastrando sobre un borne válido: "Conecta con K1 · A1" (el texto de W).
@@ -106,13 +109,15 @@ Una sola función del núcleo, la misma para la previa y para el comando. Rechaz
   - Sobre sí mismo: "El cable no puede terminar sobre sí mismo."
   - T apoyada en el extremo: "Ahí llega la derivación de otro cable: el extremo no puede quedar sobre ella."
   - Sin camino: "El cable no tiene por dónde llegar ahí."
-  - Se reusan sin cambios: `MENSAJE_MISMO_BORNE`, `MENSAJE_SIN_LARGO`, `MENSAJE_EXTREMO_SUELTO`, `MENSAJE_CRUCE`, `MENSAJE_SIN_SALIDAS` y los de `problemasTrazado`.
+  - T en el extremo de su anfitrión: "Ahí termina ese cable: la derivación no puede quedar en su extremo."
+  - Se reusan sin cambios: `MENSAJE_MISMO_BORNE`, `MENSAJE_SIN_LARGO`, `MENSAJE_EXTREMO_SUELTO`, `MENSAJE_CRUCE`, `MENSAJE_SIN_SALIDAS` y los de `problemasTrazado`. Los dos primeros vivían en el editor (`herramientas/cable.ts`): pasaron a `trazado.ts` con el mismo texto y `cable.ts` los re-exporta.
 - **Aviso al soltar en un destino inválido:** el mismo mensaje, por `alAvisar`, como en T14a.
 - **Cursor** (`src/editor/punteros.ts`): `pointer` sobre un extremo libre agarrable sin gesto; `crosshair` mientras se reconecta. El resto no cambia.
 
 ### 7. Deshacer y rehacer
 
-- `CambiarExtremo(id, lado, destino)` guarda la copia del cable de antes y el plan. `aplicar` valida todo antes de tocar el documento; `deshacer` repone la copia (exacto); rehacer reaplica el mismo plan si el cable sigue como entonces y, si no, planea de nuevo o tira sin cambiar nada.
+- `CambiarExtremo(id, lado, destino)` guarda la copia del cable de antes y el plan. `aplicar` valida todo antes de tocar el documento; `deshacer` repone la copia (exacto).
+- **Rehacer (corregido después de la etapa 1):** nunca vuelve a rutear. Repite exactamente el resultado guardado si el cable sigue como entonces y ese resultado todavía pasa la validación (`revisarReconexion`, las mismas reglas sin rutear); si no, tira sin cambiar nada ("El cable cambió desde que se conectó: no se puede rehacer." o el motivo del problema). La primera vez, el resultado de la previa se usa si sigue valiendo; si no, se planea de nuevo.
 - Un solo paso. No da ids nuevos (`generarId` no se llama). El `Cambio` es `{ componentes: [], cables: [id] }`, sin `hojaEntera`.
 
 ## Etapas
@@ -208,6 +213,16 @@ Humo `tests/humo/t14c-reconectar.mjs` (1024×600):
 - Con T apoyadas (D4-B) queda poco lugar para rutear: más destinos "sin camino".
 - Buscar el extremo libre bajo el cursor en cada movimiento del mouse (pista y cursor) suma una consulta al índice por evento: tiene que pedir cuadro solo cuando cambia.
 - El gesto nuevo suma estados a Seleccionar; un `pointerup` perdido no puede dejar el cable oculto.
+
+## Cambios después de aprobado (Bruno, 2026-11-11)
+
+- Etapa 1 hecha en `e244943`. Al verificarla salieron estos cambios, ya anotados arriba en su lugar:
+  - **Rehacer** repetía el plan solo si el cable seguía igual y, si no, volvía a rutear: ahora repite el resultado guardado o tira sin cambios (`87d6321`).
+  - **T en el extremo de su anfitrión:** regla nueva en el núcleo, con su mensaje y su test (Validación y Mensajes nuevos).
+  - **Mensajes de W al núcleo:** `MENSAJE_MISMO_BORNE` y `MENSAJE_SIN_LARGO`, mismo texto.
+- Para la etapa 2:
+  - **Extremo libre y borne dentro de la tolerancia:** gana el más cercano (punto 1, Prioridad). Con su test.
+  - **Esc** devuelve la selección de antes del arrastre (punto 6, Selección). Con su test.
 
 ## Fuera de T14c (pendientes, no se hacen acá)
 

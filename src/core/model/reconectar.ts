@@ -14,7 +14,10 @@
 //
 // Validación, la misma para la previa y para el comando, en este orden: sobre
 // sí mismo, mismo borne, los dos extremos sobre el mismo anfitrión (D6-A),
-// ciclo de apoyos (D7-C), largo cero, el extremo sobre una T apoyada. Después,
+// ciclo de apoyos (D7-C), largo cero, el extremo sobre una T apoyada, la T en
+// el extremo de su anfitrión cuando ese extremo es otra T (así no queda una T
+// sobre el extremo de su anfitrión, ni por este lado ni por el de las T
+// apoyadas; con un extremo suelto o un borne lo frena el trazado). Después,
 // cada candidato en orden: la estructura y las conexiones aparentes
 // (`prepararCableExistente`), que bloquean solo los conflictos nuevos, por
 // clave, como en T14a. Gana el primero sin problemas; si ninguno pasa, queda el
@@ -53,6 +56,8 @@ export const MENSAJE_MISMO_ANFITRION = "Los dos extremos quedarían sobre el mis
 export const MENSAJE_SOBRE_SI_MISMO = "El cable no puede terminar sobre sí mismo.";
 export const MENSAJE_T_EN_EXTREMO = "Ahí llega la derivación de otro cable: el extremo no puede quedar sobre ella.";
 export const MENSAJE_SIN_LLEGADA = "El cable no tiene por dónde llegar ahí.";
+/** La T caería en el extremo de su anfitrión, que ahí termina en T sobre otro cable (agregado al plan después de la etapa 1). */
+export const MENSAJE_EXTREMO_ANFITRION = "Ahí termina ese cable: la derivación no puede quedar en su extremo.";
 /** Rehacer cuando el cable ya no está como cuando se reconectó: no se reconecta por otro camino. */
 export const MENSAJE_NO_REHACER = "El cable cambió desde que se conectó: no se puede rehacer.";
 
@@ -166,8 +171,9 @@ interface Contexto {
 
 /**
  * Arma el contexto y hace lo que no depende del ruteo: sobre sí mismo, mismo
- * borne, mismo anfitrión, ciclo, un borne que no existe, largo cero y el
- * extremo sobre una T apoyada. Devuelve el rechazo si hay uno. Tira si el
+ * borne, mismo anfitrión, ciclo, un borne que no existe, largo cero, el
+ * extremo sobre una T apoyada y la T en un extremo del anfitrión. Devuelve el
+ * rechazo si hay uno. Tira si el
  * cable no existe, si ese extremo no está suelto o si el cable apunta a algo
  * que no está.
  */
@@ -220,6 +226,19 @@ function contexto(entorno: EntornoPlan, id: string, lado: LadoCable, destino: De
   if (pm.x === P[0] && pm.y === P[1]) return rechazar(MENSAJE_SIN_LARGO, "sinLargo");
   const apoyadas = tApoyadas(consulta, id, P);
   if (apoyadas.some((t) => t.x === pm.x && t.y === pm.y)) return rechazar(MENSAJE_T_EN_EXTREMO, "tEnExtremo");
+  if (destino.tipo === "cable") {
+    // La T no puede quedar en el extremo de su anfitrión cuando ese extremo es a su vez una T:
+    // `problemasTrazado` la da por unida. Sobre un extremo suelto o un borne ya la frena
+    // `problemasTrazado` (el aviso de W, o "pasaría sobre el borne").
+    const h = indice.cables.get(destino.cable);
+    const rec = h && recorridoCable(indice, h);
+    if (h && rec) {
+      const m = rec.length;
+      const enDesde = h.desde.tipo === "cable" && rec[0] === pm.x && rec[1] === pm.y;
+      const enHasta = h.hasta.tipo === "cable" && rec[m - 2] === pm.x && rec[m - 1] === pm.y;
+      if (enDesde || enHasta) return rechazar(MENSAJE_EXTREMO_ANFITRION, "extremoAnfitrion");
+    }
+  }
 
   let ultima: Contexto["ultima"] = null;
   const sobreP: TApoyada[] = [];

@@ -6,6 +6,7 @@ import { CambiarExtremo, Mover } from "./comandos";
 import { crearDocumento, type Cable, type Componente, type Documento, type Extremo } from "./documento";
 import {
   MENSAJE_APOYO_CICLO,
+  MENSAJE_EXTREMO_ANFITRION,
   MENSAJE_MISMO_ANFITRION,
   MENSAJE_SIN_LLEGADA,
   MENSAJE_SOBRE_SI_MISMO,
@@ -15,7 +16,16 @@ import {
   type LadoCable,
 } from "./reconectar";
 import { entornoLineal } from "./seguir";
-import { MENSAJE_CRUCE, MENSAJE_EXTREMO_SUELTO, MENSAJE_MISMO_BORNE, MENSAJE_SIN_LARGO, MENSAJE_SIN_SALIDAS } from "./trazado";
+import {
+  MENSAJE_CRUCE,
+  MENSAJE_EXTREMO_SUELTO,
+  MENSAJE_MISMO_BORNE,
+  MENSAJE_SIN_LARGO,
+  MENSAJE_SIN_SALIDAS,
+  consultaHoja,
+  consultaSinCable,
+  problemasTrazado,
+} from "./trazado";
 
 const meta = { titulo: "Reconectar", autor: "Bruno Jerke", fecha: "2026-11-11" };
 
@@ -255,6 +265,8 @@ describe("planearReconexion y CambiarExtremo: cada rechazo deja el documento igu
         cable("c3", borne("k3", "A1"), libre(23, -2)),
       ],
     });
+  /** g vertical por x = 14; h llega desde la derecha y termina en T sobre g en (14, 3). */
+  const anfitrionEnT = () => base({ cables: [cable("g", libre(14, 0), libre(14, 8)), cable("h", libre(20, 3), enCable("g", 14, 3))] });
   /** w2 en T sobre w1 y w3 en T sobre w2. */
   const cadena = () =>
     base({
@@ -308,6 +320,15 @@ describe("planearReconexion y CambiarExtremo: cada rechazo deja el documento igu
     ],
     ["sobre sí mismo", () => base(), "w1", "hasta", enCable("w1", 0, -4), MENSAJE_SOBRE_SI_MISMO],
     [
+      "T en el extremo de su anfitrión, que termina en T sobre otro cable",
+      // h llega desde la derecha y termina en T sobre g (vertical) en (14, 3): una T sobre h ahí quedaría en su extremo.
+      anfitrionEnT,
+      "w1",
+      "hasta",
+      enCable("h", 14, 3),
+      MENSAJE_EXTREMO_ANFITRION,
+    ],
+    [
       "T apoyada en el extremo",
       // K3·A1 cae justo en (4, −6), donde w2 se apoya en w1.
       () => base({ componentes: [bobina("k3", 4, -4)], cables: [cable("w2", enCable("w1", 4, -6), libre(4, -9))] }),
@@ -329,6 +350,19 @@ describe("planearReconexion y CambiarExtremo: cada rechazo deja el documento igu
       expect(doc, nombre).toEqual(antes);
     });
   }
+
+  it("T en el extremo de su anfitrión: lo frena solo la regla (un punto más allá, en el medio de h, vale)", () => {
+    const doc = anfitrionEnT();
+    const medio = planear(doc, "w1", "hasta", enCable("h", 15, 3));
+    expect(medio.rechazo).toBeNull();
+    // El mismo cable sobre (14, 3) pasaría el trazado: problemasTrazado da por unida la T de h sobre g.
+    const conT = { ...medio.cable!, hasta: enCable("h", 14, 3), codos: medio.cable!.codos };
+    const puntos = [...medio.cable!.puntos.slice(0, -2), 14, 3];
+    const indice = indexarHoja(doc.hojas[0]!);
+    const c = consultaHoja(doc.hojas[0]!, indice);
+    expect(problemasTrazado({ id: "w1", desde: conT.desde, hasta: conT.hasta, puntos }, consultaSinCable(c, "w1"))).toEqual([]);
+    expect(planear(doc, "w1", "hasta", enCable("h", 14, 3)).rechazo?.motivo).toBe(MENSAJE_EXTREMO_ANFITRION);
+  });
 
   it("sin camino: con la T apoyada, todo candidato cruzaría lo conservado", () => {
     // w1 sube de K1·A1 hasta y = −10, va a x = 8 y baja suelto hasta (8, −3); w3 se apoya en (8, −6).
