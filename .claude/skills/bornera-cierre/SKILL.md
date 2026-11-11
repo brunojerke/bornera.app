@@ -18,6 +18,8 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
    - Correr `npm run bench` si la tarea toca dibujo, arrastre, planificación, mosaicos u otro camino sensible al rendimiento.
    - Si algo falla, corregirlo solo si pertenece a la tarea. Si no, frenar e informar.
    - No relajar una prueba para que pase. Cada expectativa modificada se justifica ante Bruno, porque un verde obtenido así no prueba nada.
+   - **Acentos:** correr `git grep -nIP '\x{FFFD}|\x{C3}|\x{C2}|\x{E2}\x{20AC}'`. Tiene que dar vacío. Si encuentra algo, corregirlo a mano con la herramienta Edit, nunca con PowerShell (`Set-Content` u `Out-File` cambian la codificación y rompen más acentos), y volver a correr la búsqueda.
+   - No decir que algo quedó "reparado" sin mostrar la búsqueda vacía.
 
 3. **Revisión independiente (solo si se pidió)**
    - Lanzar un subagente de solo lectura con el plan de la tarea y el diff, sin el razonamiento de la implementación.
@@ -31,6 +33,7 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
 5. **Hacer el commit local**
    - Formato: `Fase N, Tnn (i/n): resumen`, u omitir `(i/n)` si la tarea tiene una sola parte.
    - No hacer push, no crear tags y no publicar.
+   - Después del commit, correr `git grep -nIP '\x{FFFD}|\x{C3}|\x{C2}|\x{E2}\x{20AC}' HEAD` y comprobar que da vacío, para confirmar lo que quedó guardado y no solo la copia de trabajo.
 
 6. **Actualizar Obsidian**
    - Ubicar el vault con la variable `BORNERA_VAULT`. Si no existe, preguntar la ruta; no adivinarla.
