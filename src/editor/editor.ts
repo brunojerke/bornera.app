@@ -101,6 +101,7 @@ import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
 import type { Accion } from "./atajos";
 import { BornesConCable } from "./bornesConCable";
+import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
 import { HerramientaCable } from "./herramientas/cable";
 import { HerramientaColocar, type ModoColocar, type Previa } from "./herramientas/colocar";
@@ -298,6 +299,8 @@ export class Editor {
   alCambiarPista: ((pista: string | null) => void) | null = null;
   /** Qué bornes tienen cable (marcas de la herramienta W). Al día con cada cambio. */
   readonly bornesConCable: BornesConCable;
+  /** Puntos de unión de la hoja (T14b). Al día con cada cambio de cables. */
+  readonly uniones: Uniones;
   /** Bornes, cables y cuerpos cerca de una caja, con el índice de la escena (herramienta W). */
   readonly consulta: ConsultaEscena;
   /** Componentes y cables de la hoja por id, al día con cada cambio. */
@@ -341,6 +344,7 @@ export class Editor {
     const indice = h ? indexarHoja(h) : { componentes: new Map<string, Componente>(), cables: new Map<string, Cable>() };
     this.indiceHoja = { componentes: new Map(indice.componentes), cables: new Map(indice.cables) };
     this.bornesConCable = new BornesConCable(h?.cables ?? []);
+    this.uniones = new Uniones(this.indiceHoja, h?.cables ?? []);
     this.consulta = new ConsultaEscena(this.escena, () => this.indiceHoja.cables);
     if (h && h.cables.length > 0) {
       for (const w of h.cables) {
@@ -1205,6 +1209,8 @@ export class Editor {
         this.bornesConCable.poner(id, w);
       }
       const indice = this.indiceHoja;
+      // Con el índice al día con todo el cambio (los anfitriones de las T también).
+      this.uniones.actualizar(idsCables, indice);
       for (const id of idsCables) {
         const w = indice.cables.get(id);
         const c = w ? this.cableEscena(indice, w) : null;

@@ -408,6 +408,11 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Qué:** las uniones (puntos donde se juntan 3 o más conexiones: extremos de cables, bornes y puntos de cable donde llega una T) se calculan solas a partir del documento. No se guardan en el `.brn`. Se dibujan como puntos rellenos en la capa estática; al cambiar un cable se invalida la caja de las uniones viejas y nuevas.
 - **Terminado cuando:** las T muestran su punto y las L no.
 - **Prueba:** una T da 1 unión, una L da 0 y una cruz de dos cables sin empalme da 0. Dos cables que terminan en el mismo borne dan 1.
+- **Decisiones (Bruno, 2026-11-11):** D1-A (por grado), D2-B (de a poco en el editor), D3-B (diámetro entero en px), D4-A (desde 30 %), D5-B (después de los componentes), D6-A (se ocultan en el arrastre), D7-A (lista propia con índice), D8-A (banco alternado 4aee262 → 80abe07 → T14b). Tres etapas, un commit cada una.
+  - **D1-A:** un brazo es una línea conectada que sale del punto: un extremo en un borne o en T, la línea del símbolo de un borne con cable, y el anfitrión de una T (2 si cae en el medio o en un codo, 1 si cae en su extremo). Unión con 3 o más brazos de una misma conexión (lo que solo coincide en el lugar no se suma). Una T sobre el extremo libre de su anfitrión da 2: sin punto. W no la crea ni T14a la deja: solo desde un `.brn` (ver T15a).
+  - **D3-B:** diámetro = el entero de la paridad de `w` más cercano a 0,5 u × escala (con empate, el menor), mínimo `w` + 2. Margen de invalidación con ese radio a 6 px/u (0,583 u; ninguna escala desde 6 pide más).
+  - **D6-A:** `t14a-seguir` compara (a) previa = resultado sin uniones y (b) resultado con uniones = sin uniones fuera de sus cajas, las dos a 0 px. W no muestra un punto nuevo.
+- **Etapa 1 (núcleo + editor), 2026-11-11:** `src/core/model/uniones.ts` (`uniones(hoja)` recorre la hoja; `unionEnPunto` cuenta un punto) y `src/editor/uniones.ts` (`Uniones`, de a poco: rehace los puntos de los cables del cambio y los que dependen de un anfitrión que cambió). `Editor.uniones` se arma con la hoja y se pone al día en `reflejar`; todavía no se dibuja. Tests: 15 del núcleo (T, L, cruce, borne con 2 y con 1, T enfrentadas, T en codo, libre encima, coincidencia sin conexión, cadena, T en el extremo del anfitrión libre y en borne, girado) y 3 del editor (anfitrión que cambia solo; borrar el anfitrión, deshacer y rehacer; al azar: 25 documentos × 25 operaciones con cascadas de T, rechazos, borrar anfitriones, deshacer y rehacer, igual a `uniones(hoja)` después de cada una). El al azar no pasa por "anfitrión que cambia solo" (T14a mueve las T en el mismo cambio): eso lo cubre su test. `npm test` 995, `npm run check` sin errores, humo 355 de 355.
 
 ### T14c. Reconectar extremos libres
 - **Qué:** arrastrar el extremo libre de un cable hasta un borne o un cable (T) lo conecta, con un comando `CambiarExtremo` (un paso de deshacer). El tramo final se rehace con el ruteo de T13 y pasa por la misma validación (`prepararCable`: forma + conexiones engañosas). En T13 un extremo libre ajeno no es objetivo de la herramienta W.
@@ -429,6 +434,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - Ida y vuelta: `deserializar(serializar(doc))` `toEqual` `doc`, para un documento vacío, uno con componentes rotados y espejados y uno con cables y T.
   - Lo mismo pasando por gzip (test en `src/ui` o `src/editor`).
   - Archivos dañados (JSON roto, `formato` ajeno, `version` futura, tipo de símbolo desconocido, cable hacia un id inexistente): cada uno da un error con mensaje y no tira excepción.
+  - T sobre el extremo de su anfitrión (W no la crea y T14a no la deja; solo llega de un archivo): decidir si se rechaza o se informa al abrir. Hoy `validarCable` la acepta; T14b la cuenta por grado (sobre un extremo libre, sin punto).
   - Las claves de la salida, sin ñ ni tildes.
 
 ### T15. Aceptación: marcha-parada
