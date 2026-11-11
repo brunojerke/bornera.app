@@ -18,6 +18,8 @@ Estado del código hoy:
 Regla para todas las tareas: una tarea por sesión, primero el plan y después el código. Al terminar: `npm test`, `npm run check`, commit y una línea en Bornera.md.
 Desde T8 (2026-11-08), cada tarea con algo visible en la app suma su prueba `tests/humo/tNN-*.mjs` y al cerrar se corre `npm run humo` entero.
 
+**Pendiente aparte (2026-11-11, visto en T14c y no se toca ahí):** `npm run humo` a veces termina con `EPERM, Permission denied` al borrar el perfil temporal de Edge (`rmSync` del `finally` de `tests/humo/correr.mjs`, con 10 reintentos de 200 ms). Las comprobaciones salen todas bien (411 OK y ninguna mal en la etapa 1 de T14c), pero la excepción corta antes del resumen ("N de N comprobaciones bien") y el código de salida queda en 1. Quedan carpetas `bornera-humo-*` en `%TEMP%` (hay del 2026-11-08). Lo probable: procesos de Edge que siguen con el perfil tomado después del `kill`. A decidir: esperar a que terminen, o informar la limpieza fallida sin tratarla como falla de las pruebas.
+
 Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fase 4 queda para el autoguardado, las migraciones y los circuitos de referencia.
 
 ---
