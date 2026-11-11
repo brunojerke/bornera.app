@@ -88,6 +88,51 @@ export function sobranteAlineado(grosorNominalPx: number): number {
   return (w & 1 ? 1 : 0.5) + Math.max(0, (w - grosorNominalPx) / 2);
 }
 
+/**
+ * Diámetro en px físicos de un punto relleno (las uniones, T14b) para un
+ * diámetro nominal en px y un trazo de `w` px: el entero de la paridad de `w`
+ * más cercano al nominal (con empate, el menor), y por lo menos `w` + 2. Con
+ * la misma paridad, el punto queda simétrico alrededor de la columna (o fila)
+ * del cable, sin una columna de más de un lado.
+ */
+export function diametroPunto(nominalPx: number, w: number): number {
+  const par = w & 1;
+  const t = (nominalPx - par) / 2;
+  const f = Math.floor(t);
+  const d = (t - f > 0.5 ? f + 1 : f) * 2 + par;
+  return Math.max(d, w + 2);
+}
+
+/**
+ * Hasta este diámetro (px físicos) el punto de unión va al píxel: franjas de
+ * píxeles enteros, sin suavizado. Más grande, un arco suavizado. El arco de
+ * Chrome no es simétrico en vertical (3 px: 89 / 95 % en la columna del
+ * centro; lo mismo con el lienzo transpuesto, así que es del rasterizador, no
+ * del centrado) y un punto partido por un borde de mosaico sale con otro
+ * suavizado; al píxel, las dos cosas quedan exactas. Con dpr 1, hasta ~75 %.
+ */
+export const TOPE_PUNTO_AL_PIXEL = 8;
+
+/**
+ * Agrega al recorrido actual un disco de radio `r` centrado en (cx, cy), en
+ * px físicos, como franjas de píxeles enteros (un rectángulo por fila): entra
+ * cada píxel cuyo centro está a `r` o menos. El centro cae en un píxel entero
+ * o en medio (`r` de la misma paridad): nunca hay un píxel justo en el borde,
+ * y el disco es simétrico en x y en y. No sale de [c − r, c + r].
+ */
+function franjasPunto(c: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  const r2 = r * r;
+  for (let fila = Math.floor(cy - r); fila < cy + r; fila++) {
+    const dy = fila + 0.5 - cy;
+    if (dy * dy > r2) continue;
+    const medio = Math.sqrt(r2 - dy * dy);
+    // Columnas con el centro dentro: de ceil(cx − medio − 0,5) a floor(cx + medio − 0,5).
+    const x0 = Math.ceil(cx - medio - 0.5);
+    const x1 = Math.floor(cx + medio - 0.5);
+    if (x1 >= x0) c.rect(x0, fila, x1 - x0 + 1, 1);
+  }
+}
+
 // Lugares de `RendererCanvas.m` después de la matriz (0 a 5).
 /** Traslación sin la parte entera de la que fijó `transformar` (x, y). */
 const RX = 6;
@@ -318,6 +363,47 @@ export class RendererCanvas implements Renderer {
     c.lineWidth = w;
     this.trazarLineas();
     c.lineWidth = m[GROSOR]!;
+    c.setTransform(a, b, cc, d, m[4]!, m[5]!);
+  }
+
+  puntos(centros: ArrayLike<number>, n: number, diametro: number): void {
+    if (n === 0) return;
+    const c = this.ctx;
+    const m = this.m;
+    c.beginPath();
+    if (this.ejes() === 0) {
+      // Girado otro ángulo: sin alinear ni redondear.
+      const r = diametro / 2;
+      for (let i = 0, j = 0; i < n; i++, j += 2) {
+        c.moveTo(centros[j]! + r, centros[j + 1]!);
+        c.arc(centros[j]!, centros[j + 1]!, r, 0, Math.PI * 2);
+      }
+      c.fill();
+      return;
+    }
+    // Como `lineas`: en px físicos, con el centro en el del trazo que pasa por ahí.
+    const a = m[0]!;
+    const b = m[1]!;
+    const cc = m[2]!;
+    const d = m[3]!;
+    const w = this.grosorPx();
+    const dx = (w & 1) / 2 + m[BX]!;
+    const dy = (w & 1) / 2 + m[BY]!;
+    const dp = diametroPunto(diametro * this.escala(), w);
+    const r = dp / 2;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    for (let i = 0, j = 0; i < n; i++, j += 2) {
+      const x = centros[j]!;
+      const y = centros[j + 1]!;
+      const px = Math.round(a * x + cc * y + m[RX]!) + dx;
+      const py = Math.round(b * x + d * y + m[RY]!) + dy;
+      if (dp <= TOPE_PUNTO_AL_PIXEL) franjasPunto(c, px, py, r);
+      else {
+        c.moveTo(px + r, py);
+        c.arc(px, py, r, 0, Math.PI * 2);
+      }
+    }
+    c.fill();
     c.setTransform(a, b, cc, d, m[4]!, m[5]!);
   }
 

@@ -158,6 +158,35 @@ export default async function (p, comprobar) {
   // mismo trazo diagonal o curvo rasterizado en coordenadas del mosaico y de
   // la pantalla puede dar otro suavizado en algún píxel (pasa también moviendo
   // un símbolo solo, sin cables, desde T9): eso se informa, pero no mide la previa.
+  //
+  // T14b (D6-A): mientras se arrastra, las uniones que tocan algo oculto no se
+  // dibujan (las de esta escena tocan todas a K1 o a sus cables), así que la
+  // previa no tiene puntos y el resultado sí. Dos comparaciones a 0 px:
+  // (a) la previa = el resultado dibujado sin uniones (`mostrarUniones`
+  //     apagado): igual de estricta en todo lo demás, y sin puntos fantasma
+  //     en el lugar viejo;
+  // (b) el resultado con uniones = sin uniones fuera de las cajas de sus
+  //     uniones, y dentro de cada caja cambia algo (el punto está y no se sale).
+  const conUniones = (si) =>
+    p.evaluar(`(() => { const ed = bornera.editor; ed.escena.mostrarUniones = ${si}; ed.vista.invalidarContenido(); })()`);
+  /** Píxeles distintos de la foto `n` fuera de las cajas de las uniones, y cajas (en pantalla) sin ningún cambio. */
+  const fueraDeUniones = async (n) => {
+    await reposo();
+    return p.evaluar(`(async () => { const { MARGEN_UNION: M } = await import("/src/render/escenaEditable.ts");
+      const cv = document.querySelector("canvas"), ed = bornera.editor, cam = ed.vista.camara, k = cam.escala;
+      const ox = Math.round(cam.x * k), oy = Math.round(cam.y * k);
+      const cajas = ed.uniones.todas().map((u) => [Math.floor((u.x - M) * k) - ox - 1, Math.floor((u.y - M) * k) - oy - 1,
+        Math.ceil((u.x + M) * k) - ox + 1, Math.ceil((u.y + M) * k) - oy + 1])
+        .filter(([x0, y0, x1, y1]) => x0 >= 0 && y0 >= 0 && x1 < cv.width && y1 < cv.height);
+      const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+      if (a.length !== b.length) return { fuera: -1, sinCambio: -1, cajas: cajas.length };
+      const cambios = new Array(cajas.length).fill(0); let fuera = 0;
+      for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) {
+        const x = (i / 4) % cv.width, y = Math.floor(i / 4 / cv.width); let adentro = false;
+        cajas.forEach(([x0, y0, x1, y1], j) => { if (x >= x0 && x <= x1 && y >= y0 && y <= y1) { adentro = true; cambios[j]++; } });
+        if (!adentro) fuera++; }
+      return { fuera, sinCambio: cambios.filter((c) => c === 0).length, cajas: cajas.length }; })()`);
+  };
   const previaIgual = async (conMosaicos) => {
     await p.evaluar(`(() => { const v = bornera.editor.vista; v.opciones = { ...v.opciones, cache: ${conMosaicos} }; v.invalidar(); })()`);
     await apretar(-6, 0);
@@ -165,22 +194,33 @@ export default async function (p, comprobar) {
     const valia = (await pista()) ?? "";
     await foto("previa");
     await soltar(-6, 3);
+    await conUniones(false);
     const d = await distintos("previa");
     const lugar = await donde("previa");
+    await foto("sinUniones");
+    await conUniones(true);
+    const b = await fueraDeUniones("sinUniones");
     await p.esc();
     await tecla(Z, CTRL);
     await p.evaluar(`(() => { const v = bornera.editor.vista; v.opciones = { ...v.opciones, cache: true }; v.invalidar(); })()`);
-    return { valia, d, lugar };
+    return { valia, d, lugar, b };
   };
   const sinMosaicos = await previaIgual(false);
   comprobar("mientras se arrastra, la previa vale (sin pista de rechazo)", sinMosaicos.valia === "", sinMosaicos.valia);
   comprobar(
-    "previa = resultado: el lienzo da los mismos píxeles antes y después de soltar (dibujo directo)",
+    "previa = resultado sin uniones: el lienzo da los mismos píxeles antes y después de soltar (dibujo directo)",
     sinMosaicos.d === 0,
     `${sinMosaicos.d} píxeles distintos${sinMosaicos.lugar}`,
   );
+  comprobar(
+    "resultado con uniones = sin uniones fuera de sus cajas, y cada punto cambia su caja (dibujo directo)",
+    sinMosaicos.b.fuera === 0 && sinMosaicos.b.sinCambio === 0 && sinMosaicos.b.cajas === 3,
+    JSON.stringify(sinMosaicos.b),
+  );
   const conMosaicos = await previaIgual(true);
-  console.log(`  ·   con mosaicos: ${conMosaicos.d} píxeles con otro suavizado${conMosaicos.lugar}`);
+  console.log(
+    `  ·   con mosaicos: ${conMosaicos.d} píxeles con otro suavizado${conMosaicos.lugar}; uniones ${JSON.stringify(conMosaicos.b)}`,
+  );
   comprobar("después de comparar, todo como antes", (await documento()) === docRef);
 
   // ── Arrastrar K1 con sus cables: un paso, ortogonales; Ctrl+Z y Ctrl+Y exactos ──

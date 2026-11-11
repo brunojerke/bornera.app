@@ -9,8 +9,21 @@ import { codos, opuesta, type ExtremoRuta } from "../core/model/ruteo";
 import { consultaHoja, problemasTrazado } from "../core/model/trazado";
 import { uniones } from "../core/model/uniones";
 import { SIMBOLOS, buscarSimbolo, type Rotacion } from "../core/symbols";
-import { documentoNuevo, Editor } from "./editor";
+import type { Caja } from "../render/camara";
+import { cajaUnion } from "../render/escenaEditable";
+import { documentoNuevo, Editor, type DestinoVista } from "./editor";
+import type { EventoHerramienta } from "./herramientas/tipos";
 import { Uniones } from "./uniones";
+
+class VistaFalsa implements DestinoVista {
+  regiones: Caja[] = [];
+  invalidarRegion(caja: Caja): void {
+    this.regiones.push(caja);
+  }
+  invalidar(): void {}
+}
+
+const ev = (x: number, y: number): EventoHerramienta => ({ x, y, boton: 0, botones: 1, mayus: false, ctrl: false, escala: 20 });
 
 const borne = (comp: string, b: string): Extremo => ({ tipo: "borne", comp, borne: b });
 const libre = (x: number, y: number): Extremo => ({ tipo: "libre", x, y });
@@ -153,6 +166,53 @@ describe("Uniones de a poco", () => {
     expect(ed.uniones.cantidad).toBe(1);
     ed.rehacer();
     expect(ed.uniones.cantidad).toBe(0);
+  });
+
+  it("la escena recibe las uniones e invalida sus cajas al crear, deshacer y rehacer una T", () => {
+    const ed = new Editor(documentoNuevo());
+    const vista = new VistaFalsa();
+    ed.vista = vista;
+    const doc = ed.documento;
+    const a = cablear(doc, { desde: libre(0, 0), hasta: libre(10, 0), codos: [] });
+    ed.ejecutar(a);
+    vista.regiones = [];
+    ed.ejecutar(cablear(doc, { desde: enCable(a.id, 4, 0), hasta: libre(4, 5), codos: [] }));
+    expect(ed.escena.cantidadUniones).toBe(1);
+    expect(vista.regiones).toContainEqual(cajaUnion(4, 0));
+    vista.regiones = [];
+    ed.deshacer();
+    expect(ed.escena.cantidadUniones).toBe(0);
+    expect(vista.regiones).toContainEqual(cajaUnion(4, 0));
+    ed.rehacer();
+    expect(ed.escena.unionesEn(cajaUnion(4, 0))).toEqual([{ x: 4, y: 0, cables: [a.id, "w2"].sort(), componentes: [] }]);
+    // Un editor nuevo sobre el mismo documento las arma de entrada.
+    expect(new Editor(doc).escena.cantidadUniones).toBe(1);
+  });
+
+  it("al arrastrar, las cajas de las uniones de lo arrastrado se invalidan al ocultar, al soltar y al volver", () => {
+    const ed = new Editor(documentoNuevo());
+    const vista = new VistaFalsa();
+    ed.vista = vista;
+    const doc = ed.documento;
+    const k = colocar(doc, { tipo: "contactor.bobina", x: 0, y: 0, rot: 0, espejado: false, etiqueta: "K1", params: {} });
+    ed.ejecutar(k);
+    ed.ejecutar(cablear(doc, { desde: borne(k.id, "A1"), hasta: libre(0, -6), codos: [] }));
+    ed.ejecutar(cablear(doc, { desde: borne(k.id, "A1"), hasta: libre(5, -2), codos: [] }));
+    expect(ed.uniones.todas().map((u) => [u.x, u.y])).toEqual([[0, -2]]);
+    vista.regiones = [];
+    const h = ed.seleccionar;
+    ed.aplicar(h.presionar(ev(0.2, 0)));
+    ed.aplicar(h.mover(ev(0.2, 1.5)));
+    ed.aplicar(h.mover(ev(0.2, 3)));
+    expect(ed.escena.oculto(k.id)).toBe(true);
+    expect(vista.regiones).toContainEqual(cajaUnion(0, -2));
+    vista.regiones = [];
+    ed.aplicar(h.soltar(ev(0.2, 3)));
+    expect(ed.escena.oculto(k.id)).toBe(false);
+    expect(ed.uniones.todas().map((u) => [u.x, u.y])).toEqual([[0, 1]]);
+    expect(vista.regiones).toContainEqual(cajaUnion(0, -2));
+    expect(vista.regiones).toContainEqual(cajaUnion(0, 1));
+    expect(ed.uniones.todas()).toEqual(deHoja(ed));
   });
 
   it(`al azar (semilla ${SEMILLA}): después de cada operación, igual que recorrer la hoja`, () => {

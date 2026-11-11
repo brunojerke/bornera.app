@@ -28,6 +28,7 @@
 // es porque se apuntó a él.
 
 import { ampliarCaja, seTocan, unirCajas, type Caja } from "./camara";
+import { diametroPunto, grosorEnPixeles, sobranteAlineado, TOPE_PUNTO_AL_PIXEL } from "./canvas2d";
 import { dibujarComponentes, grosorLinea, type ComponenteEscena, type Contenido, type InfoDibujo, type OpcionesEscena } from "./escena";
 import { IndiceEspacial } from "./indiceEspacial";
 import type { Renderer } from "./renderer";
@@ -295,6 +296,153 @@ class Cables {
   }
 }
 
+// ── Uniones (T14b) ─────────────────────────────────────────────────────────
+
+/** Una unión en la escena: su punto y lo que se junta ahí (para ocultarla en un arrastre). */
+export interface UnionEscena {
+  x: number;
+  y: number;
+  cables: readonly string[];
+  componentes: readonly string[];
+}
+
+/** Diámetro nominal del punto de unión, en unidades; en pantalla se redondea en px (ver `diametroPunto`). */
+export const DIAMETRO_UNION = 0.5;
+
+/**
+ * Medio lado de la caja de una unión, en unidades, a `k` px físicos por
+ * unidad: el radio ya redondeado, lo que se corre al alinear y, solo con el
+ * arco suavizado (más de `TOPE_PUNTO_AL_PIXEL`), 1 px del suavizado: al
+ * píxel, lo pintado no pasa del radio.
+ */
+export function margenUnion(k: number): number {
+  const nominal = grosorLinea(k) * k;
+  const d = diametroPunto(DIAMETRO_UNION * k, grosorEnPixeles(nominal));
+  return (d / 2 + sobranteAlineado(nominal) + (d <= TOPE_PUNTO_AL_PIXEL ? 0 : 1)) / k;
+}
+
+/**
+ * Medio lado de la caja de cada unión: el máximo de `margenUnion` desde la
+ * escala más chica en que se dibujan (`ESCALA_MIN_BORNES`, 6 px/u). No es en
+ * 6 px/u (punto de 3 px: 2,5 / 6 = 0,417 u) sino apenas pasando 8 px/u, donde
+ * el punto salta a 5 px al píxel con el trazo de 1 px: (2,5 + 1) / 8 =
+ * 0,4375 u. El arco (desde 18 px/u) pide 0,367 u como mucho. Lo prueba
+ * uniones.test.ts en todas las escalas.
+ */
+export const MARGEN_UNION = (2.5 + 1) / 8;
+
+/** Caja a rehacer de una unión. */
+export function cajaUnion(x: number, y: number): Caja {
+  return { x: x - MARGEN_UNION, y: y - MARGEN_UNION, ancho: 2 * MARGEN_UNION, alto: 2 * MARGEN_UNION };
+}
+
+const claveUnion = (x: number, y: number) => `${x},${y}`;
+
+/** Centros de las uniones del cuadro en curso (x, y seguidos): se reusa para no pedir memoria. */
+const centros: number[] = [];
+
+/** Uniones de la escena, con su propio índice espacial. */
+class PuntosUnion {
+  readonly lugares: (UnionEscena | null)[] = [];
+  readonly lugarDe = new Map<string, number>();
+  private readonly libres: number[] = [];
+  readonly indice = new IndiceEspacial();
+  private readonly visibles: number[] = [];
+  /** Lugares de las uniones de cada cable o componente. */
+  private readonly porAncla = new Map<string, Set<number>>();
+
+  get cantidad(): number {
+    return this.lugarDe.size;
+  }
+
+  /** Agrega o cambia la unión de su punto; devuelve las cajas a rehacer. */
+  poner(u: UnionEscena): Caja[] {
+    const k = claveUnion(u.x, u.y);
+    let n = this.lugarDe.get(k);
+    if (n !== undefined) this.desanclar(n);
+    else {
+      n = this.libres.pop() ?? this.lugares.length;
+      this.lugarDe.set(k, n);
+      this.indice.insertar(n, cajaUnion(u.x, u.y));
+    }
+    const copia: UnionEscena = { x: u.x, y: u.y, cables: [...u.cables], componentes: [...u.componentes] };
+    this.lugares[n] = copia;
+    for (const id of [...copia.cables, ...copia.componentes]) {
+      let s = this.porAncla.get(id);
+      if (!s) this.porAncla.set(id, (s = new Set()));
+      s.add(n);
+    }
+    return [cajaUnion(u.x, u.y)];
+  }
+
+  /** Quita la unión de (x, y); devuelve su caja (vacío si no estaba). */
+  quitar(x: number, y: number): Caja[] {
+    const k = claveUnion(x, y);
+    const n = this.lugarDe.get(k);
+    if (n === undefined) return [];
+    this.desanclar(n);
+    this.indice.quitar(n);
+    this.lugares[n] = null;
+    this.lugarDe.delete(k);
+    this.libres.push(n);
+    return [cajaUnion(x, y)];
+  }
+
+  private desanclar(n: number): void {
+    const u = this.lugares[n];
+    if (!u) return;
+    for (const id of [...u.cables, ...u.componentes]) {
+      const s = this.porAncla.get(id);
+      if (!s) continue;
+      s.delete(n);
+      if (s.size === 0) this.porAncla.delete(id);
+    }
+  }
+
+  /** Cajas de las uniones donde está alguno de `ids` (cables o componentes), sin repetir. */
+  cajasDe(ids: Iterable<string>): Caja[] {
+    const vistos = new Set<number>();
+    const cajas: Caja[] = [];
+    for (const id of ids) {
+      const s = this.porAncla.get(id);
+      if (!s) continue;
+      for (const n of s) {
+        if (vistos.has(n)) continue;
+        vistos.add(n);
+        const u = this.lugares[n]!;
+        cajas.push(cajaUnion(u.x, u.y));
+      }
+    }
+    return cajas;
+  }
+
+  /**
+   * Dibuja las uniones que tocan `info.visible`, todas en un solo relleno, con
+   * el grosor de los cables (el centro cae en el del cable). `oculta`: true si
+   * la unión toca algo que la capa estática no dibuja.
+   */
+  dibujar(r: Renderer, info: InfoDibujo, oculta: ((u: UnionEscena) => boolean) | null): void {
+    if (this.lugarDe.size === 0 || !info.detalle.bornes) return;
+    const visibles = this.indice.enCaja(info.visible, this.visibles);
+    let n = 0;
+    for (const lugar of visibles) {
+      const u = this.lugares[lugar]!;
+      if (oculta && oculta(u)) continue;
+      centros[2 * n] = u.x;
+      centros[2 * n + 1] = u.y;
+      n++;
+    }
+    if (n === 0) return;
+    r.estilo({ trazo: info.colores.simbolo, relleno: info.colores.simbolo, grosor: grosorLinea(info.escala) });
+    r.puntos(centros, n, DIAMETRO_UNION);
+  }
+
+  /** Las uniones cuya caja toca `caja` (para los tests y el humo). */
+  en(caja: Caja): UnionEscena[] {
+    return this.indice.enCaja(caja).map((n) => this.lugares[n]!);
+  }
+}
+
 export class EscenaEditable implements Contenido {
   /** Componente en cada lugar del índice; null si el lugar está libre. */
   private readonly lugares: (ComponenteEscena | null)[] = [];
@@ -316,6 +464,13 @@ export class EscenaEditable implements Contenido {
   /** Lugares de lo que se dibuja desplazado (se reusa, como `visibles`). */
   private readonly desplazados: number[] = [];
   private readonly cables = new Cables();
+  private readonly uniones = new PuntosUnion();
+  /**
+   * Dibujar los puntos de unión. Solo para comparar en el humo (T14b):
+   * apagado, la escena sale como sin uniones. Quien lo cambia rehace la capa
+   * estática.
+   */
+  mostrarUniones = true;
 
   constructor(componentes: Iterable<[string, ComponenteEscena]> = [], opciones: OpcionesEscena = {}) {
     this.marcarBornes = opciones.marcarBornes ?? true;
@@ -403,6 +558,45 @@ export class EscenaEditable implements Contenido {
     if (cajas.length > 0) this.cajaTotal = undefined;
     return cajas;
   }
+
+  /** Cantidad de uniones. */
+  get cantidadUniones(): number {
+    return this.uniones.cantidad;
+  }
+
+  /**
+   * Agrega o cambia la unión de su punto (T14b). Devuelve las cajas a rehacer.
+   * Las uniones no cuentan para la caja total: caen sobre los cables.
+   */
+  ponerUnion(u: UnionEscena): readonly Caja[] {
+    return this.uniones.poner(u);
+  }
+
+  /** Quita la unión de (x, y). Devuelve su caja (vacío si no estaba). */
+  quitarUnion(x: number, y: number): readonly Caja[] {
+    return this.uniones.quitar(x, y);
+  }
+
+  /** Uniones cuya caja toca `caja`. */
+  unionesEn(caja: Caja): UnionEscena[] {
+    return this.uniones.en(caja);
+  }
+
+  /**
+   * Cajas de las uniones donde está alguno de `ids` (cables o componentes):
+   * al ocultarlos para un arrastre o volverlos, sus uniones también cambian
+   * (se ocultan las que tocan algo oculto, D6-A).
+   */
+  cajasUnionesDe(ids: Iterable<string>): readonly Caja[] {
+    return this.uniones.cajasDe(ids);
+  }
+
+  /** True si la unión toca un cable o un componente que la capa estática no dibuja. */
+  private unionOculta = (u: UnionEscena): boolean => {
+    for (const id of u.cables) if (this.cableOculto(id)) return true;
+    for (const id of u.componentes) if (this.oculto(id)) return true;
+    return false;
+  };
 
   /**
    * Agrega un componente. Devuelve su caja de dibujo. Si el id ya estaba, lo
@@ -578,6 +772,11 @@ export class EscenaEditable implements Contenido {
       visibles.length = j;
     }
     dibujarComponentes(r, info, this.lugares, visibles, visibles.length, this.marcarBornes);
+    // Después de los componentes (D5-B): en un borne, el punto tapa la marca.
+    if (this.mostrarUniones) {
+      const hayOcultos = this.ocultos.size > 0 || this.cables.ocultos.size > 0;
+      this.uniones.dibujar(r, info, hayOcultos ? this.unionOculta : null);
+    }
     return visibles.length;
   }
 

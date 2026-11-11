@@ -38,6 +38,14 @@ export interface Renderer {
    * horizontales y verticales).
    */
   lineas(segmentos: ArrayLike<number>, n: number): void;
+  /**
+   * `n` puntos rellenos (las uniones) en un solo relleno, con el color de
+   * relleno. `centros` tiene x, y seguidos; `diametro` en unidades. En
+   * pantalla, el diámetro se redondea a px enteros de la paridad del trazo
+   * actual y el centro cae en el de una línea de ese grosor (T14b); hasta
+   * 8 px va al píxel, sin suavizado.
+   */
+  puntos(centros: ArrayLike<number>, n: number, diametro: number): void;
   /** `y` es el centro vertical del texto; `alto` es el alto de la letra. */
   texto(x: number, y: number, texto: string, alto: number, alineacion?: Alineacion): void;
   /**

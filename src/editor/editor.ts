@@ -352,6 +352,7 @@ export class Editor {
         if (c) this.escena.ponerCable(w.id, c);
       }
     }
+    for (const u of this.uniones.todas()) this.escena.ponerUnion(u);
     this.seleccionar = new HerramientaSeleccionar(
       this.escena,
       () => this._seleccion,
@@ -937,6 +938,8 @@ export class Editor {
       if (k) this.vista?.invalidarRegion(k);
     }
     for (const id of cables) for (const k of this.escena.ocultarCable(id)) this.vista?.invalidarRegion(k);
+    // Las uniones que tocan algo oculto también se ocultan (D6-A).
+    for (const k of this.escena.cajasUnionesDe([...ids, ...fijos, ...cables])) this.vista?.invalidarRegion(k);
   }
 
   /** Los componentes que no se mueven con un borne donde termina un cable de `cables` (ver ArrastreEditor.fijos). */
@@ -961,6 +964,7 @@ export class Editor {
       if (k) this.vista?.invalidarRegion(k);
     }
     for (const id of a.cables) for (const k of this.escena.mostrarCable(id)) this.vista?.invalidarRegion(k);
+    for (const k of this.escena.cajasUnionesDe([...a.ids, ...a.fijos, ...a.cables])) this.vista?.invalidarRegion(k);
   }
 
   /**
@@ -1210,7 +1214,9 @@ export class Editor {
       }
       const indice = this.indiceHoja;
       // Con el índice al día con todo el cambio (los anfitriones de las T también).
-      this.uniones.actualizar(idsCables, indice);
+      const uniones = this.uniones.actualizar(idsCables, indice);
+      for (const u of uniones.quitadas) for (const k of this.escena.quitarUnion(u.x, u.y)) this.vista?.invalidarRegion(k);
+      for (const u of uniones.puestas) for (const k of this.escena.ponerUnion(u)) this.vista?.invalidarRegion(k);
       for (const id of idsCables) {
         const w = indice.cables.get(id);
         const c = w ? this.cableEscena(indice, w) : null;
