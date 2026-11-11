@@ -53,6 +53,8 @@ export const MENSAJE_MISMO_ANFITRION = "Los dos extremos quedarían sobre el mis
 export const MENSAJE_SOBRE_SI_MISMO = "El cable no puede terminar sobre sí mismo.";
 export const MENSAJE_T_EN_EXTREMO = "Ahí llega la derivación de otro cable: el extremo no puede quedar sobre ella.";
 export const MENSAJE_SIN_LLEGADA = "El cable no tiene por dónde llegar ahí.";
+/** Rehacer cuando el cable ya no está como cuando se reconectó: no se reconecta por otro camino. */
+export const MENSAJE_NO_REHACER = "El cable cambió desde que se conectó: no se puede rehacer.";
 
 export type LadoCable = "desde" | "hasta";
 
@@ -140,13 +142,36 @@ function rutaFija(indice: IndiceHoja, e: Extremo, P: readonly number[], fresca: 
   return extremoRutaBorne(x, y, b.direccion, fresca ? b.direccion : salida);
 }
 
+/** Lo que comparten planear y revisar: el cable, su recorrido de F a M y el destino. */
+interface Contexto {
+  indice: IndiceHoja;
+  consulta: ConsultaTrazado;
+  /** El recorrido de ahora, en el sentido del cable. */
+  viejo: number[];
+  /** Del extremo fijo (F) al agarrado (M). */
+  P: number[];
+  fijo: Extremo;
+  /** El punto del destino. */
+  pm: { x: number; y: number };
+  /** Las T apoyadas que están sobre el recorrido (en un documento roto puede haber otras). */
+  sobreP: TApoyada[];
+  /** La última T apoyada desde F, o null si no hay. */
+  ultima: { tramo: number; distancia: number; x: number; y: number } | null;
+  resultado(cable: CableCambiado | null, rechazo: Rechazo | null): ResultadoReconexion;
+  /** El cable con el extremo nuevo y los codos de `puntos` (F → M). */
+  armar(puntos: readonly number[]): Cable;
+  /** Claves de los conflictos que el cable ya tenía. */
+  viejas(): Set<string>;
+}
+
 /**
- * Qué pasa si el extremo `lado` (libre) del cable `id` se conecta a
- * `destino`. No cambia nada. Tira si el cable no existe, si ese extremo no
- * está suelto o si el cable apunta a algo que no está; el resto de los
- * problemas vuelve como rechazo.
+ * Arma el contexto y hace lo que no depende del ruteo: sobre sí mismo, mismo
+ * borne, mismo anfitrión, ciclo, un borne que no existe, largo cero y el
+ * extremo sobre una T apoyada. Devuelve el rechazo si hay uno. Tira si el
+ * cable no existe, si ese extremo no está suelto o si el cable apunta a algo
+ * que no está.
  */
-export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCable, destino: DestinoExtremo): ResultadoReconexion {
+function contexto(entorno: EntornoPlan, id: string, lado: LadoCable, destino: DestinoExtremo): { ctx: Contexto } | { rechazado: ResultadoReconexion } {
   const { indice, consulta } = entorno;
   const w = indice.cables.get(id);
   if (!w) throw new Error(`No existe el cable "${id}".`);
@@ -164,14 +189,13 @@ export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCa
     cable,
     rechazo,
   });
-  /** Del extremo fijo (F) al agarrado (M). */
   const P = lado === "hasta" ? viejo : invertir(viejo);
   const n = P.length;
   const pm = puntoExtremo(indice, destino);
   const marca = pm ?? { x: P[n - 2]!, y: P[n - 1]! };
-  const rechazar = (mensaje: string, clave: string): ResultadoReconexion =>
-    resultado(null, { motivo: mensaje, conflictos: [{ mensaje, x: marca.x, y: marca.y, clave: `reconectar|${clave}|cable:${id}` }] });
-  /** El cable con el extremo nuevo y los codos de `puntos` (F → M). */
+  const rechazar = (mensaje: string, clave: string) => ({
+    rechazado: resultado(null, { motivo: mensaje, conflictos: [{ mensaje, x: marca.x, y: marca.y, clave: `reconectar|${clave}|cable:${id}` }] }),
+  });
   const armar = (puntos: readonly number[]): Cable => {
     const p = lado === "hasta" ? puntos : invertir(puntos);
     return {
@@ -182,7 +206,6 @@ export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCa
     };
   };
 
-  // Lo que no depende del ruteo.
   if (destino.tipo === "cable" && destino.cable === id) return rechazar(MENSAJE_SOBRE_SI_MISMO, "sobreSiMismo");
   if (destino.tipo === "borne" && fijo.tipo === "borne" && fijo.comp === destino.comp && fijo.borne === destino.borne) {
     return rechazar(MENSAJE_MISMO_BORNE, "mismoBorne");
@@ -192,11 +215,70 @@ export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCa
   if (!pm) {
     // Un borne que no se puede resolver: los problemas de estructura.
     const r = prepararCableExistente(indice, consulta, armar([P[0]!, P[1]!, P[0]!, P[1]!]));
-    return resultado(null, { motivo: r.problemas[0]!.mensaje, conflictos: r.problemas });
+    return { rechazado: resultado(null, { motivo: r.problemas[0]!.mensaje, conflictos: r.problemas }) };
   }
   if (pm.x === P[0] && pm.y === P[1]) return rechazar(MENSAJE_SIN_LARGO, "sinLargo");
   const apoyadas = tApoyadas(consulta, id, P);
   if (apoyadas.some((t) => t.x === pm.x && t.y === pm.y)) return rechazar(MENSAJE_T_EN_EXTREMO, "tEnExtremo");
+
+  let ultima: Contexto["ultima"] = null;
+  const sobreP: TApoyada[] = [];
+  for (const t of apoyadas) {
+    const u = ubicar(P, t.x, t.y);
+    if (!u) continue;
+    sobreP.push(t);
+    if (!ultima || u.distancia > ultima.distancia) ultima = { ...u, x: t.x, y: t.y };
+  }
+  let viejas: Set<string> | null = null;
+  const ctx: Contexto = {
+    indice,
+    consulta,
+    viejo,
+    P,
+    fijo,
+    pm,
+    sobreP,
+    ultima,
+    resultado,
+    armar,
+    viejas: () =>
+      (viejas ??= new Set(
+        problemasTrazado({ id, desde: w.desde, hasta: w.hasta, puntos: viejo }, consultaSinCable(consulta, id)).map((k) => k.clave),
+      )),
+  };
+  return { ctx };
+}
+
+/**
+ * Los problemas nuevos de `cable` (la estructura y las conexiones aparentes,
+ * sin los conflictos que ya tenía) y su recorrido. `valido` también exige que
+ * las T apoyadas sigan sobre él.
+ */
+function revisar(ctx: Contexto, cable: Cable): { puntos: number[] | null; conflictos: Conflicto[]; valido: boolean } {
+  const r = prepararCableExistente(ctx.indice, ctx.consulta, cable);
+  let conflictos = r.problemas;
+  if (conflictos.length > 0) {
+    const v = ctx.viejas();
+    conflictos = conflictos.filter((k) => !v.has(k.clave));
+  }
+  const p = r.puntos;
+  // Garantía: las T apoyadas siguen sobre el cable (lo asegura lo conservado).
+  const valido = conflictos.length === 0 && p !== null && ctx.sobreP.every((t) => puntoSobreRecorrido(p, t.x, t.y));
+  return { puntos: p, conflictos, valido };
+}
+
+/**
+ * Qué pasa si el extremo `lado` (libre) del cable `id` se conecta a
+ * `destino`. No cambia nada. Tira si el cable no existe, si ese extremo no
+ * está suelto o si el cable apunta a algo que no está; el resto de los
+ * problemas vuelve como rechazo.
+ */
+export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCable, destino: DestinoExtremo): ResultadoReconexion {
+  const c0 = contexto(entorno, id, lado, destino);
+  if ("rechazado" in c0) return c0.rechazado;
+  const { ctx } = c0;
+  const { indice, fijo, P, pm, ultima } = ctx;
+  const n = P.length;
 
   // Candidatos, todos de F a M.
   const rutaF = rutaFija(indice, fijo, P, false);
@@ -205,15 +287,6 @@ export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCa
   if (destino.tipo === "borne") {
     const b = borneDe(indice.componentes.get(destino.comp)!, destino.borne)!;
     rutaM = extremoRutaBorne(pm.x, pm.y, b.direccion, b.direccion);
-  }
-  let ultima: { tramo: number; distancia: number; x: number; y: number } | null = null;
-  /** Las T apoyadas que están sobre el recorrido (en un documento roto puede haber otras). */
-  const sobreP: TApoyada[] = [];
-  for (const t of apoyadas) {
-    const u = ubicar(P, t.x, t.y);
-    if (!u) continue;
-    sobreP.push(t);
-    if (!ultima || u.distancia > ultima.distancia) ultima = { ...u, x: t.x, y: t.y };
   }
   let lista: Candidato[];
   if (!ultima) {
@@ -242,26 +315,16 @@ export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCa
     }
   }
 
-  let viejas: Set<string> | null = null;
   /** El primer candidato que falló: sus conflictos y su recorrido. */
   const primero: { valor: { conflictos: Conflicto[]; intento: CableCambiado } | null } = { valor: null };
   /** El primero de `candidatos` que pasa todo. */
   const probar = (candidatos: readonly Candidato[]): { c: Candidato; cable: CableCambiado } | null => {
     for (const c of candidatos) {
-      const cable = armar(c.puntos);
-      const r = prepararCableExistente(indice, consulta, cable);
-      let nuevos = r.problemas;
-      if (nuevos.length > 0) {
-        viejas ??= new Set(
-          problemasTrazado({ id, desde: w.desde, hasta: w.hasta, puntos: viejo }, consultaSinCable(consulta, id)).map((k) => k.clave),
-        );
-        const v = viejas;
-        nuevos = nuevos.filter((k) => !v.has(k.clave));
-      }
+      const cable = ctx.armar(c.puntos);
+      const r = revisar(ctx, cable);
       const final: CableCambiado = { ...cable, puntos: r.puntos ?? (lado === "hasta" ? c.puntos : invertir(c.puntos)) };
-      // Garantía: las T apoyadas siguen sobre el cable (lo asegura lo conservado).
-      if (nuevos.length === 0 && sobreP.every((t) => puntoSobreRecorrido(final.puntos, t.x, t.y))) return { c, cable: final };
-      if (nuevos.length > 0) primero.valor ??= { conflictos: nuevos, intento: final };
+      if (r.valido) return { c, cable: final };
+      if (r.conflictos.length > 0) primero.valor ??= { conflictos: r.conflictos, intento: final };
     }
     return null;
   };
@@ -274,13 +337,36 @@ export function planearReconexion(entorno: EntornoPlan, id: string, lado: LadoCa
       return incumpleSalida(s.inicio, frescaF) + incumpleSalida(s.fin, rutaM);
     };
     const tope = r ? { codos: contarCodos(r.c.puntos), incumplidas: incumplidas(r.c.puntos) } : null;
-    if (r && tope && minimoCodosFresco(frescaF, rutaM, tope.incumplidas === 0) >= tope.codos) return resultado(r.cable, null);
+    if (r && tope && minimoCodosFresco(frescaF, rutaM, tope.incumplidas === 0) >= tope.codos) return ctx.resultado(r.cable, null);
     const frescos = candidatosEntero(frescaF, rutaM);
     const f = probar(tope ? frescos.filter((c) => contarCodos(c.puntos) < tope.codos && incumplidas(c.puntos) <= tope.incumplidas) : frescos);
-    if (f) return resultado(f.cable, null);
+    if (f) return ctx.resultado(f.cable, null);
   }
-  if (r) return resultado(r.cable, null);
+  if (r) return ctx.resultado(r.cable, null);
   const p = primero.valor;
-  if (p) return resultado(p.intento, { motivo: p.conflictos[0]!.mensaje, conflictos: p.conflictos });
-  return rechazar(MENSAJE_SIN_LLEGADA, "sinCamino");
+  if (p) return ctx.resultado(p.intento, { motivo: p.conflictos[0]!.mensaje, conflictos: p.conflictos });
+  const mensaje = MENSAJE_SIN_LLEGADA;
+  return ctx.resultado(null, { motivo: mensaje, conflictos: [{ mensaje, x: pm.x, y: pm.y, clave: `reconectar|sinCamino|cable:${id}` }] });
+}
+
+/**
+ * Revisa un resultado ya calculado contra la hoja de ahora, sin rutear (para
+ * rehacer): las mismas reglas que `planearReconexion`, para ese mismo cable.
+ * Null si vale. Tira como `planearReconexion`.
+ */
+export function revisarReconexion(entorno: EntornoPlan, r: ResultadoReconexion & { cable: CableCambiado }): Rechazo | null {
+  const c0 = contexto(entorno, r.id, r.lado, r.destino);
+  if ("rechazado" in c0) return c0.rechazado.rechazo;
+  const { ctx } = c0;
+  const cable: Cable = { id: r.id, desde: r.cable.desde, hasta: r.cable.hasta, codos: r.cable.codos };
+  const noRehacer = (): Rechazo => {
+    const mensaje = MENSAJE_NO_REHACER;
+    return { motivo: mensaje, conflictos: [{ mensaje, x: ctx.pm.x, y: ctx.pm.y, clave: `reconectar|noRehacer|cable:${r.id}` }] };
+  };
+  // El otro extremo tiene que ser el de ahora: si no, sería otro cable.
+  const fijo = r.lado === "hasta" ? cable.desde : cable.hasta;
+  if (JSON.stringify(fijo) !== JSON.stringify(ctx.fijo)) return noRehacer();
+  const v = revisar(ctx, cable);
+  if (v.valido) return null;
+  return v.conflictos.length > 0 ? { motivo: v.conflictos[0]!.mensaje, conflictos: v.conflictos } : noRehacer();
 }

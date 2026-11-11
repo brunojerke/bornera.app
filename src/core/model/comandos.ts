@@ -23,7 +23,14 @@ import {
   type Extremo,
   type Hoja,
 } from "./documento";
-import { planearReconexion, type DestinoExtremo, type LadoCable, type ResultadoReconexion } from "./reconectar";
+import {
+  MENSAJE_NO_REHACER,
+  planearReconexion,
+  revisarReconexion,
+  type DestinoExtremo,
+  type LadoCable,
+  type ResultadoReconexion,
+} from "./reconectar";
 import { entornoLineal, planearTransformacion, type CableCambiado, type EntornoPlan, type Operacion, type Plan } from "./seguir";
 
 /** Lo que cambió un comando. */
@@ -437,8 +444,9 @@ export interface OpcionesCambiarExtremo {
  * Conecta el extremo libre `lado` del cable `id` a un borne o a otro cable
  * (T14c), con `planearReconexion`. Un solo paso; no da ids nuevos. Si se
  * rechaza, tira con el aviso y no cambia nada. Deshacer repone la copia de
- * antes; rehacer vuelve a aplicar el mismo resultado si el cable sigue como
- * entonces y, si no, planea de nuevo (o tira sin cambiar nada).
+ * antes. Rehacer nunca vuelve a rutear: repite exactamente el resultado
+ * guardado, si el cable sigue como entonces y ese resultado todavía pasa la
+ * validación (`revisarReconexion`); si no, tira sin cambiar nada.
  */
 export class CambiarExtremo implements Comando {
   private readonly destino: DestinoExtremo;
@@ -457,14 +465,24 @@ export class CambiarExtremo implements Comando {
     const h = hojaDe(doc, [this.id]);
     const hoja = doc.hojas[h]!;
     const indice = indexarHoja(hoja);
+    const entorno = () => this.opciones.entorno?.(hoja) ?? entornoLineal(hoja);
     let r: (ResultadoReconexion & { cable: CableCambiado }) | null = null;
-    if (this.hecho?.hoja === h && this.vigente(indice, this.hecho.resultado)) r = this.hecho.resultado;
-    else if (this.opciones.plan && this.vigente(indice, this.opciones.plan)) r = this.opciones.plan;
-    if (!r) {
-      const entorno = this.opciones.entorno?.(hoja) ?? entornoLineal(hoja);
-      const n = planearReconexion(entorno, this.id, this.lado, this.destino);
-      if (n.rechazo || !n.cable) throw new Error(n.rechazo?.motivo ?? `No se puede reconectar "${this.id}".`);
-      r = n as ResultadoReconexion & { cable: CableCambiado };
+    if (this.hecho) {
+      // Rehacer: el mismo resultado o nada.
+      const guardado = this.hecho.resultado;
+      if (this.hecho.hoja !== h || !this.vigente(indice, guardado)) throw new Error(MENSAJE_NO_REHACER);
+      const rechazo = revisarReconexion(entorno(), guardado);
+      if (rechazo) throw new Error(rechazo.motivo);
+      r = guardado;
+    } else {
+      // La vista previa se usa si sigue valiendo; si no, se planea de nuevo.
+      const previa = this.opciones.plan;
+      if (previa && this.vigente(indice, previa) && !revisarReconexion(entorno(), previa)) r = previa;
+      if (!r) {
+        const n = planearReconexion(entorno(), this.id, this.lado, this.destino);
+        if (n.rechazo || !n.cable) throw new Error(n.rechazo?.motivo ?? `No se puede reconectar "${this.id}".`);
+        r = n as ResultadoReconexion & { cable: CableCambiado };
+      }
     }
     const w = indice.cables.get(this.id)!;
     w.desde = { ...r.cable.desde };

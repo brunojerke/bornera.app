@@ -16,7 +16,7 @@ import {
 } from "./comandos";
 import { buscarComponente, crearDocumento, type Componente, type Documento } from "./documento";
 import { Historial } from "./historial";
-import { planearReconexion } from "./reconectar";
+import { MENSAJE_NO_REHACER, planearReconexion } from "./reconectar";
 import { entornoLineal } from "./seguir";
 
 const meta = { titulo: "Prueba", autor: "Bruno Jerke", fecha: "2026-11-08" };
@@ -468,22 +468,67 @@ describe("CambiarExtremo (T14c)", () => {
     expect(tercero.hojas[0]!.cables[0]!.hasta).toEqual(enCable("w2", 8, 2));
   });
 
-  it("rehacer con el cable cambiado: planea de nuevo, o tira sin cambiar nada", () => {
+  it("rehacer repite exactamente el resultado guardado, aunque hoy el planificador elegiría otro recorrido", () => {
+    const d = doc();
+    // w9 tiene un codo donde caería el codo estirado (12, −6): el primer candidato no pasa.
+    d.hojas[0]!.cables.push({ id: "w9", desde: libre(12, -9), hasta: libre(16, -6), codos: [[12, -6]] });
+    const h = new Historial(d);
+    h.ejecutar(new CambiarExtremo("w1", "hasta", borne("k2", "A1")));
+    const despues = copia(d);
+    const elegido = despues.hojas[0]!.cables[0]!.codos;
+    expect(elegido).not.toEqual([[0, -6], [12, -6]]);
+    h.deshacer();
+    // Sin w9 (fuera del historial), planear de nuevo daría el estirado.
+    d.hojas[0]!.cables.pop();
+    expect(planearReconexion(entornoLineal(d.hojas[0]!), "w1", "hasta", borne("k2", "A1")).cable!.codos).toEqual([[0, -6], [12, -6]]);
+    h.rehacer();
+    expect(d.hojas[0]!.cables[0]).toEqual(despues.hojas[0]!.cables[0]);
+  });
+
+  it("rehacer con el cable cambiado: tira sin cambiar nada, no vuelve a rutear", () => {
+    const d = doc();
+    const h = new Historial(d);
+    h.ejecutar(new CambiarExtremo("w1", "hasta", borne("k2", "A1")));
+    h.deshacer();
+    // Otro camino cambia el cable (fuera del historial).
+    d.hojas[0]!.cables[0]!.codos = [[0, -5], [8, -5]];
+    const antes = copia(d);
+    expect(() => h.rehacer()).toThrow(MENSAJE_NO_REHACER);
+    expect(d).toEqual(antes);
+    expect(h.puedeRehacer).toBe(true);
+  });
+
+  it("rehacer cuando el resultado guardado ya no vale: tira sin cambiar nada", () => {
+    // La T sobre w2 ya no cae sobre w2.
+    const d = doc();
+    const h = new Historial(d);
+    h.ejecutar(new CambiarExtremo("w1", "hasta", enCable("w2", 8, 2)));
+    h.deshacer();
+    d.hojas[0]!.cables[1]!.desde = libre(4, 3);
+    d.hojas[0]!.cables[1]!.hasta = libre(16, 3);
+    let antes = copia(d);
+    expect(() => h.rehacer()).toThrow("no está sobre");
+    expect(d).toEqual(antes);
+    // Algo nuevo sobre el recorrido guardado: el codo de w9 justo en (12, −6).
+    const otro = doc();
+    const h2 = new Historial(otro);
+    h2.ejecutar(new CambiarExtremo("w1", "hasta", borne("k2", "A1")));
+    h2.deshacer();
+    otro.hojas[0]!.cables.push({ id: "w9", desde: libre(12, -9), hasta: libre(16, -6), codos: [[12, -6]] });
+    antes = copia(otro);
+    expect(() => h2.rehacer()).toThrow("tocaría otro cable");
+    expect(otro).toEqual(antes);
+  });
+
+  it("el extremo ya no está suelto al rehacer: tira sin cambiar nada", () => {
     const d = doc();
     const cmd = new CambiarExtremo("w1", "hasta", borne("k2", "A1"));
     cmd.aplicar(d);
     cmd.deshacer(d);
-    // Otro camino lo cambia (fuera del historial): rehacer planea de nuevo.
-    d.hojas[0]!.cables[0]!.codos = [[0, -5], [8, -5]];
-    cmd.aplicar(d);
-    expect(d.hojas[0]!.cables[0]!.hasta).toEqual(borne("k2", "A1"));
-    expect(d.hojas[0]!.cables[0]!.codos[0]).toEqual([0, -5]);
-    cmd.deshacer(d);
-    // Ahora el extremo ya no está suelto: tira y no cambia nada.
     d.hojas[0]!.cables[0]!.hasta = enCable("w2", 8, 2);
     d.hojas[0]!.cables[0]!.codos = [[0, -6], [8, -6]];
     const antes = copia(d);
-    expect(() => cmd.aplicar(d)).toThrow("no está suelto");
+    expect(() => cmd.aplicar(d)).toThrow(MENSAJE_NO_REHACER);
     expect(d).toEqual(antes);
   });
 
