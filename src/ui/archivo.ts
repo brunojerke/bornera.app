@@ -17,6 +17,9 @@
 //    aviso. Si falló: el error en un diálogo, y nada cambia.
 // 7. La operación termina siempre, también ante un error.
 //
+// El tiempo del aviso (D20) va de serializar al fin de la escritura, sin lo
+// que se tarda en el diálogo de dónde guardar.
+//
 // En una escena del banco (D17), Guardar guarda esa escena, siempre pregunta
 // dónde y no cambia el archivo actual ni la marca del documento.
 //
@@ -29,23 +32,29 @@
 //    termina sin cambios.
 // 4. Recién con el archivo elegido empieza la operación: en el navegador, el
 //    selector puede no avisar que se canceló y la marca quedaría trabada.
-// 5. Se desempaqueta y se deserializa. Con errores, "No se pudo abrir" y el
-//    documento actual no se toca.
+// 5. Si pasa el tope, se rechaza sin leerlo. Se lee, se desempaqueta y se
+//    deserializa. Con errores, "No se pudo abrir" y el documento actual no
+//    se toca.
 // 6. Si el documento cambió, o se pasó a Simular o al banco, se cancela con
 //    un aviso.
 // 7. Se reemplaza el editor (historial vacío, D19-A) y el archivo pasa a ser
 //    el actual. Los avisos del archivo se muestran una vez, y al primer
-//    cuadro dibujado sale "Abierto" (con el tiempo, D20).
+//    cuadro dibujado sale "Abierto" (con el tiempo desde la lectura, sin el
+//    diálogo, D20).
 //
 // Nuevo: los pasos 1 y 2 y un documento vacío, sin archivo actual.
+//
+// Cerrar la ventana (D14-A, `antesDeCerrar`): con cambios en el documento,
+// el mismo diálogo. "Guardar" guarda el documento, también si se está viendo
+// una escena del banco, y se cierra solo si quedó guardado y sin cambios.
 
 import { deserializar, serializar, type ProblemaArchivo } from "../core/io";
 import type { Documento } from "../core/model/documento";
 import type { MarcaGuardado } from "../core/model/historial";
 import { letra } from "../editor/atajos";
 import { documentoNuevo } from "../editor/editor";
-import type { ArchivoAbierto, Archivos, Destino } from "./archivos";
-import { desempaquetar, empaquetar, nombreArchivo } from "./brn";
+import type { ArchivoElegido, Archivos, Destino } from "./archivos";
+import { desempaquetar, empaquetar, MENSAJES, nombreArchivo, TOPE_BYTES } from "./brn";
 
 export type AccionArchivo = "nuevo" | "abrir" | "guardar" | "guardarComo";
 
@@ -83,6 +92,8 @@ export interface DependenciasArchivo {
    * en Simular o mientras se ve una escena del banco (D17).
    */
   reemplazable(): EditorDocumento | null;
+  /** El editor del documento, siempre (aunque se vea una escena del banco): lo guarda el cierre. */
+  documento(): EditorDocumento;
   /** Pone este documento en un editor nuevo (D19-A). Se cumple con el primer cuadro dibujado. */
   reemplazar(documento: Documento): Promise<void>;
   /** Diálogo de cambios sin guardar del documento `nombre` (D13-A). */
@@ -114,6 +125,9 @@ export const AVISOS_ABRIR = {
   otraOperacion: "Se canceló abrir: hay otra operación de archivo en curso",
 } as const;
 
+/** Aviso de la barra de estado cuando no se puede cerrar la ventana. */
+export const AVISO_CERRAR_EN_CURSO = "No se puede cerrar: hay una operación de archivo en curso";
+
 export class OperacionesArchivo {
   /** Archivo donde Guardar escribe sin preguntar; null en un documento nuevo. */
   private _archivoActual: Destino | null = null;
@@ -143,9 +157,45 @@ export class OperacionesArchivo {
     const mostrado = this.deps.mostrado();
     if (!mostrado) return false;
     this.deps.confirmarPanel();
+    return this.escribir(mostrado.editor, mostrado.esDocumento, como);
+  }
+
+  /**
+   * Cerrar la ventana (D14-A): true si se puede cerrar. Con cambios en el
+   * documento, el diálogo; "Guardar" guarda el documento (aunque se vea una
+   * escena del banco) y se cierra solo si quedó guardado y sin cambios. Con
+   * una operación en curso no se cierra.
+   */
+  async antesDeCerrar(): Promise<boolean> {
+    // El diálogo ya está abierto (otro pedido de cierre, o Abrir o Nuevo): que se responda ese.
+    if (this.preguntando) return false;
+    if (this._enCurso) {
+      this.deps.avisar(AVISO_CERRAR_EN_CURSO);
+      return false;
+    }
+    this.deps.confirmarPanel();
+    const editor = this.deps.documento();
+    if (!editor.modificado) return true;
+    this.preguntando = true;
+    let respuesta: RespuestaSinGuardar;
+    try {
+      respuesta = await this.deps.preguntarSinGuardar(nombreDocumento(this._archivoActual?.nombre ?? null, editor.documento.meta.titulo));
+    } finally {
+      this.preguntando = false;
+    }
+    if (respuesta === "cancelar" || this.deps.documento() !== editor) return false;
+    if (respuesta === "noGuardar") return true;
+    if (this._enCurso) {
+      this.deps.avisar(AVISO_CERRAR_EN_CURSO);
+      return false;
+    }
+    return (await this.escribir(editor, true, false)) && !editor.modificado;
+  }
+
+  /** Pasos 2 a 7 de Guardar, sobre este editor. */
+  private async escribir(editor: EditorArchivo, esDocumento: boolean, como: boolean): Promise<boolean> {
     this.empezar();
     try {
-      const { editor, esDocumento } = mostrado;
       const inicio = this.deps.ahora();
       const texto = serializar(editor.documento);
       const marca = editor.tomarMarca();
@@ -155,12 +205,16 @@ export class OperacionesArchivo {
         return false;
       }
       const { bytes, comprimido } = await empaquetar(texto);
-      const actual = esDocumento && !como ? this._archivoActual : null;
-      let destino: Destino | null = actual;
-      if (actual) await this.deps.archivos.guardar(actual, bytes);
-      else destino = await this.deps.archivos.guardarComo(bytes, nombreArchivo(editor.documento.meta.titulo));
-      if (!destino) return false;
-      const ms = Math.round(this.deps.ahora() - inicio);
+      // D20: el tiempo se corta durante el diálogo de dónde guardar.
+      let ms = this.deps.ahora() - inicio;
+      let destino = esDocumento && !como ? this._archivoActual : null;
+      if (!destino) {
+        destino = await this.deps.archivos.elegirDestino(nombreArchivo(editor.documento.meta.titulo));
+        if (!destino) return false;
+      }
+      const escribiendo = this.deps.ahora();
+      await this.deps.archivos.guardar(destino, bytes);
+      ms = Math.round(ms + this.deps.ahora() - escribiendo);
       if (esDocumento) {
         this._archivoActual = destino;
         editor.marcarGuardado(marca);
@@ -180,9 +234,9 @@ export class OperacionesArchivo {
     const editor = await this.antesDeReemplazar();
     if (!editor) return;
     const cambios = editor.cambios;
-    let elegido: ArchivoAbierto | null;
+    let elegido: ArchivoElegido | null;
     try {
-      elegido = await this.deps.archivos.abrir();
+      elegido = await this.deps.archivos.elegirParaAbrir();
     } catch (e) {
       this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "leer") }]);
       return;
@@ -219,17 +273,28 @@ export class OperacionesArchivo {
   }
 
   /**
-   * Pasos 4 a 7 de Abrir, con la operación en curso. Devuelve null si no se
-   * abrió (los errores ya se mostraron). El tiempo se mide desde que los
-   * bytes están leídos: la lectura del disco va junto con el selector.
+   * Pasos 5 a 7 de Abrir, con la operación en curso. Devuelve null si no se
+   * abrió (los errores ya se mostraron). El tiempo se mide desde antes de
+   * leer: cuenta la lectura del disco, no el diálogo (D20).
    */
   private async cargar(
-    elegido: ArchivoAbierto,
+    elegido: ArchivoElegido,
     editor: EditorDocumento,
     cambios: number,
   ): Promise<{ cuadro: Promise<void>; avisos: readonly ProblemaArchivo[]; inicio: number } | null> {
+    if (elegido.tamano > TOPE_BYTES) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: MENSAJES.grande }]);
+      return null;
+    }
     const inicio = this.deps.ahora();
-    const paquete = await desempaquetar(elegido.bytes);
+    let bytes: Uint8Array;
+    try {
+      bytes = await elegido.leer();
+    } catch (e) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "leer") }]);
+      return null;
+    }
+    const paquete = await desempaquetar(bytes);
     if (!paquete.ok) {
       this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: paquete.error }]);
       return null;

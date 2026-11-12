@@ -256,6 +256,11 @@
     cambio();
   }
 
+  /** El editor del documento, aunque se esté viendo una escena del banco (lo guarda el cierre, D14-A). */
+  export function editorDelDocumento(): Editor {
+    return editorDocumento;
+  }
+
   /** Quienes esperan el próximo cuadro dibujado (ver `reemplazarDocumento`). */
   let esperasCuadro: (() => void)[] = [];
 

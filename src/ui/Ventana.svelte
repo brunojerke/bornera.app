@@ -15,7 +15,9 @@
   import { esAtajoModo, f5CambiaModo, otroModo } from "./modo";
   import { hayModal } from "../editor/punteros";
   import { Editor } from "../editor/editor";
-  import { tick, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
+  import { isTauri } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
   import DialogoArchivo from "./DialogoArchivo.svelte";
   import DialogoSinGuardar from "./DialogoSinGuardar.svelte";
@@ -29,8 +31,11 @@
     type AccionArchivo,
     type RespuestaSinGuardar,
   } from "./archivo";
-  import { archivosNavegador } from "./archivos";
+  import { archivosNavegador, archivosTauri } from "./archivos";
   import { ES_PRERELEASE } from "./version";
+
+  /** Corre dentro de Tauri (el escritorio); si no, es el navegador (`npm run dev` y el humo). */
+  const enEscritorio = isTauri();
 
   let modo = $state<Modo>("editar");
   let paletaAbierta = $state(true);
@@ -79,15 +84,16 @@
   let editorActivo = $state.raw<Editor | null>(null);
 
   // ── Archivo (T15a) ───────────────────────────────────────────────────────
-  // En esta etapa, siempre con los archivos del navegador (descargas y
-  // <input type="file">); el escritorio llega en la etapa 4.
+  // En el escritorio, diálogos nativos y escritura segura; en el navegador,
+  // descargas y <input type="file">.
   const operaciones = new OperacionesArchivo({
-    archivos: archivosNavegador,
+    archivos: enEscritorio ? archivosTauri : archivosNavegador,
     // Lo que se ve: el documento o una escena del banco (D17). Las escenas
     // sin editor ("símbolos" y "vacía") no se guardan.
     mostrado: () => (editorActivo ? { editor: editorActivo, esDocumento: escena === "documento" } : null),
     // Abrir y Nuevo: solo en Editar y viendo el documento (D17).
     reemplazable: () => (puedeAbrir ? editorActivo : null),
+    documento: () => lienzo.editorDelDocumento(),
     reemplazar: (documento) => lienzo.reemplazarDocumento(new Editor(documento)),
     preguntarSinGuardar: (nombre) =>
       new Promise((responder) => {
@@ -109,10 +115,42 @@
     else void operaciones.nuevo();
   }
 
-  // Título de la ventana (D18-B): nombre y marca de cambios. En el escritorio
-  // irá por setTitle (etapa 4).
+  // Título de la ventana (D18-B): nombre y marca de cambios. En el escritorio,
+  // por setTitle (el título de la ventana no sigue a document.title).
   $effect(() => {
-    document.title = tituloVentana({ archivo: archivoActual, titulo: tituloDocumento, modificado });
+    const titulo = tituloVentana({ archivo: archivoActual, titulo: tituloDocumento, modificado });
+    document.title = titulo;
+    if (enEscritorio) getCurrentWindow().setTitle(titulo).catch((e) => console.warn("No se pudo poner el título de la ventana", e));
+  });
+
+  /** La ventana se está cerrando (ya se respondió el diálogo): `beforeunload` no pregunta otra vez. */
+  let cerrando = false;
+
+  // Cerrar la ventana con cambios (D14-A), solo en el escritorio. El cierre se
+  // frena siempre y, si se puede cerrar, se destruye la ventana desde acá:
+  // así la marca `cerrando` dura solo lo que dura el cierre.
+  onMount(() => {
+    if (!enEscritorio) return;
+    const ventana = getCurrentWindow();
+    let quitar: (() => void) | null = null;
+    let montado = true;
+    void ventana
+      .onCloseRequested(async (e) => {
+        e.preventDefault();
+        if (!(await operaciones.antesDeCerrar())) return;
+        cerrando = true;
+        try {
+          await ventana.destroy();
+        } catch (err) {
+          cerrando = false;
+          avisar(`No se pudo cerrar la ventana: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })
+      .then((q) => (montado ? (quitar = q) : q()));
+    return () => {
+      montado = false;
+      quitar?.();
+    };
   });
 
   // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
@@ -209,10 +247,11 @@
   /**
    * Recargar o cerrar la página con cambios sin guardar: el navegador pregunta
    * antes (D15-C). En el escritorio, cerrar la ventana lo atiende
-   * `onCloseRequested` (etapa 4); esto cubre la recarga.
+   * `onCloseRequested`, que ya preguntó: con `cerrando`, no se pregunta otra
+   * vez. Esto cubre la recarga.
    */
   function alSalir(e: BeforeUnloadEvent) {
-    if (!modificado) return;
+    if (!modificado || cerrando) return;
     e.preventDefault();
     // Los motores que no miran preventDefault (WebKit viejo) miran esto.
     e.returnValue = "";

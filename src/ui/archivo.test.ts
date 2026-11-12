@@ -4,11 +4,12 @@ import { datos, docCables, docRotados, meta } from "../core/io/prueba-documentos
 import { CambiarEtiqueta, colocar } from "../core/model/comandos";
 import { crearDocumento, generarId, type Documento } from "../core/model/documento";
 import { documentoNuevo, Editor } from "../editor/editor";
-import type { ArchivoAbierto, Archivos, Destino } from "./archivos";
+import type { ArchivoElegido, Archivos, Destino } from "./archivos";
 import {
   atajoArchivo,
   atajoArchivoActua,
   avisoAbierto,
+  AVISO_CERRAR_EN_CURSO,
   avisoGuardado,
   AVISOS_ABRIR,
   esTeclaRecarga,
@@ -20,14 +21,26 @@ import {
   type Mostrado,
   type RespuestaSinGuardar,
 } from "./archivo";
-import { desempaquetar, empaquetar, nombreArchivo } from "./brn";
+import { desempaquetar, empaquetar, MENSAJES, nombreArchivo, TOPE_BYTES } from "./brn";
 
-/** Archivos de mentira: anotan cada llamada y lo escrito. */
+/** Un archivo en el disco de mentira, para Abrir. */
+interface Archivo {
+  bytes: Uint8Array;
+  nombre: string;
+  ruta: string | null;
+}
+
+/**
+ * Archivos de mentira: anotan cada llamada ("elegir X" es el diálogo de dónde
+ * guardar, "guardar X" la escritura, "abrir" el selector) y lo escrito.
+ */
 class ArchivosFalsos implements Archivos {
   llamadas: string[] = [];
   escritos: { nombre: string; bytes: Uint8Array }[] = [];
-  /** Lo que se elige en Guardar como: un nombre, null (cancelar) o undefined (el sugerido). */
+  /** Lo que se elige en el diálogo de dónde guardar: un nombre, null (cancelar) o undefined (el sugerido). */
   eleccion: string | null | undefined = undefined;
+  /** Lo que pasa mientras el diálogo de dónde guardar está abierto. */
+  alElegirDestino: () => void = () => undefined;
   /** Si está, la escritura falla con este error. */
   falla: Error | null = null;
   /** Si está, la escritura espera a que se llame a `soltar`. */
@@ -39,11 +52,19 @@ class ArchivosFalsos implements Archivos {
   }
 
   /** Lo que se elige en Abrir: un archivo, o null (cancelar el selector). */
-  aAbrir: ArchivoAbierto | null = null;
+  aAbrir: Archivo | null = null;
+  /** Si está, el tamaño que da el selector (si no, el de los bytes). */
+  tamano: number | null = null;
+  /** Si está, el selector falla con este error. */
+  fallaElegir: Error | null = null;
   /** Si está, leer el archivo elegido falla con este error. */
-  fallaAbrir: Error | null = null;
+  fallaLeer: Error | null = null;
+  /** Veces que se leyó un archivo elegido. */
+  lecturas = 0;
   /** Lo que pasa mientras el selector está abierto. */
   alAbrir: () => void = () => undefined;
+  /** Lo que pasa mientras se lee el archivo elegido. */
+  alLeer: () => void = () => undefined;
   /** Si está, el selector espera a que se llame a `soltarAbrir`. */
   private pausaAbrir: Promise<void> | null = null;
   soltarAbrir: () => void = () => undefined;
@@ -52,31 +73,38 @@ class ArchivosFalsos implements Archivos {
     this.pausaAbrir = new Promise((r) => (this.soltarAbrir = r));
   }
 
-  async abrir(): Promise<ArchivoAbierto | null> {
+  async elegirParaAbrir(): Promise<ArchivoElegido | null> {
     this.llamadas.push("abrir");
     if (this.pausaAbrir) await this.pausaAbrir;
     this.alAbrir();
-    if (this.fallaAbrir) throw this.fallaAbrir;
-    return this.aAbrir;
+    if (this.fallaElegir) throw this.fallaElegir;
+    const a = this.aAbrir;
+    if (!a) return null;
+    return {
+      nombre: a.nombre,
+      ruta: a.ruta,
+      tamano: this.tamano ?? a.bytes.length,
+      leer: async () => {
+        this.lecturas++;
+        this.alLeer();
+        if (this.fallaLeer) throw this.fallaLeer;
+        return a.bytes;
+      },
+    };
   }
 
-  async guardarComo(bytes: Uint8Array, sugerido: string): Promise<Destino | null> {
-    this.llamadas.push(`guardarComo ${sugerido}`);
+  async elegirDestino(sugerido: string): Promise<Destino | null> {
+    this.llamadas.push(`elegir ${sugerido}`);
+    this.alElegirDestino();
     if (this.eleccion === null) return null;
-    const nombre = this.eleccion ?? sugerido;
-    await this.escribir(nombre, bytes);
-    return { nombre, ruta: null };
+    return { nombre: this.eleccion ?? sugerido, ruta: null };
   }
 
   async guardar(destino: Destino, bytes: Uint8Array): Promise<void> {
     this.llamadas.push(`guardar ${destino.nombre}`);
-    await this.escribir(destino.nombre, bytes);
-  }
-
-  private async escribir(nombre: string, bytes: Uint8Array): Promise<void> {
     if (this.pausa) await this.pausa;
     if (this.falla) throw this.falla;
-    this.escritos.push({ nombre, bytes });
+    this.escritos.push({ nombre: destino.nombre, bytes });
   }
 }
 
@@ -98,6 +126,9 @@ function preparar() {
     /** Nombres con que se preguntó por los cambios sin guardar, y la respuesta. */
     preguntas: [] as string[],
     respuesta: "cancelar" as RespuestaSinGuardar,
+    /** El diálogo no responde solo: espera a que se llame a `responder`. */
+    esperarRespuesta: false,
+    responder: (_r: RespuestaSinGuardar) => {},
     problemas: [] as { titulo: string; problemas: readonly ProblemaArchivo[] }[],
     avisos: [] as string[],
     confirmados: 0,
@@ -113,6 +144,7 @@ function preparar() {
     archivos,
     mostrado: () => p.mostrado,
     reemplazable: () => (p.puedeAbrir ? p.editor : null),
+    documento: () => p.editor,
     reemplazar: (documento) => {
       p.reemplazos.push(documento);
       p.editor = new Editor(documento);
@@ -121,6 +153,7 @@ function preparar() {
     },
     preguntarSinGuardar: async (nombre) => {
       p.preguntas.push(nombre);
+      if (p.esperarRespuesta) return new Promise<RespuestaSinGuardar>((r) => (p.responder = r));
       return p.respuesta;
     },
     confirmarPanel: () => {
@@ -145,13 +178,13 @@ function cambiar(ed: Editor, x = 40): void {
   ed.ejecutar(colocar(ed.documento, datos("contactor.bobina", x, 0)));
 }
 
-/** Un archivo elegido con el documento, como lo escribe Guardar (gzip). */
-async function archivo(doc: Documento, nombre = "Marcha.brn"): Promise<ArchivoAbierto> {
+/** Un archivo con el documento, como lo escribe Guardar (gzip). */
+async function archivo(doc: Documento, nombre = "Marcha.brn"): Promise<Archivo> {
   return { bytes: (await empaquetar(serializar(doc))).bytes, nombre, ruta: null };
 }
 
-/** Un archivo elegido con este texto, sin comprimir. */
-function archivoTexto(texto: string, nombre = "Roto.brn"): ArchivoAbierto {
+/** Un archivo con este texto, sin comprimir. */
+function archivoTexto(texto: string, nombre = "Roto.brn"): Archivo {
   return { bytes: new TextEncoder().encode(texto), nombre, ruta: null };
 }
 
@@ -170,12 +203,12 @@ describe("Guardar", () => {
     cambiar(p.editor);
     expect(p.editor.modificado).toBe(true);
     expect(await p.ops.guardar()).toBe(true);
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]);
     expect(p.ops.archivoActual).toEqual({ nombre: "Prueba.brn", ruta: null });
     expect(p.editor.modificado).toBe(false);
     cambiar(p.editor, 50);
     expect(await p.ops.guardar()).toBe(true);
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn", "guardar Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn", "guardar Prueba.brn"]);
     expect(p.editor.modificado).toBe(false);
   });
 
@@ -184,7 +217,7 @@ describe("Guardar", () => {
     await p.ops.guardar();
     p.archivos.eleccion = "Otro.brn";
     expect(await p.ops.guardar(true)).toBe(true);
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn", "guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn", "elegir Prueba.brn", "guardar Otro.brn"]);
     expect(p.ops.archivoActual?.nombre).toBe("Otro.brn");
     await p.ops.guardar();
     expect(p.archivos.llamadas.at(-1)).toBe("guardar Otro.brn");
@@ -277,13 +310,13 @@ describe("Guardar", () => {
     // Mientras comprime…
     expect(await p.ops.guardar()).toBe(false);
     // …y mientras escribe.
-    await vi.waitFor(() => expect(p.archivos.llamadas).toHaveLength(1));
+    await vi.waitFor(() => expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]));
     expect(await p.ops.guardar(true)).toBe(false);
     expect(await p.ops.guardar()).toBe(false);
     expect(p.confirmados).toBe(1);
     p.archivos.soltar();
     expect(await primera).toBe(true);
-    expect(p.archivos.llamadas).toHaveLength(1);
+    expect(p.archivos.llamadas).toHaveLength(2);
     expect(p.ops.enCurso).toBe(false);
   });
 
@@ -310,7 +343,7 @@ describe("Guardar", () => {
     cambiar(banco);
     p.mostrado = { editor: banco, esDocumento: false };
     expect(await p.ops.guardar()).toBe(true);
-    expect(p.archivos.llamadas.at(-1)).toBe("guardarComo Banco de 100.brn");
+    expect(p.archivos.llamadas.slice(-2)).toEqual(["elegir Banco de 100.brn", "guardar Banco de 100.brn"]);
     expect(p.ops.archivoActual?.nombre).toBe("Prueba.brn");
     expect(p.editor.modificado).toBe(true);
     expect(banco.modificado).toBe(true);
@@ -338,6 +371,23 @@ describe("Guardar", () => {
     p.archivos.soltar();
     await guardando;
     expect(p.avisos.at(-1)).toBe("Guardado en 37 ms");
+  });
+
+  it("D20: el tiempo no cuenta lo que se tarda en el diálogo de dónde guardar", async () => {
+    const p = preparar();
+    p.medir = true;
+    p.reloj = 100;
+    p.archivos.alElegirDestino = () => (p.reloj += 5000);
+    p.archivos.pausar();
+    const guardando = p.ops.guardar();
+    // Serializar y comprimir: 20 ms.
+    p.reloj = 120;
+    await vi.waitFor(() => expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]));
+    // Escribir: 30 ms.
+    p.reloj += 30;
+    p.archivos.soltar();
+    expect(await guardando).toBe(true);
+    expect(p.avisos.at(-1)).toBe("Guardado en 50 ms");
   });
 
   it("avisoGuardado", () => {
@@ -406,7 +456,7 @@ describe("Abrir", () => {
     p.respuesta = "guardar";
     p.archivos.aAbrir = await archivo(docRotados());
     await p.ops.abrir();
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn", "abrir"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn", "abrir"]);
     expect(await abrirEscrito(p.archivos.escritos[0]!.bytes)).toEqual(viejo.documento);
     expect(p.reemplazos).toHaveLength(1);
   });
@@ -418,14 +468,14 @@ describe("Abrir", () => {
     p.archivos.eleccion = null;
     p.archivos.aAbrir = await archivo(docRotados());
     await p.ops.abrir();
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn"]);
     expect(p.reemplazos).toEqual([]);
     // D22-B: no abriría, no se guarda, y tampoco se abre.
     p.archivos.eleccion = undefined;
     cambiar(p.editor, 20_000);
     await p.ops.abrir();
     expect(p.problemas.map((x) => x.titulo)).toEqual([TITULOS.noSePuedeGuardar]);
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn"]);
     expect(p.reemplazos).toEqual([]);
   });
 
@@ -436,11 +486,11 @@ describe("Abrir", () => {
     p.archivos.aAbrir = await archivo(docRotados());
     p.archivos.pausar();
     const abriendo = p.ops.abrir();
-    await vi.waitFor(() => expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]));
+    await vi.waitFor(() => expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]));
     cambiar(p.editor, 60);
     p.archivos.soltar();
     await abriendo;
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]);
     expect(p.editor.modificado).toBe(true);
     expect(p.reemplazos).toEqual([]);
   });
@@ -471,7 +521,7 @@ describe("Abrir", () => {
     p.respuesta = "noGuardar";
     const viejo = p.editor;
     const antes = serializar(viejo.documento);
-    const casos: [ArchivoAbierto, RegExp][] = [
+    const casos: [Archivo, RegExp][] = [
       [archivoTexto("{roto"), /JSON/],
       [archivoTexto('{"formato":"otro"}'), /No es un archivo de Bornera/],
       [{ bytes: new Uint8Array([0x1f, 0x8b, 1, 2, 3]), nombre: "Roto.brn", ruta: null }, /./],
@@ -494,11 +544,40 @@ describe("Abrir", () => {
 
   it("un error al leer el archivo se muestra y no cambia nada", async () => {
     const p = preparar();
-    p.archivos.fallaAbrir = new Error("Permiso denegado");
+    p.archivos.aAbrir = await archivo(docRotados());
+    p.archivos.fallaLeer = new Error("Permiso denegado");
     await p.ops.abrir();
     expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: "Permiso denegado" }] }]);
     expect(p.reemplazos).toEqual([]);
+    expect(p.ops.archivoActual).toBeNull();
     expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("un error del selector se muestra y no cambia nada", async () => {
+    const p = preparar();
+    p.archivos.aAbrir = await archivo(docRotados());
+    p.archivos.fallaElegir = new Error("No se pudo leer el tamaño");
+    await p.ops.abrir();
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: "No se pudo leer el tamaño" }] }]);
+    expect(p.archivos.lecturas).toBe(0);
+    expect(p.reemplazos).toEqual([]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("un archivo más grande que el tope se rechaza sin leerlo (D18)", async () => {
+    const p = preparar();
+    p.archivos.aAbrir = await archivo(docRotados());
+    p.archivos.tamano = TOPE_BYTES + 1;
+    await p.ops.abrir();
+    expect(p.archivos.lecturas).toBe(0);
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: MENSAJES.grande }] }]);
+    expect(p.reemplazos).toEqual([]);
+    expect(p.ops.enCurso).toBe(false);
+    // Justo en el tope, se lee y abre.
+    p.archivos.tamano = TOPE_BYTES;
+    await p.ops.abrir();
+    expect(p.archivos.lecturas).toBe(1);
+    expect(p.reemplazos).toHaveLength(1);
   });
 
   it("el documento cambió mientras se elegía el archivo: se cancela", async () => {
@@ -588,7 +667,18 @@ describe("Abrir", () => {
     expect(p.problemas).toHaveLength(1);
   });
 
-  it("«Abierto» sale con el primer cuadro, ya sin la operación en curso; medido, desde los bytes leídos", async () => {
+  it("D20: «Abierto en N ms» cuenta la lectura y no el diálogo", async () => {
+    const p = preparar();
+    p.medir = true;
+    p.reloj = 0;
+    p.archivos.aAbrir = await archivo(docRotados());
+    p.archivos.alAbrir = () => (p.reloj += 5000);
+    p.archivos.alLeer = () => (p.reloj += 25);
+    await p.ops.abrir();
+    expect(p.avisos).toEqual(["Abierto en 25 ms"]);
+  });
+
+  it("«Abierto» sale con el primer cuadro, ya sin la operación en curso; medido, desde antes de leer", async () => {
     const p = preparar();
     p.cuadroInmediato = false;
     p.medir = true;
@@ -642,13 +732,13 @@ describe("Nuevo", () => {
     expect(p.reemplazos).toEqual([]);
     p.respuesta = "guardar";
     await p.ops.nuevo();
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]);
     expect(p.reemplazos).toHaveLength(1);
     cambiar(p.editor);
     p.respuesta = "noGuardar";
     await p.ops.nuevo();
     expect(p.preguntas).toEqual(["Prueba.brn", "Prueba.brn", "Sin título.brn"]);
-    expect(p.archivos.llamadas).toEqual(["guardarComo Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]);
     expect(p.reemplazos).toHaveLength(2);
   });
 
@@ -665,7 +755,120 @@ describe("Nuevo", () => {
     const nombre = p.preguntas.at(-1);
     expect(nombre).toBe("Sin título.brn");
     await p.ops.guardar();
-    expect(p.archivos.llamadas.at(-1)).toBe(`guardarComo ${nombre}`);
+    expect(p.archivos.llamadas.slice(-2)).toEqual([`elegir ${nombre}`, `guardar ${nombre}`]);
+  });
+});
+
+describe("Cerrar la ventana (D14-A)", () => {
+  it("sin cambios se cierra sin preguntar; el panel confirma antes de mirar", async () => {
+    const p = preparar();
+    expect(await p.ops.antesDeCerrar()).toBe(true);
+    expect(p.preguntas).toEqual([]);
+    expect(p.confirmados).toBe(1);
+    // Lo escrito en el campo cuenta como cambio.
+    const id = p.editor.documento.hojas[0]!.componentes[0]!.id;
+    p.alConfirmar = () => p.editor.ejecutar(new CambiarEtiqueta(id, "K9"));
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    expect(p.preguntas).toEqual(["Prueba.brn"]);
+  });
+
+  it("con cambios: Cancelar no cierra, No guardar cierra sin escribir", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    expect(p.preguntas).toEqual(["Prueba.brn"]);
+    p.respuesta = "noGuardar";
+    expect(await p.ops.antesDeCerrar()).toBe(true);
+    expect(p.archivos.llamadas).toEqual([]);
+    expect(p.editor.modificado).toBe(true);
+  });
+
+  it("Guardar guarda y cierra; con archivo actual, lo pisa sin preguntar dónde", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.respuesta = "guardar";
+    expect(await p.ops.antesDeCerrar()).toBe(true);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]);
+    expect(p.editor.modificado).toBe(false);
+    cambiar(p.editor, 50);
+    expect(await p.ops.antesDeCerrar()).toBe(true);
+    expect(p.archivos.llamadas.at(-1)).toBe("guardar Prueba.brn");
+    expect(await abrirEscrito(p.archivos.escritos.at(-1)!.bytes)).toEqual(p.editor.documento);
+  });
+
+  it("Guardar que no queda guardado no cierra (cancelado, error, D22-B)", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.respuesta = "guardar";
+    p.archivos.eleccion = null;
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    p.archivos.eleccion = undefined;
+    p.archivos.falla = new Error("El disco está lleno");
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    expect(p.problemas.map((x) => x.titulo)).toEqual([TITULOS.noSePudoGuardar]);
+    p.archivos.falla = null;
+    cambiar(p.editor, 20_000);
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    expect(p.problemas.map((x) => x.titulo)).toEqual([TITULOS.noSePudoGuardar, TITULOS.noSePuedeGuardar]);
+    expect(p.archivos.escritos).toEqual([]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("Guardar, pero el documento cambió mientras se escribía: no cierra", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.respuesta = "guardar";
+    p.archivos.pausar();
+    const cerrando = p.ops.antesDeCerrar();
+    await vi.waitFor(() => expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]));
+    cambiar(p.editor, 60);
+    p.archivos.soltar();
+    expect(await cerrando).toBe(false);
+    expect(p.editor.modificado).toBe(true);
+  });
+
+  it("viendo una escena del banco, Guardar guarda el documento y no la escena", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    const banco = new Editor(docRotados());
+    banco.documento.meta.titulo = "Banco de 100";
+    cambiar(banco);
+    p.mostrado = { editor: banco, esDocumento: false };
+    p.puedeAbrir = false;
+    p.respuesta = "guardar";
+    expect(await p.ops.antesDeCerrar()).toBe(true);
+    expect(p.preguntas).toEqual(["Prueba.brn"]);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]);
+    expect(await abrirEscrito(p.archivos.escritos[0]!.bytes)).toEqual(p.editor.documento);
+    expect(p.ops.archivoActual?.nombre).toBe("Prueba.brn");
+    expect(p.editor.modificado).toBe(false);
+    expect(banco.modificado).toBe(true);
+  });
+
+  it("con una operación en curso no se cierra, y avisa", async () => {
+    const p = preparar();
+    p.archivos.pausar();
+    const guardando = p.ops.guardar();
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    expect(p.avisos).toEqual([AVISO_CERRAR_EN_CURSO]);
+    expect(p.preguntas).toEqual([]);
+    p.archivos.soltar();
+    expect(await guardando).toBe(true);
+    expect(await p.ops.antesDeCerrar()).toBe(true);
+  });
+
+  it("con el diálogo ya abierto, otro pedido de cierre (o Abrir) no hace nada", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.esperarRespuesta = true;
+    const primero = p.ops.antesDeCerrar();
+    await vi.waitFor(() => expect(p.preguntas).toHaveLength(1));
+    expect(await p.ops.antesDeCerrar()).toBe(false);
+    await p.ops.abrir();
+    expect(p.preguntas).toHaveLength(1);
+    expect(p.archivos.llamadas).toEqual([]);
+    p.responder("noGuardar");
+    expect(await primero).toBe(true);
   });
 });
 

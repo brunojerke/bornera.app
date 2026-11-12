@@ -164,22 +164,24 @@ Las conexiones aparentes no se miran (D10-A).
 ### 4. Archivos (`src/ui/archivos.ts`)
 
 ```ts
-interface ArchivoAbierto { bytes: Uint8Array; nombre: string; ruta: string | null }
+interface ArchivoElegido { nombre: string; ruta: string | null; tamano: number; leer(): Promise<Uint8Array> }
 interface Destino { nombre: string; ruta: string | null }
 
 interface Archivos {
-  /** Pide un archivo y lo lee. Null si se canceló. */
-  abrir(): Promise<ArchivoAbierto | null>;
-  /** Pide dónde guardar y escribe. Null si se canceló. */
-  guardarComo(bytes: Uint8Array, sugerido: string): Promise<Destino | null>;
-  /** Escribe en el archivo actual, sin preguntar. */
+  /** Pide un archivo para abrir (diálogo o selector). Null si se canceló. No lo lee. */
+  elegirParaAbrir(): Promise<ArchivoElegido | null>;
+  /** Pide dónde guardar (diálogo). Null si se canceló. No escribe. */
+  elegirDestino(sugerido: string): Promise<Destino | null>;
+  /** Escribe en ese destino, sin preguntar. */
   guardar(destino: Destino, bytes: Uint8Array): Promise<void>;
 }
 ```
 
-**Escritorio (`archivosTauri`), el camino del usuario.** Se elige cuando la app corre dentro de Tauri.
+Elegir va separado de leer y escribir (Bruno, 2026-11-12, en la etapa 4, por D20): así los tiempos de los avisos no cuentan el diálogo. Antes eran `abrir()` (elegir y leer) y `guardarComo(bytes, sugerido)` (elegir y escribir).
 
-- Abrir: `open` del plugin dialog (un archivo, filtro `brn`) y `readFile` del plugin fs.
+**Escritorio (`archivosTauri`), el camino del usuario.** Se elige cuando la app corre dentro de Tauri (`isTauri()`).
+
+- Abrir: `open` del plugin dialog (un archivo, filtro `brn`), `stat` del plugin fs para el tamaño y, si no pasa el tope, `readFile`. Un archivo de más de 16 MB se rechaza sin leerlo (Bruno, 2026-11-12, en la etapa 4: suma `fs:allow-stat`).
 - Guardar como: `save` del plugin dialog (nombre sugerido, filtro `brn`; si el nombre elegido no termina en `.brn`, se agrega) y escritura segura.
 - Guardar: escritura segura sobre la ruta del archivo actual.
 - **Escritura segura:** `writeFile` a `<ruta>.tmp` en la misma carpeta y después `rename` del temporal a la ruta. Si algo falla, se borra el temporal con `remove` y se informa el error; el archivo anterior queda como estaba.
@@ -194,6 +196,7 @@ Permisos que se suman en `src-tauri/capabilities/default.json`:
 "core:window:allow-set-title",
 "dialog:allow-open",
 "dialog:allow-save",
+"fs:allow-stat",
 "fs:allow-read-file",
 "fs:allow-write-file",
 "fs:allow-rename",
@@ -204,13 +207,14 @@ Permisos que se suman en `src-tauri/capabilities/default.json`:
 - `core:window:allow-destroy`: D14-A (`onCloseRequested` llama a `destroy()` si no se previno).
 - `core:window:allow-set-title`: D18 (`setTitle`).
 - Escuchar el evento de cierre ya está permitido: `core:default` trae `core:event:default`, con `allow-listen`. `allow-close` no hace falta.
-- La entrada `**/*.brn.tmp` es un **supuesto (frenar)**: no está verificado que el alcance acepte un patrón sin carpeta base ni que coincida con rutas de Windows. Es lo primero que se prueba en la etapa 4. Si no anda, se frena y se le lleva a Bruno la elección (alcance más amplio, un comando propio en Rust para escribir, o escribir sin temporal).
+- La entrada `**/*.brn.tmp` era un **supuesto (frenar)**. **Verificado en la etapa 4** (ver "Verificado en el código"): anda con rutas de Windows y no da más de lo pedido.
+- Un error del plugin que diga `forbidden path` (una ruta fuera del alcance, como `Marcha.txt` al que se le agregó `.brn`) se muestra en español; los demás errores pasan como vienen (los del sistema ya llegan en español).
 
 En `src-tauri/src/lib.rs` se registran los dos plugins. El comando `greet` de la plantilla no se toca.
 
 **Navegador (`archivosNavegador`), solo para `npm run dev` y el humo.**
 
-- Abrir: `<input type="file" accept=".brn">`. Guardar y Guardar como: descarga con `<a download>`. La ruta es siempre `null`.
+- Abrir: `<input type="file" accept=".brn">`. Guardar y Guardar como: descarga con `<a download>` (`elegirDestino` devuelve el nombre sugerido, sin preguntar). La ruta es siempre `null`.
 - Ahí se da por guardado al disparar la descarga. No es el camino del usuario.
 
 ### 5. `Historial`, `Editor` y el reemplazo del documento
@@ -273,6 +277,8 @@ Devuelve si quedó guardado, para el diálogo de D13-A.
 
 **Cerrar con cambios (D14-A).** `getCurrentWindow().onCloseRequested` espera al manejador antes de destruir la ventana. Si hay cambios, el manejador muestra el diálogo y llama a `preventDefault` si se cancela o si no se pudo guardar. Con una operación de archivo en curso, el cierre se frena con un aviso. En el navegador, lo cubre `beforeunload`.
 
+Hecho así en la etapa 4 (Bruno, 2026-11-12): el manejador frena siempre y, si `OperacionesArchivo.antesDeCerrar()` dice que se puede, levanta la marca `cerrando` y llama él a `destroy()`; con `cerrando`, `beforeunload` no pregunta otra vez. Si `destroy()` falla, baja la marca y avisa. "Guardar" desde el cierre guarda **el documento** aunque se vea una escena del banco (el Guardar normal, por D17, guarda la escena). Con el diálogo ya abierto, otro pedido de cierre no hace nada.
+
 **Recarga accidental (D15-C).**
 
 - En la app compilada se anulan Ctrl+R, Ctrl+Mayús+R, Ctrl+F5 y Mayús+F5. F5 ya es nuestra. En `npm run dev` se dejan para recargar.
@@ -286,7 +292,7 @@ Devuelve si quedó guardado, para el diálogo de D13-A.
 
 **`meta`.** T15a no edita título, autor ni fecha: cambiar `meta` al guardar sería un cambio fuera de un Comando.
 
-**Medición (D20).** En desarrollo y en las prereleases, los avisos dicen el tiempo: "Guardado en N ms" (de serializar al fin de la escritura, sin el diálogo) y "Abierto en N ms" (de la lectura al primer cuadro, sin el diálogo). En la etapa 3b, "Abierto" cuenta desde que los bytes están leídos: la lectura del disco va dentro de `archivos.abrir()`, junto con el selector, y separarla cambia la interfaz `Archivos`. Se revisa en la etapa 4, junto con "Guardado en N ms".
+**Medición (D20).** En desarrollo y en las prereleases, los avisos dicen el tiempo: "Guardado en N ms" (de serializar al fin de la escritura, sin el diálogo) y "Abierto en N ms" (de la lectura al primer cuadro, sin el diálogo). Resuelto en la etapa 4 separando elegir de leer y escribir en `Archivos` (sección 4): "Guardado" suma serializar y comprimir más la escritura, y "Abierto" cuenta desde antes de `leer()`. Todo con el reloj inyectado (`ahora`), con tests.
 
 ### 7. Límites conocidos
 
@@ -395,6 +401,17 @@ Humo (`t15a-archivo.mjs`):
 
 ### Etapa 4 — Escritorio (Windows)
 
+**Hecha en la PC (2026-11-12), salvo la prueba a mano.**
+
+- Paso 0, el freno: el alcance `**/*.brn.tmp` anda (ver "Verificado en el código"). Se siguió.
+- Dependencias: `@tauri-apps/plugin-dialog` 2.8.4 y `@tauri-apps/plugin-fs` 2.7.1 (npm); `tauri-plugin-dialog` 2.8.4 y `tauri-plugin-fs` 2.7.1 (crates). `Cargo.lock` solo suma (`rfd` 0.17.2, los dos plugins y `libc` en un crate de macOS); no sube ninguna versión existente.
+- `Archivos` separa elegir de leer y escribir (D20, sección 4). `archivosTauri`: `escribirSeguro` con el fs inyectado, `nombreDeRuta`, `conExtensionBrn`, `mensajeErrorFs`; `stat` antes de leer (`fs:allow-stat`, Bruno).
+- `archivo.ts`: `antesDeCerrar()` y la dependencia `documento()` (el editor del documento, también viendo el banco). El tope se mira con el tamaño del selector, antes de leer.
+- `Ventana.svelte`: `archivosTauri` dentro de Tauri, `setTitle`, `onCloseRequested` con la marca `cerrando` (sección 6). `Lienzo.svelte`: `editorDelDocumento()`.
+- Tests: `archivo.test.ts` (D20 sin el diálogo, tope sin leer, error del selector, cierre) y `archivos.test.ts` (nuevo: escritura segura con un disco de mentira, rutas, mensajes).
+- Comprobado en la app real (`tauri dev`, WebView2 por CDP, con `CloseMainWindow`): título nativo con y sin la marca, el diálogo al cerrar con cambios, Cancelar deja la ventana, No guardar la cierra y no sale el aviso de `beforeunload`.
+- En `tauri dev`, la primera carga después de sumar los plugins reoptimiza las dependencias de Vite y recarga la página una vez ("Failed to fetch dynamically imported module" en la consola). Es solo de desarrollo.
+
 Archivos:
 
 - `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`: las cuatro dependencias.
@@ -475,18 +492,27 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - CDP fija la carpeta de descargas y acepta el diálogo de `beforeunload` (etapa 3a).
 - CDP carga un archivo en el `<input type="file">` (etapa 3b): `Page.setInterceptFileChooserDialog`, el evento `Page.fileChooserOpened` y `DOM.setFileInputFiles` con su `backendNodeId`. Los bytes llegan idénticos y el nombre con tildes y «» llega intacto. Cancelar se hace disparando el evento `cancel` en el input. Una tecla mandada por CDP cuenta como gesto del usuario.
 
+**Verificado en el escritorio** (etapa 4, 2026-11-12: `tauri dev` en Windows 11 con WebView2, llamando a los comandos reales del plugin fs por CDP; la sonda no quedó en el repo):
+
+- El alcance `**/*.brn.tmp` coincide con rutas de Windows: carpeta con espacios, ñ, tildes y corchetes; nombre `[c] ñ.brn.tmp`; carpeta que empieza con punto; `X.BRN.TMP` en mayúsculas; barras `/`. Escribir, `stat`, leer, renombrar y borrar el temporal anda.
+- `rename` reemplaza un archivo que ya existe.
+- No da más de lo pedido: escribir un `.txt`, renombrar un temporal a un `.brn` que no vino del diálogo y leer ese `.brn` se rechazan con `forbidden path`.
+- `isTauri()` existe en `@tauri-apps/api/core` 2.12.4.
+- Destruir la ventana desde `onCloseRequested` (con la marca `cerrando`) no muestra el aviso de `beforeunload`. El título nativo sigue a `setTitle`.
+
 ## Supuesto (sin verificar)
 
-- **(frenar)** El alcance de fs acepta `**/*.brn.tmp` sin carpeta base y coincide con rutas de Windows. Si no, el temporal queda prohibido.
+- ~~**(frenar)** El alcance de fs acepta `**/*.brn.tmp` sin carpeta base y coincide con rutas de Windows.~~ Verificado en la etapa 4.
 - **(frenar)** El modelo no produce `-0` (rompería el `toEqual` de ida y vuelta).
 - **(frenar)** Los documentos del banco pasan el paquete estricto (sin ciclos ni T en el extremo).
 - `allow_file` vale para la ruta exacta, también con caracteres raros en el nombre (corchetes).
-- `rename` en Windows reemplaza un archivo que ya existe.
+- ~~`rename` en Windows reemplaza un archivo que ya existe.~~ Verificado en la etapa 4.
 - `CompressionStream` y `DecompressionStream` existen como globales en Vitest con entorno `node`.
-- Hay una forma de saber desde el frontend si corre dentro de Tauri (`isTauri` de `@tauri-apps/api/core`).
+- ~~Hay una forma de saber desde el frontend si corre dentro de Tauri.~~ Verificado: `isTauri()`.
 - El diálogo nativo es modal sobre la ventana.
 - En WebView2, F5 y Ctrl+R vienen activos y `preventDefault` en `keydown` los bloquea. El código ya lo hace con F5, pero no consta una prueba en WebView2.
-- WebView2 muestra el aviso de `beforeunload`, y destruir la ventana desde `onCloseRequested` no lo dispara.
+- WebView2 muestra el aviso de `beforeunload` al recargar. (Que destruir la ventana desde `onCloseRequested` no lo muestre ya está verificado en la etapa 4.)
+- `save` en Windows agrega `.brn` a un nombre sin extensión. Visto en la fuente: `rfd` 0.17.2 llama a `SetDefaultExtension` con la primera extensión del filtro (`dialog_ffi.rs`, `add_filters`). Falta verlo andar en la prueba a mano. Un nombre con otra extensión (`Marcha.txt`) queda así: `conExtensionBrn` lo lleva a `Marcha.txt.brn`, que el diálogo no habilitó, y sale el aviso de permiso sin tocar nada.
 - El menú contextual del WebView no deja recargar por fuera de las teclas.
 - Ctrl+N llega a la página en WebView2.
 - El pico de memoria al abrir 16 MB queda en unos cientos de MB (estimación: el árbol de objetos pesa varias veces el texto).
