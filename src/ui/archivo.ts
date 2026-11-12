@@ -1,9 +1,9 @@
-// Operaciones de archivo (T15a): Guardar y Guardar como. Las dependencias
-// (archivos, editores, diálogos, avisos, reloj) llegan de afuera, así la
-// lógica se prueba sin DOM y sin saber si corre en el escritorio o en el
-// navegador. También van acá, como funciones puras, los atajos de archivo,
-// las teclas de recarga, el título de la ventana y el recorte de la lista
-// de problemas.
+// Operaciones de archivo (T15a): Guardar, Guardar como, Abrir y Nuevo. Las
+// dependencias (archivos, editores, diálogos, avisos, reloj) llegan de
+// afuera, así la lógica se prueba sin DOM y sin saber si corre en el
+// escritorio o en el navegador. También van acá, como funciones puras, los
+// atajos de archivo, las teclas de recarga, el título de la ventana y el
+// recorte de la lista de problemas.
 //
 // Guardar, paso a paso:
 // 1. Si hay otra operación en curso, nada. El panel confirma lo escrito.
@@ -19,21 +19,52 @@
 //
 // En una escena del banco (D17), Guardar guarda esa escena, siempre pregunta
 // dónde y no cambia el archivo actual ni la marca del documento.
+//
+// Abrir, paso a paso:
+// 1. Si hay otra operación en curso, o se está en Simular o en el banco
+//    (D17), nada. El panel confirma lo escrito.
+// 2. Si hay cambios, el diálogo "Guardar / No guardar / Cancelar" (D13-A).
+//    Guardar sigue solo si quedó guardado (y no cambió mientras se escribía).
+// 3. Se recuerda el contador de cambios y se pide el archivo. Cancelar
+//    termina sin cambios.
+// 4. Recién con el archivo elegido empieza la operación: en el navegador, el
+//    selector puede no avisar que se canceló y la marca quedaría trabada.
+// 5. Se desempaqueta y se deserializa. Con errores, "No se pudo abrir" y el
+//    documento actual no se toca.
+// 6. Si el documento cambió, o se pasó a Simular o al banco, se cancela con
+//    un aviso.
+// 7. Se reemplaza el editor (historial vacío, D19-A) y el archivo pasa a ser
+//    el actual. Los avisos del archivo se muestran una vez, y al primer
+//    cuadro dibujado sale "Abierto" (con el tiempo, D20).
+//
+// Nuevo: los pasos 1 y 2 y un documento vacío, sin archivo actual.
 
 import { deserializar, serializar, type ProblemaArchivo } from "../core/io";
 import type { Documento } from "../core/model/documento";
 import type { MarcaGuardado } from "../core/model/historial";
 import { letra } from "../editor/atajos";
-import type { Archivos, Destino } from "./archivos";
-import { empaquetar, nombreArchivo } from "./brn";
+import { documentoNuevo } from "../editor/editor";
+import type { ArchivoAbierto, Archivos, Destino } from "./archivos";
+import { desempaquetar, empaquetar, nombreArchivo } from "./brn";
 
 export type AccionArchivo = "nuevo" | "abrir" | "guardar" | "guardarComo";
+
+/** Respuesta del diálogo de cambios sin guardar (D13-A). */
+export type RespuestaSinGuardar = "guardar" | "noGuardar" | "cancelar";
 
 /** Lo que las operaciones usan de un Editor. */
 export interface EditorArchivo {
   readonly documento: Documento;
   tomarMarca(): MarcaGuardado;
   marcarGuardado(marca: MarcaGuardado): void;
+}
+
+/** Lo que Abrir y Nuevo usan del editor del documento. */
+export interface EditorDocumento extends EditorArchivo {
+  /** Tiene cambios sin guardar. */
+  readonly modificado: boolean;
+  /** Sube con cada cambio del documento: si cambió mientras se elegía el archivo, Abrir se cancela. */
+  readonly cambios: number;
 }
 
 /** Lo que se ve en el lienzo y se puede guardar. */
@@ -47,6 +78,15 @@ export interface DependenciasArchivo {
   archivos: Archivos;
   /** Lo que se ve y se guarda; null si lo que se ve no se guarda (escenas sin editor). */
   mostrado(): Mostrado | null;
+  /**
+   * El editor del documento, si Abrir y Nuevo pueden reemplazarlo ahora; null
+   * en Simular o mientras se ve una escena del banco (D17).
+   */
+  reemplazable(): EditorDocumento | null;
+  /** Pone este documento en un editor nuevo (D19-A). Se cumple con el primer cuadro dibujado. */
+  reemplazar(documento: Documento): Promise<void>;
+  /** Diálogo de cambios sin guardar del documento `nombre` (D13-A). */
+  preguntarSinGuardar(nombre: string): Promise<RespuestaSinGuardar>;
   /** El panel de propiedades confirma lo que se esté escribiendo. */
   confirmarPanel(): void;
   /** Diálogo con una lista de problemas ("No se puede guardar"…). */
@@ -63,12 +103,23 @@ export interface DependenciasArchivo {
 export const TITULOS = {
   noSePuedeGuardar: "No se puede guardar",
   noSePudoGuardar: "No se pudo guardar",
+  noSePudoAbrir: "No se pudo abrir",
+  seAbrioConAvisos: "Se abrió con avisos",
+} as const;
+
+/** Avisos de la barra de estado cuando Abrir se cancela solo. */
+export const AVISOS_ABRIR = {
+  documentoCambio: "El documento cambió: se canceló abrir",
+  cambioModo: "Se canceló abrir: se cambió de modo o de escena",
+  otraOperacion: "Se canceló abrir: hay otra operación de archivo en curso",
 } as const;
 
 export class OperacionesArchivo {
   /** Archivo donde Guardar escribe sin preguntar; null en un documento nuevo. */
   private _archivoActual: Destino | null = null;
   private _enCurso = false;
+  /** El diálogo de cambios sin guardar está abierto: otra Abrir o Nuevo no hace nada. */
+  private preguntando = false;
   /** Se avisa cuando cambia el archivo actual o si hay una operación en curso. */
   alCambiar: (() => void) | null = null;
 
@@ -117,11 +168,112 @@ export class OperacionesArchivo {
       this.deps.avisar(avisoGuardado(comprimido, this.deps.medir ? ms : null));
       return true;
     } catch (e) {
-      this.deps.mostrarProblemas(TITULOS.noSePudoGuardar, [{ donde: "", mensaje: textoError(e) }]);
+      this.deps.mostrarProblemas(TITULOS.noSePudoGuardar, [{ donde: "", mensaje: textoError(e, "escribir") }]);
       return false;
     } finally {
       this.terminar();
     }
+  }
+
+  /** Abrir (Ctrl+O): pide un archivo, lo valida y reemplaza el documento. */
+  async abrir(): Promise<void> {
+    const editor = await this.antesDeReemplazar();
+    if (!editor) return;
+    const cambios = editor.cambios;
+    let elegido: ArchivoAbierto | null;
+    try {
+      elegido = await this.deps.archivos.abrir();
+    } catch (e) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "leer") }]);
+      return;
+    }
+    if (!elegido) return;
+    if (this._enCurso) {
+      this.deps.avisar(AVISOS_ABRIR.otraOperacion);
+      return;
+    }
+    this.empezar();
+    let abierto: { cuadro: Promise<void>; avisos: readonly ProblemaArchivo[]; inicio: number } | null = null;
+    try {
+      abierto = await this.cargar(elegido, editor, cambios);
+    } catch (e) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "abrir") }]);
+    } finally {
+      this.terminar();
+    }
+    if (!abierto) return;
+    if (abierto.avisos.length > 0) this.deps.mostrarProblemas(TITULOS.seAbrioConAvisos, abierto.avisos);
+    // Fuera de la operación: si el cuadro tardara (una ventana oculta), no traba las demás.
+    await abierto.cuadro;
+    const ms = Math.round(this.deps.ahora() - abierto.inicio);
+    this.deps.avisar(avisoAbierto(this.deps.medir ? ms : null));
+  }
+
+  /** Nuevo (Ctrl+N o el botón): documento vacío, sin archivo actual. */
+  async nuevo(): Promise<void> {
+    const editor = await this.antesDeReemplazar();
+    if (!editor || this._enCurso) return;
+    void this.deps.reemplazar(documentoNuevo());
+    this._archivoActual = null;
+    this.alCambiar?.();
+  }
+
+  /**
+   * Pasos 4 a 7 de Abrir, con la operación en curso. Devuelve null si no se
+   * abrió (los errores ya se mostraron). El tiempo se mide desde que los
+   * bytes están leídos: la lectura del disco va junto con el selector.
+   */
+  private async cargar(
+    elegido: ArchivoAbierto,
+    editor: EditorDocumento,
+    cambios: number,
+  ): Promise<{ cuadro: Promise<void>; avisos: readonly ProblemaArchivo[]; inicio: number } | null> {
+    const inicio = this.deps.ahora();
+    const paquete = await desempaquetar(elegido.bytes);
+    if (!paquete.ok) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: paquete.error }]);
+      return null;
+    }
+    const r = deserializar(paquete.texto);
+    if (!r.ok) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, r.errores);
+      return null;
+    }
+    const ahora = this.deps.reemplazable();
+    if (!ahora) {
+      this.deps.avisar(AVISOS_ABRIR.cambioModo);
+      return null;
+    }
+    if (ahora !== editor || ahora.cambios !== cambios) {
+      this.deps.avisar(AVISOS_ABRIR.documentoCambio);
+      return null;
+    }
+    const cuadro = this.deps.reemplazar(r.documento);
+    this._archivoActual = { nombre: elegido.nombre, ruta: elegido.ruta };
+    return { cuadro, avisos: r.avisos, inicio };
+  }
+
+  /**
+   * Primeros pasos de Abrir y Nuevo: bloqueos, el panel confirma y, si hay
+   * cambios, el diálogo (D13-A). Devuelve el editor del documento si se
+   * sigue, o null.
+   */
+  private async antesDeReemplazar(): Promise<EditorDocumento | null> {
+    if (this._enCurso || this.preguntando || !this.deps.reemplazable()) return null;
+    this.deps.confirmarPanel();
+    const editor = this.deps.reemplazable();
+    if (!editor || !editor.modificado) return editor;
+    this.preguntando = true;
+    let respuesta: RespuestaSinGuardar;
+    try {
+      respuesta = await this.deps.preguntarSinGuardar(nombreDocumento(this._archivoActual?.nombre ?? null, editor.documento.meta.titulo));
+    } finally {
+      this.preguntando = false;
+    }
+    if (respuesta === "cancelar" || this.deps.reemplazable() !== editor) return null;
+    // Si no quedó guardado (cancelado, error, D22-B, o cambió mientras se escribía), termina.
+    if (respuesta === "guardar" && (!(await this.guardar()) || editor.modificado)) return null;
+    return this.deps.reemplazable() === editor ? editor : null;
   }
 
   private empezar(): void {
@@ -141,9 +293,14 @@ export function avisoGuardado(comprimido: boolean, ms: number | null): string {
   return ms === null ? base : `${base} en ${ms} ms`;
 }
 
-function textoError(e: unknown): string {
+/** Aviso de la barra de estado al abrir; con `ms`, dice el tiempo hasta el primer cuadro (D20). */
+export function avisoAbierto(ms: number | null): string {
+  return ms === null ? "Abierto" : `Abierto en ${ms} ms`;
+}
+
+function textoError(e: unknown, accion: "escribir" | "leer" | "abrir"): string {
   const t = e instanceof Error ? e.message : String(e);
-  return t.trim() === "" ? "Error desconocido al escribir el archivo" : t;
+  return t.trim() === "" ? `Error desconocido al ${accion} el archivo` : t;
 }
 
 // ── Teclas ─────────────────────────────────────────────────────────────────
@@ -189,12 +346,20 @@ export function esTeclaRecarga(e: TeclaEvento): boolean {
 // ── Título y problemas ─────────────────────────────────────────────────────
 
 /**
- * Título de la ventana (D18-B): `<marca><nombre> — Bornera`. El nombre es el
- * del archivo actual o, si no hay, el título del documento; la marca `• `
- * va adelante si hay cambios sin guardar.
+ * Nombre del documento, el mismo en el título de la ventana y en el diálogo
+ * de cambios sin guardar: el del archivo actual o, si no hay, el que se
+ * sugiere al guardar (`nombreArchivo` del título: "Sin título.brn").
+ */
+export function nombreDocumento(archivo: string | null, titulo: string): string {
+  return archivo ?? nombreArchivo(titulo);
+}
+
+/**
+ * Título de la ventana (D18-B): `<marca><nombre> — Bornera`, con el nombre
+ * de `nombreDocumento`; la marca `• ` va adelante si hay cambios sin guardar.
  */
 export function tituloVentana(estado: { archivo: string | null; titulo: string; modificado: boolean }): string {
-  return `${estado.modificado ? "• " : ""}${estado.archivo ?? estado.titulo} — Bornera`;
+  return `${estado.modificado ? "• " : ""}${nombreDocumento(estado.archivo, estado.titulo)} — Bornera`;
 }
 
 /** Cuántas líneas muestra el diálogo de problemas; el resto va como "y N más". */

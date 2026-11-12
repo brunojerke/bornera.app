@@ -269,7 +269,7 @@ Devuelve si quedó guardado, para el diálogo de D13-A.
 - Sin guardar: "Guardar / No guardar / Cancelar". Esc es Cancelar.
 - Archivo: título ("No se pudo abrir", "No se puede guardar", "Se abrió con avisos") y la lista de problemas.
 
-**Título de la ventana (D18).** `<marca><nombre> — Bornera`: el nombre del archivo actual, o `meta.titulo` si no hay; la marca `• ` adelante cuando hay cambios. En el navegador va por `document.title`; en el escritorio, por `setTitle`.
+**Título de la ventana (D18).** `<marca><nombre> — Bornera`: el nombre del archivo actual o, si no hay, el que se sugiere al guardar (`nombreArchivo(meta.titulo)`); la marca `• ` adelante cuando hay cambios. Es el mismo nombre del diálogo de cambios sin guardar (`nombreDocumento`). Un documento nuevo se llama "Sin título.brn": `documentoNuevo` pone `meta.titulo` "Sin título" (sin él, `nombreArchivo` daría "circuito.brn"); lo fija un test. En el navegador va por `document.title`; en el escritorio, por `setTitle`. (Bruno, 2026-11-12, en la etapa 3b: antes, sin archivo, se mostraba `meta.titulo` y no coincidía con el nombre sugerido.)
 
 **Cerrar con cambios (D14-A).** `getCurrentWindow().onCloseRequested` espera al manejador antes de destruir la ventana. Si hay cambios, el manejador muestra el diálogo y llama a `preventDefault` si se cancela o si no se pudo guardar. Con una operación de archivo en curso, el cierre se frena con un aviso. En el navegador, lo cubre `beforeunload`.
 
@@ -286,7 +286,7 @@ Devuelve si quedó guardado, para el diálogo de D13-A.
 
 **`meta`.** T15a no edita título, autor ni fecha: cambiar `meta` al guardar sería un cambio fuera de un Comando.
 
-**Medición (D20).** En desarrollo y en las prereleases, los avisos dicen el tiempo: "Guardado en N ms" (de serializar al fin de la escritura, sin el diálogo) y "Abierto en N ms" (de la lectura al primer cuadro, sin el diálogo).
+**Medición (D20).** En desarrollo y en las prereleases, los avisos dicen el tiempo: "Guardado en N ms" (de serializar al fin de la escritura, sin el diálogo) y "Abierto en N ms" (de la lectura al primer cuadro, sin el diálogo). En la etapa 3b, "Abierto" cuenta desde que los bytes están leídos: la lectura del disco va dentro de `archivos.abrir()`, junto con el selector, y separarla cambia la interfaz `Archivos`. Se revisa en la etapa 4, junto con "Guardado en N ms".
 
 ### 7. Límites conocidos
 
@@ -353,7 +353,12 @@ Tests:
 **Partida en 3a y 3b (Bruno, 2026-11-12).** Obsidian no se toca en la etapa 3: va en la etapa 5.
 
 - **3a (hecha):** `beforeunload` y `cdp.mjs` (acepta solo ese diálogo; otro se descarta y cuenta como error de la página), `archivos.ts`, Guardar y Guardar como en `archivo.ts`, `DialogoArchivo`, Ctrl+S y Ctrl+Mayús+S, teclas de recarga (`esTeclaRecarga`, con test propio), título por `document.title` y la parte de Guardar del humo. En las escenas sin editor ("símbolos" y "vacía"), Guardar queda desactivado.
-- **3b (sesión aparte):** Abrir y Nuevo, reemplazo del Editor, `DialogoSinGuardar`, Ctrl+O y Ctrl+N, desactivar Abrir y Nuevo en Simular y en el banco, y el resto del humo.
+- **3b (hecha):** Abrir y Nuevo, reemplazo del Editor, `DialogoSinGuardar`, Ctrl+O y Ctrl+N, desactivar Abrir y Nuevo en Simular y en el banco, y el resto del humo.
+  - `Lienzo`: `editorDocumento` es `let`; `reemplazarDocumento(ed)` conecta el editor nuevo, encuadra y devuelve una promesa que se cumple con el primer cuadro dibujado (una lista de esperas que vacía `alDibujar`, sin bucle). `bornera.editor` es un getter.
+  - `archivo.ts`: `abrir()` y `nuevo()`. El bloqueo se toma con el archivo ya elegido. Si se responde "Guardar" en el diálogo, se sigue solo si quedó guardado y el documento no cambió mientras se escribía. Recheck después del selector: si el documento cambió, se cancela con "El documento cambió: se canceló abrir"; si se pasó a Simular o al banco, con "Se canceló abrir: se cambió de modo o de escena"; si hay otra operación en curso, con "Se canceló abrir: hay otra operación de archivo en curso". Los avisos del archivo salen una vez ("Se abrió con avisos"). "Abierto en N ms" sale con el primer cuadro, ya sin el bloqueo, así una ventana oculta no traba las demás acciones.
+  - Ctrl+Mayús+B (escena del banco) respeta `hayModal()` como los demás atajos (Bruno, 2026-11-12). El recheck de modo y escena en Abrir queda como red.
+  - **`tests/humo/datos/tildes.brn` es el archivo para la prueba de tildes en la netbook** (título, autor y etiquetas con tildes, ñ, ü y comillas). Se genera con el `serializar` y el `empaquetar` de la app: `node tests/humo/datos/tildes.mjs`. El humo lo abre, lo compara con lo que lee Node y lo vuelve a escribir con el mismo texto.
+  - `cdp.mjs`: `interceptarSelector()` y `elegirArchivo(ruta | null)`. Un selector sin respuesta preparada se cancela y cuenta como error de la página.
 
 Archivos:
 
@@ -434,7 +439,7 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - Las teclas de recarga no pierden el documento.
 - El título muestra el nombre y la marca.
 - Un archivo dañado muestra el error y el documento sigue.
-- Etiqueta y título con tildes sobreviven.
+- Etiqueta y título con tildes sobreviven: abrir `tests/humo/datos/tildes.brn` (llevarlo a la netbook), ver el título y las etiquetas, guardarlo con otro nombre, cerrar la app y volver a abrirlo.
 - **D20:** guardar y abrir la escena de 2000 con cables, ≤ 1 s cada uno. Se anota el tiempo real como línea base.
 - Banco de control, para la línea base nueva en Windows. Nota "Medición <versión> - netbook Windows".
 
@@ -465,6 +470,11 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - Los permisos existen con estos nombres: `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`, `fs:allow-write-file`, `fs:allow-rename`, `fs:allow-remove`. Un permiso solo no da acceso a ninguna ruta: hace falta el alcance.
 - El alcance se configura con `{ "identifier": "fs:scope", "allow": [{ "path": "..." }] }` y acepta comodines.
 
+**Verificado en el humo** (Chrome headless por CDP, 2026-11-12):
+
+- CDP fija la carpeta de descargas y acepta el diálogo de `beforeunload` (etapa 3a).
+- CDP carga un archivo en el `<input type="file">` (etapa 3b): `Page.setInterceptFileChooserDialog`, el evento `Page.fileChooserOpened` y `DOM.setFileInputFiles` con su `backendNodeId`. Los bytes llegan idénticos y el nombre con tildes y «» llega intacto. Cancelar se hace disparando el evento `cancel` en el input. Una tecla mandada por CDP cuenta como gesto del usuario.
+
 ## Supuesto (sin verificar)
 
 - **(frenar)** El alcance de fs acepta `**/*.brn.tmp` sin carpeta base y coincide con rutas de Windows. Si no, el temporal queda prohibido.
@@ -479,7 +489,6 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - WebView2 muestra el aviso de `beforeunload`, y destruir la ventana desde `onCloseRequested` no lo dispara.
 - El menú contextual del WebView no deja recargar por fuera de las teclas.
 - Ctrl+N llega a la página en WebView2.
-- CDP puede fijar la carpeta de descargas, cargar un archivo en el `<input>` y aceptar el diálogo de `beforeunload`.
 - El pico de memoria al abrir 16 MB queda en unos cientos de MB (estimación: el árbol de objetos pesa varias veces el texto).
 
 ## Riesgos
@@ -491,7 +500,7 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - **Transformar vuelve a rutear al rehacer** (pendiente anotado en T14a). Podría dejar "sin cambios" un documento que difiere en un recorrido.
 - **Linux (aparte, no bloquea).** `CompressionStream` en WebKitGTK, el diálogo nativo en GTK, las teclas de recarga, el evento de cancelar del selector de archivos y el foco de los diálogos propios.
 - **D20 sin línea base.** El criterio de 1 s se fijó sin mediciones en Windows.
-- **Tildes en la etiqueta (visto en la etapa 3a).** El criterio "Etiqueta y título con tildes sobreviven" no se puede armar desde la interfaz: el panel acepta solo `A-Z a-z 0-9 - _ . + / = :` (`validarEtiqueta`) y T15a no edita el título. El humo lo prueba con una etiqueta puesta por la consola (`bornera`, solo en desarrollo). En la netbook hace falta un `.brn` armado aparte.
+- **Tildes en la etiqueta (visto en la etapa 3a).** El criterio "Etiqueta y título con tildes sobreviven" no se puede armar desde la interfaz: el panel acepta solo `A-Z a-z 0-9 - _ . + / = :` (`validarEtiqueta`) y T15a no edita el título. El humo lo prueba con una etiqueta puesta por la consola (`bornera`, solo en desarrollo) y abriendo `tests/humo/datos/tildes.brn`, que es también el `.brn` para la netbook (etapa 3b).
 
 ## Fuera de T15a (pendientes, no se hacen acá)
 

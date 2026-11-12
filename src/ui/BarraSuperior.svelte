@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Barra de herramientas superior. Andan Guardar y Guardar como (T15a), el
-  // historial (deshacer y rehacer, desactivados si no hay nada) y el zoom; el
-  // resto es estructura.
+  // Barra de herramientas superior. Andan Nuevo, Abrir, Guardar y Guardar
+  // como (T15a), el historial (deshacer y rehacer, desactivados si no hay
+  // nada) y el zoom; el resto es estructura.
   import FilePlus from "@lucide/svelte/icons/file-plus";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Save from "@lucide/svelte/icons/save";
@@ -24,6 +24,9 @@
     modo = $bindable("editar"),
     zoom = 1,
     puedeGuardar = false,
+    puedeAbrir = false,
+    onnuevo,
+    onabrir,
     onguardar,
     onguardarcomo,
     onacercar,
@@ -44,6 +47,10 @@
     zoom?: number;
     /** Lo que se ve se puede guardar (no en las escenas sin editor). */
     puedeGuardar?: boolean;
+    /** Nuevo y Abrir andan (D17: no en Simular ni en una escena del banco). */
+    puedeAbrir?: boolean;
+    onnuevo?: () => void;
+    onabrir?: () => void;
     onguardar?: () => void;
     onguardarcomo?: () => void;
     onacercar?: () => void;
@@ -69,8 +76,12 @@
   <span class="marca">Bornera</span>
 
   <div class="grupo" role="group" aria-label="Archivo">
-    <button class="boton-icono" title="Nuevo (Ctrl+N)" aria-label="Nuevo"><FilePlus size={TAM} /></button>
-    <button class="boton-icono" title="Abrir (Ctrl+O)" aria-label="Abrir"><FolderOpen size={TAM} /></button>
+    <button class="boton-icono" title="Nuevo (Ctrl+N)" aria-label="Nuevo" disabled={!puedeAbrir} onclick={onnuevo}>
+      <FilePlus size={TAM} />
+    </button>
+    <button class="boton-icono" title="Abrir (Ctrl+O)" aria-label="Abrir" disabled={!puedeAbrir} onclick={onabrir}>
+      <FolderOpen size={TAM} />
+    </button>
     <button class="boton-icono" title="Guardar (Ctrl+S)" aria-label="Guardar" disabled={!puedeGuardar} onclick={onguardar}>
       <Save size={TAM} />
     </button>

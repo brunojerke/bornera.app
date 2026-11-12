@@ -86,11 +86,12 @@
   let canvas: HTMLCanvasElement;
   let vista: Vista | null = null;
 
-  // El editor del documento dura lo que dura el lienzo: cambiar a una escena
-  // de prueba y volver no pierde el documento ni su historial. Las escenas del
-  // banco (100, 500, 2000) se abren en un editor aparte, que se descarta al
-  // salir: así se puede seleccionar con 2000 símbolos sin tocar el documento.
-  const editorDocumento = new Editor();
+  // El editor del documento: cambiar a una escena de prueba y volver no pierde
+  // el documento ni su historial. Abrir y Nuevo lo reemplazan por otro
+  // (`reemplazarDocumento`, D19-A). Las escenas del banco (100, 500, 2000) se
+  // abren en un editor aparte, que se descarta al salir: así se puede
+  // seleccionar con 2000 símbolos sin tocar el documento.
+  let editorDocumento = new Editor();
   /** El editor de lo que se muestra; null en las escenas que no se editan. */
   let editor: Editor | null = editorDocumento;
   let herramientas: Herramientas | null = null;
@@ -157,9 +158,13 @@
   //     hasta: { tipo: "libre", x: 0, y: -6 }, codos: [] }));
   //   editor.deshacer();
   // `bornera.activo()` da el editor de lo que se muestra (el del banco, en esas escenas).
+  // `bornera.editor` se lee en el momento: después de Abrir o Nuevo es el
+  // editor nuevo, y no se retiene el documento viejo.
   if (import.meta.env.DEV) {
     (globalThis as Record<string, unknown>).bornera = {
-      editor: editorDocumento,
+      get editor() {
+        return editorDocumento;
+      },
       comandos,
       cables,
       activo: () => editor,
@@ -251,6 +256,32 @@
     cambio();
   }
 
+  /** Quienes esperan el próximo cuadro dibujado (ver `reemplazarDocumento`). */
+  let esperasCuadro: (() => void)[] = [];
+
+  /**
+   * Abrir y Nuevo (D19-A): el documento pasa a ser el de `ed`, con su
+   * historial. Si se está viendo el documento, se conecta (lo que desconecta
+   * al editor anterior) y se dibuja encuadrado. La promesa se cumple con el
+   * primer cuadro dibujado después del cambio ("Abierto en N ms").
+   */
+  export function reemplazarDocumento(ed: Editor): Promise<void> {
+    editorDocumento = ed;
+    const v = vista;
+    if (!v || escena !== "documento") {
+      // No debería pasar: Abrir y Nuevo no andan en el banco. Al volver al
+      // documento, `editorPara` ya da el editor nuevo.
+      modificado = ed.modificado;
+      tituloDocumento = ed.documento.meta.titulo;
+      return Promise.resolve();
+    }
+    const cuadro = new Promise<void>((r) => esperasCuadro.push(r));
+    v.contenido = ed.escena;
+    conectarEditor(v, ed);
+    encuadrar();
+    return cuadro;
+  }
+
   // ── Contador de rendimiento ──────────────────────────────────────────────
   // Se actualiza 4 veces por segundo mientras haya cuadros o queden cuadros
   // lentos en la ventana de 5 s, y una última vez cuando ya no hay ninguno de
@@ -292,6 +323,11 @@
     v.alDibujar = (m) => {
       medidor.registrar(performance.now(), m);
       if (rendimiento) programarResumen();
+      if (esperasCuadro.length > 0) {
+        const esperas = esperasCuadro;
+        esperasCuadro = [];
+        for (const cumplir of esperas) cumplir();
+      }
     };
     const desconectar = conectarNavegacion(canvas, {
       camara: v.camara,

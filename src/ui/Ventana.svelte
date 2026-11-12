@@ -14,10 +14,11 @@
   import { abrirAlSeleccionar, DURACION_AVISO_MS } from "./propiedades";
   import { esAtajoModo, f5CambiaModo, otroModo } from "./modo";
   import { hayModal } from "../editor/punteros";
-  import type { Editor } from "../editor/editor";
+  import { Editor } from "../editor/editor";
   import { tick, untrack } from "svelte";
   import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
   import DialogoArchivo from "./DialogoArchivo.svelte";
+  import DialogoSinGuardar from "./DialogoSinGuardar.svelte";
   import type { ProblemaArchivo } from "../core/io";
   import {
     atajoArchivo,
@@ -26,6 +27,7 @@
     OperacionesArchivo,
     tituloVentana,
     type AccionArchivo,
+    type RespuestaSinGuardar,
   } from "./archivo";
   import { archivosNavegador } from "./archivos";
   import { ES_PRERELEASE } from "./version";
@@ -54,6 +56,14 @@
   let archivoActual = $state<string | null>(null);
   /** Diálogo de archivo abierto ("No se puede guardar"…); null si no hay. */
   let dialogoArchivo = $state.raw<{ titulo: string; problemas: readonly ProblemaArchivo[] } | null>(null);
+  /** Diálogo de cambios sin guardar abierto (D13-A); null si no hay. */
+  let sinGuardar = $state.raw<{ nombre: string; responder: (r: RespuestaSinGuardar) => void } | null>(null);
+
+  function responderSinGuardar(r: RespuestaSinGuardar) {
+    const s = sinGuardar;
+    sinGuardar = null;
+    s?.responder(r);
+  }
   /** Aviso de la barra de estado (una acción que no se pudo hacer); se borra solo. */
   let aviso = $state<string | null>(null);
   let temporizadorAviso = 0;
@@ -76,6 +86,14 @@
     // Lo que se ve: el documento o una escena del banco (D17). Las escenas
     // sin editor ("símbolos" y "vacía") no se guardan.
     mostrado: () => (editorActivo ? { editor: editorActivo, esDocumento: escena === "documento" } : null),
+    // Abrir y Nuevo: solo en Editar y viendo el documento (D17).
+    reemplazable: () => (puedeAbrir ? editorActivo : null),
+    reemplazar: (documento) => lienzo.reemplazarDocumento(new Editor(documento)),
+    preguntarSinGuardar: (nombre) =>
+      new Promise((responder) => {
+        sinGuardar?.responder("cancelar");
+        sinGuardar = { nombre, responder };
+      }),
     confirmarPanel: () => panel?.confirmar(),
     mostrarProblemas: (titulo, problemas) => (dialogoArchivo = { titulo, problemas }),
     avisar,
@@ -87,7 +105,8 @@
   function accionArchivo(a: AccionArchivo) {
     if (a === "guardar") void operaciones.guardar();
     else if (a === "guardarComo") void operaciones.guardar(true);
-    // Abrir y Nuevo: etapa 3b.
+    else if (a === "abrir") void operaciones.abrir();
+    else void operaciones.nuevo();
   }
 
   // Título de la ventana (D18-B): nombre y marca de cambios. En el escritorio
@@ -99,6 +118,8 @@
   // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
   // prueba), contador de rendimiento y optimizaciones.
   let escena = $state<EscenaDesarrollo>("documento");
+  /** Abrir y Nuevo andan: en Editar y viendo el documento (D17: no en Simular ni en el banco). */
+  const puedeAbrir = $derived(modo === "editar" && escena === "documento");
   let rendimiento = $state(false);
   let opciones = $state<OpcionesCapas>({ ...OPCIONES_OPTIMIZADAS });
   let diagnostico = $state<DiagnosticoArrastre>({ modo: "auto", sonda: false });
@@ -175,9 +196,10 @@
     }
     // Ctrl+Shift+B (oculto, también en la versión compilada): siguiente escena
     // del banco de pruebas. Se anula el atajo del WebView (barra de favoritos).
+    // Con un diálogo modal abierto no cambia (como los demás atajos).
     if (esAtajoBanco(e)) {
       e.preventDefault();
-      if (!e.repeat) {
+      if (!e.repeat && !hayModal()) {
         panel?.confirmar();
         escena = siguienteEscenaBanco(escena);
       }
@@ -204,6 +226,9 @@
     bind:modo
     {zoom}
     puedeGuardar={editorActivo !== null}
+    {puedeAbrir}
+    onnuevo={() => accionArchivo("nuevo")}
+    onabrir={() => accionArchivo("abrir")}
     onguardar={() => accionArchivo("guardar")}
     onguardarcomo={() => accionArchivo("guardarComo")}
     onacercar={() => lienzo.acercar()}
@@ -267,6 +292,10 @@
 
 {#if dialogoArchivo}
   <DialogoArchivo titulo={dialogoArchivo.titulo} problemas={dialogoArchivo.problemas} oncerrar={() => (dialogoArchivo = null)} />
+{/if}
+
+{#if sinGuardar}
+  <DialogoSinGuardar nombre={sinGuardar.nombre} onresponder={responderSinGuardar} />
 {/if}
 
 <style>

@@ -20,6 +20,13 @@ export class Pagina {
    * cambios sin guardar. Se aceptan solos, así ninguna prueba se cuelga.
    */
   salidasConCambios = 0;
+  /**
+   * Selectores de archivo que se abrieron mientras se interceptan (T15a:
+   * Abrir en el navegador es un <input type="file">).
+   */
+  selectoresAbiertos = 0;
+  /** Respuestas para los próximos selectores: una ruta, o null (cancelar). */
+  #respuestasSelector = [];
   #ws;
   #n = 0;
   #pendientes = new Map();
@@ -53,7 +60,60 @@ export class Pagina {
         else this.errores.push(`Diálogo inesperado (${d.params.type}): ${d.params.message}`);
         this.cdp("Page.handleJavaScriptDialog", { accept: salir }).catch(() => undefined);
       }
+      if (d.method === "Page.fileChooserOpened") {
+        this.selectoresAbiertos++;
+        void this.#responderSelector(d.params.backendNodeId);
+      }
     });
+  }
+
+  /**
+   * Responde un selector de archivos con la próxima respuesta preparada
+   * (`elegirArchivo`). Uno sin respuesta se cancela y cuenta como error de la
+   * página: así ninguna prueba queda esperando.
+   */
+  async #responderSelector(backendNodeId) {
+    const hay = this.#respuestasSelector.length > 0;
+    const ruta = hay ? this.#respuestasSelector.shift() : null;
+    if (!hay) this.errores.push("Se abrió un selector de archivos inesperado");
+    try {
+      if (ruta !== null) {
+        await this.cdp("DOM.setFileInputFiles", { files: [ruta], backendNodeId });
+      } else {
+        // Cancelar: el evento que da el navegador al cerrar el selector.
+        const { object } = await this.cdp("DOM.resolveNode", { backendNodeId });
+        await this.cdp("Runtime.callFunctionOn", {
+          objectId: object.objectId,
+          functionDeclaration: "function () { this.dispatchEvent(new Event('cancel')); }",
+        });
+        await this.cdp("Runtime.releaseObject", { objectId: object.objectId });
+      }
+    } catch (e) {
+      this.errores.push(`Selector de archivos: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  /**
+   * Los selectores de archivo no se muestran: se responden con lo preparado
+   * en `elegirArchivo` (T15a). Con `false`, vuelve a lo de siempre.
+   */
+  async interceptarSelector(si = true) {
+    if (si) await this.cdp("DOM.enable");
+    await this.cdp("Page.setInterceptFileChooserDialog", { enabled: si });
+    if (!si) {
+      this.#respuestasSelector = [];
+      await this.cdp("DOM.disable");
+    }
+  }
+
+  /** El próximo selector de archivos elige `ruta` (ruta completa), o se cancela con null. */
+  elegirArchivo(ruta) {
+    this.#respuestasSelector.push(ruta);
+  }
+
+  /** Respuestas preparadas que ningún selector usó todavía. */
+  get respuestasPendientes() {
+    return this.#respuestasSelector.length;
   }
 
   /** Se conecta a la pestaña `url` del WebSocket de depuración. */
