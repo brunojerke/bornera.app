@@ -472,6 +472,11 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - Archivos dañados (JSON roto, `formato` ajeno, `version` futura, tipo de símbolo desconocido, cable hacia un id inexistente): cada uno da un error con mensaje y no tira excepción.
   - T sobre el extremo de su anfitrión (W no la crea y T14a no la deja; solo llega de un archivo): decidir si se rechaza o se informa al abrir. Hoy `validarCable` la acepta; T14b la cuenta por grado (sobre un extremo libre, sin punto).
   - Las claves de la salida, sin ñ ni tildes.
+- **Plan:** `docs/plan-T15a.md` (aprobado el 2026-11-12, D1 a D22).
+- **T15a cerrada (2026-11-12) con el criterio de la PC de Bruno.** Etapas: 1, núcleo (`29062c9`); 2, gzip, nombre y marca de guardado (`794c086`); 3a, Guardar y Guardar como en el navegador (`96eb3cf`); 3b, Abrir y Nuevo (`c900ed7`); 4, escritorio en Windows (`6bb5227`); 5, cierre (este commit).
+  - **PC:** 1338 tests, check limpio, humo 513/513, banco de control con 0 cuadros lentos en 2 de 3 corridas (en la primera, 2 cuadros de 17–19 ms con todo seleccionado al 31 %, que no se repiten: ruido; T15a no toca el dibujo).
+  - **Prueba a mano en `tauri dev` (Bruno):** guardar nuevo, sin extensión, pisar, Guardar como sobre uno existente, Abrir, `tildes.brn`, dañado, cerrar con cambios (3 botones), Ctrl+N y Ctrl+R con cambios: bien. **D20 en la PC**, 2000 con cables: guardado 53 ms, abierto 95 ms.
+  - **Pendiente en la netbook con Windows, con la prerelease alpha.11 (sin fecha):** los criterios "En la netbook" de `docs/plan-T15a.md` (D20 ≤ 1 s y línea base, banco de control, tildes), más guardar sobre un archivo bloqueado (PowerShell) y las teclas de recarga y el menú contextual en la app compilada.
 
 ### T15. Aceptación: marcha-parada
 - **Qué:**

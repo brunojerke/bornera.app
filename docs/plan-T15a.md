@@ -401,7 +401,7 @@ Humo (`t15a-archivo.mjs`):
 
 ### Etapa 4 — Escritorio (Windows)
 
-**Hecha en la PC (2026-11-12), salvo la prueba a mano.**
+**Hecha en la PC (2026-11-12), con la prueba a mano** (ver "Resultado de la prueba a mano" al final de la etapa).
 
 - Paso 0, el freno: el alcance `**/*.brn.tmp` anda (ver "Verificado en el código"). Se siguió.
 - Dependencias: `@tauri-apps/plugin-dialog` 2.8.4 y `@tauri-apps/plugin-fs` 2.7.1 (npm); `tauri-plugin-dialog` 2.8.4 y `tauri-plugin-fs` 2.7.1 (crates). `Cargo.lock` solo suma (`rfd` 0.17.2, los dos plugins y `libc` en un crate de macOS); no sube ninguna versión existente.
@@ -434,12 +434,27 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - Las teclas de recarga y el menú contextual, en una versión compilada. Ctrl+R, Ctrl+Mayús+R, Ctrl+F5 y Mayús+F5 no recargan: se anulan solo en la app compilada, y el humo corre en desarrollo, donde se dejan para recargar. Por eso se prueban a mano acá; `esTeclaRecarga` tiene su test en `archivo.test.ts`.
 - D20 se mide con la escena del banco, que siempre pasa por Guardar como: en el escritorio, `guardarComo` incluye el diálogo nativo, y "Guardado en N ms" tiene que contar solo la escritura (sin el diálogo). Se resuelve en esta etapa.
 
+**Resultado de la prueba a mano (Bruno, 2026-11-12, `npm run tauri dev` en la PC con Windows):**
+
+- Bien: guardar un documento nuevo, guardar con un nombre sin extensión (el diálogo agrega `.brn`), pisar un archivo, Guardar como sobre uno que ya existe, Abrir, `tildes.brn`, un archivo dañado, cerrar con cambios (los tres botones), Ctrl+N y Ctrl+R con cambios.
+- **D20 en la PC**, escena del banco de 2000 con cables: **guardado 53 ms, abierto 95 ms**. Es la línea base de la PC; el criterio (≤ 1 s) se mide en la netbook.
+- **Sin probar todavía**, van con la prerelease en la netbook con Windows: guardar sobre un archivo bloqueado por otro programa (con PowerShell) y las teclas de recarga y el menú contextual en la app compilada.
+- La prueba guardó encima de `tests/humo/datos/tildes.brn` (componentes movidos y un codo nuevo, los textos intactos). En el cierre se volvió a la versión del repo (Bruno). Para la netbook conviene llevar una copia y guardar con otro nombre, como dice el criterio.
+
 ### Etapa 5 — Cierre en la PC
+
+**Hecha (2026-11-12).**
 
 - `npm test`, `npm run check`, `npm run humo` entero y `npm run bench` de control (no se toca el dibujo).
 - `docs/plan-fase3.md`: estado de T15a.
 - Obsidian: sesión, pendientes, errores resueltos y las notas de decisión.
 - Commit local, sin push. La prerelease la autoriza Bruno aparte.
+
+Resultado:
+
+- `npm test`: 1338 tests en 51 archivos, bien. `npm run check`: 0 errores y 0 advertencias (379 archivos) y `check:core` limpio. Humo: 513 de 513. Acentos rotos: búsqueda vacía.
+- **Banco de control** (Edge headless, 1366×768, dpr 1, por software), 3 corridas: la primera dio 1 cuadro lento en *Arrastre con todo seleccionado al 31 %* (máx. 18,7 ms) y 1 en *Girar todo al 31 %* (máx. 17,4 ms), los dos en la escena de 2000 + 3000 cables + 30 T; la segunda y la tercera, **0 cuadros lentos** (máx. 12,8 / 13,2 ms y 13,7 / 13,7 ms). T15a no toca el dibujo: se toma como ruido. Tabla en la nota de Obsidian "Medición 0.1.3-dev (T15a) - PC Ryzen 7".
+- **T15a cerrada con el criterio de la PC de Bruno** (guardar 53 ms, abrir 95 ms). La prueba en la netbook con Windows (sección "En la netbook" de los criterios, más lo que quedó sin probar en la etapa 4) va con la prerelease alpha.11, sin fecha.
 
 ## Criterios de cierre
 
@@ -512,9 +527,9 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - El diálogo nativo es modal sobre la ventana.
 - En WebView2, F5 y Ctrl+R vienen activos y `preventDefault` en `keydown` los bloquea. El código ya lo hace con F5, pero no consta una prueba en WebView2.
 - WebView2 muestra el aviso de `beforeunload` al recargar. (Que destruir la ventana desde `onCloseRequested` no lo muestre ya está verificado en la etapa 4.)
-- `save` en Windows agrega `.brn` a un nombre sin extensión. Visto en la fuente: `rfd` 0.17.2 llama a `SetDefaultExtension` con la primera extensión del filtro (`dialog_ffi.rs`, `add_filters`). Falta verlo andar en la prueba a mano. Un nombre con otra extensión (`Marcha.txt`) queda así: `conExtensionBrn` lo lleva a `Marcha.txt.brn`, que el diálogo no habilitó, y sale el aviso de permiso sin tocar nada.
+- ~~`save` en Windows agrega `.brn` a un nombre sin extensión.~~ Visto en la prueba a mano de la etapa 4. En la fuente: `rfd` 0.17.2 llama a `SetDefaultExtension` con la primera extensión del filtro (`dialog_ffi.rs`, `add_filters`). Un nombre con otra extensión (`Marcha.txt`) queda así: `conExtensionBrn` lo lleva a `Marcha.txt.brn`, que el diálogo no habilitó, y sale el aviso de permiso sin tocar nada.
 - El menú contextual del WebView no deja recargar por fuera de las teclas.
-- Ctrl+N llega a la página en WebView2.
+- ~~Ctrl+N llega a la página en WebView2.~~ Visto en la prueba a mano de la etapa 4.
 - El pico de memoria al abrir 16 MB queda en unos cientos de MB (estimación: el árbol de objetos pesa varias veces el texto).
 
 ## Riesgos
