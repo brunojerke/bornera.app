@@ -102,7 +102,7 @@ import {
   type Extremo,
 } from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
-import { Historial } from "../core/model/historial";
+import { Historial, type MarcaGuardado } from "../core/model/historial";
 import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
@@ -340,7 +340,10 @@ export class Editor {
    * panel de propiedades).
    */
   alCambiarSeleccion: (() => void) | null = null;
-  /** Se avisa cuando cambia lo que se puede deshacer o rehacer (para los botones). */
+  /**
+   * Se avisa cuando cambia lo que se puede deshacer o rehacer (para los
+   * botones) o la marca de cambios sin guardar (`modificado`).
+   */
   alCambiarHistorial: (() => void) | null = null;
   /** Aviso para la barra de estado: una acción que no se pudo hacer. */
   alAvisar: ((texto: string) => void) | null = null;
@@ -610,6 +613,29 @@ export class Editor {
   /** Con un tramo en curso, nunca. */
   get puedeRehacer(): boolean {
     return !this.enTramo && this.historial.puedeRehacer;
+  }
+
+  /**
+   * El documento difiere de lo último guardado o abierto (T15a, D16-A). Un
+   * tramo de cable en curso no cuenta: todavía no está en el documento.
+   */
+  get modificado(): boolean {
+    return this.historial.modificado;
+  }
+
+  /**
+   * Toma la marca de guardado. Se llama en el mismo instante en que se
+   * serializa el documento; la marca se aplica con `marcarGuardado` solo si
+   * la escritura salió bien.
+   */
+  tomarMarca(): MarcaGuardado {
+    return this.historial.tomarMarca();
+  }
+
+  /** Da por guardado el documento tal como estaba al tomar la marca, y lo avisa. */
+  marcarGuardado(marca: MarcaGuardado): void {
+    this.historial.marcarGuardado(marca);
+    this.alCambiarHistorial?.();
   }
 
   /** Ejecuta el comando y muestra el cambio. Si el comando tira un error, no cambia nada. */

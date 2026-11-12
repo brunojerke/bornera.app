@@ -128,3 +128,113 @@ describe("Historial", () => {
     expect(doc.hojas[0]!.componentes).toEqual([]);
   });
 });
+
+describe("Historial: marca de guardado (T15a, D16-A)", () => {
+  /** Guarda en el acto: toma la marca y la aplica enseguida. */
+  const guardar = (h: Historial): void => h.marcarGuardado(h.tomarMarca());
+
+  it("un historial nuevo arranca sin cambios", () => {
+    const { h } = nuevo();
+    expect(h.modificado).toBe(false);
+  });
+
+  it("ejecutar marca cambios; guardar los quita", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    expect(h.modificado).toBe(true);
+    guardar(h);
+    expect(h.modificado).toBe(false);
+    h.ejecutar(new Mover(["c1"], 1, 0));
+    expect(h.modificado).toBe(true);
+  });
+
+  it("deshacer hasta la marca deja sin cambios; rehacer vuelve a modificado", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    guardar(h);
+    h.ejecutar(new Mover(["c1"], 1, 0));
+    h.ejecutar(new Mover(["c1"], 1, 0));
+    h.deshacer();
+    expect(h.modificado).toBe(true);
+    h.deshacer();
+    expect(h.modificado).toBe(false);
+    // Más atrás de la marca también es un cambio.
+    h.deshacer();
+    expect(h.modificado).toBe(true);
+    h.rehacer();
+    expect(h.modificado).toBe(false);
+    h.rehacer();
+    expect(h.modificado).toBe(true);
+  });
+
+  it("guardar con la pila vacía: deshacer todo vuelve a sin cambios", () => {
+    const { doc, h } = nuevo();
+    guardar(h);
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    expect(h.modificado).toBe(true);
+    h.deshacer();
+    expect(h.modificado).toBe(false);
+  });
+
+  it("guardar, deshacer y ejecutar otro: la marca queda fuera del historial y sigue modificado", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    h.ejecutar(new Mover(["c1"], 1, 0));
+    guardar(h);
+    h.deshacer();
+    h.ejecutar(new Mover(["c1"], 0, 1));
+    expect(h.modificado).toBe(true);
+    // Ni deshaciendo ni rehaciendo se vuelve a la marca: ese estado ya no está.
+    h.deshacer();
+    expect(h.modificado).toBe(true);
+    h.rehacer();
+    expect(h.modificado).toBe(true);
+    guardar(h);
+    expect(h.modificado).toBe(false);
+  });
+
+  it("marca tomada antes de un cambio y aplicada después: sigue modificado", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    const marca = h.tomarMarca();
+    // Se edita mientras se escribe el archivo.
+    h.ejecutar(new Mover(["c1"], 1, 0));
+    h.marcarGuardado(marca);
+    expect(h.modificado).toBe(true);
+    // Deshacer lo editado durante la escritura vuelve a lo que se escribió.
+    h.deshacer();
+    expect(h.modificado).toBe(false);
+  });
+
+  it("agrupar apila un paso nuevo, no suma al de arriba: guardar, mover y agrupar otro mover sobre el mismo da modificado", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    guardar(h);
+    h.ejecutar(new Mover(["c1"], 1, 0));
+    h.agrupar([new Mover(["c1"], 1, 0)]);
+    expect(h.modificado).toBe(true);
+    // El caso que fallaría si agrupar sumara al paso de arriba: la marca justo en el mover.
+    guardar(h);
+    h.agrupar([new Mover(["c1"], 1, 0), new Mover(["c1"], 0, 1)]);
+    expect(h.modificado).toBe(true);
+    h.deshacer();
+    expect(h.modificado).toBe(false);
+  });
+
+  it("agrupar sin comandos no cambia la marca", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    guardar(h);
+    h.agrupar([]);
+    expect(h.modificado).toBe(false);
+  });
+
+  it("un comando que falla no cambia la marca", () => {
+    const { doc, h } = nuevo();
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    guardar(h);
+    expect(() => h.ejecutar(fallido)).toThrow("falla a propósito");
+    expect(() => h.agrupar([new Mover(["c1"], 5, 5), fallido])).toThrow("falla a propósito");
+    expect(h.modificado).toBe(false);
+  });
+});

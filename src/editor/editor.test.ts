@@ -1028,3 +1028,51 @@ describe("Editor: etiquetas (T11)", () => {
     expect(editor.resumenSeleccion().unico).toMatchObject({ esFuente: false, otrasEnRed: 0 });
   });
 });
+
+describe("Editor: marca de guardado (T15a, D16-A)", () => {
+  it("modificado sigue al historial: nuevo sin cambios, ejecutar, guardar, deshacer y rehacer", () => {
+    const { editor } = armar();
+    expect(editor.modificado).toBe(false);
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    expect(editor.modificado).toBe(true);
+    editor.marcarGuardado(editor.tomarMarca());
+    expect(editor.modificado).toBe(false);
+    editor.ejecutar(new Mover([cmd.id], 2, 0));
+    expect(editor.modificado).toBe(true);
+    editor.deshacer();
+    expect(editor.modificado).toBe(false);
+    editor.rehacer();
+    expect(editor.modificado).toBe(true);
+  });
+
+  it("agrupar otro Mover sobre el mismo componente después de guardar: modificado", () => {
+    const { editor } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    editor.ejecutar(new Mover([cmd.id], 1, 0));
+    editor.marcarGuardado(editor.tomarMarca());
+    editor.agrupar([new Mover([cmd.id], 1, 0)]);
+    expect(editor.modificado).toBe(true);
+  });
+
+  it("marcar guardado avisa por alCambiarHistorial, y ejecutar y deshacer también", () => {
+    const { editor } = armar();
+    const estados: boolean[] = [];
+    editor.alCambiarHistorial = () => estados.push(editor.modificado);
+    editor.ejecutar(colocar(editor.documento, datos(0, 0)));
+    editor.marcarGuardado(editor.tomarMarca());
+    editor.deshacer();
+    expect(estados).toEqual([true, false, true]);
+  });
+
+  it("la marca tomada antes de un cambio no da por guardado lo que se editó después", () => {
+    const { editor } = armar();
+    const cmd = colocar(editor.documento, datos(0, 0));
+    editor.ejecutar(cmd);
+    const marca = editor.tomarMarca();
+    editor.ejecutar(new CambiarEtiqueta(cmd.id, "K2"));
+    editor.marcarGuardado(marca);
+    expect(editor.modificado).toBe(true);
+  });
+});
