@@ -453,6 +453,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - **Falta en la netbook:**
     - Prueba del menú de desarrollo, bloque "Aceptación T14c": paso mediano de los 40 cableados < 8 ms; soltar con todo seleccionado ≤ 200 ms; paso de reconectar < 8 ms (válidos); rechazos después de rutear < 8 ms; soltar reconectando ≤ 200 ms (comando + primer cuadro).
     - A mano: reconectar a un borne y a una T, Ctrl+Z, agarrar el extremo a 58 % y 73 %, sin restos.
+- **T14c cerrada (2026-11-12).** Bruno probó la v0.1.3-alpha.10 en la netbook y dio bien: el bloque "Aceptación T14c" con los 5 criterios en ✓ y la prueba a mano a 58 y 73 %. Era lo que faltaba. Los números de esa prueba no quedaron anotados.
 
 ---
 
