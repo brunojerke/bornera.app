@@ -1,7 +1,8 @@
 // F5 alterna entre Editar y Simular. Lo atiende Ventana, también con el foco
 // en un campo del panel (antes de cambiar, el panel confirma lo escrito).
 // Sin esto, F5 recarga la página (también en el WebView de Tauri) y se pierde
-// el documento. Ctrl+R, Ctrl+F5 y Mayús+F5 quedan libres por ahora.
+// el documento. Ctrl+R, Ctrl+F5 y Mayús+F5 se anulan en la app compilada
+// (`esTeclaRecarga` en archivo.ts, D15-C); en desarrollo quedan para recargar.
 
 import type { Modo } from "./tipos";
 

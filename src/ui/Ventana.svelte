@@ -17,6 +17,18 @@
   import type { Editor } from "../editor/editor";
   import { tick, untrack } from "svelte";
   import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
+  import DialogoArchivo from "./DialogoArchivo.svelte";
+  import type { ProblemaArchivo } from "../core/io";
+  import {
+    atajoArchivo,
+    atajoArchivoActua,
+    esTeclaRecarga,
+    OperacionesArchivo,
+    tituloVentana,
+    type AccionArchivo,
+  } from "./archivo";
+  import { archivosNavegador } from "./archivos";
+  import { ES_PRERELEASE } from "./version";
 
   let modo = $state<Modo>("editar");
   let paletaAbierta = $state(true);
@@ -34,6 +46,14 @@
   let pista = $state<string | null>(null);
   let puedeDeshacer = $state(false);
   let puedeRehacer = $state(false);
+  /** El documento tiene cambios sin guardar (T15a). */
+  let modificado = $state(false);
+  /** `meta.titulo` del documento: va en el título de la ventana si no hay archivo actual. */
+  let tituloDocumento = $state("");
+  /** Nombre del archivo actual; null en un documento que nunca se guardó. */
+  let archivoActual = $state<string | null>(null);
+  /** Diálogo de archivo abierto ("No se puede guardar"…); null si no hay. */
+  let dialogoArchivo = $state.raw<{ titulo: string; problemas: readonly ProblemaArchivo[] } | null>(null);
   /** Aviso de la barra de estado (una acción que no se pudo hacer); se borra solo. */
   let aviso = $state<string | null>(null);
   let temporizadorAviso = 0;
@@ -47,6 +67,34 @@
   let panel: ReturnType<typeof PanelPropiedades> | undefined = $state();
   /** Editor de lo que muestra el lienzo: a él van las ediciones del panel. */
   let editorActivo = $state.raw<Editor | null>(null);
+
+  // ── Archivo (T15a) ───────────────────────────────────────────────────────
+  // En esta etapa, siempre con los archivos del navegador (descargas y
+  // <input type="file">); el escritorio llega en la etapa 4.
+  const operaciones = new OperacionesArchivo({
+    archivos: archivosNavegador,
+    // Lo que se ve: el documento o una escena del banco (D17). Las escenas
+    // sin editor ("símbolos" y "vacía") no se guardan.
+    mostrado: () => (editorActivo ? { editor: editorActivo, esDocumento: escena === "documento" } : null),
+    confirmarPanel: () => panel?.confirmar(),
+    mostrarProblemas: (titulo, problemas) => (dialogoArchivo = { titulo, problemas }),
+    avisar,
+    ahora: () => performance.now(),
+    medir: import.meta.env.DEV || ES_PRERELEASE,
+  });
+  operaciones.alCambiar = () => (archivoActual = operaciones.archivoActual?.nombre ?? null);
+
+  function accionArchivo(a: AccionArchivo) {
+    if (a === "guardar") void operaciones.guardar();
+    else if (a === "guardarComo") void operaciones.guardar(true);
+    // Abrir y Nuevo: etapa 3b.
+  }
+
+  // Título de la ventana (D18-B): nombre y marca de cambios. En el escritorio
+  // irá por setTitle (etapa 4).
+  $effect(() => {
+    document.title = tituloVentana({ archivo: archivoActual, titulo: tituloDocumento, modificado });
+  });
 
   // Lo que muestra el lienzo (el documento, salvo que se elija una escena de
   // prueba), contador de rendimiento y optimizaciones.
@@ -105,6 +153,21 @@
       }
       return;
     }
+    // Ctrl+S, Ctrl+Mayús+S, Ctrl+O y Ctrl+N: también con el foco en el campo
+    // del panel (la operación lo confirma antes). La tecla es siempre nuestra:
+    // el navegador no abre sus diálogos de guardar ni de abrir.
+    const archivo = atajoArchivo(e);
+    if (archivo) {
+      e.preventDefault();
+      if (atajoArchivoActua({ repetida: e.repeat, modal: hayModal(), gesto: lienzo?.enGesto() ?? false })) accionArchivo(archivo);
+      return;
+    }
+    // D15-C: en la app compilada, Ctrl+R, Ctrl+F5 y Mayús+F5 no recargan (se
+    // perdería el documento). En desarrollo quedan para recargar.
+    if (!import.meta.env.DEV && esTeclaRecarga(e)) {
+      e.preventDefault();
+      return;
+    }
     // F3: contador de rendimiento (y que el navegador no abra "Buscar").
     if (e.key === "F3" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       e.preventDefault();
@@ -120,14 +183,29 @@
       }
     }
   }
+
+  /**
+   * Recargar o cerrar la página con cambios sin guardar: el navegador pregunta
+   * antes (D15-C). En el escritorio, cerrar la ventana lo atiende
+   * `onCloseRequested` (etapa 4); esto cubre la recarga.
+   */
+  function alSalir(e: BeforeUnloadEvent) {
+    if (!modificado) return;
+    e.preventDefault();
+    // Los motores que no miran preventDefault (WebKit viejo) miran esto.
+    e.returnValue = "";
+  }
 </script>
 
-<svelte:window onkeydown={alTecla} />
+<svelte:window onkeydown={alTecla} onbeforeunload={alSalir} />
 
 <div class="ventana">
   <BarraSuperior
     bind:modo
     {zoom}
+    puedeGuardar={editorActivo !== null}
+    onguardar={() => accionArchivo("guardar")}
+    onguardarcomo={() => accionArchivo("guardarComo")}
     onacercar={() => lienzo.acercar()}
     onalejar={() => lienzo.alejar()}
     onencuadrar={() => lienzo.encuadrar()}
@@ -160,6 +238,8 @@
       bind:pista
       bind:puedeDeshacer
       bind:puedeRehacer
+      bind:modificado
+      bind:tituloDocumento
       bind:activo={editorActivo}
       {modo}
       {escena}
@@ -183,6 +263,10 @@
 
 {#if prueba}
   <DialogoDiagnostico corriendo={prueba.corriendo} texto={prueba.texto} oncerrar={() => (prueba = null)} />
+{/if}
+
+{#if dialogoArchivo}
+  <DialogoArchivo titulo={dialogoArchivo.titulo} problemas={dialogoArchivo.problemas} oncerrar={() => (dialogoArchivo = null)} />
 {/if}
 
 <style>

@@ -53,8 +53,9 @@ export function teclaDe(e: {
  * La letra de la tecla, en minúscula: la impresa (`key`), así R es R en
  * cualquier distribución latina; si no es una letra latina (teclado ruso,
  * griego), la de la posición física (`code`). Null si no es una letra.
+ * También la usan los atajos de archivo (src/ui/archivo.ts).
  */
-function letra(t: Tecla): string | null {
+export function letra(t: Pick<Tecla, "key" | "code">): string | null {
   if (/^[a-z]$/i.test(t.key)) return t.key.toLowerCase();
   const m = /^Key([A-Z])$/.exec(t.code);
   return m ? m[1]!.toLowerCase() : null;

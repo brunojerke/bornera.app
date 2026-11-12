@@ -1,9 +1,11 @@
 <script lang="ts">
-  // Barra de herramientas superior. Por ahora andan el historial (deshacer y
-  // rehacer, desactivados si no hay nada) y el zoom; el resto es estructura.
+  // Barra de herramientas superior. Andan Guardar y Guardar como (T15a), el
+  // historial (deshacer y rehacer, desactivados si no hay nada) y el zoom; el
+  // resto es estructura.
   import FilePlus from "@lucide/svelte/icons/file-plus";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Save from "@lucide/svelte/icons/save";
+  import SaveAll from "@lucide/svelte/icons/save-all";
   import FileDown from "@lucide/svelte/icons/file-down";
   import Undo2 from "@lucide/svelte/icons/undo-2";
   import Redo2 from "@lucide/svelte/icons/redo-2";
@@ -21,6 +23,9 @@
   let {
     modo = $bindable("editar"),
     zoom = 1,
+    puedeGuardar = false,
+    onguardar,
+    onguardarcomo,
     onacercar,
     onalejar,
     onencuadrar,
@@ -37,6 +42,10 @@
     modo?: Modo;
     /** Zoom actual (1 = 100 %). */
     zoom?: number;
+    /** Lo que se ve se puede guardar (no en las escenas sin editor). */
+    puedeGuardar?: boolean;
+    onguardar?: () => void;
+    onguardarcomo?: () => void;
     onacercar?: () => void;
     onalejar?: () => void;
     onencuadrar?: () => void;
@@ -62,7 +71,18 @@
   <div class="grupo" role="group" aria-label="Archivo">
     <button class="boton-icono" title="Nuevo (Ctrl+N)" aria-label="Nuevo"><FilePlus size={TAM} /></button>
     <button class="boton-icono" title="Abrir (Ctrl+O)" aria-label="Abrir"><FolderOpen size={TAM} /></button>
-    <button class="boton-icono" title="Guardar (Ctrl+S)" aria-label="Guardar"><Save size={TAM} /></button>
+    <button class="boton-icono" title="Guardar (Ctrl+S)" aria-label="Guardar" disabled={!puedeGuardar} onclick={onguardar}>
+      <Save size={TAM} />
+    </button>
+    <button
+      class="boton-icono"
+      title="Guardar como (Ctrl+Mayús+S)"
+      aria-label="Guardar como"
+      disabled={!puedeGuardar}
+      onclick={onguardarcomo}
+    >
+      <SaveAll size={TAM} />
+    </button>
     <button class="boton-icono" title="Exportar PDF (Ctrl+P)" aria-label="Exportar PDF"><FileDown size={TAM} /></button>
   </div>
 

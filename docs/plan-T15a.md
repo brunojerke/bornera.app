@@ -350,6 +350,11 @@ Tests:
 
 ### Etapa 3 — Interfaz en el navegador y humo
 
+**Partida en 3a y 3b (Bruno, 2026-11-12).** Obsidian no se toca en la etapa 3: va en la etapa 5.
+
+- **3a (hecha):** `beforeunload` y `cdp.mjs` (acepta solo ese diálogo; otro se descarta y cuenta como error de la página), `archivos.ts`, Guardar y Guardar como en `archivo.ts`, `DialogoArchivo`, Ctrl+S y Ctrl+Mayús+S, teclas de recarga (`esTeclaRecarga`, con test propio), título por `document.title` y la parte de Guardar del humo. En las escenas sin editor ("símbolos" y "vacía"), Guardar queda desactivado.
+- **3b (sesión aparte):** Abrir y Nuevo, reemplazo del Editor, `DialogoSinGuardar`, Ctrl+O y Ctrl+N, desactivar Abrir y Nuevo en Simular y en el banco, y el resto del humo.
+
 Archivos:
 
 - `src/ui/archivos.ts` (interfaz y `archivosNavegador`), `src/ui/archivo.ts` (la lógica de Guardar, Guardar como, Abrir y Nuevo, con sus dependencias inyectadas), `src/ui/archivo.test.ts` (nuevos).
@@ -404,7 +409,8 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - Cerrar con cambios: los tres botones.
 - El título de la ventana.
 - Ctrl+N.
-- Las teclas de recarga y el menú contextual, en una versión compilada.
+- Las teclas de recarga y el menú contextual, en una versión compilada. Ctrl+R, Ctrl+Mayús+R, Ctrl+F5 y Mayús+F5 no recargan: se anulan solo en la app compilada, y el humo corre en desarrollo, donde se dejan para recargar. Por eso se prueban a mano acá; `esTeclaRecarga` tiene su test en `archivo.test.ts`.
+- D20 se mide con la escena del banco, que siempre pasa por Guardar como: en el escritorio, `guardarComo` incluye el diálogo nativo, y "Guardado en N ms" tiene que contar solo la escritura (sin el diálogo). Se resuelve en esta etapa.
 
 ### Etapa 5 — Cierre en la PC
 
@@ -485,6 +491,7 @@ Prueba a mano en la PC con `npm run tauri dev`:
 - **Transformar vuelve a rutear al rehacer** (pendiente anotado en T14a). Podría dejar "sin cambios" un documento que difiere en un recorrido.
 - **Linux (aparte, no bloquea).** `CompressionStream` en WebKitGTK, el diálogo nativo en GTK, las teclas de recarga, el evento de cancelar del selector de archivos y el foco de los diálogos propios.
 - **D20 sin línea base.** El criterio de 1 s se fijó sin mediciones en Windows.
+- **Tildes en la etiqueta (visto en la etapa 3a).** El criterio "Etiqueta y título con tildes sobreviven" no se puede armar desde la interfaz: el panel acepta solo `A-Z a-z 0-9 - _ . + / = :` (`validarEtiqueta`) y T15a no edita el título. El humo lo prueba con una etiqueta puesta por la consola (`bornera`, solo en desarrollo). En la netbook hace falta un `.brn` armado aparte.
 
 ## Fuera de T15a (pendientes, no se hacen acá)
 

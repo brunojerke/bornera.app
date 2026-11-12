@@ -15,6 +15,11 @@ export const MAYUS = 8;
 export class Pagina {
   /** Errores de la página (excepciones y console.error) desde la última carga. */
   errores = [];
+  /**
+   * Diálogos de `beforeunload` aceptados (T15a): salen al navegar con
+   * cambios sin guardar. Se aceptan solos, así ninguna prueba se cuelga.
+   */
+  salidasConCambios = 0;
   #ws;
   #n = 0;
   #pendientes = new Map();
@@ -38,6 +43,15 @@ export class Pagina {
       }
       if (d.method === "Runtime.consoleAPICalled" && d.params.type === "error") {
         this.errores.push(d.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
+      }
+      // Solo el diálogo de beforeunload se acepta. Cualquier otro (alert,
+      // confirm, prompt) se descarta y cuenta como error de la página: si
+      // quedara abierto, la prueba se colgaría hasta el límite.
+      if (d.method === "Page.javascriptDialogOpening") {
+        const salir = d.params.type === "beforeunload";
+        if (salir) this.salidasConCambios++;
+        else this.errores.push(`Diálogo inesperado (${d.params.type}): ${d.params.message}`);
+        this.cdp("Page.handleJavaScriptDialog", { accept: salir }).catch(() => undefined);
       }
     });
   }
@@ -142,8 +156,37 @@ export class Pagina {
     await esperar(30);
   }
 
+  /**
+   * Mantiene apretada una tecla: un keyDown, `repeticiones` keyDown con
+   * autorrepetición (`e.repeat`) y un keyUp.
+   */
+  async teclaMantenida(key, code, codigoWindows, mods = 0, repeticiones = 3) {
+    const base = { key, code, windowsVirtualKeyCode: codigoWindows, modifiers: mods };
+    await this.cdp("Input.dispatchKeyEvent", { type: "keyDown", ...base });
+    for (let i = 0; i < repeticiones; i++) {
+      await esperar(30);
+      await this.cdp("Input.dispatchKeyEvent", { type: "keyDown", ...base, autoRepeat: true });
+    }
+    await this.cdp("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+    await esperar(30);
+  }
+
   esc() {
     return this.tecla("Escape", "Escape", 27);
+  }
+
+  /**
+   * Las descargas van a `carpeta`, sin preguntar (T15a: Guardar en el
+   * navegador es una descarga). Con `null`, vuelve a lo de siempre.
+   */
+  async descargasEn(carpeta) {
+    const p = carpeta ? { behavior: "allow", downloadPath: carpeta } : { behavior: "default" };
+    try {
+      await this.cdp("Browser.setDownloadBehavior", p);
+    } catch {
+      // Desde la pestaña, algunas versiones solo aceptan la variante vieja.
+      await this.cdp("Page.setDownloadBehavior", p);
+    }
   }
 
   /** Guarda una captura si se pidieron (--capturas=CARPETA). */

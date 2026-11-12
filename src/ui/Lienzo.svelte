@@ -33,6 +33,8 @@
     pista = $bindable(null),
     puedeDeshacer = $bindable(false),
     puedeRehacer = $bindable(false),
+    modificado = $bindable(false),
+    tituloDocumento = $bindable(""),
     activo = $bindable(null),
     modo = "editar",
     escena = "documento",
@@ -55,6 +57,14 @@
     /** Hay algo para deshacer o rehacer en el editor a la vista. Solo lectura desde afuera. */
     puedeDeshacer?: boolean;
     puedeRehacer?: boolean;
+    /**
+     * El documento (no una escena del banco) tiene cambios sin guardar. Solo
+     * lectura desde afuera. Mientras se ve otra escena no cambia: el
+     * documento no se puede editar desde ahí.
+     */
+    modificado?: boolean;
+    /** `meta.titulo` del documento (para el título de la ventana). Solo lectura desde afuera. */
+    tituloDocumento?: string;
     /** Editor de lo que se muestra (null en las escenas que no se editan). Solo lectura desde afuera. */
     activo?: Editor | null;
     /** Modo de trabajo: en Simular, los atajos de edición no actúan. */
@@ -115,6 +125,10 @@
     const historial = () => {
       puedeDeshacer = ed?.puedeDeshacer ?? false;
       puedeRehacer = ed?.puedeRehacer ?? false;
+      if (ed === editorDocumento) {
+        modificado = ed.modificado;
+        tituloDocumento = ed.documento.meta.titulo;
+      }
     };
     historial();
     if (!ed) return;
