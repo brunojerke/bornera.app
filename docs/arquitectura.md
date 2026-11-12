@@ -1,6 +1,6 @@
 # Plan: Bornera, simulador de automatismos eléctricos
 
-Nov 6, 2026 · @Bruno
+Nov 6, 2026 · @Bruno · Última revisión: 2026-11-12
 
 ## Visión y objetivos
 
@@ -10,7 +10,7 @@ Objetivos medibles (metas propuestas, a validar en las pruebas):
 
 - **Liviano:** menos de 150 MB de RAM con un circuito de 500 componentes.
 - **Rápido:** arranque en menos de 3 s; zoom, desplazamiento y simulación sin trabas con 500 componentes.
-- **Corre en todo:** Windows y Linux, incluida una netbook Conectar Igualdad con Linux Mint y pantalla de 1024×600.
+- **Corre en todo:** Windows y Linux. Plataforma principal: Windows con WebView2; equipo de referencia: una netbook con Windows y pantalla de 1024×600. Linux con WebKitGTK sigue como plataforma secundaria. Meta: fluido con 4 GB de RAM.
 - **Diseñar y simular en el mismo lugar:** se pasa de modo edición a modo simulación con una tecla.
 - **Archivos propios y portables:** formato abierto, versionado y legible.
 - **Salida profesional:** PDF vectorial con rótulo (cajetín), listo para entregar o imprimir.
@@ -23,7 +23,7 @@ La primera versión cubre circuitos de mando y potencia básicos: alcanza para m
 | --- | --- | --- |
 | Fase (L) | L | Alimentación suelta; su etiqueta (L, L1, L2, L3) es el nombre de la red |
 | Neutro (N) | N | Alimentación suelta; su etiqueta (N) es el nombre de la red |
-| Fuente trifásica | L1, L2, L3, N | Tres fases con secuencia definida |
+| Fuente trifásica | L1, L2, L3 (variantes con N y con N y PE) | Tres fases con secuencia definida |
 | Fuente de CC 24 V | +, − | Para mandos en baja tensión |
 | Cable y unión | — | Conductor ideal; la unión (punto) se crea sola al empalmar |
 | Pulsador NA | 13, 14 | Cierra mientras se mantiene apretado |
@@ -60,11 +60,21 @@ Recomendación: **TypeScript + Canvas 2D**, empaquetado con **Tauri** para escri
 
 **Riesgo a probar temprano:** en Linux, Tauri usa WebKitGTK, que en hardware viejo puede rendir menos que Chrome. Por eso la fase 2 incluye una prueba de rendimiento en la netbook; si falla, el plan B es usarla como PWA en Chromium.
 
+> Nota (2026-11-12): riesgo mitigado. La fase 2 cerró con la 0.1.2 medida en la netbook (casi 0 cuadros de más de 16 ms). Desde la fase 3 la plataforma principal es Windows con WebView2, todavía sin medir en la netbook.
+
 ## Arquitectura general
 
 Tres niveles con dependencias en un solo sentido: interfaz y editor arriba, un núcleo puro en el medio y el renderer abajo.
 
-&#91;embedded content: arquitectura · interfaz, núcleo y renderer\]
+```text
+interfaz (src/ui, Svelte)  ·  editor (src/editor)
+              │  Comandos            │  lee
+              ▼                      ▼
+        núcleo (src/core: modelo, símbolos, io, sim)
+              │  lee
+              ▼
+        renderer (src/render: Canvas 2D; luego SVG y PDF)
+```
 
 El editor solo cambia el modelo mediante comandos; el simulador y el renderer lo leen. Por eso pantalla, SVG y PDF salen del mismo código de dibujo, y el núcleo se prueba entero sin abrir la interfaz.
 
@@ -74,17 +84,17 @@ Todo el programa gira alrededor de un único **Documento**: el editor lo modific
 
 **Entidades principales:**
 
-- **Documento:** metadatos (título, autor, fecha, versión del formato) + una hoja (varias en fases futuras).
+- **Documento:** formato y versión, metadatos (título, autor, fecha), `contadores` de ids (solo suben: un id borrado no se vuelve a dar) y la lista de hojas. El editor trabaja en la primera; un archivo con varias hojas abre, las conserva y avisa.
 - **Definición de símbolo:** se escribe una sola vez por tipo. Contiene el dibujo en coordenadas locales (líneas, arcos, círculos, texto), la posición y el nombre de cada borne, y el tipo de comportamiento (contacto NA, bobina, carga, fuente…).
 - **Instancia de componente:** id, tipo de símbolo, posición en la grilla, rotación (0/90/180/270), espejado, etiqueta (K1, S2, H1) y parámetros (tensión, color de lámpara).
-- **Cable:** id, lista de puntos ortogonales, y en cada extremo una conexión a un borne o a otro cable.
-- **Unión:** punto donde se empalman tres o más cables; se calcula sola.
+- **Cable:** id, extremos `desde` y `hasta` y los codos intermedios (tramos horizontales o verticales, en enteros). Cada extremo está en un borne, sobre otro cable (una T) o libre.
+- **Unión:** punto donde llegan 3 o más brazos de una misma conexión (extremos de cable, bornes con cable y el anfitrión de una T); se calcula sola y no se guarda.
 
 **Reglas clave:**
 
 - Todas las coordenadas van en **unidades de grilla** (enteros), no en píxeles. Así el zoom y el PDF no cambian nada del modelo.
 - Los contactos se vinculan a su bobina **por etiqueta**: todo lo que se llame K1 sigue a la bobina K1.
-- Ningún cambio se aplica directo: todo pasa por un **comando** (colocar, mover, rotar, borrar, cablear). Eso da deshacer/rehacer gratis y evita estados corruptos.
+- Ningún cambio se aplica directo: todo pasa por un **comando** (colocar, mover, rotar, espejar, borrar, cablear, cambiar un extremo, cambiar la etiqueta, y varios juntos en un grupo). Eso da deshacer/rehacer gratis y evita estados corruptos.
 - El núcleo del modelo no depende del navegador: se puede probar entero con tests sin abrir la interfaz.
 
 ## Motor de simulación
@@ -135,7 +145,9 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
 - Referencias cruzadas: debajo de cada bobina, la lista de dónde están sus contactos.
 - Validaciones en vivo: bornes sin conectar y cables sueltos marcados en naranja.
 
-**Atajos principales:** F5 alterna editar/simular, Ctrl+S guarda, Ctrl+P exporta PDF, Esc cancela la herramienta actual. Tema claro y oscuro.
+> Nota (2026-11-12): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3 (`docs/plan-fase3.md` los propone como T16–T19). Ubicación pendiente de decisión de Bruno.
+
+**Atajos principales:** F5 alterna editar/simular, Ctrl+N nuevo, Ctrl+O abre, Ctrl+S guarda, Ctrl+Mayús+S guarda como, Ctrl+P exporta PDF (con la exportación, fase 7), Esc cancela la herramienta actual. Tema claro y oscuro.
 
 ## Renderizado y rendimiento
 
@@ -180,12 +192,12 @@ Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en form
 
 **Reglas:**
 
-- **Compresión:** el JSON se comprime con gzip usando `CompressionStream` del navegador (sin librerías). Un circuito escolar pesa pocos KB.
-- **Versión y migraciones:** cada cambio de estructura sube `version` y agrega una función que convierte la versión anterior. Los archivos viejos siempre abren.
-- **Validación al abrir:** si el archivo está dañado, se informa qué falla en vez de cerrarse el programa.
-- **Autoguardado:** copia de recuperación cada 60 s en el almacenamiento local.
+- **Compresión:** Guardar escribe gzip con `CompressionStream` del navegador (sin librerías); si el sistema no lo tiene, guarda sin comprimir y lo avisa. Abrir acepta los dos (los distingue por los bytes `1f 8b`). Tope: 16 MB. Un circuito escolar pesa pocos KB.
+- **Versión y migraciones:** hoy hay una sola versión (1). Un archivo de una versión más nueva se rechaza ("hecho con una versión más nueva de Bornera"). Cada cambio de estructura sube `version` y agrega una función que convierte la versión anterior. Los archivos viejos siempre abren.
+- **Validación al abrir:** un archivo dañado se rechaza con la lista de problemas, sin cerrar el programa: claves desconocidas, cables rotos, contadores atrasados, ciclos de apoyos o una T sobre el extremo de su anfitrión. Un símbolo desconocido sin cables abre con "?" y un aviso.
+- **Autoguardado:** copia de recuperación cada 60 s en el almacenamiento local (pendiente, fase 4).
 - **Biblioteca separada:** los símbolos no se guardan dentro de cada archivo; solo se referencia su tipo (`contactor.bobina`).
-- **Exportación de respaldo:** opción de guardar sin comprimir (`.brn.json`) para revisarlo o versionarlo con Git.
+- **Exportación de respaldo:** opción de guardar sin comprimir (`.brn.json`) para revisarlo o versionarlo con Git (pendiente: T15a la dejó para la fase 4).
 
 ## Exportación a PDF vectorial
 
@@ -206,7 +218,10 @@ Carpetas separadas por responsabilidad, para que Claude Code trabaje en un módu
 ```text
 /
 ├── CLAUDE.md              reglas del proyecto para Claude Code
-├── docs/arquitectura.md   este plan, resumido
+├── docs/
+│   ├── arquitectura.md    este plan, resumido
+│   ├── plan-*.md          plan de cada fase y de las tareas grandes
+│   └── bench.md           resultados del banco de dibujado
 ├── src/
 │   ├── core/              sin dependencias del navegador
 │   │   ├── model/         tipos, documento, comandos, deshacer
@@ -215,37 +230,16 @@ Carpetas separadas por responsabilidad, para que Claude Code trabaje en un módu
 │   │   └── io/            formato .brn, migraciones, validación
 │   ├── render/            Renderer: canvas, svg, pdf
 │   ├── editor/            herramientas, selección, índice espacial
-│   └── ui/                paneles, barras, diálogos (Svelte)
+│   ├── ui/                paneles, barras, diálogos (Svelte)
+│   └── routes/            punto de entrada de SvelteKit (+page.svelte)
 ├── tests/
 │   ├── circuitos/         .brn de referencia con resultado esperado
-│   └── bench/             pruebas de rendimiento
+│   ├── bench/             pruebas de rendimiento
+│   └── humo/              pruebas de humo de la app real (Chrome/Edge headless)
 └── src-tauri/             empaquetado de escritorio
 ```
 
-**Contenido del CLAUDE.md:**
-
-```markdown
-# Bornera
-
-## Objetivo
-Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en una netbook con 2 GB de RAM.
-
-## Reglas
-- `src/core` no puede importar nada del DOM ni de `ui/`.
-- Todo cambio al documento pasa por un Comando (deshacer/rehacer).
-- Coordenadas siempre en unidades de grilla, nunca en píxeles.
-- Cada símbolo nuevo: definición + test de bornes.
-- Cada cambio en `sim/`: correr los circuitos de referencia (`npm test`).
-- No agregar dependencias sin preguntar.
-- Redibujar solo ante cambios; nunca un bucle constante.
-- Interfaz en Svelte 5; el lienzo es Canvas 2D propio, sin librerías de dibujo.
-- Código y comentarios en español.
-
-## Comandos
-- `npm run dev`    servidor de desarrollo
-- `npm test`       tests
-- `npm run bench`  rendimiento
-```
+**Contenido del CLAUDE.md:** ver CLAUDE.md en la raíz (es la versión vigente).
 
 **Cómo trabajar con Claude Code:** una tarea chica por sesión ("agregar el contacto NC", no "hacer el simulador"), pedirle primero el plan y después el código, y no avanzar de fase sin que pasen los tests.
 
@@ -273,6 +267,8 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
 **Después del MVP:** temporizadores, relés auxiliares, finales de carrera, varias hojas, más símbolos, advertencias de tensión, importador `.cad` y, a largo plazo, PLC en escalera.
 
 ## Prompts de arranque: fase 1
+
+> Nota (2026-11-12): fase 1 cerrada; esta sección es registro histórico. Las reglas y los comandos vigentes están en CLAUDE.md.
 
 Cinco prompts en orden, uno por sesión de trabajo. Al terminar cada uno: probar, revisar los cambios y hacer commit antes de pasar al siguiente.
 
@@ -361,6 +357,7 @@ La simulación tiene que dar resultados que coincidan con lo que pasaría en el 
 - **Migraciones:** archivos de versiones viejas abren bien.
 - **Comandos:** cada comando, deshecho, deja el documento igual que antes.
 - **Rendimiento:** el banco de pruebas no puede empeorar más de un 10 % entre fases.
+  > Nota (2026-11-12): excepción aceptada en T14b. *Soltar con todo* subió 7 ms en la PC y se mide con un criterio absoluto: ≤ 200 ms en la netbook. La línea base 0.1.2 se midió en Mint con WebKitGTK; hay que rehacerla en la netbook con Windows.
 - **Prueba humana:** armar en el programa los circuitos de los trabajos de la escuela y comparar con lo que da CADe\_SIMU y con el funcionamiento real.
 
 ## Distribución y monetización
@@ -378,6 +375,7 @@ GitHub es la base: código, instaladores y actualizaciones automáticas desde un
 | Redes propias y comunidades | Escuelas técnicas, docentes y grupos de electricistas | Gratis |
 
 - **Aviso de Windows:** un instalador sin firma digital muestra la advertencia SmartScreen. La firma cuesta dinero; la Microsoft Store lo resuelve.
+  > Nota (2026-11-12): opciones pendientes de decidir: SignPath (gratis para código abierto) o un certificado Certum (unos 25-70 €).
 - **macOS:** queda para después, porque requiere cuenta paga de Apple.
 - **Reportes de errores:** GitHub Issues, más un formulario simple en la web para quien no tenga cuenta.
 
@@ -396,7 +394,8 @@ El mayor riesgo no es técnico: es querer agregar todo antes de tener el MVP and
 | Riesgo | Mitigación |
 | --- | --- |
 | Crecer el alcance antes de terminar el MVP | No se agrega nada fuera de la lista hasta cerrar la fase 8 |
-| WebKitGTK lento en la netbook | Prueba de rendimiento en la fase 2; plan B: PWA en Chromium |
+| WebKitGTK lento en la netbook | Prueba de rendimiento en la fase 2; plan B: PWA en Chromium. Mitigado (2026-11-12): 0.1.2 medida en la netbook, casi 0 cuadros de más de 16 ms |
+| WebView2 lento en la netbook con Windows (sin medir) | Banco de control en la netbook con Windows, con la próxima prerelease (línea base nueva) |
 | Claude Code pierde el hilo en un código grande | CLAUDE.md, módulos separados, tareas chicas y tests obligatorios |
 | Simulación que no coincide con la realidad | Circuitos de referencia como tests, revisados contra la práctica |
 | Derechos sobre los símbolos | Dibujarlos propios según IEC 60617; si se reutilizan de otro proyecto, revisar su licencia |

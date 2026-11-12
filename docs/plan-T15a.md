@@ -32,6 +32,7 @@ Aprobado por Bruno el 2026-11-12, con las decisiones D1 a D22 de abajo. Tarea de
 - **Secundario: Linux con WebKitGTK.** Lo que dependa de WebKitGTK va a Riesgos, se prueba aparte y **no bloquea el cierre de T15a**.
 - **Línea base nueva.** Las mediciones anteriores de la netbook eran en Mint con WebKitGTK y no son comparables. En la prueba de la netbook de T15a se corre también el banco de control y sale una nota "Medición <versión> - netbook Windows".
 - El objetivo de `CLAUDE.md` (fluido con 2 GB de RAM) sigue valiendo: el tope de tamaño se eligió contra 2 GB, no contra los 8 GB de la netbook de prueba.
+  - Nota (2026-11-12): la meta pasó a 4 GB; el tope de 16 MB elegido contra 2 GB sigue valiendo, con más margen.
 
 ## Decisiones (Bruno, 2026-11-12)
 

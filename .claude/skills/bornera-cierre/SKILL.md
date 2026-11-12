@@ -30,12 +30,17 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
    - Registrar en el plan vigente de `docs/` lo hecho, los resultados, las decisiones y lo pendiente.
    - Si falta una medición de aceptación, como la de la netbook, dejar la tarea abierta y decir exactamente qué falta.
 
-5. **Hacer el commit local**
+5. **Revisar docs/arquitectura.md**
+   - Si la tarea cambió algo que arquitectura.md describe (modelo de datos, formato .brn, comandos, fases o criterios de pasaje, plataforma o equipo de referencia, metas de rendimiento o RAM, estructura del repo), corregirlo en el mismo commit.
+   - Donde describe cómo es hoy, corregir el texto. Donde es plan o historia, agregar una nota corta con fecha, sin borrar.
+   - Si un cambio contradice una decisión de Bruno o mueve una fase, no editarlo: frenar y preguntar.
+
+6. **Hacer el commit local**
    - Formato: `Fase N, Tnn (i/n): resumen`, u omitir `(i/n)` si la tarea tiene una sola parte.
    - No hacer push, no crear tags y no publicar.
    - Después del commit, correr `git grep -nIP '\x{FFFD}|\x{C3}|\x{C2}|\x{E2}\x{20AC}' HEAD` y comprobar que da vacío, para confirmar lo que quedó guardado y no solo la copia de trabajo.
 
-6. **Actualizar Obsidian**
+7. **Actualizar Obsidian**
    - Ubicar el vault con la variable `BORNERA_VAULT`. Si no existe, preguntar la ruta; no adivinarla.
    - Actualizar `10 Proyectos/Bornera/Bornera.md` con sesión, errores resueltos y pendientes.
    - Crear `Decisión - <tema>.md` solo para decisiones nuevas que convenga recordar.
@@ -49,4 +54,5 @@ Mantenerlo breve y usar este orden:
 - **Qué cambió:** explicado en términos eléctricos, por ejemplo qué pasa con bornes, cables y conexiones al mover un contactor.
 - **Verificación:** cantidad de tests y resultado de check, humo y bench.
 - **Commit:** hash y mensaje.
+- **arquitectura.md:** qué se corrigió, o "sin cambios".
 - **No probado o pendiente:** decirlo siempre, sobre todo lo que depende de la netbook.

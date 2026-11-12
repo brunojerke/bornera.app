@@ -4,7 +4,7 @@ Editor y simulador de automatismos eléctricos, liviano y de código abierto. Pe
 
 ## Estado
 
-**En desarrollo.** Todavía no hay una versión usable: el proyecto está en su fase inicial. El plan completo está en [docs/arquitectura.md](docs/arquitectura.md).
+**Prerelease 0.1.3-alpha**, editor de la fase 3; la simulación todavía no. El plan completo está en [docs/arquitectura.md](docs/arquitectura.md).
 
 ## Cómo correrlo
 

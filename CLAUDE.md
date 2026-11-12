@@ -1,7 +1,7 @@
 # Bornera
 
 ## Objetivo
-Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en una netbook con 2 GB de RAM.
+Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en una netbook con 4 GB de RAM.
 
 ## Reglas
 - `src/core` no puede importar nada del DOM ni de las otras capas (`ui/`, `editor/`, `render/`), ni de Svelte. Las dependencias van en un solo sentido, hacia el núcleo.
