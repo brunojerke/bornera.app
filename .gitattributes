@@ -1,0 +1,2 @@
+# Los .brn son gzip (o JSON en una línea): Git no tiene que tocar los fines de línea.
+*.brn -text

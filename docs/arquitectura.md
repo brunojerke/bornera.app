@@ -156,24 +156,27 @@ La diferencia con CADe\_SIMU se gana acá: **dibujar solo lo necesario, solo cua
 
 Sí es posible y conviene: un **JSON versionado y comprimido**, con extensión propia (`.brn`). Es fácil de leer, de depurar y de mantener compatible a futuro.
 
-**Estructura:**
+**Estructura (versión 1):**
 
 ```json
 {
   "formato": "bornera",
   "version": 1,
-  "meta": { "titulo": "Inversión de giro", "autor": "Bruno Jerke", "fecha": "2026-11-06" },
+  "meta": { "titulo": "Marcha-parada", "autor": "", "fecha": "2026-11-12" },
+  "contadores": { "c": 3, "w": 3 },
   "hojas": [{
     "nombre": "Hoja 1",
     "componentes": [
-      { "id": "c1", "tipo": "contactor.bobina", "x": 40, "y": 20, "rot": 0, "etiqueta": "K1", "params": { "tension": "220V" } }
+      { "id": "c1", "tipo": "pulsador.na", "x": 10, "y": 8, "rot": 90, "espejado": true, "etiqueta": "S1", "params": {} }
     ],
     "cables": [
-      { "id": "w1", "puntos": [[40, 16], [40, 10], [60, 10]], "desde": { "comp": "c1", "borne": "A1" }, "hasta": { "comp": "c2", "borne": "14" } }
+      { "id": "w1", "desde": { "tipo": "borne", "comp": "c1", "borne": "13" }, "hasta": { "tipo": "cable", "cable": "w2", "x": 10, "y": 4 }, "codos": [[10, 5]] }
     ]
   }]
 }
 ```
+
+Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en forma canónica: JSON compacto en una línea, todos los campos explícitos y las claves en orden fijo (ver `docs/plan-T15a.md`, §1).
 
 **Reglas:**
 
