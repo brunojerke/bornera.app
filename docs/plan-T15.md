@@ -1,6 +1,6 @@
 # Plan T15 — Aceptación: marcha-parada
 
-**Aprobado el 2026-11-12** con D1-A, D2-B, D3-B, D4-B, D5-B, D6-B, D7-A y D8-B, más los ajustes 1 a 5 de Bruno (ya incorporados). D9 queda abierta: sale de verificar F3 para el ajuste 4.
+**Aprobado el 2026-11-12** con D1-A, D2-B, D3-B, D4-B, D5-B, D6-B, D7-A y D8-B, más los ajustes 1 a 5 de Bruno (ya incorporados). D9-A (leer F3 como está) se eligió el mismo día; salió de verificar F3 para el ajuste 4.
 
 > **Las redes por union-find no existían.** Al planear no había netlist ni función de redes de la hoja. Lo que había: `nodoExtremo` (a qué nodo conecta un extremo, `src/core/model/cables.ts:225`, anotado como "base de las redes (T15)") y un union-find **local a un punto** para los puntos de unión de T14b (`unionEnPunto`, `src/core/model/uniones.ts:57`), que no arma redes. `src/core/sim/` está vacía. La etapa 1a las escribe en `src/core/model/redes.ts` (D2-B).
 
@@ -18,8 +18,9 @@
 | D6 | **B** | Lo relativo, en la PC: banco alternado contra `v0.1.2`, con el criterio de la sección 6 fijado antes de medir. Lo absoluto, en la netbook con Windows: la meta de 0.1.2 con F3. |
 | D7 | **A** | Prerelease `v0.1.3-alpha.11` con T15 y los pendientes de T15a; después, 0.1.3. |
 | D8 | **B** | Prueba a mano a la vista, y además se trae `marcha-parada.brn` a la PC y se comparan sus redes con un comando. |
+| D9 | **A** | F3 se lee como está, justo al soltar cada cable. El criterio "Fluido" de la sección 5 es una aproximación a la meta de 0.1.2 (ver la sección D9 al final). |
 
-Descartadas: D1-B (en `tests/circuitos/`), D2-A (ayudante de test), D3-A (ruteo de W al armar), D4-A (unificar con T14a), D5-A/C (solo código / JSON sin comprimir), D6-A/C (las dos versiones en la netbook / referencia en la alpha.11), D7-B/C (`.msi` local / directo 0.1.3), D8-A (solo a la vista).
+Descartadas: D1-B (en `tests/circuitos/`), D2-A (ayudante de test), D3-A (ruteo de W al armar), D4-A (unificar con T14a), D5-A/C (solo código / JSON sin comprimir), D6-A/C (las dos versiones en la netbook / referencia en la alpha.11), D7-B/C (`.msi` local / directo 0.1.3), D8-A (solo a la vista), D9-B (acumulado nuevo en F3).
 
 ## 1. La tarea en `docs/plan-fase3.md` (cita textual)
 
@@ -99,7 +100,7 @@ Fase y Neutro tienen `elemento: "fuente"` y un solo borne (`biblioteca.ts:229`, 
 **F3 (`src/render/rendimiento.ts`, `src/ui/Rendimiento.svelte`)**
 - "Prom. / máx." es el promedio y el máximo **del último segundo** (`VENTANA_MS = 1000`, :7). Con el programa quieto, a un segundo vuelve a 0.
 - "> 16 ms (5 s)" cuenta los cuadros de **más de 16 ms** (`LIMITE_LENTO_MS = 16`, :10) en los últimos 5 s (`VENTANA_LENTOS_MS`, :13).
-- "FPS" son los cuadros del último segundo. **F3 no muestra cuántos cuadros hubo en 5 s ni en un gesto entero**, así que el "1 %" no se puede calcular con lo que se ve (ver D9).
+- "FPS" son los cuadros del último segundo. **F3 no muestra cuántos cuadros hubo en 5 s ni en un gesto entero**, así que el "1 %" no se puede calcular con lo que se ve (D9-A: se aproxima, sección 5).
 
 **Instalador MSI (ajuste 3)**
 - `tauri.conf.json` no fija `bundle.windows.allowDowngrades`.
@@ -198,7 +199,7 @@ Igual que la base, más **c8** `fuente.neutro` "N" en (16, 33), rot 180, con su 
 - **Por cables:** 5 redes. R4 se parte en R4a {K1·A2, c7·N; w6} y R4b {H1·X2, c8·N; w8}.
 - **Uniones:** 3 (se va la de (0, 28)).
 - **Se unirían por nombre (anotado, sin simular):** `porNombre` da `{ L: [R1], N: [R4a, R4b] }`. R2 y R3 no tienen nombre.
-- **Después de unir por nombre** (`unirPorNombre`), la partición de los bornes es igual a la de la base.
+- **Después de unir por nombre** (`unirPorNombre`), la partición de los bornes es igual a la de la base, con c8·N en la red de N.
 - **Caso "n " (ajuste 1):** con `CambiarEtiqueta(c8, "n ")`, `porNombre` lo normaliza y lo junta igual con "N". El resultado es el mismo que con "N".
 
 ## 4. Tests
@@ -278,10 +279,13 @@ A 1024×600:
 - **Completa:** se termina sin consola, sin editar el archivo y sin reiniciar la app.
 - **W sin sorpresas:** cada cable sale en un gesto. Un rechazo cuenta como traba solo si el mensaje no explica por qué o no queda otra forma razonable de tenderlo.
 - **Todo a la vista:** paleta, panel, barra y los diálogos (Guardar, Abrir, "¿Guardar los cambios?") se ven enteros, sin desplazar nada. Con F, el circuito entero entra con las etiquetas legibles.
-- **Fluido (ajuste 4):**
-  - Al terminar cada uno de los 8 cables, anotar de F3 el máximo por cuadro y los lentos en 5 s: 8 lecturas.
-  - Pasa con menos de 1 % de cuadros de más de 16,7 ms y ninguno de más de 50 ms.
-  - *Lo que F3 mide hoy (verificado, sección 2):* el máximo es del último segundo, los lentos son de más de 16 ms (algo más estricto que 16,7) y no hay total de cuadros. Así, las 8 lecturas no cubren el gesto entero (si dura más de 1 s o más de 5 s) ni dan el porcentaje. **Cómo se completa: D9.**
+- **Fluido (ajuste 4, con D9-A):**
+  - Al terminar cada uno de los 8 cables, leer F3 enseguida, antes de que pase 1 s: "Prom. / máx." (el máximo del último segundo) y "> 16 ms (5 s)" (los lentos). Son 8 lecturas.
+  - **Pasa si en cada una de las 8 lecturas** el máximo del último segundo es menor a 50 ms y los lentos (más de 16 ms) en 5 s son 0 o 1.
+  - **Es una aproximación a la meta de 0.1.2** (menos de 1 % de cuadros de más de 16,7 ms y ninguno de más de 50 ms):
+    - F3 no muestra el total de cuadros, así que el porcentaje no se calcula.
+    - Un cable que tarda más de 1 s en tenderse no queda cubierto entero por el máximo, y uno que tarda más de 5 s, tampoco por los lentos.
+    - El umbral de los lentos de F3 es 16 ms, algo más estricto que 16,7.
 - **Guardar y abrir:** sin espera notable. D20 pide ≤ 1 s con 2000 símbolos; este circuito es mucho más chico.
 
 ## 6. Banco: comparar contra 0.1.2 (D6-B)
@@ -302,7 +306,7 @@ A 1024×600:
 - **Pasa** si ninguna suba se repite.
 
 **Lo absoluto, en la netbook con Windows (alpha.11):**
-- F3 con la escena de 2000 (Ctrl+Shift+B), al 11–14 % y al 20–65 %, 3 corridas, como la nota de 0.1.2. Meta: menos de 1 % de cuadros de más de 16,7 ms y ninguno de más de 50 ms (con las limitaciones de F3, D9).
+- F3 con la escena de 2000 (Ctrl+Shift+B), al 11–14 % y al 20–65 %, 3 corridas, como la nota de 0.1.2. Meta: menos de 1 % de cuadros de más de 16,7 ms y ninguno de más de 50 ms. Con F3 se lee igual que en la sección 5 (D9-A): es una aproximación.
 - El bloque del menú de desarrollo.
 - Es la línea base nueva de Windows: nota "Medición 0.1.3-alpha.11 - netbook Windows".
 
@@ -357,6 +361,21 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 **Etapa 1b — Marcha-parada.**
 - `src/core/circuitos/marchaParada.ts` y su test (sección 4), incluida la variante y el caso "n ".
 - Commit: "Fase 3, T15 etapa 1b: marcha-parada armada con comandos".
+- **Hecha (2026-11-12).**
+  - `marchaParada({ dosNeutros })` devuelve `{ doc, historial, comp, cables }`: los ids por papel (`fase`, `s0`, `s1`, `k1Auxiliar`, `k1Bobina`, `h1`, `neutro`, `neutro2`) y w1 a w8.
+  - `META_MARCHA_PARADA` es fija (título "Marcha-parada", fecha 2026-11-12): dos armados dan el mismo archivo, para el congelado de la etapa 2.
+  - Codos fijos (D3-B). Si `prepararCable` encuentra problemas, el armado tira un error.
+  - "Solo con comandos" se comprueba deshaciendo: 20 pasos en la base y 21 en la variante (colocar, `CambiarEtiqueta` y cablear), y queda la hoja vacía con los contadores arriba. `Historial` no expone su lista de comandos.
+  - 17 tests, en `src/core/circuitos/marchaParada.test.ts`:
+    - Las tablas de componentes y cables de la sección 3, con `nodoExtremo` y el recorrido.
+    - La validación de W con la hoja terminada (`prepararCableExistente`).
+    - Deshacer y rehacer todo.
+    - Las 4 redes, por id y como "etiqueta·borne". Cada borne en una sola red.
+    - Las 4 uniones.
+    - La variante: 5 redes, `porNombre` `{ L: [0], N: [3, 4] }`, unidas como la base y el caso "n ".
+    - Guardar y abrir de las dos, y dos armados iguales.
+  - 1368 tests, check limpio, humo 513/513. Sin banco: no toca el dibujo.
+  - `docs/arquitectura.md`: `src/core/circuitos/` en la estructura del repositorio.
 
 **Etapa 2 — Ida y vuelta, documento base y comando de D8-B.**
 - Las dos variantes en `documentosDePrueba()`.
@@ -364,7 +383,7 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 - El comando para comparar un `.brn` dibujado a mano.
 - Commit: "Fase 3, T15 etapa 2: documento base para la fase 4".
 
-**Etapa 3 — Humo `t15-marcha-parada.mjs`** a 1024×600 (sección 4), más lo que se elija en D9.
+**Etapa 3 — Humo `t15-marcha-parada.mjs`** a 1024×600 (sección 4).
 - Commit: "Fase 3, T15 etapa 3: humo de la marcha-parada".
 
 **Etapa 4 — Banco en la PC** con el criterio de la sección 6.
@@ -384,15 +403,13 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 - Commit: "Fase 3, T15 cerrada (0.1.3)".
 - Tag, push y release: con tu autorización.
 
-## Decisión abierta para Bruno
+## D9 (Bruno, 2026-11-12): **A**
 
-**D9. Cómo se miden el 1 % y el máximo del gesto entero (sale del ajuste 4).** F3 da el máximo del último segundo y los lentos de 5 s, sin total de cuadros (sección 2).
-- **A. Leer F3 como está**, justo al soltar cada cable. El 1 % se aproxima: con 0 lentos en las 8 lecturas pasa; con algún lento se mira a ojo contra los FPS.
+**Cómo se miden el 1 % y el máximo del gesto entero (sale del ajuste 4).** F3 da el máximo del último segundo y los lentos de 5 s, sin total de cuadros (sección 2).
+- **Elegida, A. Leer F3 como está**, justo al soltar cada cable. Criterio en la sección 5 ("Fluido").
   - Ventajas: nada que programar; F3 es igual que en 0.1.2.
-  - Desventajas: no cubre el gesto entero si dura más de 1 s (máximo) o más de 5 s (lentos), y el porcentaje no es una medida.
-- **B. Sumar a F3 un acumulado reiniciable** (por ejemplo, con una tecla): cuadros, más de 16,7 ms, más de 50 ms y máximo desde que se reinició. Va en la etapa 3, con su test y su humo; no toca el dibujo.
-  - Ventajas: las 8 lecturas cubren cada cable entero y dan el porcentaje exacto que pide el criterio.
-  - Desventajas: es código de interfaz nuevo en una tarea de aceptación, y F3 deja de ser igual al de 0.1.2.
+  - Límite aceptado: es una aproximación. No da el porcentaje, y no cubre entero un cable que tarda más de 1 s (el máximo) o más de 5 s (los lentos).
+- **Descartada, B. Sumar a F3 un acumulado reiniciable:** cuadros, más de 16,7 ms, más de 50 ms y máximo desde que se reinició. Era código de interfaz nuevo en una tarea de aceptación, y F3 dejaba de ser igual al de 0.1.2.
 
 ## Riesgos
 - **1024×600 no es el lienzo útil.** En Windows maximizado, la barra de tareas y la de título le quitan unos 70 px (supuesto). El humo mide 1024×600 de viewport. En la netbook el lienzo es más bajo, y el circuito ocupa 34 unidades de alto.

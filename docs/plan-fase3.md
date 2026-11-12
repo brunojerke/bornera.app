@@ -487,8 +487,9 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - `npm run bench` y medición F3.
 - **Terminado cuando:** el test pasa, se dibuja a mano sin trabas en 1024×600 y el banco no empeora más de 10 % respecto de 0.1.2.
 - **Cierre:** versión 0.1.3, nota "Medición 0.1.3 - netbook.md" y fase 3 tildada en Bornera.md.
-- **Plan:** `docs/plan-T15.md` (aprobado el 2026-11-12, D1 a D8; D9 abierta: cómo medir con F3 el 1 % y el máximo del gesto entero).
-  - Etapa 1a, redes por union-find (`src/core/model/redes.ts`): hecha (este commit).
+- **Plan:** `docs/plan-T15.md` (aprobado el 2026-11-12, D1 a D9; D9-A: con F3 la meta de 0.1.2 se aproxima).
+  - Etapa 1a, redes por union-find (`src/core/model/redes.ts`): hecha (`fe8b5c4`).
+  - Etapa 1b, marcha-parada armada con comandos (`src/core/circuitos/marchaParada.ts`): hecha (este commit).
 
 ### Fuera del criterio de pasaje (se pueden diferir)
 Están en la sección "Editor" del plan, pero el criterio de la fase no los pide:

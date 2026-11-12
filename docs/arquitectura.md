@@ -228,7 +228,8 @@ Carpetas separadas por responsabilidad, para que Claude Code trabaje en un módu
 │   │   ├── model/         tipos, documento, comandos, deshacer
 │   │   ├── symbols/       definiciones de símbolos IEC
 │   │   ├── sim/           netlist, solver, eventos
-│   │   └── io/            formato .brn, migraciones, validación
+│   │   ├── io/            formato .brn, migraciones, validación
+│   │   └── circuitos/     circuitos de referencia armados con comandos (solo los usan los tests)
 │   ├── render/            Renderer: canvas, svg, pdf
 │   ├── editor/            herramientas, selección, índice espacial
 │   ├── ui/                paneles, barras, diálogos (Svelte)
