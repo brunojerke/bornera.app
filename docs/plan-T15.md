@@ -345,6 +345,14 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 **Etapa 1a — Redes.**
 - `src/core/model/redes.ts` y `redes.test.ts` (sección 4).
 - Commit: "Fase 3, T15 etapa 1a: redes por union-find".
+- **Hecha (2026-11-12).**
+  - `redes(hoja, { unirPorNombre })` y `porNombre(lista)`. Cada borne de un componente está en una red, aunque no tenga cables.
+  - Orden fijo: las redes por su primer borne en la hoja; las que no tienen bornes (cables sueltos), al final. Los bornes, por componente y como en su definición; los cables, como en la hoja.
+  - Lo que no existe (componente, borne o cable) no conecta y no tira excepción. Un símbolo desconocido no tiene bornes.
+  - Las fuentes de varios bornes todavía no dan nombre.
+  - 13 tests: los 6 del ajuste 2, más dos cables en un borne, una T sobre un cable que viene después en la lista, hoja vacía, nombres (normalizados, vacíos, L y N en una red, paso transitivo, sin nombres) y documento roto.
+  - 1351 tests, check limpio, humo 513/513. Sin banco: no toca el dibujo.
+  - `docs/arquitectura.md`: nota con fecha en el paso 1 de "Motor de simulación" (las redes ya están, sin simular).
 
 **Etapa 1b — Marcha-parada.**
 - `src/core/circuitos/marchaParada.ts` y su test (sección 4), incluida la variante y el caso "n ".

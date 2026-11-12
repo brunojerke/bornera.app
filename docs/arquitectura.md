@@ -104,6 +104,7 @@ Simulación **lógica por conectividad**, no analógica: alcanza para automatism
 **Algoritmo de cada recálculo:**
 
 1. **Armar la netlist:** se agrupan en "redes" todos los bornes unidos por cables (estructura union-find). Además, los bornes de alimentación con el mismo nombre de red (sin espacios a los lados y en mayúsculas) se unen aunque no haya cable, como etiquetas de red: en Fase y Neutro el nombre es la etiqueta del componente; en una fuente trifásica, el nombre de cada borne. Se hace una vez al entrar a simulación.
+   > Nota (2026-11-12): las redes de este paso ya están en `src/core/model/redes.ts` (fase 3, T15), sin simular: `redes(hoja)` une por cables y, con `unirPorNombre`, por nombre. Falta el nombre por borne de la fuente trifásica, que se suma con los símbolos de potencia.
 2. **Unir por contactos cerrados:** cada contacto, pulsador o fusible que conduce une sus dos redes. Las cargas (bobinas, lámparas, motores) nunca unen redes: son los "cortes" del circuito.
 3. **Propagar potenciales:** cada red queda marcada con las fuentes que la alcanzan (L, N, L1, L2, L3, +, −).
 4. **Detectar cortocircuito:** si una misma red recibe L y N, o dos fases distintas, se marca el cortocircuito, se funde el fusible aguas arriba (si hay) o se detiene la simulación con aviso.
