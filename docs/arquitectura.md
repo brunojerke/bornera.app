@@ -256,7 +256,7 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
 3. **Editor:** paleta, colocar, mover, rotar, borrar, cables con codos, selección, deshacer/rehacer.
    - Pasa cuando: se puede dibujar a mano una marcha-parada completa.
    - **3b. Editor, segunda parte** (decisión de Bruno, 2026-11-13; plan en `docs/plan-fase3b.md`): copiar, cortar, pegar y duplicar (T16), etiquetado automático (T17), referencias cruzadas (T18) y validaciones en vivo (T19). Va después de la fase 3, cerrada con la 0.1.3, y antes de la 4.
-     - Pasa cuando: se arma a mano un mando de dos contactores con enclavamiento duplicando la rama de K1, con los contactos bien vinculados a su bobina, las referencias cruzadas correctas y nada marcado en naranja (criterio completo en el plan).
+     - Pasa cuando (confirmado por Bruno el 2026-11-13): se arma a mano una inversión de giro con enclavamiento entre K1 y K2, duplicando la rama de K1 con Ctrl+D, sin bobinas repetidas, con las referencias cruzadas correctas y nada en naranja. El `.brn` dibujado se compara por redes con el archivo congelado `tests/circuitos/inversion.brn` (`npm run circuito`), como en T15. Criterio completo en el plan.
 4. **Guardar y abrir:** formato `.brn`, validación, autoguardado.
    - Nota (2026-11-13): lo básico (formato `.brn` y validación) se adelantó en la fase 3 (T15a), con la fase 3 ya cerrada. En esta fase quedan el autoguardado, las migraciones y los circuitos de referencia (`tests/circuitos/marcha-parada.brn` es el primero).
    - Pasa cuando: guardar → cerrar → abrir deja el circuito idéntico (test automático).

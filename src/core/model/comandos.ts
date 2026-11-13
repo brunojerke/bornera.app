@@ -84,7 +84,8 @@ function idsUnicos(ids: Iterable<string>, comando: string): string[] {
   return lista;
 }
 
-function exigirEntero(valor: number, nombre: string): void {
+/** Tira un RangeError si `valor` no es entero. */
+export function exigirEntero(valor: number, nombre: string): void {
   if (!Number.isInteger(valor)) throw new RangeError(`${nombre} tiene que ser entero (es ${valor}).`);
 }
 

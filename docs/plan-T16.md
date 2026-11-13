@@ -87,8 +87,9 @@
   - `aplicar` valida todo antes de tocar el documento: ningún id repetido, y `validarCable` de cada cable nuevo contra un solo índice (la hoja más el lote). Recién entonces agrega todo al final de las listas.
   - `deshacer` quita los ids en una pasada, con un `Set`. Rehacer aplica de nuevo con los mismos ids.
   - El `Cambio` trae todos los ids.
-- **`problemasPegado(recorte, dx, dy, consulta): Conflicto[]`**:
+- **`problemasPegado(recorte, dx, dy, consulta, contadores): Conflicto[]`** (E1-A, sección 7):
   - Corre `problemasComponente` de cada componente trasladado y `problemasTrazado` de cada cable trasladado contra la hoja existente.
+  - Lo pegado lleva las ids que le daría `pegar` con esos `contadores`, previstas sin gastarlas. Con las ids originales, pegar encima del original no chocaba: las reglas saltean lo que tiene la misma id.
   - Lo que choca dentro del recorte no cuenta, porque es la copia rígida de algo que ya está en la hoja: se ignora la clave "mismo" (un cable consigo mismo). Los bornes y las T de lo pegado no están en la consulta, así que no se revisan entre sí.
   - Los símbolos desconocidos ("?") no tienen geometría y no dan conflicto, igual que hoy.
 
@@ -156,10 +157,11 @@ Una Fase "L1" copiada se pega como "L1", y por nombre es la misma red que la L1 
   - tramos encimados, toque en un vértice, T pegada sobre un cruce existente;
   - extremo libre pegado sobre un borne o un cable existente.
   - En un lugar libre da `[]`. Lo que choca dentro del recorte no cuenta, aunque el original lo tenga.
-- **Al azar con semilla fija** (mulberry32, como `seguir.test.ts:711`):
+- **Al azar con semilla fija** (mulberry32, como `seguir.test.ts:711`), en `tests/portapapeles-banco.test.ts` (E2-A):
   - Documentos del banco con cables y T, selecciones y desplazamientos al azar.
   - Invariantes: `validarHoja` en 0, las cuentas, y deshacer y rehacer exactos.
-  - Si `problemasPegado` da `[]`, **pegar no cambia las redes de lo que ya estaba** (`redes` sin unir por nombre, restringidas a los bornes existentes). Las redes de lo pegado son las del original, trasladadas.
+  - **Pegar no cambia las redes de lo que ya estaba**, y las de lo pegado son las del original trasladadas, comparando con `redes(…, { unirPorNombre: false })` (ajuste de Bruno).
+  - Con `unirPorNombre: true`, pegar una Fase "L1" une a propósito lo pegado con la L1 que ya está (D3-A). Ahí solo se comprueba que cada fuente pegada cae en la red de su nombre y que no aparece otra unión. También hay un caso fijo.
 
 ### Editor
 - **`atajos.test.ts`:** las 7 teclas nuevas, que no se repiten; combinaciones que no son atajo; Mayús+Supr ya no da `null`.
@@ -220,7 +222,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 | Etapa | Qué | Modelo |
 |---|---|---|
 | 0 | Docs: `plan-fase3b.md`, este plan, `arquitectura.md` (fase 3b en la hoja de ruta y la nota de "Editor e interfaz"), `plan-fase3.md`, `SKILL.md` de bornera-inicio y Obsidian. Commit solo de docs. **Hecha.** | Opus (la sesión del plan) |
-| 1 | Núcleo: `portapapeles.ts` (`Recorte`, `recortar`, `pegar`/`Pegar`, `problemasPegado`) con sus tests, los del ajuste 2 y los de al azar. `npm test`, `npm run check` (incluye `check:core`). | Opus xhigh |
+| 1 | Núcleo: `portapapeles.ts` (`Recorte`, `recortar`, `pegar`/`Pegar`, `problemasPegado`) con sus tests, los del ajuste 2 y los de al azar. `npm test`, `npm run check` (incluye `check:core`). **Hecha el 2026-11-13** (sección 7). | Opus xhigh |
 | 2 | Editor: acciones y atajos, `src/editor/portapapeles.ts`, `HerramientaPegar` con previa dinámica, contornos y tope provisorio, y Ctrl+D con paso a la previa. Tests del editor. Prueba a mano en `npm run dev`. | Opus alto |
 | 3 | Humo t16 y banco: escenarios nuevos, `TOPE_PREVIA_PEGAR` medido, regresión contra `v0.1.3`, `docs/bench.md`. Si duplicar 2000 no pasa, `Uniones` (sección 4). | Opus alto |
 | 4 | Cierre: este plan y `plan-fase3b.md`, `arquitectura.md` si hace falta, Obsidian (Bornera.md, nota de medición), `npm run humo` entero. | Sonnet |
@@ -231,3 +233,37 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 - **Dos bobinas K1 al duplicar una rama con su bobina** (D3-A). Se renombra a mano en el panel. T17 decide la numeración al pegar y T19 o la fase 5, el aviso.
 - **Los contadores suben con cada pegado y no bajan al deshacer**, como manda la regla de ids. Con 2000 duplicados, los ids siguientes saltan 5000.
 - **Costo de reflejar 5000 elementos de una vez** (S4) y de `Uniones` (sección 4).
+
+## 7. Etapa 1, hecha (2026-11-13)
+
+**Decisiones de Bruno al aprobar la etapa:**
+
+| D | Elegida | Qué |
+|---|---|---|
+| E1 | **A** | `problemasPegado` recibe los `contadores` y usa las ids que va a dar `pegar` (copia los contadores y llama a `generarId`, sin gastarlas). Para eso `generarId` recibe `Pick<Documento, "contadores">`. |
+| E2 | **A** | Las pruebas al azar y la de costo van en `tests/portapapeles-banco.test.ts`. `documentoBancoCables` está en `src/editor`, y un test de `src/core` no puede importarlo (`tests/arquitectura.test.ts`). |
+| E3 | **sí** | El criterio de la fase 3b mantiene la viñeta del banco y la netbook. |
+| Redes | ajuste | Ver la sección 3 (al azar). |
+
+**Qué quedó:**
+- `src/core/model/portapapeles.ts`: `Recorte`, `recorteVacio`, `recortar`, `pegar`, `Pegar` y `problemasPegado`.
+  - `recortar` usa una lista de trabajo: cada cable con T espera a que entre su anfitrión. Es O(n) con cadenas de T, en cualquier orden de la hoja.
+  - La caja del recorte puede tener medias unidades (un cuerpo de ancho impar). Para Ctrl+D, la etapa 2 usa `Math.ceil(ancho) + 2`.
+  - `Pegar.aplicar` comprueba las ids en una pasada por todas las hojas y arma un solo índice (hoja + lote). `deshacer` quita lo pegado en su lugar, sin cambiar las listas por otras.
+  - `pegar` revisa el recorte (vacío, ids repetidas, extremos que nombran algo de afuera, números no enteros) antes de gastar ids. Así sirve también para un portapapeles serializado.
+- `exigirEntero` ahora se exporta desde `comandos.ts`.
+- Tests:
+  - `src/core/model/portapapeles.test.ts`: 33 casos fijos de la sección 3, incluidos los dos del ajuste 2, "pegar encima del original" (sale de E1) y el caso fijo de Fase y Neutro.
+  - `tests/portapapeles-banco.test.ts`: 60 vueltas al azar (semilla 20261113) sobre 4 bancos de 120 componentes. Unos 9 componentes y 7,5 cables por recorte. De 60 recortes, 26 traen T, 26 extremos libres y 29 cables que entraron por D2a. Más la prueba de costo.
+  - Las ayudas compartidas están en `src/core/model/prueba-portapapeles.ts`. Solo las importan los tests.
+- **Costo** (contado, no cronometrado): construir y aplicar `Pegar` con 2000 componentes y 3030 cables (`documentoBancoCables(2000)`) llama una sola vez a `indexarHoja`, y `deshacer` ninguna. Se cuenta con `vi.mock` de `cables`.
+- **Control de `problemasPegado`:** después de pegar, se revisa la hoja entera, cada elemento contra todo lo demás.
+  - `problemasPegado` no inventa: cada par que da también aparece en la revisión entera.
+  - No se le escapa nada: cada conflicto entre algo pegado y algo existente tiene, en el mismo punto, uno de `problemasPegado` con el mismo elemento existente.
+  - No se exige el mismo par. Si un borne pegado cae sobre un cable existente o sobre su T, desde ese cable se ve un toque o un cruce cable–cable. `problemasPegado` lo da como borne–cable: `problemasTrazado` deja el contacto en el borne de su extremo a `problemasComponente`. Hay ✕ en ese punto y se culpa al mismo cable. Lo encontró el control en los casos fijos.
+- **Verificación:** `npm test` 1417 pasados y 1 salteado (`circuito` sin `BORNERA_BRN`); `npm run check` sin errores, incluido `check:core`; `npm run humo` 541 de 541. Sin banco: la etapa no toca dibujo ni arrastre.
+- **Tiempo de los tests:** la prueba al azar tarda ~1 s sola y unas 3,5 veces más con `npm test` entero. Tiene un límite explícito de 20 s.
+
+**Para la etapa 2:**
+- La previa llama a `problemasPegado(recorte, dx, dy, consulta, doc.contadores)` con la consulta indexada del editor. Las ids previstas coinciden con las de `pegar`, porque entre la previa y el clic no se dan ids.
+- Ojo: `problemasPegado` rehace el traslado, el índice del lote y los recorridos en cada punto. Si la etapa 3 da caro el tope de la previa, el primer cambio es calcularlos una vez y trasladarlos.

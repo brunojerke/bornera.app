@@ -103,9 +103,10 @@ export const PREFIJO_CABLE = "w";
 /**
  * Da un id nuevo ("c1", "c2"…) y sube el contador del documento. No se deshace:
  * así, rehacer o deshacer nunca hace que dos objetos compartan id. Se llama al
- * construir un comando, no al aplicarlo.
+ * construir un comando, no al aplicarlo. Solo usa `contadores`: con una copia
+ * de ellos se pueden prever las ids sin gastarlas (la previa de pegar, T16).
  */
-export function generarId(doc: Documento, prefijo = "c"): string {
+export function generarId(doc: Pick<Documento, "contadores">, prefijo = "c"): string {
   const n = doc.contadores[prefijo] ?? 1;
   doc.contadores[prefijo] = n + 1;
   return `${prefijo}${n}`;

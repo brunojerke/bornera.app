@@ -11,11 +11,14 @@ La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`)
 - referencias cruzadas bajo cada bobina;
 - validaciones en vivo (bornes y cables sueltos en naranja).
 
-**Pasa cuando** (propuesto en la etapa 0 de T16; Bruno lo puede ajustar al planear T17–T19): a partir de la marcha-parada, se arma a mano en 1024×600 un mando con dos contactores, K1 y K2, con enclavamiento eléctrico entre ellos, duplicando la rama de K1 (Ctrl+D) en lugar de dibujarla de nuevo. Al terminar:
-- cada contacto queda vinculado por etiqueta a su bobina, sin bobinas repetidas;
-- las referencias cruzadas bajo K1 y K2 listan sus contactos;
-- las validaciones en vivo no marcan nada en naranja;
+**Pasa cuando** (confirmado por Bruno el 2026-11-13): a partir de la marcha-parada, se arma a mano a 1024×600 una inversión de giro con enclavamiento eléctrico entre K1 y K2. La rama de K2 se hace duplicando la de K1 con Ctrl+D, no dibujándola de nuevo. Al terminar:
+- no hay bobinas repetidas y cada contacto queda vinculado a su bobina por la etiqueta;
+- las referencias cruzadas bajo K1 y K2 son correctas;
+- nada queda en naranja;
+- el `.brn` dibujado se compara por redes con el archivo congelado `tests/circuitos/inversion.brn` usando `npm run circuito`, como en T15;
 - el banco no empeora contra `v0.1.3` en la PC, y la prueba a mano anda en la netbook con Windows.
+
+El armado de referencia, el `inversion.brn` y la comparación se hacen al cerrar la fase, como T15, y se planean después de T19.
 
 ## Reglas
 Las mismas de la fase 3:
@@ -30,6 +33,7 @@ Las mismas de la fase 3:
 - **Qué:** Ctrl+C, Ctrl+X, Ctrl+V y Ctrl+D (también Mayús+Supr, Ctrl+Insert y Mayús+Insert). Un solo paso de deshacer y conflictos con la misma regla que Colocar.
 - **Plan:** `docs/plan-T16.md`, aprobado el 2026-11-13.
 - **Etapa 0 (docs):** hecha.
+- **Etapa 1 (núcleo, `src/core/model/portapapeles.ts`):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 7.
 
 ### T17. Etiquetado automático
 - **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Decidir también qué etiqueta lleva lo pegado: T16 la conserva (D3-A de `docs/plan-T16.md`).
