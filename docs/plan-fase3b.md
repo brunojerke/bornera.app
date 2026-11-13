@@ -34,6 +34,7 @@ Las mismas de la fase 3:
 - **Plan:** `docs/plan-T16.md`, aprobado el 2026-11-13.
 - **Etapa 0 (docs):** hecha.
 - **Etapa 1 (núcleo, `src/core/model/portapapeles.ts`):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 7.
+- **Etapa 2 (editor: atajos, `HerramientaPegar`, Ctrl+D):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 8.
 
 ### T17. Etiquetado automático
 - **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Decidir también qué etiqueta lleva lo pegado: T16 la conserva (D3-A de `docs/plan-T16.md`).

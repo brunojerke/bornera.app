@@ -78,6 +78,14 @@
 // sigue oculto, y después vuelve a la estática. Soltar en vacío o en un destino
 // que no vale, Esc, el botón derecho o un cambio del documento: vuelve como
 // estaba, sin paso. Las uniones nuevas aparecen al soltar.
+//
+// Portapapeles (T16, docs/plan-T16.md): copiar guarda un `Recorte` de la
+// selección en el portapapeles del módulo (portapapeles.ts); cortar es
+// copiar más un `Borrar`, en un paso. Pegar abre la `HerramientaPegar`, una
+// previa flotante que se suelta con un clic en un solo `Pegar`. Duplicar
+// (Ctrl+D) no toca el portapapeles: pega al lado en un paso, o, si choca, abre
+// la previa ahí para correrla. Lo pegado queda seleccionado. La previa va en
+// la capa dinámica y no invalida mosaicos.
 
 import { hayCablesEn, indexarHoja, puntoSobreRecorrido, recorridoCable, type IndiceHoja } from "../core/model/cables";
 import { Borrar, CambiarEtiqueta, CambiarExtremo, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
@@ -103,6 +111,7 @@ import {
 } from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { Historial, type MarcaGuardado } from "../core/model/historial";
+import { pegar, problemasPegado, recortar, recorteVacio, type Recorte } from "../core/model/portapapeles";
 import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
@@ -113,7 +122,10 @@ import type { Renderer } from "../render/renderer";
 import { dibujarCablesArrastre, dibujarCableEnCurso, dibujarCruces, dibujarMarcasCable, type DibujoCableEnCurso } from "../render/cableEnCurso";
 import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
-import type { Accion } from "./atajos";
+import { esDePortapapeles, type Accion, type AccionPortapapeles } from "./atajos";
+import { armarDibujoPegado, dibujarPegado, type DibujoPegado } from "./dibujoPegar";
+import { guardarRecorte, recorteGuardado } from "./portapapeles";
+import { HerramientaPegar } from "./herramientas/pegar";
 import { BornesConCable } from "./bornesConCable";
 import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
@@ -206,6 +218,17 @@ export const TOPE_CABLES_PREVIA = 40;
 export function textoReducido(cables: number): string {
   return `${cables} cables se acomodan al soltar; recién ahí se revisa si se puede.`;
 }
+
+/** Avisos del portapapeles (T16, E6). */
+export const AVISO_NADA_PARA_COPIAR = "Nada seleccionado para copiar.";
+export const AVISO_NADA_PARA_CORTAR = "Nada seleccionado para cortar.";
+export const AVISO_NADA_PARA_DUPLICAR = "Nada seleccionado para duplicar.";
+export const AVISO_NADA_PARA_PEGAR = "No hay nada para pegar.";
+export const AVISO_DUPLICAR_SIN_LUGAR = "No hay lugar al lado: mové la copia y hacé clic para soltarla.";
+/** Solo cables seleccionados y ninguno con sus dos extremos en lo elegido: el recorte queda vacío (D2b-A). */
+export const AVISO_RECORTE_VACIO = "Lo seleccionado no se puede copiar: un cable entra solo con sus dos extremos en lo copiado.";
+/** Con un tramo en curso, ni copiar ni pegar. */
+export const AVISO_ESC_CABLE = "Esc cancela el cable en curso.";
 
 /** Aviso cuando el documento cambia por otra vía en medio de un arrastre. */
 export const AVISO_ARRASTRE_CANCELADO = "El documento cambió: se canceló el arrastre.";
@@ -331,8 +354,8 @@ export class Editor {
   readonly escena = new EscenaEditable();
   /** Vista que muestra la escena; null si no se está mostrando (no hay nada que invalidar). */
   vista: DestinoVista | null = null;
-  /** Herramienta elegida (Colocar o Cable); null si no hay ninguna y está la de selección. */
-  herramienta: HerramientaColocar | HerramientaCable | null = null;
+  /** Herramienta elegida (Colocar, Cable o Pegar); null si no hay ninguna y está la de selección. */
+  herramienta: HerramientaColocar | HerramientaCable | HerramientaPegar | null = null;
   /** Se avisa cuando empieza o termina una herramienta (para la paleta). */
   alCambiarHerramienta: (() => void) | null = null;
   /**
@@ -386,6 +409,8 @@ export class Editor {
   /** Mediciones con la sonda (ms), desde la última vez que se leyeron con `tomarMuestras`. */
   private muestras: number[] = [];
   private readonly desconocidos = new Set<string>();
+  /** Lo que dibuja la previa de pegar, armado una vez por recorte. */
+  private dibujoPegado: DibujoPegado | null = null;
 
   constructor(
     readonly documento: Documento = documentoNuevo(),
@@ -441,6 +466,11 @@ export class Editor {
     return this.herramienta instanceof HerramientaColocar ? this.herramienta : null;
   }
 
+  /** La previa de pegar (T16), si es la herramienta activa. */
+  get pegando(): HerramientaPegar | null {
+    return this.herramienta instanceof HerramientaPegar ? this.herramienta : null;
+  }
+
   /** Hay un cable en curso con la herramienta W. */
   get enTramo(): boolean {
     return this.cable?.enTramo ?? false;
@@ -458,7 +488,7 @@ export class Editor {
    * volver a una posición que vale.
    */
   get pista(): string | null {
-    return this.cable?.pista ?? this.colocar?.pista ?? this.pistaReconexion() ?? this.pistaArrastre();
+    return this.cable?.pista ?? this.colocar?.pista ?? this.pegando?.pista ?? this.pistaReconexion() ?? this.pistaArrastre();
   }
 
   /** Hay una reconexión de un extremo libre en curso (cursor en cruz). */
@@ -687,10 +717,37 @@ export class Editor {
         return a === "deshacer" && this.deshacer() !== null;
       }
       if (a === "rehacer") return !w.enTramo && this.rehacer() !== null;
+      // Copiar, cortar, pegar y duplicar: nada. Con un tramo, se avisa cómo cancelarlo.
+      if (esDePortapapeles(a) && w.enTramo) this.alAvisar?.(AVISO_ESC_CABLE);
       return false;
     }
     if (a === "borrarAtras") a = "borrar";
+    const pg = this.pegando;
+    if (pg) {
+      // Con la previa de pegar: Ctrl+V vuelve a empezar con el portapapeles,
+      // en el mismo punto; deshacer y rehacer valen (la previa se revisa de
+      // nuevo al reflejar); lo demás no hace nada.
+      if (a === "pegar") {
+        const r = recorteGuardado();
+        if (!r) return false;
+        this.aplicar(pg.reemplazar(r));
+        return true;
+      }
+      if (a === "deshacer") return this.deshacer() !== null;
+      if (a === "rehacer") return this.rehacer() !== null;
+      return false;
+    }
     const h = this.colocar;
+    if (h && esDePortapapeles(a)) {
+      // Colocando: Ctrl+V termina Colocar y empieza a pegar; lo demás, nada.
+      if (a !== "pegar" || h.modo === "arrastre") return false;
+      if (!recorteGuardado()) {
+        this.alAvisar?.(AVISO_NADA_PARA_PEGAR);
+        return false;
+      }
+      this.aplicar(h.terminar());
+      return this.portapapeles(a);
+    }
     if (h) {
       // Colocando: girar y espejar cambian la vista previa (también mientras
       // se arrastra desde la paleta).
@@ -712,6 +769,7 @@ export class Editor {
       case "rehacer":
         return this.rehacer() !== null;
     }
+    if (esDePortapapeles(a)) return this.portapapeles(a);
     const ids = this.idsSeleccionados();
     if (ids.length === 0) return false;
     if (a === "borrar") {
@@ -729,6 +787,96 @@ export class Editor {
     const opciones = { entorno: this.entornoPlan, plan: r.plan };
     this.ejecutar(op.tipo === "rotar" ? new Rotar(ids, op.sentido, opciones) : new Espejar(ids, opciones));
     return true;
+  }
+
+  /**
+   * Copiar, cortar, pegar o duplicar, ya sin herramienta que lo impida ni
+   * gesto en curso. True si hizo algo (un paso, o abrir la previa).
+   */
+  private portapapeles(a: AccionPortapapeles): boolean {
+    if (a === "pegar") {
+      const r = recorteGuardado();
+      if (!r) {
+        this.alAvisar?.(AVISO_NADA_PARA_PEGAR);
+        return false;
+      }
+      return this.iniciarPegar(r) !== null;
+    }
+    const ids = this.idsSeleccionados();
+    if (ids.length === 0) {
+      this.alAvisar?.(a === "copiar" ? AVISO_NADA_PARA_COPIAR : a === "cortar" ? AVISO_NADA_PARA_CORTAR : AVISO_NADA_PARA_DUPLICAR);
+      return false;
+    }
+    const hoja = this.documento.hojas[this.hoja];
+    if (!hoja) return false;
+    const r = recortar(hoja, ids);
+    if (recorteVacio(r)) {
+      this.alAvisar?.(AVISO_RECORTE_VACIO);
+      return false;
+    }
+    if (a === "copiar") {
+      guardarRecorte(r);
+      return true;
+    }
+    if (a === "cortar") {
+      guardarRecorte(r);
+      this.borrarSeleccion(ids);
+      return true;
+    }
+    return this.duplicar(r);
+  }
+
+  /**
+   * Ctrl+D (D4-B, D5-C): pega `r` al lado, con dx = ancho de su caja
+   * (redondeado para arriba) + 2. Una sola revisión, sin tope. Si vale, un
+   * paso y queda seleccionado lo pegado; si choca, avisa y abre la previa ahí,
+   * con sus ✕, para correrla. No toca el portapapeles.
+   */
+  private duplicar(r: Recorte): boolean {
+    const lado = { dx: Math.ceil(r.caja?.ancho ?? 0) + 2, dy: 0 };
+    const conflictos = this.revisarPegado(r, lado.dx, lado.dy);
+    if (conflictos.length === 0) {
+      const cmd = this.crearPegado(r, lado.dx, lado.dy);
+      this.ejecutar(cmd);
+      this.seleccionarIds(cmd.ids);
+      return true;
+    }
+    this.alAvisar?.(AVISO_DUPLICAR_SIN_LUGAR);
+    return this.iniciarPegar(r, { lado, conflictos }) !== null;
+  }
+
+  /**
+   * Abre la previa de pegar `r`: flotante bajo el mouse (Ctrl+V) o, con
+   * `duplicar`, al lado y con sus conflictos. Sin vista no hace nada.
+   */
+  iniciarPegar(r: Recorte, duplicar?: { lado: { dx: number; dy: number }; conflictos: readonly Conflicto[] }): HerramientaPegar | null {
+    if (!this.vista) return null;
+    const h = new HerramientaPegar(
+      r,
+      duplicar ? "duplicar" : "pegar",
+      (rc, dx, dy) => this.revisarPegado(rc, dx, dy),
+      (rc, dx, dy) => this.crearPegado(rc, dx, dy),
+      duplicar,
+    );
+    this.ponerHerramienta(h);
+    if (duplicar) this.vista.invalidar();
+    return h;
+  }
+
+  /** Conflictos de pegar `r` desplazado, con la consulta y los contadores de ahora. */
+  private revisarPegado(r: Recorte, dx: number, dy: number): Conflicto[] {
+    return problemasPegado(r, dx, dy, this.consulta, this.documento.contadores);
+  }
+
+  /** El comando que pega `r` desplazado en esta hoja (da las ids ahora). */
+  private crearPegado(r: Recorte, dx: number, dy: number) {
+    return pegar(this.documento, r, dx, dy, this.hoja);
+  }
+
+  /** Lo que dibuja la previa de `r` (se arma una vez por recorte). */
+  private dibujoDe(r: Recorte): DibujoPegado {
+    if (this.dibujoPegado?.recorte !== r) this.dibujoPegado = armarDibujoPegado(r, (tipo) => buscarSimbolo(tipo) ?? SIMBOLO_DESCONOCIDO);
+    return this.dibujoPegado;
   }
 
   /**
@@ -924,7 +1072,7 @@ export class Editor {
   }
 
   /** Cambia la herramienta activa y avisa (la paleta, los botones de deshacer y la pista). */
-  private ponerHerramienta(h: HerramientaColocar | HerramientaCable): void {
+  private ponerHerramienta(h: HerramientaColocar | HerramientaCable | HerramientaPegar): void {
     const habiaCable = this.cable !== null;
     this.herramienta = h;
     this.alCambiarHerramienta?.();
@@ -956,8 +1104,9 @@ export class Editor {
       this.avisarPista();
       this.vista?.invalidar();
     }
-    // Colocando en modo clic, deshacer o rehacer pueden cambiar si la previa vale.
-    if (this.colocar?.revisarDeNuevo()) {
+    // Colocando en modo clic, o con la previa de pegar, deshacer o rehacer
+    // pueden cambiar si la previa vale.
+    if (this.colocar?.revisarDeNuevo() || this.pegando?.revisarDeNuevo()) {
       this.avisarPista();
       this.vista?.invalidar();
     }
@@ -1336,6 +1485,11 @@ export class Editor {
       }
       const d = w.dibujo;
       if (d) dibujarCableEnCurso(r, info, d);
+      return;
+    }
+    const pp = this.pegando?.previa;
+    if (pp) {
+      dibujarPegado(r, info, this.dibujoDe(pp.recorte), pp.dx, pp.dy, pp.conflictos, LIMITE_ARRASTRE_COMPLETO);
       return;
     }
     const p = this.colocar?.previa;

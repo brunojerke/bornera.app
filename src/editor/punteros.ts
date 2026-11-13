@@ -216,9 +216,20 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     // Aunque el editor la ignore (en medio de un arrastre), la tecla es
     // nuestra: Ctrl+Y no abre el historial del navegador.
     e.preventDefault();
+    const habiaPrevia = editor.pegando;
     editor.accion(accion);
+    // Pegar o duplicar abrió una previa nueva: con el mouse sobre el lienzo,
+    // aparece ahí sin esperar a que se mueva (y Ctrl+D toma ese punto como
+    // referencia, E5-A). Si ya estaba abierta, sigue en su punto.
+    if (editor.pegando && editor.pegando !== habiaPrevia) alPuntoActual();
     actualizarCursor();
   };
+
+  /** Le pasa a la herramienta activa el último punto del mouse sobre el lienzo, si lo hay. */
+  function alPuntoActual() {
+    if (arrastrando || !ultimo || !editando()) return;
+    editor.aplicar(editor.activa.mover(evento({ ...ultimo, button: 0, shiftKey: false, ctrlKey: false })));
+  }
 
   function terminarArrastre() {
     quitarArrastre?.();
@@ -290,8 +301,7 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   return {
     desdePaleta,
     refrescar() {
-      if (arrastrando || !ultimo || !editor.cable || !editando()) return;
-      editor.aplicar(editor.activa.mover(evento({ ...ultimo, button: 0, shiftKey: false, ctrlKey: false })));
+      if (editor.cable || editor.pegando) alPuntoActual();
     },
     desconectar() {
       terminarArrastre();

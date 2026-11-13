@@ -23,7 +23,22 @@ describe("accionDeTecla", () => {
     ["Bloq Mayús + W", t("W"), "cable"],
     ["Mayús+W: libre", t("W", { mayus: true }), null],
     ["Ctrl+W (cerrar): nada", t("w", { ctrl: true }), null],
-    ["Mayús+Supr: libre (cortar)", t("Delete", { mayus: true }), null],
+    ["Mayús+Supr: cortar", t("Delete", { mayus: true }), "cortar"],
+    ["Ctrl+C", t("c", { ctrl: true }), "copiar"],
+    ["Ctrl+C con Bloq Mayús", t("C", { ctrl: true }), "copiar"],
+    ["Ctrl+Insert: copiar", t("Insert", { ctrl: true }), "copiar"],
+    ["Ctrl+X", t("x", { ctrl: true }), "cortar"],
+    ["Ctrl+V", t("v", { ctrl: true }), "pegar"],
+    ["Mayús+Insert: pegar", t("Insert", { mayus: true }), "pegar"],
+    ["Ctrl+D", t("d", { ctrl: true }), "duplicar"],
+    ["Insert solo: nada", t("Insert"), null],
+    ["Ctrl+Mayús+C: nada", t("C", { ctrl: true, mayus: true }), null],
+    ["Ctrl+Mayús+X: nada", t("X", { ctrl: true, mayus: true }), null],
+    ["Ctrl+Mayús+V: nada", t("V", { ctrl: true, mayus: true }), null],
+    ["Ctrl+Mayús+D: nada", t("D", { ctrl: true, mayus: true }), null],
+    ["Ctrl+Mayús+Insert: nada", t("Insert", { ctrl: true, mayus: true }), null],
+    ["Alt+Ctrl+V (AltGr): nada", t("v", { ctrl: true, alt: true }), null],
+    ["C, X, V y D sin Ctrl: nada", t("c"), null],
     ["Ctrl+Z", t("z", { ctrl: true }), "deshacer"],
     ["Ctrl+Z con Bloq Mayús", t("Z", { ctrl: true }), "deshacer"],
     ["Ctrl+Y", t("y", { ctrl: true }), "rehacer"],
@@ -47,6 +62,15 @@ describe("accionDeTecla", () => {
       expect(accionDeTecla(t(k, { repeat: true }))).toBeNull();
     }
     expect(accionDeTecla(t("R", { mayus: true, repeat: true }))).toBeNull();
+  });
+
+  it("copiar, cortar, pegar y duplicar no se repiten al mantener la tecla", () => {
+    for (const k of [t("c", { ctrl: true }), t("x", { ctrl: true }), t("v", { ctrl: true }), t("d", { ctrl: true })]) {
+      expect(accionDeTecla({ ...k, repeat: true })).toBeNull();
+    }
+    expect(accionDeTecla(t("Insert", { ctrl: true, repeat: true }))).toBeNull();
+    expect(accionDeTecla(t("Insert", { mayus: true, repeat: true }))).toBeNull();
+    expect(accionDeTecla(t("Delete", { mayus: true, repeat: true }))).toBeNull();
   });
 
   it("deshacer y rehacer sí se repiten", () => {

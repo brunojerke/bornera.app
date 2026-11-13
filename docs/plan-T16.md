@@ -223,7 +223,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 |---|---|---|
 | 0 | Docs: `plan-fase3b.md`, este plan, `arquitectura.md` (fase 3b en la hoja de ruta y la nota de "Editor e interfaz"), `plan-fase3.md`, `SKILL.md` de bornera-inicio y Obsidian. Commit solo de docs. **Hecha.** | Opus (la sesión del plan) |
 | 1 | Núcleo: `portapapeles.ts` (`Recorte`, `recortar`, `pegar`/`Pegar`, `problemasPegado`) con sus tests, los del ajuste 2 y los de al azar. `npm test`, `npm run check` (incluye `check:core`). **Hecha el 2026-11-13** (sección 7). | Opus xhigh |
-| 2 | Editor: acciones y atajos, `src/editor/portapapeles.ts`, `HerramientaPegar` con previa dinámica, contornos y tope provisorio, y Ctrl+D con paso a la previa. Tests del editor. Prueba a mano en `npm run dev`. | Opus alto |
+| 2 | Editor: acciones y atajos, `src/editor/portapapeles.ts`, `HerramientaPegar` con previa dinámica, contornos y tope provisorio, y Ctrl+D con paso a la previa. Tests del editor. Prueba a mano en `npm run dev`. **Hecha el 2026-11-13** (sección 8). | Opus alto |
 | 3 | Humo t16 y banco: escenarios nuevos, `TOPE_PREVIA_PEGAR` medido, regresión contra `v0.1.3`, `docs/bench.md`. Si duplicar 2000 no pasa, `Uniones` (sección 4). | Opus alto |
 | 4 | Cierre: este plan y `plan-fase3b.md`, `arquitectura.md` si hace falta, Obsidian (Bornera.md, nota de medición), `npm run humo` entero. | Sonnet |
 
@@ -267,3 +267,74 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 **Para la etapa 2:**
 - La previa llama a `problemasPegado(recorte, dx, dy, consulta, doc.contadores)` con la consulta indexada del editor. Las ids previstas coinciden con las de `pegar`, porque entre la previa y el clic no se dan ids.
 - Ojo: `problemasPegado` rehace el traslado, el índice del lote y los recorridos en cada punto. Si la etapa 3 da caro el tope de la previa, el primer cambio es calcularlos una vez y trasladarlos.
+
+## 8. Etapa 2, hecha (2026-11-13)
+
+**Decisiones de Bruno al aprobar la etapa:**
+
+| D | Elegida | Qué |
+|---|---|---|
+| E4 | **A** | Los atajos con el foco en un campo, con un diálogo y en Simular se prueban en Vitest (`src/editor/punteros.test.ts`), con `window`, `document` y `HTMLElement` falsos. Sin dependencias nuevas. |
+| E5 | **A** | La previa de Ctrl+D que choca toma como referencia el punto del mouse sobre el lienzo al apretar Ctrl+D; si el mouse está afuera, el primero al entrar. No salta. |
+| E6 | textos | "Nada seleccionado para copiar." (igual con cortar y duplicar), "No hay nada para pegar." y "No hay lugar al lado: mové la copia y hacé clic para soltarla.". |
+
+**Ajustes de Bruno:**
+1. Al clic de soltar se revisa siempre de nuevo, con cualquier tamaño, con la consulta y los `doc.contadores` de ese momento.
+2. El recorte guardado es una copia: cambiar, mover o borrar el original después de copiar no cambia lo que se pega.
+3. Con la previa abierta: Ctrl+V reemplaza el recorte y sigue en el mismo punto; Ctrl+C, Ctrl+X y Ctrl+D no hacen nada; Ctrl+Z deshace y la previa se revisa de nuevo.
+4. Si la previa necesitaba un dibujo propio en `render/`, avisar antes. **No hizo falta:** el dibujo está en `src/editor/dibujoPegar.ts` y usa las primitivas de `render/` que ya había.
+
+**Control de la etapa 1 (pedido al aprobar):** `comprobarControl` (`src/core/model/prueba-portapapeles.ts:186`) ya compara en las dos direcciones: lo que da la previa está en la revisión de la hoja entera (l. 189), y cada conflicto cruzado de la hoja entera está en la previa, en el mismo punto y con el mismo elemento existente (l. 193). No se agregó nada.
+
+**Qué quedó:**
+- `src/editor/atajos.ts`: `Accion` suma `copiar`, `cortar`, `pegar` y `duplicar` (con `esDePortapapeles`). Ctrl+C y Ctrl+Insert, Ctrl+X y Mayús+Supr, Ctrl+V y Mayús+Insert, Ctrl+D. Ninguna se repite al mantener la tecla. Con Ctrl+Mayús, nada.
+- `src/editor/portapapeles.ts`: el recorte guardado, de módulo (sobrevive a Ctrl+N y Ctrl+O).
+- `src/editor/herramientas/pegar.ts`: `HerramientaPegar`, con los modos "pegar" y "duplicar", `reemplazar` (Ctrl+V con la previa abierta), `revisarDeNuevo` y `TOPE_PREVIA_PEGAR = 80` (provisorio).
+- `src/editor/dibujoPegar.ts`: la previa en la capa dinámica, armada una vez por recorte y dibujada trasladada. Con más de `LIMITE_ARRASTRE_COMPLETO` componentes a la vista, solo contornos (un `rectangulos`).
+- `src/editor/editor.ts`: `accion` con las reglas de la sección 2, `iniciarPegar`, `pegando`, la pista y `refrescarHerramienta`.
+- `src/editor/punteros.ts`: si pegar o duplicar abren una previa nueva, se le pasa el último punto del mouse sobre el lienzo. `refrescar` (cámara) también la mueve.
+- **Aviso nuevo, no previsto en E6:** si la selección son solo cables sin sus dos extremos en lo elegido, el recorte queda vacío (D2b-A). Avisa "Lo seleccionado no se puede copiar: un cable entra solo con sus dos extremos en lo copiado." y no toca el portapapeles. Bruno puede cambiar el texto.
+- **Detalle:** Ctrl+Z no baja los contadores. Por eso el test del ajuste 1 los sube con una bobina puesta por otra vía y después la deshace. Las ids pegadas son las de los contadores de ese momento (`c83`, no `c82`).
+
+**Tests:**
+- `src/editor/atajos.test.ts`: las 7 teclas, que no se repiten, combinaciones que no son atajo, y Mayús+Supr ahora corta.
+- `src/editor/portapapeles.test.ts` (24):
+  - copiar, cortar, pegar y duplicar;
+  - el portapapeles que sobrevive a un `Editor` nuevo;
+  - el recorte como copia;
+  - con W y con tramo; en un arrastre; con Colocar;
+  - con la previa abierta (Ctrl+C, X, D, V y Z);
+  - Ctrl+D al lado, en fila, sin tocar el portapapeles, y el paso a la previa flotante;
+  - los dos casos del ajuste 2 con Ctrl+V y con Ctrl+D;
+  - la previa no invalida mosaicos: 4 cuadros en 6 movimientos y 0 regiones;
+  - Esc y el botón derecho sin paso;
+  - el ajuste 1 en modo reducido (81 bobinas);
+  - las ids de los cables;
+  - los contornos con más de 80.
+- `src/editor/herramientas/pegar.test.ts` (10): la mecánica de la herramienta con `revisar` y `crear` falsos.
+- `src/editor/punteros.test.ts` (8, E4-A):
+  - con el foco en la etiqueta o en el buscador, en Simular y con un diálogo, ni Ctrl+C, X, V y D ni Ctrl+Insert, Mayús+Insert y Mayús+Supr llegan al editor, y tampoco hacen `preventDefault`;
+  - Ctrl+V con el mouse sobre el lienzo muestra la previa ahí.
+- Mutación de control: sin la revisión al clic fallan los 3 tests del ajuste 1.
+
+**Prueba en la app real:** un script de humo temporal en Chrome headless a 1024×600, con capturas, borrado antes del commit (el humo t16 es de la etapa 3). Dio 16 de 16:
+- armar bobina, lámpara y cable, y seleccionar con el rectángulo;
+- Ctrl+C y Ctrl+V con la previa, y el clic que pega y deja seleccionado lo pegado;
+- Ctrl+D al lado;
+- la previa sobre el original, en aviso con ✕ y la pista, y el clic que no pega;
+- Esc;
+- Ctrl+Z y Ctrl+Y;
+- Mayús+Supr;
+- con el foco en el buscador, Ctrl+V no abre la previa; en Simular, tampoco.
+
+Las capturas muestran la previa en acento cuando vale y en aviso con ✕ cuando choca. La copia de Ctrl+D quedó fuera de la vista, como dice el riesgo de la sección 6.
+
+**Verificación:**
+- `npm test`: 1475 pasados y 1 salteado (`circuito`).
+- `npm run check`: sin errores, incluido `check:core`.
+- `npm run humo`: 541 de 541.
+- Sin banco: la etapa no cambia los caminos de dibujo que ya existen; solo suma una rama de la capa dinámica cuando hay previa. El banco va en la etapa 3.
+
+**Para la etapa 3:**
+- Humo `t16-copiar-pegar.mjs` (sección 4). El script temporal sirve de base: el cable se cierra con un clic sobre un borne, no en un punto libre.
+- Medir `TOPE_PREVIA_PEGAR`. La previa en modo reducido sigue dibujando todos los tramos de los cables (un `lineas` por cuadro); los componentes, solo los que están a la vista.
