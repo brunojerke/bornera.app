@@ -256,6 +256,7 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
 3. **Editor:** paleta, colocar, mover, rotar, borrar, cables con codos, selección, deshacer/rehacer.
    - Pasa cuando: se puede dibujar a mano una marcha-parada completa.
 4. **Guardar y abrir:** formato `.brn`, validación, autoguardado.
+   - Nota (2026-11-13): lo básico (formato `.brn` y validación) se adelantó en la fase 3 (T15a), con la fase 3 ya cerrada. En esta fase quedan el autoguardado, las migraciones y los circuitos de referencia (`tests/circuitos/marcha-parada.brn` es el primero).
    - Pasa cuando: guardar → cerrar → abrir deja el circuito idéntico (test automático).
 5. **Simulación de mando:** fuentes, pulsadores, contactor, contactos auxiliares, lámpara, modo simular.
    - Pasa cuando: la marcha-parada con enclavamiento funciona y su test pasa.

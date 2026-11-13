@@ -479,7 +479,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **T15a cerrada (2026-11-12) con el criterio de la PC de Bruno.** Etapas: 1, núcleo (`29062c9`); 2, gzip, nombre y marca de guardado (`794c086`); 3a, Guardar y Guardar como en el navegador (`96eb3cf`); 3b, Abrir y Nuevo (`c900ed7`); 4, escritorio en Windows (`6bb5227`); 5, cierre (este commit).
   - **PC:** 1338 tests, check limpio, humo 513/513, banco de control con 0 cuadros lentos en 2 de 3 corridas (en la primera, 2 cuadros de 17–19 ms con todo seleccionado al 31 %, que no se repiten: ruido; T15a no toca el dibujo).
   - **Prueba a mano en `tauri dev` (Bruno):** guardar nuevo, sin extensión, pisar, Guardar como sobre uno existente, Abrir, `tildes.brn`, dañado, cerrar con cambios (3 botones), Ctrl+N y Ctrl+R con cambios: bien. **D20 en la PC**, 2000 con cables: guardado 53 ms, abierto 95 ms.
-  - **Pendiente en la netbook con Windows, con la prerelease alpha.11 (sin fecha):** los criterios "En la netbook" de `docs/plan-T15a.md` (D20 ≤ 1 s y línea base, banco de control, tildes), más guardar sobre un archivo bloqueado (PowerShell) y las teclas de recarga y el menú contextual en la app compilada.
+  - **Netbook con Windows, alpha.11 (2026-11-13), hecho en la etapa 6 de T15:** abrir la escena 200 ms, guardar 2000 en 117 ms (D20 ≤ 1 s), tildes, archivo bloqueado, teclas de recarga y menú contextual, todo bien. Ver "Medición 0.1.3-alpha.11 - netbook Windows" en Obsidian.
 
 ### T15. Aceptación: marcha-parada
 - **Qué:**
@@ -490,12 +490,20 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
   - `npm run bench` y medición F3.
 - **Terminado cuando:** el test pasa, se dibuja a mano sin trabas en 1024×600 y el banco no empeora más de 10 % respecto de 0.1.2.
 - **Cierre:** versión 0.1.3, nota "Medición 0.1.3 - netbook.md" y fase 3 tildada en Bornera.md.
+- **T15 cerrada y fase 3 cerrada (2026-11-13)**, con la netbook con Windows y la alpha.11. La nota de la netbook se llama "Medición 0.1.3-alpha.11 - netbook Windows". Falta, con autorización de Bruno, el commit de versión 0.1.3, el push, los tags y la release.
+  - **Marcha-parada a mano:** sin trabas, máximo 2 ms al dibujar y 7,6 ms al encuadrar. `npm run circuito`: misma partición que la base (4 redes, 12 bornes), después de agregar en la PC las etiquetas y la lámpara que faltaban (a favor de T17 y T19).
+  - **Línea base de Windows** (2000 + 3000 cables, 58 %, con caché): dibujo 1,3 / 5,7 ms, 0 lentos, soltar con todo 82 ms, nítida 148 ms, previa con 300 cables 56 ms. Mint con la alpha.7: 6,8 / 17 ms, 77–114 ms, ~500 ms, 91 ms.
+  - ***Encuadrar (F)* con 2000 en la netbook:** máximo 10 ms, 0 lentos. Optimizarlo (D16-A) pasa a **prioridad baja**.
+  - Una sola Bornera instalada: la 0.1.3 se instala encima de la alpha sin desinstalar.
 - **Plan:** `docs/plan-T15.md` (aprobado el 2026-11-12, D1 a D9; D9-A: con F3 la meta de 0.1.2 se aproxima).
   - Etapa 1a, redes por union-find (`src/core/model/redes.ts`): hecha (`fe8b5c4`).
   - Etapa 1b, marcha-parada armada con comandos (`src/core/circuitos/marchaParada.ts`): hecha (`15f9708`).
   - Etapa 2, documento base para la fase 4 (`tests/circuitos/marcha-parada.brn`) y `npm run circuito` para comparar el dibujo a mano: hecha (`81d8acf`).
   - Etapa 3, humo `t15-marcha-parada.mjs` a 1024×600: hecha (`e137ea8`).
   - Etapa 4, banco contra 0.1.2 en la PC: **hecha con resultado "no pasa, causa conocida"** (este commit; la opción `--escena-012` del banco, en `2a2df4f`). *Encuadrar (F)* con 2000 no pasa: +20 % de trabajo por gesto, por T14n más lo acumulado desde T2 (D16-A; pendiente aparte arriba). *Arrastre al 31 %* con 500 y 2000, solo con la escena de 0.1.2: no pasa por resolución del reloj (0,05 ms). 0 cuadros lentos. Ver `docs/bench.md`, "Contra 0.1.2".
+  - Etapa 5, versión 0.1.3-alpha.11: publicada (`9251c49`).
+  - Etapa 6, netbook con Windows: **hecha el 2026-11-13, todo pasa** (ver arriba).
+  - Etapa 7, cierre: docs y Obsidian al día; versión 0.1.3, push y release esperan autorización.
 
 ### Fuera del criterio de pasaje (se pueden diferir)
 Están en la sección "Editor" del plan, pero el criterio de la fase no los pide:

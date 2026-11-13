@@ -4,6 +4,8 @@
 
 > **Las redes por union-find no existían.** Al planear no había netlist ni función de redes de la hoja. Lo que había: `nodoExtremo` (a qué nodo conecta un extremo, `src/core/model/cables.ts:225`, anotado como "base de las redes (T15)") y un union-find **local a un punto** para los puntos de unión de T14b (`unionEnPunto`, `src/core/model/uniones.ts:57`), que no arma redes. `src/core/sim/` está vacía. La etapa 1a las escribe en `src/core/model/redes.ts` (D2-B).
 
+> **T15 cerrada el 2026-11-13** con la prueba en la netbook con Windows (alpha.11): etapa 6 y cierre en la etapa 7. Queda con tu autorización la versión 0.1.3, el push y la release.
+
 **Estado de git al planear (verificado):** `main` en `4279fe4` (T15a cerrada), 8 commits sin push, árbol limpio.
 
 ## Decisiones (Bruno, 2026-11-12)
@@ -287,11 +289,12 @@ Agregados de Bruno (2026-11-13, al aprobar la etapa 3):
 5. Volver a abrir la app y Abrir el archivo: el mismo dibujo, el título sin "•" y Deshacer desactivado.
 6. Traer `marcha-parada.brn` a la PC y correr el comando de D8-B: misma partición que la base. En PowerShell, en la carpeta del repo (la ruta, la del archivo traído):
    ```powershell
-   $env:BORNERA_BRN = "C:\Users\jerke\Downloads\marcha-parada.brn"; npm run circuito; Remove-Item Env:BORNERA_BRN
+   $env:BORNERA_BRN = "C:\Users\jerke\Downloads\marcha-parada.brn"; npm.cmd run circuito; Remove-Item Env:BORNERA_BRN
    ```
    - **Pasa:** «✓ … misma partición de bornes que la base» y la línea «misma partición que la base (4 redes, 12 bornes)».
    - **Falla:** la lista de diferencias. Por ejemplo, «Falta "H1" (senalizacion.lampara).», «Sobra "L1" (fuente.fase, c9): fuente con un nombre de red nuevo.» o «Se partió la red {S1·14, K1·14, K1·A1, H1·X1}: quedó en {S1·14, K1·A1, H1·X1} y {K1·14}.».
    - Sin la variable, el test se saltea («1 skipped»). `Remove-Item` la borra para que no quede en la terminal.
+   - **Hallazgo de la netbook (2026-11-13):** en PowerShell, `npm` resuelve a `npm.ps1` y la política de ejecución lo bloquea. Se usa `npm.cmd`: `npm.cmd run circuito`. Con `cmd` o Git Bash, `npm` anda tal cual.
    - Vale una T donde la base tiene dos cables en un borne, otro orden, otros ids u otras posiciones, y también dos Neutro "N" sin cable entre ellos (se unen por nombre).
 7. Anotar cuánto tardó en dibujarla. Es referencia, no criterio.
 
@@ -463,15 +466,28 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 **Etapa 5 — Versión 0.1.3-alpha.11.**
 - Commit de versión local. Tag y push solo con tu autorización.
 
+**Etapa 5 — hecha:** `0.1.3-alpha.11` publicada (commit `9251c49`).
+
 **Etapa 6 — Prueba en la netbook (Bruno).**
 - La sección 5, lo absoluto de la sección 6 y los pendientes de T15a.
 - Mirar que quede una sola "Bornera" instalada.
 - Yo paso tus números a la nota.
+- **Hecha (2026-11-13), Windows 11, alpha.11. Todo pasa.** Números en la nota "Medición 0.1.3-alpha.11 - netbook Windows".
+  - **Instalación:** una sola Bornera. La 0.1.3 se instaló encima de la alpha sin desinstalar: anduvo (se confirma el supuesto del riesgo "El MSI").
+  - **Línea base de Windows**, diagnóstico de arrastre con 2000 + 3000 cables al 58 % con caché: dibujo 1,3 ms (promedio) y 5,7 ms (máximo), 0 lentos, soltar con todo 82 ms, nítida 148 ms, previa con 300 cables 56 ms. Contra Mint con la alpha.7: 6,8 y 17 ms, soltar 77–114 ms, nítida ~500 ms, previa 91 ms.
+  - **Encuadrar (F) con 2000:** máximo 10 ms, 0 lentos. La optimización de Encuadrar (D16-A) pasa a **prioridad baja**.
+  - **Marcha-parada a mano:** sin trabas, máximo 2 ms al dibujar y 7,6 ms al encuadrar.
+  - **`npm run circuito`:** misma partición que la base (4 redes, 12 bornes), después de agregar en la PC las etiquetas y la lámpara H1 que faltaban en el dibujo. Hallazgo a favor de T17/T19: sin etiquetas ni validaciones en vivo, es fácil dejar un símbolo sin nombrar y no enterarse.
+  - **Pendientes de T15a:** abrir la escena 200 ms, guardar 2000 en 117 ms (D20 pide ≤ 1 s), tildes bien, archivo bloqueado bien, teclas de recarga bien, menú contextual bien.
+  - **PowerShell:** `npm.ps1` bloqueado por la política de ejecución; se usa `npm.cmd` (sección 5).
+  - **Sin anotar:** las 8 lecturas de F3 una por una y si hubo que desplazar la vista o alejar el zoom (el máximo general fue de 2 ms, muy por debajo de los 50 ms del criterio).
 
 **Etapa 7 — Cierre.**
 - Versión 0.1.3, `arquitectura.md` (sección 8), `plan-fase3.md`, Bornera.md y la nota de medición.
 - Commit: "Fase 3, T15 cerrada (0.1.3)".
 - Tag, push y release: con tu autorización.
+- **Hecho (2026-11-13), en un commit de docs: T15 y la fase 3 cerradas.** `arquitectura.md`, `plan-fase3.md`, este plan y Obsidian al día.
+- **Sigue pendiente, con tu autorización:** el commit de versión `0.1.3` (`package.json`, `Cargo.toml` y `tauri.conf.json`, con `bundle.windows.wix.version`), el push de `main`, los tags `v0.1.3-alpha.11` y `v0.1.3`, y la release en GitHub.
 
 ## D9 (Bruno, 2026-11-12): **A**
 
