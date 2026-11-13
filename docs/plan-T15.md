@@ -19,8 +19,10 @@
 | D7 | **A** | Prerelease `v0.1.3-alpha.11` con T15 y los pendientes de T15a; después, 0.1.3. |
 | D8 | **B** | Prueba a mano a la vista, y además se trae `marcha-parada.brn` a la PC y se comparan sus redes con un comando. |
 | D9 | **A** | F3 se lee como está, justo al soltar cada cable. El criterio "Fluido" de la sección 5 es una aproximación a la meta de 0.1.2 (ver la sección D9 al final). |
+| D10 | **A** | (2026-11-13, etapa 3) El humo calcula `redes` y `compararRedes` en Node con el código de la app: el runner le pasa `cargar` (el `ssrLoadModule` de su Vite). No se toca el global `bornera`. |
+| D11 | **A** | (2026-11-13, etapa 3) Si a 1024×530 el circuito no entraba con F, se frenaba antes del commit para decidir. Entró: no hizo falta. |
 
-Descartadas: D1-B (en `tests/circuitos/`), D2-A (ayudante de test), D3-A (ruteo de W al armar), D4-A (unificar con T14a), D5-A/C (solo código / JSON sin comprimir), D6-A/C (las dos versiones en la netbook / referencia en la alpha.11), D7-B/C (`.msi` local / directo 0.1.3), D8-A (solo a la vista), D9-B (acumulado nuevo en F3).
+Descartadas: D1-B (en `tests/circuitos/`), D2-A (ayudante de test), D3-A (ruteo de W al armar), D4-A (unificar con T14a), D5-A/C (solo código / JSON sin comprimir), D6-A/C (las dos versiones en la netbook / referencia en la alpha.11), D7-B/C (`.msi` local / directo 0.1.3), D8-A (solo a la vista), D9-B (acumulado nuevo en F3), D10-B (`redes` en el global `bornera`), D11-B (a 1024×530, solo medición informativa).
 
 ## 1. La tarea en `docs/plan-fase3.md` (cita textual)
 
@@ -129,7 +131,7 @@ Fase y Neutro tienen `elemento: "fuente"` y un solo borne (`biblioteca.ts:229`, 
 ### Supuesto (sin verificar)
 - "Por bornes, por cables" = conectividad a través de un borne compartido (dos cables en un borne) y a través de un cable (T). El test cubre las dos y, además, lista cada red por sus bornes y por sus cables.
 - A mano, el Neutro de abajo se gira 180° (borne arriba), como en `docMarchaParada`.
-- El humo puede dibujar el circuito a 1024×600 con el mouse sin desplazar la vista (no medí cuántos px ocupa una unidad al zoom inicial).
+- ~~El humo puede dibujar el circuito a 1024×600 con el mouse sin desplazar la vista.~~ **No:** medido en la etapa 3 (2026-11-13). Una unidad ocupa 20 px al zoom inicial, y el circuito (38 unidades de alto, 760 px) no entra en el lienzo de 536 px. Hay que desplazar la vista (ver la sección 5).
 - Los escenarios del banco de 0.1.2 se pueden comparar con los mismos de HEAD (T2 lo hizo; con el banco de hoy no lo revisé).
 - `UpgradeCode` es el mismo en todas las versiones. Sale de la configuración de la app, no de la versión; no vi el cálculo en la fuente. Las alphas se fueron instalando una encima de otra, que es coherente con esto.
 
@@ -256,9 +258,15 @@ A 1024×600:
 2. Colocar los 7 desde la paleta.
 3. Poner las etiquetas en el panel.
 4. Tender los 8 cables con W, con clics del mouse (las 2 T con un clic sobre el cable). Cada gesto da 1 paso de deshacer.
-5. Comparar las redes del documento de la página con las de la sección 3. Se usa `redes` a través de `bornera` (en desarrollo).
+5. Comparar las redes del documento de la página con las de la sección 3. ~~Se usa `redes` a través de `bornera` (en desarrollo).~~ Se calculan en Node con el código de la app (D10-A).
 6. Ctrl+S, leer la descarga en Node, Nuevo, Abrir ese archivo: documento igual, título sin "•", historial vacío.
 7. F (encuadrar): el circuito entero queda dentro del lienzo que no tapan la paleta ni el panel.
+
+Agregados de Bruno (2026-11-13, al aprobar la etapa 3):
+- El .brn de Ctrl+S pasa por `compararRedes` contra `marchaParada()` con 0 diferencias (la misma cadena que `npm run circuito`).
+- Las redes son las que deciden. "Hoja igual al armado" falla si cambian componentes, posiciones, etiquetas o extremos de cables; si cambian solo codos, imprime qué cables difieren y no falla.
+- Segunda pasada a 1024×530 (Windows maximizado le quita unos 70 px, supuesto): solo F.
+- Imprimir los px por unidad al zoom inicial y cuántas veces se desplazó la vista. Si un clic en S0·12 no alcanza para empezar en el borne (sin T sobre w2), es un hallazgo de "sin trabas".
 
 ### Lo que no se hace en T15
 - Simular, el cortocircuito L-N y el aviso de L con L1.
@@ -281,6 +289,12 @@ A 1024×600:
    - Sin la variable, el test se saltea («1 skipped»). `Remove-Item` la borra para que no quede en la terminal.
    - Vale una T donde la base tiene dos cables en un borne, otro orden, otros ids u otras posiciones, y también dos Neutro "N" sin cable entre ellos (se unen por nombre).
 7. Anotar cuánto tardó en dibujarla. Es referencia, no criterio.
+
+**Dato del humo (etapa 3, Edge headless, 2026-11-13):**
+- Al zoom inicial (100 %), una unidad ocupa 20 px. El lienzo mide 792×536 px (39,6×26,8 unidades) con el panel plegado y 604×536 px con el panel abierto.
+- El circuito ocupa 23,6×38 unidades (472×760 px), así que **no entra a la vista: hay que desplazarla o alejar el zoom para dibujarlo**.
+- El humo dibujó al 100 % y desplazó la vista 12 veces con el botón del medio. Su regla: llevar al centro lo que iba a tocar si quedaba a menos de 40 px del borde, en tres pasadas (colocar, etiquetar y cablear). Con el panel abierto, también hizo falta desplazarse en horizontal (K1 auxiliar y H1). En la netbook la cifra depende de cómo se dibuje; anotá si desplazaste o alejaste.
+- Con F, el circuito entero entra: 12 px por unidad a 1024×600 y 10,2 px a 1024×530, con los textos dibujados (desde 6 px).
 
 **Criterio "sin trabas en 1024×600"**
 - **Completa:** se termina sin consola, sin editar el archivo y sin reiniciar la app.
@@ -409,6 +423,19 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 
 **Etapa 3 — Humo `t15-marcha-parada.mjs`** a 1024×600 (sección 4).
 - Commit: "Fase 3, T15 etapa 3: humo de la marcha-parada".
+- **Hecha (2026-11-13).**
+  - `tests/humo/correr.mjs`: cada prueba recibe un tercer argumento, `{ cargar }`, para cargar módulos de la app en Node con el mismo Vite (D10-A).
+  - `tests/humo/t15-marcha-parada.mjs`, 28 comprobaciones:
+    - **Dibujo:** Nuevo; 6 símbolos arrastrados desde la paleta y el Neutro con clic, R, R y clic; las 5 etiquetas con clic en el símbolo, el campo del panel y Enter; los 8 cables con W y clics, con las 2 T con un clic sobre w4 y w6. Un paso por gesto, 20 en total (como `marchaParada()`), y todo al zoom inicial.
+    - **Redes y hoja (en Node):** las redes de la página son iguales a las del armado. La hoja, igual en componentes y en extremos de cables. Los codos también salieron iguales en los 8 cables.
+    - **Sin trabas:** un solo clic en S0·12 (que ya tiene a w2) empieza en el borne, con la pista «Empezar en S0 · 12». No hubo hallazgo.
+    - **El .brn de Ctrl+S, en Node:** es gzip, abre sin avisos y `compararRedes` contra `marchaParada()` da 0 diferencias. Es el documento de la página.
+    - **Nuevo y Abrir:** documento igual, «marcha-parada.brn — Bornera» sin «•» y sin historial.
+    - **F:** a 1024×600 y a 1024×530, con el panel plegado y abierto, el circuito entero queda dentro del lienzo, sin tocar la paleta, el panel, la barra ni el pie.
+    - **Mediciones** (las líneas con «·»): sección 5, "Dato del humo".
+  - Prueba en negativo: sin w5, fallan las redes, los extremos y `compararRedes` («Se partió la red {S1·14, K1·14, K1·A1, H1·X1}…»). Se volvió a poner.
+  - Comportamiento visto, no es error: si el panel de propiedades se plegó a mano, seleccionar no lo vuelve a abrir. El humo lo abre con «Mostrar propiedades».
+  - 1378 tests (más el del comando, salteado), check limpio, humo 541/541 (513 de antes más 28). Sin banco: no toca el dibujo.
 
 **Etapa 4 — Banco en la PC** con el criterio de la sección 6.
 - Tabla en `docs/bench.md` y nota de medición de la PC.
@@ -437,6 +464,7 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 
 ## Riesgos
 - **1024×600 no es el lienzo útil.** En Windows maximizado, la barra de tareas y la de título le quitan unos 70 px (supuesto). El humo mide 1024×600 de viewport. En la netbook el lienzo es más bajo, y el circuito ocupa 34 unidades de alto.
+  - Medido en la etapa 3: con la caja de dibujo (símbolos y etiquetas), son 38 unidades. A 1024×530, el lienzo mide 466 px de alto y con F el circuito entra entero a 10,2 px por unidad, con textos, también con el panel abierto. Al 100 % no entra ni a 1024×600 (sección 5).
 - **El MSI, sin probar en la máquina.** La plantilla y WiX dicen que 0.1.3 se instala encima de la alpha (sección 2), pero no se probó. Si quedaran dos "Bornera" instaladas, se desinstala la vieja y se anota.
 - **Ruido del banco.** Aunque el criterio está fijado (sección 6), una mediana chica (0,2–1 ms) sube más de 10 % con poco. Si eso se repite en las dos tandas, cuenta: no hay piso.
 - **La alpha.11 sin probar.** Si los pendientes de T15a fallan en la netbook, el cierre de T15 espera.

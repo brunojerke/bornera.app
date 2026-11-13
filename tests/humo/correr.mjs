@@ -5,9 +5,11 @@
 // andando) y corre cada prueba `*.mjs` de esta carpeta (menos este archivo y
 // cdp.mjs: `tNN-*.mjs` por tarea, o con nombre de tema), en orden, con la
 // app recién cargada. Una prueba exporta `nombre` y una función por defecto
-// que recibe la página (cdp.mjs) y `comprobar(descripcion, ok, detalle?)`.
-// Después de cada prueba se comprueba también que la página no haya tenido
-// errores (excepciones ni console.error).
+// que recibe la página (cdp.mjs), `comprobar(descripcion, ok, detalle?)` y
+// `{ cargar }`: `cargar("/src/…ts")` carga un módulo de la app en Node con el
+// mismo Vite (`ssrLoadModule`), para comparar en Node con el código de la app
+// (T15). Después de cada prueba se comprueba también que la página no haya
+// tenido errores (excepciones ni console.error).
 //
 // Cada tarea suma sus comprobaciones acá: lo que se probó a mano en el
 // navegador, queda.
@@ -129,6 +131,8 @@ async function main() {
   let fallas = 0;
   let total = 0;
   let pagina = null;
+  /** Módulos de la app cargados en Node (para las pruebas que comparan en Node). */
+  const cargar = (ruta) => servidor.ssrLoadModule(ruta);
   try {
     pagina = await Pagina.conectar(await pestana(perfil), capturas);
     await calentar(pagina, url);
@@ -144,7 +148,7 @@ async function main() {
       };
       try {
         await pagina.abrir(url);
-        await conLimite(prueba.default(pagina, comprobar), LIMITE_PRUEBA_MS, "La prueba no terminó a tiempo.");
+        await conLimite(prueba.default(pagina, comprobar, { cargar }), LIMITE_PRUEBA_MS, "La prueba no terminó a tiempo.");
       } catch (e) {
         comprobar("la prueba terminó sin errores", false, e instanceof Error ? e.message : String(e));
       }
