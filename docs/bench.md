@@ -16,6 +16,162 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Desplazar al 100 %*: ida y vuelta de a 6 px, sin salir de lo dibujado.
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
+- `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 abajo). Las comparaciones contra 0.1.2 usan esta opción.
+
+## Contra 0.1.2 (fase 3, T15 etapa 4) — 2026-11-13
+
+**Resultado: no pasa, con la causa conocida.**
+- *Encuadrar (F)* con 2000: la mediana por cuadro sube en las dos tandas, con las dos escenas (+83 a +136 %). Causa: T14n (dos `setTransform` por símbolo) más lo acumulado desde T2 (ver "Curva por commit"). Queda como "no pasa: +20 % por gesto". Optimizarlo es una tarea aparte, después de T15; la medición en la netbook decide la urgencia (D16-A).
+- *Arrastre al 31 %* con 500 y 2000, mediana, solo con `--escena-012`: **no pasa por resolución del reloj (0,05 ms)**. La suba es de 0,25 → 0,30 ms en tres casos y de 0,20 → 0,30 en el otro, medio paso y un paso del reloj del banco, que mide de a 0,1 ms. El criterio no tiene piso, así que cuenta igual.
+- 0 cuadros lentos en las 48 corridas, también en la escena con cables.
+
+**Cómo se midió** (criterio de `docs/plan-T15.md`, sección 6, fijado antes de medir):
+- HEAD contra un worktree en `v0.1.2` con su propio banco y su propio `node_modules` (`npm ci`). Solo los escenarios comunes: 100, 500 y 2000 sin cables.
+- Cada tanda, en orden ABBA ×3 (0.1.2, HEAD, HEAD, 0.1.2…): 6 corridas por versión y, por celda, la mediana de las 6.
+- Cuentan la mediana y el p95 por cuadro, comparados sin redondear (D12-A), y los lentos sumados en las 6 corridas (D13-B). El tiempo por gesto solo se informa.
+- Suba: más de 10 % en la mediana o el p95, o cualquier lento si 0.1.2 tiene 0. Solo cuenta si se repite en la tanda 2, en el mismo escenario y la misma métrica.
+- PC de siempre (Ryzen 7 170, Edge 157 headless, 1366×768, dpr 1, sin GPU): enchufada, en "Mejor rendimiento", con Opera y Claude cerrados.
+
+Cada celda: tanda 1 · tanda 2. Tiempos por cuadro en ms.
+
+### Tabla oficial: cada versión con su escena
+
+HEAD = `e137ea8`. Desde `c638a35` (Fase y Neutro) la lista de símbolos tiene 7 y no 5, así que con la misma semilla la escena cambia de tipos: en HEAD, 595 de los 2000 son Fase o Neutro (876 círculos contra 395). Posiciones, rotaciones y zoom después de F son iguales.
+
+| Símbolos | Escenario | 0.1.2: mediana / p95 | HEAD: mediana / p95 | Δ mediana | Δ p95 | Por gesto (ms) | Resultado |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 100 | Rehacer al 100 % | 8,5 / 8,9 · 8,5 / 8,9 | 8,5 / 8,9 · 8,4 / 8,8 | +1 % · −2 % | +0 % · −1 % | 10,8 → 11,7 · 10,9 → 11,4 | pasa |
+|  | Rehacer al 31 % | 8,5 / 9,0 · 8,5 / 8,9 | 8,6 / 8,9 · 8,5 / 8,9 | +1 % · +1 % | −2 % · +1 % | 9,0 → 8,9 · 8,9 → 9,5 | pasa |
+|  | Encuadrar (F) | 6,3 / 7,4 · 6,4 / 7,9 | 7,2 / 8,9 · 6,1 / 8,3 | +14 % · −5 % | +20 % · +6 % | 8,8 → 9,9 · 9,0 → 9,9 | pasa (no se repite) |
+|  | Zoom con la rueda | 2,7 / 7,9 · 2,7 / 7,8 | 2,8 / 8,1 · 2,8 / 8,0 | +2 % · +4 % | +3 % · +1 % | 27,7 → 27,8 · 27,6 → 28,4 | pasa |
+|  | Desplazar al 100 % | 0,3 / 0,4 · 0,3 / 0,5 | 0,3 / 0,5 · 0,2 / 0,4 | +20 % · −20 % | +25 % · −22 % | 6,7 → 7,7 · 6,9 → 5,9 | pasa (no se repite) |
+|  | Arrastre al 31 % | 0,4 / 0,8 · 0,3 / 0,6 | 0,3 / 0,7 · 0,3 / 0,6 | −25 % · +0 % | −13 % · +0 % | 41,5 → 33,4 · 33,0 → 31,8 | pasa |
+| 500 | Rehacer al 100 % | 8,5 / 8,8 · 8,5 / 8,8 | 8,5 / 9,2 · 8,6 / 9,2 | +0 % · +2 % | +3 % · +4 % | 11,2 → 14,9 · 10,5 → 14,3 | pasa |
+|  | Rehacer al 31 % | 8,6 / 9,1 · 8,4 / 9,0 | 8,2 / 8,8 · 8,5 / 8,8 | −4 % · +1 % | −4 % · −2 % | 19,0 → 15,6 · 16,5 → 16,5 | pasa |
+|  | Encuadrar (F) | 5,5 / 6,7 · 5,3 / 6,8 | 5,6 / 6,6 · 6,0 / 7,2 | +1 % · +13 % | −1 % · +5 % | 7,3 → 6,8 · 7,0 → 7,5 | pasa (no se repite) |
+|  | Zoom con la rueda | 2,7 / 8,6 · 2,7 / 8,7 | 2,6 / 8,7 · 2,8 / 8,7 | −2 % · +2 % | +1 % · −0 % | 34,6 → 35,1 · 35,8 → 36,5 | pasa |
+|  | Desplazar al 100 % | 0,2 / 0,4 · 0,3 / 0,4 | 0,2 / 0,3 · 0,3 / 0,5 | +0 % · +0 % | −13 % · +43 % | 6,0 → 5,9 · 6,4 → 8,1 | pasa (no se repite) |
+|  | Arrastre al 31 % | 0,2 / 0,5 · 0,6 / 1,0 | 0,3 / 0,6 · 0,2 / 0,5 | +50 % · −64 % | +30 % · −48 % | 25,2 → 33,6 · 59,7 → 26,2 | pasa (no se repite) |
+| 2000 | Rehacer al 100 % | 8,5 / 9,0 · 8,6 / 9,1 | 8,4 / 8,7 · 8,3 / 8,7 | −1 % · −3 % | −3 % · −4 % | 13,7 → 9,5 · 14,7 → 9,8 | pasa |
+|  | Rehacer al 31 % | 8,4 / 8,9 · 8,5 / 9,0 | 8,4 / 8,9 · 8,4 / 8,8 | +1 % · −1 % | +1 % · −2 % | 23,7 → 23,0 · 24,9 → 23,7 | pasa |
+|  | **Encuadrar (F)** | 2,8 / 8,9 · 3,3 / 9,0 | 6,5 / 9,1 · 6,7 / 9,2 | **+136 % · +100 %** | +3 % · +3 % | 12,4 → 16,4 · 13,4 → 17,2 | **no pasa** (mediana) |
+|  | Zoom con la rueda | 2,9 / 8,9 · 3,0 / 8,9 | 2,7 / 8,7 · 2,6 / 8,8 | −5 % · −12 % | −2 % · −2 % | 44,8 → 40,0 · 46,6 → 39,2 | pasa |
+|  | Desplazar al 100 % | 0,3 / 0,4 · 0,3 / 0,5 | 0,2 / 0,3 · 0,2 / 0,4 | −33 % · −33 % | −25 % · −22 % | 6,8 → 5,1 · 7,9 → 5,6 | pasa |
+|  | Arrastre al 31 % | 0,3 / 2,4 · 0,3 / 2,4 | 0,3 / 2,2 · 0,3 / 2,1 | +0 % · +20 % | −6 % · −11 % | 43,0 → 47,9 · 41,9 → 41,5 | pasa (no se repite) |
+
+### Con `--escena-012`: la escena de 0.1.2 en las dos versiones
+
+HEAD = `e137ea8` con la opción, el código que quedó en `2a2df4f`. Con la opción, `generarBanco` elige entre los 5 símbolos de 0.1.2, buscados por tipo y en el orden de esa versión. El test (`banco.test.ts`) compara las tres escenas, componente por componente, con un SHA-256 sacado de `v0.1.2`.
+
+| Símbolos | Escenario | 0.1.2: mediana / p95 | HEAD: mediana / p95 | Δ mediana | Δ p95 | Por gesto (ms) | Resultado |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 100 | Rehacer al 100 % | 8,4 / 8,9 · 8,4 / 8,9 | 8,5 / 8,9 · 8,5 / 8,9 | +1 % · +1 % | +1 % · −1 % | 11,0 → 11,4 · 11,0 → 11,2 | pasa |
+|  | Rehacer al 31 % | 8,5 / 9,0 · 8,6 / 8,9 | 8,6 / 8,9 · 8,6 / 8,9 | +1 % · +0 % | −1 % · +1 % | 9,3 → 9,5 · 9,2 → 9,7 | pasa |
+|  | Encuadrar (F) | 6,4 / 7,4 · 6,3 / 7,2 | 6,3 / 7,5 · 6,3 / 7,4 | −2 % · +0 % | +1 % · +3 % | 9,0 → 8,8 · 8,9 → 8,7 | pasa |
+|  | Zoom con la rueda | 2,7 / 7,8 · 2,7 / 7,8 | 2,8 / 8,0 · 2,8 / 8,1 | +4 % · +2 % | +3 % · +5 % | 27,8 → 28,2 · 27,7 → 28,6 | pasa |
+|  | Desplazar al 100 % | 0,2 / 0,4 · 0,3 / 0,4 | 0,3 / 0,4 · 0,2 / 0,5 | +50 % · −20 % | +0 % · +25 % | 6,2 → 7,5 · 6,4 → 6,7 | pasa (no se repite) |
+|  | Arrastre al 31 % | 0,3 / 0,6 · 0,3 / 0,6 | 0,3 / 0,6 · 0,3 / 0,6 | +0 % · +0 % | +8 % · +0 % | 30,6 → 33,9 · 30,3 → 29,7 | pasa |
+| 500 | Rehacer al 100 % | 8,5 / 8,9 · 8,5 / 8,8 | 8,5 / 9,0 · 8,5 / 8,9 | +0 % · +1 % | +2 % · +1 % | 10,4 → 13,1 · 10,3 → 10,9 | pasa |
+|  | Rehacer al 31 % | 8,4 / 8,9 · 8,3 / 8,8 | 8,4 / 9,0 · 8,4 / 8,8 | +0 % · +0 % | +1 % · −0 % | 16,8 → 17,0 · 16,4 → 16,7 | pasa |
+|  | Encuadrar (F) | 5,3 / 7,8 · 5,2 / 6,8 | 5,6 / 6,6 · 5,4 / 6,3 | +7 % · +4 % | −15 % · −8 % | 7,1 → 6,9 · 7,0 → 6,7 | pasa |
+|  | Zoom con la rueda | 2,7 / 8,7 · 2,8 / 8,7 | 2,7 / 8,8 · 2,8 / 8,7 | +0 % · −2 % | +2 % · +1 % | 35,6 → 38,4 · 35,7 → 37,7 | pasa |
+|  | Desplazar al 100 % | 0,2 / 0,3 · 0,3 / 0,4 | 0,3 / 0,4 · 0,3 / 0,4 | +50 % · +0 % | +33 % · +0 % | 5,8 → 7,0 · 6,2 → 6,5 | pasa (no se repite) |
+|  | Arrastre al 31 % | 0,3 / 0,6 · 0,3 / 0,8 | 0,3 / 0,6 · 0,3 / 0,6 | +20 % · +20 % | +0 % · −25 % | 27,2 → 32,2 · 34,1 → 27,9 | **no pasa** por resolución del reloj (0,05 ms) |
+| 2000 | Rehacer al 100 % | 8,6 / 9,4 · 8,6 / 9,2 | 8,3 / 8,8 · 8,4 / 8,7 | −3 % · −3 % | −7 % · −6 % | 18,1 → 9,6 · 17,6 → 9,6 | pasa |
+|  | Rehacer al 31 % | 8,4 / 8,9 · 8,3 / 8,8 | 8,5 / 8,9 · 8,4 / 8,9 | +1 % · +1 % | +0 % · +1 % | 23,9 → 25,9 · 22,9 → 25,5 | pasa |
+|  | **Encuadrar (F)** | 3,0 / 9,0 · 2,9 / 8,9 | 5,9 / 9,1 · 5,3 / 9,0 | **+100 % · +83 %** | +1 % · +1 % | 12,7 → 15,5 · 12,5 → 14,9 | **no pasa** (mediana) |
+|  | Zoom con la rueda | 3,0 / 8,9 · 3,0 / 8,9 | 2,8 / 8,9 · 2,7 / 8,9 | −8 % · −10 % | −1 % · −0 % | 46,1 → 43,8 · 46,8 → 41,1 | pasa |
+|  | Desplazar al 100 % | 0,3 / 0,5 · 0,3 / 0,5 | 0,2 / 0,4 · 0,2 / 0,4 | −17 % · −20 % | −11 % · −30 % | 7,1 → 6,7 · 6,7 → 5,2 | pasa |
+|  | Arrastre al 31 % | 0,3 / 2,3 · 0,2 / 2,3 | 0,3 / 2,3 · 0,3 / 2,4 | +20 % · +50 % | −0 % · +4 % | 40,3 → 43,3 · 39,5 → 44,6 | **no pasa** por resolución del reloj (0,05 ms) |
+
+La tabla redondea a 0,1 ms: en *Arrastre* con 500, las dos tandas son 0,25 → 0,30 ms.
+
+Control, una tanda en la que HEAD corre en las escenas de 100, 500 y 2000 solo los 6 escenarios de 0.1.2, como el banco de 0.1.2, con la PC más ruidosa (0.1.2 entre 3,2 y 5,7 ms): *Encuadrar* con 2000 sigue arriba, 5,1 → 6,1 ms (+21 %).
+
+### Escena con cables (solo HEAD, informativa)
+
+0.1.2 no la tiene. Mediana de las 12 corridas de HEAD de la tabla oficial; máximo y lentos, de todas.
+
+| Escenario | Mediana | p95 | Máx. | Lentos | Por gesto |
+|---|---:|---:|---:|---:|---:|
+| Rehacer al 100 % | 8,4 | 8,9 | 9,0 | 0 | 9,4 |
+| Rehacer al 31 % | 8,4 | 8,8 | 9,1 | 0 | 24,2 |
+| Encuadrar (F) | 7,8 | 9,0 | 14,6 | 0 | 25,1 |
+| Zoom con la rueda | 2,7 | 8,7 | 9,6 | 0 | 39,6 |
+| Desplazar al 100 % | 0,2 | 0,3 | 0,7 | 0 | 4,9 |
+| Arrastre al 31 % | 0,2 | 2,5 | 6,5 | 0 | 40,0 |
+| Seleccionar todo al 31 % | 1,6 | 2,1 | 3,2 | 0 | 11,0 |
+| Arrastre con todo seleccionado al 31 % | 1,8 | 4,0 | 14,9 | 0 | 204,4 |
+| Arrastrar 40 cableados al 58 % | 1,3 | 2,2 | 6,9 | 0 | 86,0 |
+| Arrastrar 40 cableados contra los vecinos (se rechaza) al 58 % | 1,1 | 1,8 | 5,5 | 0 | 75,6 |
+| Girar 40 cableados (se rechaza) al 58 % | 0,6 | 0,8 | 1,1 | 0 | 5,7 |
+| Girar 1 cableado al 58 % | 1,3 | 1,7 | 2,5 | 0 | 13,1 |
+| Girar todo al 31 % | 10,5 | 11,0 | 13,4 | 0 | 53,7 |
+| Soltar con todo seleccionado al 31 % | 7,1 | 11,0 | 14,8 | 0 | 33,5 |
+| Arrastrar todo seleccionado al 31 % | 3,0 | 6,1 | 7,5 | 0 | 65,0 |
+| Borrar y deshacer uno con cables al 31 % | 0,7 | 0,9 | 1,7 | 0 | 7,0 |
+| Cable en curso al 58 % | 0,3 | 0,4 | 3,2 | 0 | 17,2 |
+| Reconectar un extremo libre al 58 % | 0,4 | 0,7 | 2,0 | 0 | 19,9 |
+| Reconectar, rechazos después de rutear, al 58 % | 0,4 | 0,6 | 1,5 | 0 | 18,7 |
+| Soltar reconectando al 58 % | 0,6 | 1,0 | 1,2 | 0 | 1,9 |
+
+Heap con la escena armada (HEAD): 3,9 · 5,0 · 6,2 MB y 13,8 MB con cables.
+
+### Por qué la mediana sube más que el trabajo
+
+Cada gesto de *Encuadrar* tiene 3 cuadros:
+1. El salto: ~0,8 ms. Es zoom diferido: escala lo que hay.
+2. Mosaicos hasta agotar el presupuesto: ~8,5 ms.
+3. Los mosaicos que faltan, hasta quedar nítido.
+
+La mediana de esos 3 cuadros es el último. Cuanto más cuesta cada mosaico, menos entran en el cuadro 2, y el último cuadro hereda los que no entraron. Un gesto de cada versión (traza por cuadro, escena de 0.1.2):
+
+| | Cuadro 1 | Cuadro 2 | Cuadro 3 |
+|---|---:|---:|---:|
+| 0.1.2 | 0,8 ms | 8,9 ms, 16 mosaicos | 3,1 ms, 19 mosaicos |
+| `e137ea8` | 0,8 ms | 8,3 ms, 8 mosaicos | 5,8 ms, 27 mosaicos |
+
+Por eso un 20 % más de trabajo de la capa estática por gesto se ve como +83 a +136 % en la mediana. El p95 y el máximo los ataja el presupuesto (+1 a +3 %), y por gesto sube +19 a +32 %. Ya en T2 la mediana subía +31 % con solo +5 % de trabajo.
+
+### Curva por commit (2000 · Encuadrar, escena de 0.1.2)
+
+Worktree en cada commit, con la elección de símbolos de `--escena-012` aplicada a mano (la escena de 2000 verificada por hash contra `v0.1.2`) y una mini tanda ABBA ×2 contra `v0.1.2`: 4 corridas por versión. **Estática por gesto:** suma del tiempo de la capa estática en los 3 cuadros del gesto, de una traza por cuadro (solo en los pasos que la tienen).
+
+| Commit | Tarea | Mediana 0.1.2 → commit | Δ mediana | Estática por gesto (ms) | Δ estática | Mosaicos del cuadro 2 |
+|---|---|---:|---:|---:|---:|---:|
+| 27a9bb8 | T1 | 3,5 → 3,1 | −13 % | – | – | – |
+| 9e2a248 | T2 | 3,0 → 3,8 | +31 % | 10,2 → 10,7 | +5 % | 15 → 13 |
+| fe9a97e | T6 | 3,3 → 4,3 | +30 % | 10,4 → 11,0 | +6 % | 14 → 11 |
+| d48cbb1 | T7 | 2,9 → 4,5 | +58 % | – | – | – |
+| 17b75b9 | T9 | 3,0 → 3,8 | +26 % | – | – | – |
+| 44af41f | T10 | 3,2 → 3,7 | +17 % | – | – | – |
+| 274d724 | T12 | 3,0 → 4,9 | +68 % | 10,2 → 11,4 | +12 % | 15 → 9 |
+| 6a2b7fc | T13 | 2,7 → 3,7 | +35 % | 10,0 → 10,7 | +7 % | 15 → 11 |
+| 7dace06 | T14a (2/3) | 3,2 → 4,4 | +40 % | 10,2 → 11,1 | +10 % | 15 → 10 |
+| 4aee262 | T14a, cerrada | 3,2 → 4,4 | +40 % | 10,1 → 11,2 | +11 % | 15 → 9 |
+| **51dfa90** | **T14n** | 3,3 → 5,2 | +60 % | 10,2 → 12,0 | **+18 %** | 14 → 8,5 |
+| 80abe07 | T14n, cerrada (solo docs) | 3,1 → 8,3 | +172 % | – | – | – |
+| ff9a68c | T14b (2/3) | 3,0 → 5,1 | +72 % | – | – | – |
+| 7fa3dd1 | T14b (3/3) | 2,8 → 5,6 | +105 % | 9,9 → 12,2 | +24 % | 16 → 8 |
+| cc3cd70 | T14c etapa 3 | 3,2 → 5,6 | +77 % | 10,3 → 12,1 | +18 % | 14 → 9 |
+| e137ea8 | T15 etapa 3 | 2,9 → 5,2 | +76 % | 10,0 → 12,0 | +20 % | 16 → 9 |
+
+- El trabajo crece de a poco desde T2 (+5 %) hasta T14a (+10–11 %). El escalón más grande es **T14n** (+11 → +18 %); después queda en +18 a +24 %. El ruido de la estática es de ±5 puntos.
+- Los pasos de T1 a T13 se midieron con Opera abierto; 7dace06, medido de nuevo sin Opera, dio lo mismo.
+- 80abe07 solo cambia docs: tiene el mismo código que 51dfa90. En esa mini tanda, los gestos de HEAD se partieron en 4 cuadros (29–32 cuadros en vez de 24–25) y la mediana pasó a ser un cuadro de presupuesto. Es ruido, y muestra cuánto salta la mediana con un cuadro de más.
+
+### T14n: medición sin la alineación de `simbolo()`
+
+En 51dfa90 (escena de 0.1.2 y traza, como la curva), con solo `RendererCanvas.simbolo()` vuelto a como era antes de T14n: sin los dos `setTransform` por símbolo. Lo demás de T14n quedó igual. Sin commit. Dos tandas con las tres variantes intercaladas (A S C C S A ×2: 4 corridas por variante).
+
+| Estática por gesto (ms) | Tanda 1 | Tanda 2 |
+|---|---:|---:|
+| 0.1.2 | 17,3 | 12,9 |
+| 51dfa90 sin alinear `simbolo()` | 19,1 (+10 %) | 13,5 (+5 %) |
+| 51dfa90 sin tocar | 20,7 (+20 %) | 14,3 (+11 %) |
+
+- **Sí:** sin alinear `simbolo()`, la estática vuelve al nivel de 4aee262 (+11 % en la curva) o queda por debajo. En las dos tandas baja entre 5 y 8 % respecto de 51dfa90 sin tocar.
+- **El número exacto no es firme.** La PC estaba más lenta que a la mañana (0.1.2 entre 12,9 y 17,3 ms por gesto, contra ~10) y con más dispersión (51dfa90 sin tocar: de 19,0 a 29,7 ms entre corridas de la tanda 1). La dirección se repitió en las dos tandas.
 
 ## Herramienta cable (fase 3, T13) — 2026-11-08
 

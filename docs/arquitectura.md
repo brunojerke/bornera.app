@@ -360,6 +360,7 @@ La simulación tiene que dar resultados que coincidan con lo que pasaría en el 
 - **Comandos:** cada comando, deshecho, deja el documento igual que antes.
 - **Rendimiento:** el banco de pruebas no puede empeorar más de un 10 % entre fases.
   > Nota (2026-11-12): excepción aceptada en T14b. *Soltar con todo* subió 7 ms en la PC y se mide con un criterio absoluto: ≤ 200 ms en la netbook. La línea base 0.1.2 se midió en Mint con WebKitGTK; hay que rehacerla en la netbook con Windows.
+  > Nota (2026-11-13): en el cierre de la fase 3 (T15, etapa 4), *Encuadrar (F)* con 2000 no pasa contra 0.1.2: +20 % de trabajo por gesto, por T14n más lo acumulado desde T2. Queda anotado como "no pasa"; optimizarlo es una tarea aparte, después de T15, y la netbook decide la urgencia. Las comparaciones contra 0.1.2 se hacen con `npm run bench -- --escena-012`, para que las dos versiones dibujen la misma escena (`docs/bench.md`).
 - **Prueba humana:** armar en el programa los circuitos de los trabajos de la escuela y comparar con lo que da CADe\_SIMU y con el funcionamiento real.
 
 ## Distribución y monetización

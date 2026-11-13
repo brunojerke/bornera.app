@@ -21,8 +21,13 @@
 | D9 | **A** | F3 se lee como está, justo al soltar cada cable. El criterio "Fluido" de la sección 5 es una aproximación a la meta de 0.1.2 (ver la sección D9 al final). |
 | D10 | **A** | (2026-11-13, etapa 3) El humo calcula `redes` y `compararRedes` en Node con el código de la app: el runner le pasa `cargar` (el `ssrLoadModule` de su Vite). No se toca el global `bornera`. |
 | D11 | **A** | (2026-11-13, etapa 3) Si a 1024×530 el circuito no entraba con F, se frenaba antes del commit para decidir. Entró: no hizo falta. |
+| D12 | **A** | (2026-11-13, etapa 4) Las subas se calculan con los valores del JSON sin redondear: no hay piso. |
+| D13 | **B** | (2026-11-13, etapa 4) Los lentos de una tanda se suman en todas sus corridas; no se toma la mediana. Es más estricto: un lento en una sola corrida cuenta. |
+| D14 | **B** | (2026-11-13, etapa 4) Opción permanente del banco, `--escena-012`: las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2, con un test que las compara por hash con `v0.1.2`. Las comparaciones contra 0.1.2 la usan (sección 6). |
+| D15 | **A** | (2026-11-13, etapa 4) Bisección de 2000 · *Encuadrar (F)* con la escena de 0.1.2, sin arreglar nada. |
+| D16 | **A** | (2026-11-13, etapa 4) 2000 · *Encuadrar (F)* queda "no pasa: +20 % por gesto". Causa: T14n (2 `setTransform` por símbolo) más lo acumulado desde T2. Optimizarlo es una tarea aparte, después de T15; la medición en la netbook decide la urgencia. |
 
-Descartadas: D1-B (en `tests/circuitos/`), D2-A (ayudante de test), D3-A (ruteo de W al armar), D4-A (unificar con T14a), D5-A/C (solo código / JSON sin comprimir), D6-A/C (las dos versiones en la netbook / referencia en la alpha.11), D7-B/C (`.msi` local / directo 0.1.3), D8-A (solo a la vista), D9-B (acumulado nuevo en F3), D10-B (`redes` en el global `bornera`), D11-B (a 1024×530, solo medición informativa).
+Descartadas: D1-B (en `tests/circuitos/`), D2-A (ayudante de test), D3-A (ruteo de W al armar), D4-A (unificar con T14a), D5-A/C (solo código / JSON sin comprimir), D6-A/C (las dos versiones en la netbook / referencia en la alpha.11), D7-B/C (`.msi` local / directo 0.1.3), D8-A (solo a la vista), D9-B (acumulado nuevo en F3), D10-B (`redes` en el global `bornera`), D11-B (a 1024×530, solo medición informativa), D12-B (valores redondeados a 0,1 ms), D13-A (mediana de los lentos), D14-A/C (diagnóstico sin commit / no medir más), D15-B/C (cerrar sin buscar la causa / otra).
 
 ## 1. La tarea en `docs/plan-fase3.md` (cita textual)
 
@@ -325,6 +330,8 @@ Agregados de Bruno (2026-11-13, al aprobar la etapa 3):
   - No hay piso absoluto: una mediana de 1,0 ms que pasa a 1,2 ms es suba.
 - **Empeorar:** una suba de la primera tanda solo cuenta si se repite en una segunda tanda (otras 5 vueltas), con el mismo escenario y la misma métrica.
 - **Pasa** si ninguna suba se repite.
+- **Ajustes al aprobar la etapa 4 (2026-11-13), antes de medir:** cada tanda va en orden ABBA ×3 (0.1.2, HEAD, HEAD, 0.1.2…), con 6 corridas por versión y la mediana de las 6. Se compara sin redondear (D12-A) y los lentos se suman (D13-B). El worktree de 0.1.2 usa su propio `node_modules` (`npm ci`), sin junction.
+- **Desde la etapa 4 (D14-B):** las comparaciones contra 0.1.2 usan `npm run bench -- --escena-012`, para que las dos versiones dibujen la misma escena.
 
 **Lo absoluto, en la netbook con Windows (alpha.11):**
 - F3 con la escena de 2000 (Ctrl+Shift+B), al 11–14 % y al 20–65 %, 3 corridas, como la nota de 0.1.2. Meta: menos de 1 % de cuadros de más de 16,7 ms y ninguno de más de 50 ms. Con F3 se lee igual que en la sección 5 (D9-A): es una aproximación.
@@ -440,6 +447,18 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 **Etapa 4 — Banco en la PC** con el criterio de la sección 6.
 - Tabla en `docs/bench.md` y nota de medición de la PC.
 - Commit: "Fase 3, T15 etapa 4: banco contra 0.1.2".
+- **Hecha (2026-11-13). Resultado: no pasa, con la causa conocida.** Las tablas, la curva y la explicación están en `docs/bench.md`, sección "Contra 0.1.2".
+  - Cuatro tandas ABBA ×3 en la PC enchufada, en "Mejor rendimiento", con Opera y Claude cerrados: dos oficiales (cada versión con su escena) y dos con `--escena-012`. 0 cuadros lentos en las 48 corridas, también en la escena con cables.
+  - **2000 · *Encuadrar (F)*, mediana: no pasa** (D16-A). Se repite en las dos tablas: +136 y +100 % en la oficial, +100 y +83 % con la escena de 0.1.2. El p95 sube +1 a +3 % y el tiempo por gesto, +19 a +32 %.
+    - Por qué la mediana salta tanto: cada gesto tiene 3 cuadros y la mediana es el último. El cuadro anterior se corta por presupuesto (~8,5 ms). Con más costo por mosaico entran 8–9 mosaicos en vez de 14–16, y el último cuadro hereda el resto: pasa de ~3 a ~5,5 ms. Un +20 % de trabajo de la capa estática se ve como +83 a +136 % en la mediana.
+    - Causa, por la bisección (D15-A, 16 commits con traza): el trabajo crece de a poco desde T2 (+5 %) hasta T14a (+10–11 %). El escalón más grande es T14n (51dfa90, +18 %), y desde ahí queda en +18 a +24 %.
+    - Confirmación: en 51dfa90, con solo la alineación de `simbolo()` desactivada (sin commit), la estática bajó a +10 y +5 % en dos tandas, contra +20 y +11 % de 51dfa90 sin tocar. Vuelve al nivel de antes de T14n. Ese día la PC estaba más ruidosa, así que el número exacto no es firme, pero la dirección se repitió.
+  - **2000 y 500 · *Arrastre al 31 %*, mediana, solo con `--escena-012`: no pasa por resolución del reloj (0,05 ms).** Sube de 0,25 a 0,30 ms (0,20 → 0,30 en un caso), medio paso o un paso del reloj del banco, que mide de a 0,1 ms. El criterio no tiene piso (D12-A), así que cuenta.
+  - Otras subas de una tanda que no se repiten: *Encuadrar* con 100 y 500, *Desplazar* con 100 y 500, *Arrastre* con 500 (oficial) y 2000 (oficial).
+  - Commit aparte de la opción del banco: `2a2df4f` (`--escena-012` y su test).
+  - Worktrees de 0.1.2 y de la bisección borrados con `git worktree remove`. Los dos tenían su propio `node_modules`; el del repo quedó igual: 11 272 archivos antes y después. Los 3 más que al empezar el día (11 269) son cachés de Vitest y Vite.
+  - Sin cambios de código. `npm test` y `npm run check` al cerrar; sin humo ni banco nuevo: no toca nada visible.
+  - Optimizar *Encuadrar* queda como pendiente aparte en `docs/plan-fase3.md`, después de T15.
 
 **Etapa 5 — Versión 0.1.3-alpha.11.**
 - Commit de versión local. Tag y push solo con tu autorización.

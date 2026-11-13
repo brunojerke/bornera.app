@@ -22,6 +22,8 @@ Desde T8 (2026-11-08), cada tarea con algo visible en la app suma su prueba `tes
 
 **Pendiente aparte (2026-11-11, visto en T14c y no se toca ahí):** Transformar (T14a) vuelve a rutear al rehacer; debería repetir el resultado guardado o fallar. Hoy `Mover`, `Rotar` y `Espejar` reaplican el plan guardado solo si lo que tocan sigue igual (`planVigente`) y, si no, planean de nuevo y pueden dar otro recorrido. `CambiarExtremo` (T14c) ya lo hace bien: repite el resultado guardado, revisado sin rutear, o tira sin cambiar nada.
 
+**Pendiente aparte (2026-11-13, de T15 etapa 4; tarea aparte después de T15, D16-A de `docs/plan-T15.md`):** optimizar *Encuadrar (F)* con 2000. Contra 0.1.2 queda "no pasa": +20 % de trabajo de la capa estática por gesto, y +83 a +136 % en la mediana por cuadro, que amplifica la diferencia (ver `docs/bench.md`, "Contra 0.1.2"). Causa: T14n, con 2 `setTransform` por símbolo en `RendererCanvas.simbolo()`, más lo acumulado desde T2. Sin cuadros lentos en la PC. **La medición en la netbook decide la urgencia.** Se mide con `npm run bench -- --escena-012` contra `v0.1.2`.
+
 Nota: T15a adelanta a esta fase lo básico de la fase 4 (formato `.brn`). La fase 4 queda para el autoguardado, las migraciones y los circuitos de referencia.
 
 ---
@@ -406,6 +408,7 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
     - **Subas de la tanda 1 que la tanda 2 no repite:** *Arrastre con todo seleccionado* con 500 (0,7 → 1,0; después 0,8 → 0,8), *Mover 1* con 500 (0,3 → 0,9; después 0,4 → 0,5), *Encuadrar* con 100 (2,6 → 3,1; después 2,8 → 2,3), paso de *Soltar con todo* (9,3 → 10,4; después 10,0 → 9,3) y paso de *Seleccionar todo* (0,5 → 0,8; después 0,6 → 0,5).
     - **Supuesto (Bruno, 2026-11-11; no se volvió a medir):** esas subas al 31 % son probable deriva de la máquina entre un bloque y el otro, no del arreglo. Argumento: el paso de *Seleccionar todo* subió 0,3 ms en la tanda 1 y es tiempo fuera del cuadro (comando y selección), que no pasa por el dibujo, lo único que tocó T14n; con las corridas alternadas no sube.
     - **Sin explicar (suben también en la tanda alternada, así que la deriva las explica peor):** *Encuadrar (F)* con 500 (5,7 → 6,2 y 5,3 → 6,3) y con 2000 (6,1 → 7,2 y 5,4 → 7,1; por gesto 16,7 → 17,9 y 14,6 → 17,4 ms) y *Mover todo* con 500 (2,1 → 2,5 y 1,9 → 2,3). Sin cuadros lentos: el máximo de *Encuadrar* con 2000 pasa de 9,4–11,0 a 8,9–13,2 ms y con 500 de 6,2–7,3 a 7,4–8,8 ms; con 2000 + 3000 cables *Encuadrar* no cambia (7,8 → 7,7 y 7,7 → 7,6) y *Mover todo* con 2000 tampoco. Queda para mirar en la próxima medición del banco.
+    - **Retomado en T15 etapa 4 (2026-11-13):** la suba de *Encuadrar* con 2000 sí viene de T14n. Con la escena de 0.1.2, el trabajo de la capa estática pasa de +11 % (4aee262) a +18 % (51dfa90) contra 0.1.2. Sin la alineación de `simbolo()` vuelve a +5–10 %. Queda como pendiente aparte (arriba). Ver `docs/bench.md`, "Contra 0.1.2".
   - **Verificación al cerrar en la PC (2026-11-11):** `npm test` 977, `npm run check` sin errores, humo 355 de 355. Ver "Medición 0.1.3-dev (T14n) - PC Ryzen 7" en Obsidian.
 
 ### T14b. Uniones
@@ -490,7 +493,9 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Plan:** `docs/plan-T15.md` (aprobado el 2026-11-12, D1 a D9; D9-A: con F3 la meta de 0.1.2 se aproxima).
   - Etapa 1a, redes por union-find (`src/core/model/redes.ts`): hecha (`fe8b5c4`).
   - Etapa 1b, marcha-parada armada con comandos (`src/core/circuitos/marchaParada.ts`): hecha (`15f9708`).
-  - Etapa 2, documento base para la fase 4 (`tests/circuitos/marcha-parada.brn`) y `npm run circuito` para comparar el dibujo a mano: hecha (este commit).
+  - Etapa 2, documento base para la fase 4 (`tests/circuitos/marcha-parada.brn`) y `npm run circuito` para comparar el dibujo a mano: hecha (`81d8acf`).
+  - Etapa 3, humo `t15-marcha-parada.mjs` a 1024×600: hecha (`e137ea8`).
+  - Etapa 4, banco contra 0.1.2 en la PC: **hecha con resultado "no pasa, causa conocida"** (este commit; la opción `--escena-012` del banco, en `2a2df4f`). *Encuadrar (F)* con 2000 no pasa: +20 % de trabajo por gesto, por T14n más lo acumulado desde T2 (D16-A; pendiente aparte arriba). *Arrastre al 31 %* con 500 y 2000, solo con la escena de 0.1.2: no pasa por resolución del reloj (0,05 ms). 0 cuadros lentos. Ver `docs/bench.md`, "Contra 0.1.2".
 
 ### Fuera del criterio de pasaje (se pueden diferir)
 Están en la sección "Editor" del plan, pero el criterio de la fase no los pide:
