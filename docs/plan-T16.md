@@ -227,7 +227,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 | 1 | Núcleo: `portapapeles.ts` (`Recorte`, `recortar`, `pegar`/`Pegar`, `problemasPegado`) con sus tests, los del ajuste 2 y los de al azar. `npm test`, `npm run check` (incluye `check:core`). **Hecha el 2026-11-13** (sección 7). | Opus xhigh |
 | 2 | Editor: acciones y atajos, `src/editor/portapapeles.ts`, `HerramientaPegar` con previa dinámica, contornos y tope provisorio, y Ctrl+D con paso a la previa. Tests del editor. Prueba a mano en `npm run dev`. **Hecha el 2026-11-13** (sección 8). | Opus alto |
 | 3 | Humo t16 y banco: escenarios nuevos, `TOPE_PREVIA_PEGAR` medido, regresión contra `v0.1.3`, `docs/bench.md`. Si duplicar 2000 no pasa, `Uniones` (sección 4). **Hecha el 2026-11-13** (sección 9). | Opus alto |
-| 4 | Cierre: este plan y `plan-fase3b.md`, `arquitectura.md` si hace falta, Obsidian (Bornera.md, nota de medición), `npm run humo` entero. | Sonnet |
+| 4 | Cierre: este plan y `plan-fase3b.md`, `arquitectura.md` si hace falta, Obsidian (Bornera.md, nota de medición), `npm run humo` entero. **Hecha el 2026-11-13** (sección 10): solo docs, sin humo, tests ni check (valen los de `4b8d008`). | Sonnet |
 
 ## 6. Riesgos
 - **Cortar y pegar en el mismo lugar se rechaza.** Los cables externos quedaron con el extremo libre sobre los bornes viejos, y pegar ahí da "borne sobre el extremo suelto de un cable". Para volver atrás está Ctrl+Z. Pegar no reconecta.
@@ -402,3 +402,19 @@ Las capturas muestran la previa en acento cuando vale y en aviso con ✕ cuando 
 **Tests:**
 - `src/editor/portapapeles.test.ts` suma el aviso de cables sin extremos.
 - Los tests del modo reducido (`portapapeles.test.ts` y `herramientas/pegar.test.ts`) ya no tienen el centro escrito a mano: lo sacan del tope.
+
+## 10. Etapa 4, hecha (2026-11-13): T16 cerrada
+
+**Solo docs:**
+- este plan;
+- `docs/plan-fase3b.md`: T16 hecha;
+- `docs/arquitectura.md`, sección "Editor e interfaz": copiar, cortar, pegar y duplicar, hecho en T16;
+- Obsidian.
+
+Por decisión de Bruno, no se corrieron humo, tests ni check, porque solo cambiaron docs. Valen los de `4b8d008`: 1476 tests, check limpio y humo 579/579.
+
+**Queda vigente:**
+- `TOPE_PREVIA_PEGAR` = 160 hasta medir en la netbook.
+- Duplicar 2000 y la previa con el tope se miden en la netbook al cerrar la fase 3b, con la prueba de la inversión (`docs/plan-fase3b.md`).
+- Contra `v0.1.3`, las 2 celdas de 100 quedan como "no pasa por resolución del reloj" (Bruno, 2026-11-13). No bloquean el cierre.
+- El pendiente de T19 por el naranja de la previa en conflicto.

@@ -40,6 +40,8 @@ Las mismas de la fase 3:
 - **Etapa 1 (núcleo, `src/core/model/portapapeles.ts`):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 7.
 - **Etapa 2 (editor: atajos, `HerramientaPegar`, Ctrl+D):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 8.
 - **Etapa 3 (humo t16 y banco):** hecha el 2026-11-13. `TOPE_PREVIA_PEGAR` = 160 (limitado hasta la netbook), contra `v0.1.3` pasa salvo 2 celdas de 100 por resolución del reloj. Detalle en `docs/plan-T16.md`, sección 9, y en `docs/bench.md`.
+- **Etapa 4 (cierre, solo docs):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 10.
+- **T16 hecha el 2026-11-13.** La medición en la netbook queda para el cierre de la fase (arriba).
 
 ### T17. Etiquetado automático
 - **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Decidir también qué etiqueta lleva lo pegado: T16 la conserva (D3-A de `docs/plan-T16.md`).
