@@ -23,7 +23,7 @@
 // entrar a simular y para los tests, no para cada cuadro.
 
 import { buscarSimbolo } from "../symbols";
-import type { Hoja } from "./documento";
+import type { Componente, Hoja } from "./documento";
 import { normalizarEtiqueta } from "./etiquetas";
 
 /** Un borne de un componente. */
@@ -53,6 +53,16 @@ type Nodo = { tipo: "borne"; comp: string; borne: string; nombre: string } | { t
 /** Orden por unidades de código: el mismo en cualquier idioma del sistema. */
 function compararTexto(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * El nombre de red que da el componente si es Fase o Neutro (una fuente de un
+ * solo borne): su etiqueta normalizada, "" si está vacía. null si no es una
+ * de esas fuentes (o el símbolo no existe).
+ */
+export function nombreDeFuente(c: Pick<Componente, "tipo" | "etiqueta">): string | null {
+  const def = buscarSimbolo(c.tipo);
+  return def && def.elemento === "fuente" && def.bornes.length === 1 ? normalizarEtiqueta(c.etiqueta) : null;
 }
 
 /**
@@ -88,7 +98,7 @@ export function redes(hoja: Hoja, opciones: OpcionesRedes = {}): Red[] {
     const def = buscarSimbolo(c.tipo);
     // Un símbolo desconocido no tiene bornes conocidos (y ningún cable puede llegarle: T15a lo rechaza).
     if (!def) continue;
-    const nombre = def.elemento === "fuente" && def.bornes.length === 1 ? normalizarEtiqueta(c.etiqueta) : "";
+    const nombre = nombreDeFuente(c) ?? "";
     let delComp = bornes.get(c.id);
     if (!delComp) bornes.set(c.id, (delComp = new Map()));
     for (const b of def.bornes) {

@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "node tests/bench/correr.mjs",
+    "circuito": "vitest run tests/circuitos/a-mano.test.ts --silent=false --reporter=verbose",
     "tauri": "tauri",
     "humo": "node tests/humo/correr.mjs"
   },

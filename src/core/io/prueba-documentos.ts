@@ -2,6 +2,7 @@
 // núcleo (src/core/io) y los del empaquetado (src/ui/brn.test.ts). Solo lo
 // importan los tests: el código de la app no lo usa.
 import { expect } from "vitest";
+import { marchaParada } from "../circuitos/marchaParada";
 import { borneDe } from "../model/cables";
 import { cablear, colocar, Espejar, Rotar, type Comando } from "../model/comandos";
 import { crearDocumento, generarId, type Cable, type Componente, type Documento, type Extremo } from "../model/documento";
@@ -138,7 +139,7 @@ export function docComandos(): { doc: Documento; pasos: { nombre: string; doc: D
   return { doc, pasos };
 }
 
-/** Los documentos de la ida y vuelta (etapa 1), con su nombre. */
+/** Los documentos de la ida y vuelta (T15a etapa 1, y la marcha-parada de T15), con su nombre. */
 export function documentosDePrueba(): [string, Documento][] {
   return [
     ["vacío", crearDocumento({ titulo: "", autor: "", fecha: "" })],
@@ -146,5 +147,7 @@ export function documentosDePrueba(): [string, Documento][] {
     ["cables, T, libres y contadores", docCables()],
     ["textos raros", docTextos()],
     ["girado y espejado con comandos", docComandos().doc],
+    ["marcha-parada", marchaParada().doc],
+    ["marcha-parada con dos N", marchaParada({ dosNeutros: true }).doc],
   ];
 }

@@ -248,7 +248,7 @@ Igual que la base, más **c8** `fuente.neutro` "N" en (16, 33), rot 180, con su 
   - Gzip y versión 1, generado con el `serializar` y el `empaquetar` de la app por un script, como `tests/humo/datos/tildes.mjs`.
   - Un test en `tests/circuitos/` lo abre y lo compara con `marchaParada()`.
   - Es la semilla de "archivos viejos abren bien" para las migraciones de la fase 4. Si el armado cambia, el test falla y el archivo se regenera a mano, a propósito.
-- **Comando de D8-B:** dado un `.brn` dibujado a mano, comparar la partición de sus bornes, con nombres, contra la de la base. No se comparan cables ni geometría. Ejemplo: `npm run circuito -- archivo.brn` (nombre a definir en la etapa 2; sin dependencias nuevas).
+- **Comando de D8-B:** dado un `.brn` dibujado a mano, comparar la partición de sus bornes, con nombres, contra la de la base. No se comparan cables ni geometría. Quedó como `npm run circuito`, con la ruta en la variable de entorno `BORNERA_BRN` (paso exacto en la sección 5; detalle en la etapa 2 de la sección 9).
 
 ### Humo (etapa 3): `tests/humo/t15-marcha-parada.mjs`
 A 1024×600:
@@ -272,7 +272,14 @@ A 1024×600:
 3. Ver los 4 puntos de unión.
 4. Ctrl+S como `marcha-parada.brn`. Cerrar la app con la X.
 5. Volver a abrir la app y Abrir el archivo: el mismo dibujo, el título sin "•" y Deshacer desactivado.
-6. Traer `marcha-parada.brn` a la PC y correr el comando de D8-B: misma partición que la base.
+6. Traer `marcha-parada.brn` a la PC y correr el comando de D8-B: misma partición que la base. En PowerShell, en la carpeta del repo (la ruta, la del archivo traído):
+   ```powershell
+   $env:BORNERA_BRN = "C:\Users\jerke\Downloads\marcha-parada.brn"; npm run circuito; Remove-Item Env:BORNERA_BRN
+   ```
+   - **Pasa:** «✓ … misma partición de bornes que la base» y la línea «misma partición que la base (4 redes, 12 bornes)».
+   - **Falla:** la lista de diferencias. Por ejemplo, «Falta "H1" (senalizacion.lampara).», «Sobra "L1" (fuente.fase, c9): fuente con un nombre de red nuevo.» o «Se partió la red {S1·14, K1·14, K1·A1, H1·X1}: quedó en {S1·14, K1·A1, H1·X1} y {K1·14}.».
+   - Sin la variable, el test se saltea («1 skipped»). `Remove-Item` la borra para que no quede en la terminal.
+   - Vale una T donde la base tiene dos cables en un borne, otro orden, otros ids u otras posiciones, y también dos Neutro "N" sin cable entre ellos (se unen por nombre).
 7. Anotar cuánto tardó en dibujarla. Es referencia, no criterio.
 
 **Criterio "sin trabas en 1024×600"**
@@ -382,6 +389,23 @@ Cada etapa cierra con `npm test` y `npm run check`, y con `npm run humo` si toca
 - `tests/circuitos/marcha-parada.brn`, su generador y su test.
 - El comando para comparar un `.brn` dibujado a mano.
 - Commit: "Fase 3, T15 etapa 2: documento base para la fase 4".
+- **Hecha (2026-11-13).**
+  - Las dos variantes en `documentosDePrueba()`: las cubren los invariantes, la forma canónica y las dos idas y vueltas (núcleo y gzip).
+  - **Archivo congelado (D5-B):**
+    - `tests/circuitos/marcha-parada.mjs` escribe `marcha-parada.brn` (494 bytes) con el `serializar` y el `empaquetar` de la app, como `tildes.mjs`. Antes comprueba que sea versión 1, que abra sin avisos y que al guardarlo de nuevo dé el mismo texto.
+    - `marcha-parada.test.ts` comprueba la marca de gzip y la versión 1, y que abra sin avisos `toEqual` a `marchaParada()`. Si no, falla con «El armado de marchaParada() cambió y marcha-parada.brn no. Si el cambio es a propósito, regeneralo con `node tests/circuitos/marcha-parada.mjs` y commitealo». Si falta el archivo, dice cómo generarlo. Se probaron los dos mensajes.
+    - Se compara el modelo, no el texto: cuando el formato cambie (fase 4), el archivo v1 tiene que seguir abriendo igual.
+  - **Comparar redes (D8-B):** `src/core/circuitos/compararRedes.ts`, `compararRedes(dibujado, base)`, devuelve las diferencias en texto.
+    - Componentes por etiqueta normalizada y tipo: falta, sobra y repetido. Las dos K1 (auxiliar y bobina) no son repetidas: distinto tipo.
+    - Fase y Neutro quedan fuera de "repetido" (varias "N" son la misma red). Se comparan por nombre de red y tipo. Una que sobra con un nombre que la base no tiene lo dice («fuente con un nombre de red nuevo»); una sin nombre, también.
+    - Si los componentes no coinciden, las redes no se comparan.
+    - Partición de los bornes en "etiqueta·borne" con `unirPorNombre` en los dos documentos; el borne de una fuente es su nombre de red ("N·N" aunque haya varias). Dice qué red se partió y qué redes se unieron. No mira cables, ids, orden ni geometría. Las redes sin bornes (cables sueltos) no cuentan.
+    - `nombreDeFuente` sale de `redes.ts`: la misma regla que da los nombres de red.
+  - 5 tests en `compararRedes.test.ts`: movido con `Mover`, renumerado y en otro orden (0 diferencias); sin w5 (dice qué red se partió); S0 puenteado (dice qué redes se unieron); la variante con dos N, también con "n " (0 diferencias); componentes (falta, sobra, repetido, fuentes).
+  - **Comando:** `tests/circuitos/a-mano.test.ts` con `npm run circuito` (`vitest run … --silent=false --reporter=verbose`, para ver el resultado). Sin `BORNERA_BRN` se saltea, también en `npm test`. Falla si el archivo no se lee, no abre o abre con avisos. Probado en PowerShell con el congelado (pasa) y con uno sin w5 (falla y dice qué red se partió).
+  - Los tests de `tests/` pasan por svelte-check, y sin `@types/node`. Los imports de Node llevan `// @ts-expect-error`, como `vite.config.js`.
+  - 1378 tests (más el del comando, salteado), check limpio, humo 513/513. Sin banco: no toca el dibujo.
+  - `docs/arquitectura.md`: `src/core/circuitos/` también tiene la comparación por redes. `CLAUDE.md`: `npm run circuito` en los comandos.
 
 **Etapa 3 — Humo `t15-marcha-parada.mjs`** a 1024×600 (sección 4).
 - Commit: "Fase 3, T15 etapa 3: humo de la marcha-parada".

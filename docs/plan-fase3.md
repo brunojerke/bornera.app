@@ -489,7 +489,8 @@ Las herramientas van en `src/editor/herramientas/`. Reciben eventos ya pasados a
 - **Cierre:** versión 0.1.3, nota "Medición 0.1.3 - netbook.md" y fase 3 tildada en Bornera.md.
 - **Plan:** `docs/plan-T15.md` (aprobado el 2026-11-12, D1 a D9; D9-A: con F3 la meta de 0.1.2 se aproxima).
   - Etapa 1a, redes por union-find (`src/core/model/redes.ts`): hecha (`fe8b5c4`).
-  - Etapa 1b, marcha-parada armada con comandos (`src/core/circuitos/marchaParada.ts`): hecha (este commit).
+  - Etapa 1b, marcha-parada armada con comandos (`src/core/circuitos/marchaParada.ts`): hecha (`15f9708`).
+  - Etapa 2, documento base para la fase 4 (`tests/circuitos/marcha-parada.brn`) y `npm run circuito` para comparar el dibujo a mano: hecha (este commit).
 
 ### Fuera del criterio de pasaje (se pueden diferir)
 Están en la sección "Editor" del plan, pero el criterio de la fase no los pide:

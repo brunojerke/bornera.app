@@ -22,6 +22,7 @@ Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en 
 - `npm run test:watch`   tests en modo vigilancia
 - `npm run bench`        banco de dibujado (100/500/2000 símbolos) en un Chrome/Edge headless, sin abrir la ventana
 - `npm run humo`         pruebas de humo de la app real en Chrome/Edge headless a 1024×600 (`tests/humo/*.mjs`: `tNN-*.mjs` por tarea o con nombre de tema; `-- t08` corre una, `-- --capturas=CARPETA` guarda capturas). Cada tarea suma ahí sus comprobaciones
+- `npm run circuito`     compara un `.brn` dibujado a mano con la marcha-parada base, por redes (ruta en `BORNERA_BRN`; sin ella se saltea). Paso para PowerShell en `docs/plan-T15.md` sección 5
 - `npm run check`        chequeo de tipos completo (svelte-check + `check:core`)
 - `npm run check:core`   chequeo de tipos de `src/core` sin la librería DOM
 - `npm run check:watch`  svelte-check en modo vigilancia
