@@ -20,7 +20,7 @@
 | D7 atajos | **con Ctrl+Insert y Mayús+Insert** | Ctrl+C, Ctrl+X, Ctrl+V y Ctrl+D, Mayús+Supr (cortar), Ctrl+Insert (copiar) y Mayús+Insert (pegar). |
 
 **Ajustes de Bruno:**
-1. El tope de la previa ("revisar solo al soltar") se fija midiendo en la etapa 3. El tope es el N más grande con el que la revisión por punto da ≤ 8 ms en la PC. Si 500 queda por encima del tope, se saca del criterio la revisión por punto con 500 (sección 4).
+1. El tope de la previa ("revisar solo al soltar") se fija midiendo en la etapa 3. El tope es el N más grande con el que la revisión por punto da ≤ 5 ms en la PC (p95, ver la sección 9; antes decía ≤ 8 ms). Si 500 queda por encima del tope, se saca del criterio la revisión por punto con 500 (sección 4).
 2. Los tests de conflicto suman dos casos, con Ctrl+V y con Ctrl+D: un cable existente que pasa sobre un borne pegado, y un extremo suelto existente bajo un borne pegado.
 3. Banco: `git fetch --tags` y comparar contra `v0.1.3`.
 4. La nota de arriba sobre la skill de cuenta.
@@ -200,7 +200,7 @@ Escenarios nuevos en `tests/bench/pagina.ts`, al 31 %. Pegan a la derecha de la 
 |---|---|---|
 | *Pegar 500 y deshacer* | paso de pegar y paso de deshacer (`medirPaso`), y los cuadros siguientes | cada paso: mediana ≤ 40 ms y máximo ≤ 80 ms; 0 cuadros lentos (> 16 ms) |
 | *Duplicar todo (2000) y deshacer* | Ctrl+D con todo seleccionado; cada paso y los cuadros siguientes | cada paso: mediana ≤ 150 ms y máximo ≤ 300 ms; 0 lentos |
-| *Previa de pegar N* (N = 40, 80, 160, 320, 500) | cuadros de la previa y revisión por punto | por cuadro: mediana ≤ 4 ms, p95 ≤ 8 ms y 0 lentos. **`TOPE_PREVIA_PEGAR` = el N más grande con revisión por punto ≤ 8 ms (mediana; el máximo se informa)**. Si 500 > tope, la revisión con 500 sale del criterio (ajuste 1); sus cuadros, con revisión al soltar, siguen contando |
+| *Previa de pegar N* (N = 40, 80, 160, 320, 500) | cuadros de la previa y revisión por punto | por cuadro: mediana ≤ 4 ms, p95 ≤ 8 ms y 0 lentos. **`TOPE_PREVIA_PEGAR` = el N más grande de la serie con revisión por punto p95 ≤ 5 ms y 0 cuadros lentos (la mediana y el máximo se informan; criterio corregido en la sección 9)**. Si 500 > tope, la revisión con 500 sale del criterio (ajuste 1); sus cuadros, con revisión al soltar, siguen contando |
 | *Copiar 2000* | paso de Ctrl+C | solo se informa |
 
 Por qué esos números: con el factor de 2,5 de la netbook, 40 ms en la PC son unos 100 ms allá, la respuesta inmediata para una acción puntual. Duplicar 2000 es el caso extremo: 150 ms son unos 375 ms en la netbook, sin cuadros lentos después.
@@ -214,6 +214,8 @@ Por qué esos números: con el factor de 2,5 de la netbook, 40 ms en la PC son u
 **Si no pasa duplicar 2000:** el primer sospechoso es `Uniones` (el pendiente de T14b, "para cuando llegue pegar"). Se perfila el paso y, si `Uniones` pesa, se acelera en T16 (claves numéricas). Si no, el pendiente sigue abierto. El segundo sospechoso es la invalidación de a una caja por elemento (S4).
 
 ### Netbook
+**Decisión de Bruno (2026-11-13, etapa 3):** duplicar 2000 y la previa con el tope se miden en la netbook al cerrar la fase 3b, junto con la prueba de la inversión (`docs/plan-fase3b.md`). T16 no espera por eso. El texto de abajo es el criterio original.
+
 Solo si en la PC algún paso pasa la mitad de su tope, si aparece un cuadro lento, o si el tope de la previa da menos de 40. Hace falta una alpha (la 0.1.3 final no tiene F3 ni menú de desarrollo), así que primero va la autorización de Bruno.
 
 ## 5. Etapas
@@ -224,7 +226,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 | 0 | Docs: `plan-fase3b.md`, este plan, `arquitectura.md` (fase 3b en la hoja de ruta y la nota de "Editor e interfaz"), `plan-fase3.md`, `SKILL.md` de bornera-inicio y Obsidian. Commit solo de docs. **Hecha.** | Opus (la sesión del plan) |
 | 1 | Núcleo: `portapapeles.ts` (`Recorte`, `recortar`, `pegar`/`Pegar`, `problemasPegado`) con sus tests, los del ajuste 2 y los de al azar. `npm test`, `npm run check` (incluye `check:core`). **Hecha el 2026-11-13** (sección 7). | Opus xhigh |
 | 2 | Editor: acciones y atajos, `src/editor/portapapeles.ts`, `HerramientaPegar` con previa dinámica, contornos y tope provisorio, y Ctrl+D con paso a la previa. Tests del editor. Prueba a mano en `npm run dev`. **Hecha el 2026-11-13** (sección 8). | Opus alto |
-| 3 | Humo t16 y banco: escenarios nuevos, `TOPE_PREVIA_PEGAR` medido, regresión contra `v0.1.3`, `docs/bench.md`. Si duplicar 2000 no pasa, `Uniones` (sección 4). | Opus alto |
+| 3 | Humo t16 y banco: escenarios nuevos, `TOPE_PREVIA_PEGAR` medido, regresión contra `v0.1.3`, `docs/bench.md`. Si duplicar 2000 no pasa, `Uniones` (sección 4). **Hecha el 2026-11-13** (sección 9). | Opus alto |
 | 4 | Cierre: este plan y `plan-fase3b.md`, `arquitectura.md` si hace falta, Obsidian (Bornera.md, nota de medición), `npm run humo` entero. | Sonnet |
 
 ## 6. Riesgos
@@ -293,7 +295,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 - `src/editor/dibujoPegar.ts`: la previa en la capa dinámica, armada una vez por recorte y dibujada trasladada. Con más de `LIMITE_ARRASTRE_COMPLETO` componentes a la vista, solo contornos (un `rectangulos`).
 - `src/editor/editor.ts`: `accion` con las reglas de la sección 2, `iniciarPegar`, `pegando`, la pista y `refrescarHerramienta`.
 - `src/editor/punteros.ts`: si pegar o duplicar abren una previa nueva, se le pasa el último punto del mouse sobre el lienzo. `refrescar` (cámara) también la mueve.
-- **Aviso nuevo, no previsto en E6:** si la selección son solo cables sin sus dos extremos en lo elegido, el recorte queda vacío (D2b-A). Avisa "Lo seleccionado no se puede copiar: un cable entra solo con sus dos extremos en lo copiado." y no toca el portapapeles. Bruno puede cambiar el texto.
+- **Aviso nuevo, no previsto en E6:** si la selección son solo cables sin sus dos extremos en lo elegido, el recorte queda vacío (D2b-A). Avisa "Para copiar un cable, seleccioná también lo que conecta en sus dos puntas." (texto de Bruno en la etapa 3) y no toca el portapapeles.
 - **Detalle:** Ctrl+Z no baja los contadores. Por eso el test del ajuste 1 los sube con una bobina puesta por otra vía y después la deshace. Las ids pegadas son las de los contadores de ese momento (`c83`, no `c82`).
 
 **Tests:**
@@ -338,3 +340,65 @@ Las capturas muestran la previa en acento cuando vale y en aviso con ✕ cuando 
 **Para la etapa 3:**
 - Humo `t16-copiar-pegar.mjs` (sección 4). El script temporal sirve de base: el cable se cierra con un clic sobre un borne, no en un punto libre.
 - Medir `TOPE_PREVIA_PEGAR`. La previa en modo reducido sigue dibujando todos los tramos de los cables (un `lineas` por cuadro); los componentes, solo los que están a la vista.
+
+## 9. Etapa 3, hecha (2026-11-13)
+
+**Cambios al criterio de Bruno, al empezar la etapa (antes de medir):**
+- `TOPE_PREVIA_PEGAR`: la revisión por punto tiene que dar ≤ 5 ms en la PC, no 8. Con el factor de 2,5 de la netbook, 8 ms serían un cuadro lento allá.
+- Al aprobar la etapa: cuenta el p95 de la revisión, no la mediana, y además 0 cuadros lentos. La mediana se informa.
+- La previa se mide moviéndose sobre la zona más densa de la escena, no sobre espacio vacío: el costo de `problemasPegado` depende de lo que hay debajo.
+- R1: la regresión usa los escenarios comunes y los de cables que ya existían en `v0.1.3`. R2: si el tope daba menos de 40, se anotaba y nada más.
+- Texto del aviso de cables sin extremos: "Para copiar un cable, seleccioná también lo que conecta en sus dos puntas.".
+- Si duplicar 2000 o pegar 500 no pasaban, había que frenar y presentar opciones antes de optimizar. **Pasaron**, así que no se optimizó nada.
+
+**Humo `tests/humo/t16-copiar-pegar.mjs` (38 comprobaciones):**
+- los 16 casos de la prueba a mano de la etapa 2, con un cable tendido con W que se cierra sobre H1·X1;
+- Ctrl+Insert, Mayús+Insert y Mayús+Supr;
+- Ctrl+X y pegar en otro lado;
+- Ctrl+D repetido;
+- los dos casos del ajuste 2: con Ctrl+V, un cable existente sobre un borne pegado; con Ctrl+D, un extremo suelto bajo un borne, que pasa a la previa flotante y se suelta corrida sin saltar;
+- la Fase "L1";
+- el aviso nuevo;
+- con el foco en la etiqueta y en el buscador, solo se comprueba que el editor no actúa (ni previa ni paso). No se comprueba el portapapeles del sistema;
+- Ctrl+N con «No guardar», sin quedar colgado, y pegar en el documento nuevo.
+
+**Banco** (`tests/bench/pagina.ts`, al final de la escena con cables; detalle en `docs/bench.md`):
+- **Escenarios nuevos:**
+  - *Previa de pegar N* con N = 40, 80, 160, 320 y 500;
+  - *Pegar 500 y deshacer*;
+  - *Duplicar todo (2000) y deshacer*;
+  - *Copiar 2000*.
+- **Lo que suma el banco para medirlos:**
+  - el p95 del paso;
+  - los pasos impares (deshacer) aparte;
+  - un gancho `antes` que no cuenta en el paso;
+  - la revisión por punto medida aparte, con cualquier tamaño, y los conflictos de cada punto (siempre > 0: debajo hay algo).
+- **Condiciones de la PC:**
+  - La primera corrida se descartó: la PC estaba en "Equilibrado", con Opera y Gemini abiertos, y el mismo paso variaba hasta 3 veces entre corridas.
+  - La que cuenta se repitió en las condiciones de T15 ("Mejor rendimiento", enchufada, sin Opera ni Gemini), con las condiciones anotadas en cada corrida.
+
+**Resultados (PC, condiciones de T15, 16 corridas de HEAD):**
+
+| Escenario | Medido | Criterio | Resultado |
+|---|---|---|---|
+| Pegar 500 | paso 3,8 / máx. 8,8 ms; deshacer 0,9 / 2,6 ms; 0 lentos | ≤ 40 / 80 ms | pasa |
+| Duplicar todo (2000) | paso 42,5 / máx. 55,8 ms; deshacer 8,0 / 14,0 ms; 0 lentos | ≤ 150 / 300 ms | pasa |
+| Previa de pegar 40 a 500 | cuadro: mediana ≤ 2,1, p95 ≤ 3,0 ms; 0 lentos | mediana ≤ 4, p95 ≤ 8 | pasa |
+| Revisión por punto | p95: 40 → 0,3 · 80 → 0,5 · 160 → 0,9 · 320 → 2,1 · 500 → 3,2 ms | p95 ≤ 5 ms | toda la serie |
+| Contra `v0.1.3` (62 celdas, ABBA ×3, dos tandas) | 2 celdas de 100 suben un paso del reloj en las dos tandas; 0 lentos | sin suba que se repita | pasa, salvo esas 2: **no pasa por resolución del reloj**, como en T15 |
+
+**`TOPE_PREVIA_PEGAR` = 160** (era 80, provisorio):
+- Medido, el tope sería 500, porque toda la serie pasa.
+- Bruno lo limitó a 160 hasta medir en la netbook al cerrar la fase 3b: en Mint la previa fue unas 6 veces más lenta que en la PC (T14a), y con 160 podría pasar los 16 ms por punto. **El tope se revisa allá.**
+- Con el tope en 160, la previa de 160 revisa en cada punto y dibuja sus ✕ (hasta 796), y su cuadro da 2,1 / 3,0 ms. La de 320 y la de 500 revisan al soltar.
+
+**Netbook:**
+- Con la PC inestable, duplicar 2000 dio ~116 ms, más de la mitad de su tope, y eso disparaba la netbook según la sección 4.
+- En las condiciones de T15 da 42,5 ms y ya no la dispara.
+- Igual queda la decisión de Bruno: duplicar 2000 y la previa con el tope se miden en la netbook al cerrar la fase 3b, con la prueba de la inversión (`docs/plan-fase3b.md`).
+
+**Pendiente para T19:** el naranja de la previa en conflicto (`--aviso`) choca con el naranja de las validaciones en vivo. Anotado en `docs/plan-fase3b.md`.
+
+**Tests:**
+- `src/editor/portapapeles.test.ts` suma el aviso de cables sin extremos.
+- Los tests del modo reducido (`portapapeles.test.ts` y `herramientas/pegar.test.ts`) ya no tienen el centro escrito a mano: lo sacan del tope.

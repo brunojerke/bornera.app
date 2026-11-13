@@ -18,6 +18,109 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 abajo). Las comparaciones contra 0.1.2 usan esta opción.
 
+## Copiar, cortar, pegar y duplicar (fase 3b, T16 etapa 3) — 2026-11-13
+
+**Resultado:**
+- **Escenarios nuevos: pasan** todos, con 0 cuadros lentos en 16 corridas.
+- **`TOPE_PREVIA_PEGAR` = 160.** Medido, toda la serie pasa, incluso 500, pero Bruno lo limitó a 160 hasta medir en la netbook al cerrar la fase 3b. En Mint, la previa fue unas 6 veces más lenta que en la PC (T14a).
+- **Contra `v0.1.3`: pasa, salvo 2 celdas de 100 que no pasan por resolución del reloj,** como en T15:
+  - *Seleccionar al 31 %*: la mediana sube de 0,40 a 0,50 y el p95 de 0,70 a 0,80.
+  - *Mover 1 al 31 %*: la mediana sube de 0,30 a 0,35 y el p95 de 0,95 a 1,05.
+  - Es un paso del reloj del banco, que mide de a 0,1 ms. Con 6 corridas, la mediana puede quedar a mitad de paso: de ahí los +0,05.
+  - En esas escenas el código que corre es el mismo en las dos versiones: `src/render` no cambió desde `v0.1.3` y las escenas de 100, 500 y 2000 no usan el editor.
+  - La primera corrida, con la PC inestable, había marcado otras celdas de 100 (*Desplazar al 100 %* y *Mover 1 al 31 %*, +0,05).
+- Ningún lento en las 28 corridas de la repetición (16 de HEAD y 12 de `v0.1.3`).
+
+**Cómo se midió** (criterio de `docs/plan-T16.md`, sección 4, y la regla de `docs/plan-T15.md`, sección 6):
+- HEAD es la etapa 3 sobre `99e1ce2`, sin commit al medir. Se compara contra un worktree en `v0.1.3` con su propio `node_modules` (`npm ci`), después de `git fetch --tags`.
+- Primero, 4 corridas de HEAD para la serie del tope. Después, dos tandas ABBA ×3: 6 corridas por versión en cada tanda y, por celda, la mediana de las 6.
+- Cuentan la mediana y el p95 por cuadro, sin redondear, y los lentos sumados. Una suba (más de 10 %, o cualquier lento donde `v0.1.3` tiene 0) cuenta solo si se repite en la tanda 2.
+- Escenarios comunes (62): los de 100, 500 y 2000 sin cables, y los de la escena con cables que ya existían en `v0.1.3`. Es la escena por defecto en las dos versiones, sin `--escena-012`: el banco y `src/render` no cambiaron.
+- Los escenarios nuevos van al final de la escena con cables, así lo de antes corre igual. Se cuentan las 16 corridas de HEAD (4 de la serie y 12 de las tandas).
+
+**Condiciones de la PC, corrida por corrida.** Ryzen 7 170, Edge 157.0.4341.46 headless, 1366×768, dpr 1, sin GPU.
+- **Repetición (la que cuenta), 28 corridas entre las 14:50 y las 14:58:**
+  - todas enchufadas y cargando, con la batería del 63 al 70 %;
+  - todas en el modo "Mejor rendimiento";
+  - en todas, Opera y Gemini cerrados;
+  - VS Code y Claude abiertos, porque son la sesión que corre el banco.
+  - El registro de cada corrida (hora, batería, modo y apps abiertas) se guardó al medir. En todas dio lo mismo.
+- **Primera corrida, descartada (24 corridas entre las 14:09 y las 14:23):**
+  - plan "Equilibrado", cargando con 36 % de batería, con Opera y Gemini abiertos;
+  - el mismo paso varió hasta 3 veces entre corridas: *Soltar con todo seleccionado* de 13 a 43 ms y duplicar 2000 de 41 a 130 ms;
+  - con esas corridas, el tope salía 160 o 500 según el momento.
+  - Desde ahora, el banco se corre en las condiciones de T15 y se anotan.
+
+### Escenarios nuevos (solo HEAD, 16 corridas)
+
+Escena con cables (2000 componentes, 3000 cables y 30 T), al 31 %. Cuadro y paso en ms: mediana de las 16 corridas; el máximo es el mayor y los lentos, la suma.
+
+| Escenario | Cuadro: mediana / p95 / máx. | Lentos | Paso: mediana / p95 / máx. | Deshacer: mediana / máx. | Criterio | Resultado |
+|---|---:|---:|---:|---:|---|---|
+| Pegar 500 y deshacer | 0,60 / 1,00 / 1,80 | 0 | 3,8 / 6,4 / 8,8 | 0,9 / 2,6 | cada paso: mediana ≤ 40, máx. ≤ 80; 0 lentos | pasa |
+| Duplicar todo (2000) y deshacer | 1,30 / 1,60 / 2,00 | 0 | 42,5 / 45,6 / 55,8 | 8,0 / 14,0 | cada paso: mediana ≤ 150, máx. ≤ 300; 0 lentos | pasa |
+| Copiar 2000 | 2,50 / 2,80 / 3,30 | 0 | 2,1 / 4,3 / 4,9 | – | se informa | – |
+| Previa de pegar 40 | 0,80 / 1,20 / 2,70 | 0 | 0,1 / 0,3 / 1,8 | – | cuadro: mediana ≤ 4, p95 ≤ 8; 0 lentos | pasa |
+| Previa de pegar 80 | 1,20 / 1,70 / 3,40 | 0 | 0,3 / 0,4 / 2,1 | – | ídem | pasa |
+| Previa de pegar 160 | 2,10 / 3,00 / 5,90 | 0 | 0,5 / 0,9 / 2,4 | – | ídem | pasa |
+| Previa de pegar 320 | 0,70 / 1,00 / 2,70 | 0 | 0,0 / 0,1 / 0,2 | – | ídem (revisa al soltar) | pasa |
+| Previa de pegar 500 | 0,90 / 1,25 / 2,90 | 0 | 0,0 / 0,1 / 0,2 | – | ídem (revisa al soltar) | pasa |
+
+- *Pegar 500*:
+  - el recorte tiene 500 elementos (224 componentes y 276 cables) y se pega a la derecha de la escena, sin conflictos;
+  - abrir la previa va fuera del paso: el paso es el clic que suelta (revisa, crea y ejecuta);
+  - lo pegado cae fuera de la vista, como fija el plan.
+- *Duplicar todo*: Ctrl+D con los 5030 elementos seleccionados, pegados al lado, y Ctrl+Z.
+- **Previa**:
+  - con 320 y 500 la herramienta no revisa en cada punto (se pasa del tope de 160), así que el paso no incluye la revisión y no hay ✕ que dibujar;
+  - con 160 se revisa en cada punto y se dibujan hasta 796 ✕.
+
+### Revisión por punto de la previa y el tope
+
+La revisión (`problemasPegado` con la consulta y los contadores del editor) se mide aparte del paso y con cualquier tamaño, en los mismos 120 puntos por corrida.
+
+**Por dónde pasa la previa:**
+- El recorte son los componentes más cercanos a la zona densa: a un cuarto del ancho de la escena desde la izquierda, a media altura, lejos del anillo vacío alrededor del grupo del centro. Los cables entre ellos entran solos (D2a).
+- La previa barre 60 puntos de grilla, de dx −30 a +29 con dy = 1, respecto del original. Pasa por encima del mismo grupo y de sus vecinos.
+- Debajo siempre hay bornes y cables. El banco cuenta los conflictos de cada punto, y el mínimo nunca es 0.
+
+| N (serie) | Elementos (comp. + cables) | Conflictos por punto | Revisión: mediana / p95 / máx. (ms) | p95 por corrida | ≤ 5 ms (p95) |
+|---:|---|---|---:|---|---|
+| 40 | 38 (17 + 21) | 10–147 | 0,20 / 0,30 / 1,80 | 0,3–0,4 | sí |
+| 80 | 79 (33 + 46) | 33–373 | 0,30 / 0,50 / 2,00 | 0,4–0,7 | sí |
+| 160 | 160 (74 + 86) | 48–796 | 0,60 / 0,90 / 7,90 | 0,8–1,2 | sí |
+| 320 | 318 (146 + 172) | 113–1514 | 1,20 / 2,10 / 3,50 | 2,0–2,3 | sí |
+| 500 | 500 (224 + 276) | 206–2520 | 1,90 / 3,20 / 5,40 | 2,9–3,5 | sí |
+
+- Por el criterio (el mayor N con p95 ≤ 5 ms), el tope medido es 500. **Queda en 160** por el límite de Bruno. Se revisa en la netbook al cerrar la fase 3b, junto con duplicar 2000.
+- Si 160 resulta caro allá, el primer cambio está en la etapa 1, sección 7 de `docs/plan-T16.md`: calcular una sola vez el traslado, el índice del lote y los recorridos.
+
+### Contra `v0.1.3`: las celdas con alguna suba
+
+Cada celda: mediana de las 6 corridas, en ms por cuadro. Las demás celdas, de las 62, no tienen suba en ninguna tanda.
+
+| Escena · escenario | 0.1.3: mediana / p95 | HEAD: mediana / p95 (tanda 1) | Suba T1 | Suba T2 | Resultado |
+|---|---:|---:|---|---|---|
+| 100 · Seleccionar al 31 % | 0,40 / 0,70 | 0,50 / 0,80 | mediana, p95 | mediana, p95 | **no pasa por resolución del reloj** |
+| 100 · Mover 1 al 31 % | 0,30 / 0,95 | 0,35 / 1,05 | mediana, p95 | mediana, p95 | **no pasa por resolución del reloj** |
+| 100 · Arrastrar 40 en contornos al 58 % | 0,90 / 3,00 | 1,20 / 3,85 | mediana, p95 | – | pasa (no se repite) |
+| 500 · Desplazar al 100 % | 0,25 / 0,45 | 0,30 / 0,50 | mediana, p95 | – | pasa (no se repite) |
+| 500 · Arrastre al 31 % | 0,30 / 0,60 | 0,30 / 0,75 | p95 | mediana | pasa (otra métrica) |
+| 500 · Editar al 31 % | 0,60 / 1,00 | 0,60 / 1,15 | p95 | – | pasa (no se repite) |
+| 500 · Seleccionar al 31 % | 0,80 / 1,20 | 0,85 / 1,40 | p95 | – | pasa (no se repite) |
+| 500 · Arrastre con todo seleccionado al 31 % | 0,60 / 1,10 | 0,75 / 1,30 | mediana, p95 | – | pasa (no se repite) |
+| 500 · Mover 1 al 31 % | 0,30 / 0,80 | 0,35 / 0,85 | mediana | p95 | pasa (otra métrica) |
+| 500 · Mover todo al 31 % | 1,55 / 4,00 | 1,75 / 4,35 | mediana | – | pasa (no se repite) |
+| 500 · Editar al 100 % | 0,40 / 0,55 | 0,35 / 0,60 | – | mediana, p95 | pasa (no se repite) |
+| 2000 · Desplazar al 100 % | 0,20 / 0,30 | 0,20 / 0,35 | p95 | – | pasa (no se repite) |
+| 2000 · Mover 1 al 31 % | 0,30 / 0,70 | 0,35 / 0,70 | mediana | – | pasa (no se repite) |
+| 2000 · Editar al 100 %, Editar al 31 %, Seleccionar al 31 % | – | – | – | mediana, p95 | pasa (no se repite) |
+| 2000 + cables · Cable en curso al 58 % | 0,30 / 0,40 | 0,30 / 0,45 | p95 | – | pasa (no se repite) |
+| 2000 + cables · Soltar reconectando al 58 % | 0,60 / 0,80 | 0,60 / 0,90 | p95 | – | pasa (no se repite) |
+| 2000 + cables · Girar 1 cableado al 58 % | – | – | – | p95 | pasa (no se repite) |
+
+Lentos: 0 en las dos versiones, en todas las celdas y las dos tandas.
+
 ## Contra 0.1.2 (fase 3, T15 etapa 4) — 2026-11-13
 
 **Resultado: no pasa, con la causa conocida.**

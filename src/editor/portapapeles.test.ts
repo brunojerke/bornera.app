@@ -18,6 +18,7 @@ import {
   AVISO_NADA_PARA_CORTAR,
   AVISO_NADA_PARA_DUPLICAR,
   AVISO_NADA_PARA_PEGAR,
+  AVISO_RECORTE_VACIO,
   documentoNuevo,
   Editor,
   LIMITE_ARRASTRE_COMPLETO,
@@ -103,6 +104,23 @@ describe("Editor: copiar, cortar y pegar (T16)", () => {
     expect(editor.accion("pegar")).toBe(false);
     expect(avisos).toEqual([AVISO_NADA_PARA_PEGAR]);
     expect(editor.herramienta).toBeNull();
+  });
+
+  it("solo un cable sin sus dos extremos en lo elegido: avisa cómo copiarlo y no toca el portapapeles", () => {
+    const { editor, avisos, poner, tender, pasos } = armar();
+    const k1 = poner(0, 0, "K5");
+    const w = tender({ tipo: "borne", comp: k1, borne: "A1" }, libre(0, -6));
+    editor.seleccionarIds([k1]);
+    editor.accion("copiar");
+    const guardado = recorteGuardado();
+    const antes = pasos();
+    editor.seleccionarIds([w]);
+    expect(editor.accion("copiar")).toBe(false);
+    expect(editor.accion("cortar")).toBe(false);
+    expect(avisos).toEqual([AVISO_RECORTE_VACIO, AVISO_RECORTE_VACIO]);
+    expect(AVISO_RECORTE_VACIO).toBe("Para copiar un cable, seleccioná también lo que conecta en sus dos puntas.");
+    expect(recorteGuardado()).toBe(guardado);
+    expect(pasos()).toBe(antes);
   });
 
   it("copiar y pegar: la previa sigue al mouse, el clic pega en un paso y queda seleccionado lo pegado", () => {
@@ -469,8 +487,9 @@ describe("Editor: la previa de pegar (T16)", () => {
     editor.accion("pegar");
     const h = editor.pegando!;
     expect(h.reducido).toBe(true);
-    // Centro de la caja: x (-1 + 4·80 + 1) / 2 = 160, y 0. Mouse en (160, 20): dx 0, dy 20.
-    mover(editor, 160, 20);
+    // Centro de la caja: x (-1 + 4·TOPE + 1) / 2 = 2·TOPE, y 0. Mouse en (2·TOPE, 20): dx 0, dy 20.
+    const cx = 2 * TOPE_PREVIA_PEGAR;
+    mover(editor, cx, 20);
     expect(h.previa).toMatchObject({ dx: 0, dy: 20, conflictos: [] });
     expect(editor.pista).toMatch(/recién al soltar/);
 
@@ -480,7 +499,7 @@ describe("Editor: la previa de pegar (T16)", () => {
     const n = pasos();
     const esperados = problemasPegado(recorte, 0, 20, consultaHoja(hoja(doc)), doc.contadores);
     expect(esperados.length).toBeGreaterThan(0);
-    clic(editor, 160, 20);
+    clic(editor, cx, 20);
     expect(pasos()).toBe(n);
     expect(avisos.at(-1)).toMatch(/^No se puede pegar acá: /);
     expect(h.previa!.conflictos.map(({ clave, x, y }) => ({ clave, x, y }))).toEqual(esperados.map(({ clave, x, y }) => ({ clave, x, y })));
@@ -491,12 +510,12 @@ describe("Editor: la previa de pegar (T16)", () => {
     const previstas = { contadores: { ...doc.contadores } };
     const ids0 = recorte.componentes.map(() => generarId(previstas));
     expect(problemasPegado(recorte, 0, 20, consultaHoja(hoja(doc)), doc.contadores)).toEqual([]);
-    clic(editor, 160, 20);
+    clic(editor, cx, 20);
     expect(pasos()).toBe(n);
     expect(editor.herramienta).toBeNull();
     const pegados = comps(doc).slice(TOPE_PREVIA_PEGAR + 1).map((c) => c.id);
     expect(pegados).toEqual(ids0);
-    expect(pegados[0]).toBe(`c${TOPE_PREVIA_PEGAR + 3}`); // c82 lo gastó la bobina deshecha
+    expect(pegados[0]).toBe(`c${TOPE_PREVIA_PEGAR + 3}`); // c(TOPE + 2) lo gastó la bobina deshecha
     expect([...editor.seleccion].sort()).toEqual([...pegados].sort());
     expect(validarHoja(hoja(doc))).toEqual([]);
   });

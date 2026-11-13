@@ -93,17 +93,60 @@ function informe(r, sinGpu) {
   if (conPaso.length > 0) {
     lineas.push("");
     lineas.push("Tiempo de cada paso, fuera del cuadro (comando, selección, resumen del panel, plan de la previa), en ms:");
-    const filas = [["Escena", "Escenario", "Mediana", "Máx.", "Cables que se acomodan", "Pasos válidos / con ✕", "Comandos"]];
+    const filas = [["Escena", "Escenario", "Mediana", "p95", "Máx.", "Cables que se acomodan", "Pasos válidos / con ✕", "Comandos"]];
     for (const m of conPaso)
       filas.push([
         String(m.componentes),
         m.escenario,
         ms.format(m.paso.mediana),
+        m.paso.p95 === undefined ? "–" : ms.format(m.paso.p95),
         ms.format(m.paso.maximo),
         m.acomodados === undefined ? "–" : String(m.acomodados),
         m.rechazados === undefined ? "–" : `${m.rechazados.pasos - m.rechazados.rechazados} / ${m.rechazados.rechazados}`,
         m.comandos === undefined ? "–" : String(m.comandos),
       ]);
+    lineas.push(tabla(filas));
+  }
+
+  // T16: pasos pares (pegar, duplicar) e impares (deshacer) por separado.
+  const conImpar = r.mediciones.filter((m) => m.pasoImpar && m.modo === modos[0]);
+  if (conImpar.length > 0) {
+    lineas.push("");
+    lineas.push("Pegar y deshacer por separado (pasos pares e impares), en ms:");
+    const filas = [["Escena", "Escenario", "Pegar: mediana", "p95", "Máx.", "Deshacer: mediana", "p95", "Máx."]];
+    for (const m of conImpar)
+      filas.push([
+        String(m.componentes),
+        m.escenario,
+        ms.format(m.paso.mediana),
+        ms.format(m.paso.p95),
+        ms.format(m.paso.maximo),
+        ms.format(m.pasoImpar.mediana),
+        ms.format(m.pasoImpar.p95),
+        ms.format(m.pasoImpar.maximo),
+      ]);
+    lineas.push(tabla(filas));
+  }
+
+  // T16: revisión por punto de la previa de pegar (problemasPegado, aparte del paso).
+  const conRevision = r.mediciones.filter((m) => m.revision && m.modo === modos[0]);
+  if (conRevision.length > 0) {
+    lineas.push("");
+    lineas.push("Revisión por punto de la previa de pegar (problemasPegado sobre la zona densa), en ms:");
+    const filas = [["Escenario", "Elementos", "Comp. + cables", "Puntos", "Mediana", "p95", "Máx.", "Conflictos mín.–máx."]];
+    for (const m of conRevision) {
+      const v = m.revision;
+      filas.push([
+        m.escenario,
+        String(v.elementos),
+        `${v.componentes} + ${v.cables}`,
+        String(v.puntos),
+        ms.format(v.mediana),
+        ms.format(v.p95),
+        ms.format(v.maximo),
+        `${v.conflictosMin}–${v.conflictosMax}`,
+      ]);
+    }
     lineas.push(tabla(filas));
   }
 

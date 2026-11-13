@@ -20,6 +20,10 @@ La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`)
 
 El armado de referencia, el `inversion.brn` y la comparación se hacen al cerrar la fase, como T15, y se planean después de T19.
 
+**En la netbook, al cerrar la fase, junto con la prueba de la inversión** (decisión de Bruno, 2026-11-13; T16 no espera por esto):
+- *Duplicar todo (2000)*: en la PC, en las condiciones de T15, tarda 42,5 ms de mediana y 55,8 de máximo; el tope es 150/300 ms. En la primera corrida, con la PC inestable, dio ~116 ms (`docs/plan-T16.md`, sección 9).
+- La previa de pegar con `TOPE_PREVIA_PEGAR = 160`: en la netbook con Mint, unas 6 veces más lenta que la PC según T14a, la revisión por punto podría pasar los 16 ms. Verificarlo ahí. En la PC, toda la serie hasta 500 da p95 ≤ 5 ms, y el tope se revisa con lo que dé la netbook.
+
 ## Reglas
 Las mismas de la fase 3:
 - Una tarea por sesión. Primero el plan (`docs/plan-TNN.md`) y, con el "aprobado" de Bruno, el código.
@@ -35,6 +39,7 @@ Las mismas de la fase 3:
 - **Etapa 0 (docs):** hecha.
 - **Etapa 1 (núcleo, `src/core/model/portapapeles.ts`):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 7.
 - **Etapa 2 (editor: atajos, `HerramientaPegar`, Ctrl+D):** hecha el 2026-11-13. Detalle en `docs/plan-T16.md`, sección 8.
+- **Etapa 3 (humo t16 y banco):** hecha el 2026-11-13. `TOPE_PREVIA_PEGAR` = 160 (limitado hasta la netbook), contra `v0.1.3` pasa salvo 2 celdas de 100 por resolución del reloj. Detalle en `docs/plan-T16.md`, sección 9, y en `docs/bench.md`.
 
 ### T17. Etiquetado automático
 - **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Decidir también qué etiqueta lleva lo pegado: T16 la conserva (D3-A de `docs/plan-T16.md`).
@@ -47,6 +52,7 @@ Las mismas de la fase 3:
 ### T19. Validaciones en vivo
 - **Qué:** bornes sin conectar y cables sueltos, marcados en naranja.
 - **Plan:** sin escribir.
+- **Pendiente (de T16):** el naranja de la previa de pegar en conflicto (`--aviso`) choca con el naranja de las validaciones en vivo. Decidir cómo se distinguen.
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/plan-fase3.md`, T14b). Está en los riesgos de `docs/plan-T16.md`.

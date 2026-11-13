@@ -103,21 +103,22 @@ describe("HerramientaPegar", () => {
     const r = recorte(TOPE_PREVIA_PEGAR + 1);
     const h = new HerramientaPegar(r, "pegar", revisar, creador());
     expect(h.reducido).toBe(true);
-    // Centro de la caja: x (−1 + 4·80 + 1) / 2 = 160, y 0.
-    h.mover(ev(160, 5));
-    h.mover(ev(161, 5));
-    h.mover(ev(160, 5));
+    // Centro de la caja: x (−1 + 4·TOPE + 1) / 2 = 2·TOPE, y 0.
+    const cx = 2 * TOPE_PREVIA_PEGAR;
+    h.mover(ev(cx, 5));
+    h.mover(ev(cx + 1, 5));
+    h.mover(ev(cx, 5));
     expect(revisar).not.toHaveBeenCalled();
     expect(h.previa).toMatchObject({ dx: 0, dy: 5, conflictos: [] });
     expect(h.pista).toBe(textoPegarReducido(TOPE_PREVIA_PEGAR + 1));
-    const res = h.presionar(ev(160, 5));
+    const res = h.presionar(ev(cx, 5));
     expect(revisar).toHaveBeenCalledTimes(1);
     expect(res.comando).toBeUndefined();
     expect(h.pista).toBe(textoPegar(conflicto(0, 5)));
     // Al moverse se borra lo de esa revisión (no se revisa de nuevo hasta soltar).
-    h.mover(ev(160, 6));
+    h.mover(ev(cx, 6));
     expect(h.previa!.conflictos).toEqual([]);
-    expect(h.presionar(ev(160, 6)).comando).toBeDefined();
+    expect(h.presionar(ev(cx, 6)).comando).toBeDefined();
   });
 
   it(`con ${TOPE_PREVIA_PEGAR} elementos todavía revisa en cada punto`, () => {

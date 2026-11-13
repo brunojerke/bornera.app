@@ -34,9 +34,13 @@ import { NADA, type EventoHerramienta, type Herramienta, type Resultado } from "
 /**
  * Elementos (componentes + cables del recorte) hasta los que la previa se
  * revisa en cada punto de grilla. Con más, se revisa recién al soltar.
- * Provisorio (ajuste 1 del plan T16): la etapa 3 lo fija midiendo.
+ * Etapa 3 de T16 (docs/bench.md): en la PC, en condiciones de T15, toda la
+ * serie 40, 80, 160, 320 y 500 da la revisión por punto en p95 ≤ 5 ms sobre
+ * la zona densa del banco (500: p95 de 2,9 a 3,5 ms). Queda en 160 hasta
+ * medir en la netbook al cerrar la fase 3b (decisión de Bruno): en Mint, la
+ * previa fue unas 6 veces más lenta que en la PC (T14a).
  */
-export const TOPE_PREVIA_PEGAR = 80;
+export const TOPE_PREVIA_PEGAR = 160;
 
 export type ModoPegar = "pegar" | "duplicar";
 

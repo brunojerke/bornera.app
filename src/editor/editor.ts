@@ -226,7 +226,7 @@ export const AVISO_NADA_PARA_DUPLICAR = "Nada seleccionado para duplicar.";
 export const AVISO_NADA_PARA_PEGAR = "No hay nada para pegar.";
 export const AVISO_DUPLICAR_SIN_LUGAR = "No hay lugar al lado: mové la copia y hacé clic para soltarla.";
 /** Solo cables seleccionados y ninguno con sus dos extremos en lo elegido: el recorte queda vacío (D2b-A). */
-export const AVISO_RECORTE_VACIO = "Lo seleccionado no se puede copiar: un cable entra solo con sus dos extremos en lo copiado.";
+export const AVISO_RECORTE_VACIO = "Para copiar un cable, seleccioná también lo que conecta en sus dos puntas.";
 /** Con un tramo en curso, ni copiar ni pegar. */
 export const AVISO_ESC_CABLE = "Esc cancela el cable en curso.";
 

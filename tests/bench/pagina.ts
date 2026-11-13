@@ -3,7 +3,8 @@
 // la app y manda los tiempos al script por POST. Después, la de 2000 con 3000
 // cables y 30 derivaciones en T (T14a), abierta en un Editor como en la app
 // (Ctrl+Shift+B), con reconectar uno de sus extremos libres (T14c) al final,
-// y el paso de la previa según los cables que se acomodan.
+// y el paso de la previa según los cables que se acomodan. Al final, T16:
+// la previa de pegar sobre la zona densa, pegar 500, duplicar todo y copiar.
 // Con `?escena-t12`, la de cables es la de T12 (para comparar).
 //
 // Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
@@ -37,6 +38,9 @@ import { clasesDelRecorrido, gestoReconexion, type ClaseReconexion, type GestoRe
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 import { bornesColocados } from "../../src/core/symbols";
+import { problemasPegado, recortar, type Recorte } from "../../src/core/model/portapapeles";
+import { elementosRecorte } from "../../src/editor/herramientas/pegar";
+import { ajustarAGrilla } from "../../src/editor/herramientas/colocar";
 
 /** Pantalla típica de netbook. */
 const ANCHO = 1366;
@@ -79,8 +83,12 @@ export interface Medicion {
    * primer cuadro de cada gesto y el resto. Solo en los escenarios que lo piden.
    */
   textos?: { primero: UsoTextos; resto: UsoTextos };
-  /** ms de cada paso (fuera del cuadro), en los escenarios que lo piden: mediana y máximo. */
-  paso?: { mediana: number; maximo: number };
+  /** ms de cada paso (fuera del cuadro), en los escenarios que lo piden. Con `pasoImpar`, solo los pares. */
+  paso?: TiempoPaso;
+  /** ms de los pasos impares (deshacer), en los escenarios con `pasoImpar`. */
+  pasoImpar?: TiempoPaso;
+  /** Revisión por punto de la previa de pegar (`problemasPegado`, aparte del paso), en los que la miden. */
+  revision?: RevisionPrevia;
   /**
    * Mosaicos rehechos en un solo cuadro, como máximo, por fase del gesto: el
    * primer cuadro, los del medio y el último con su cola (en los que lo piden).
@@ -96,6 +104,24 @@ export interface Medicion {
   invalidacionesIntermedias?: number;
   /** Lo que conviene saber del escenario (por ejemplo, por qué se rechaza). */
   nota?: string;
+}
+
+export interface TiempoPaso {
+  mediana: number;
+  p95: number;
+  maximo: number;
+}
+
+/** Revisión de la previa de pegar en cada punto (T16): ms y conflictos que dio. */
+export interface RevisionPrevia extends TiempoPaso {
+  puntos: number;
+  /** Elementos del recorte (componentes + cables). */
+  elementos: number;
+  componentes: number;
+  cables: number;
+  /** Conflictos por punto, mínimo y máximo: con un mínimo > 0, siempre había algo debajo. */
+  conflictosMin: number;
+  conflictosMax: number;
 }
 
 export interface Resultado {
@@ -134,6 +160,12 @@ interface Escenario {
   medirPaso?: boolean;
   /** Qué pasos cuentan para el tiempo de paso (por defecto, todos). */
   pasoMedido?(i: number): boolean;
+  /** Los pasos impares (deshacer) van aparte, en `pasoImpar`. */
+  pasoImpar?: boolean;
+  /** Antes de cada paso, sin contar en su tiempo (por ejemplo, abrir la previa o medir algo aparte). */
+  antes?(i: number, medido: boolean): void;
+  /** Revisión por punto de la previa de pegar (después de medir). */
+  revision?(): RevisionPrevia;
   /** Informar los mosaicos por fase (inicio, intermedios, soltar). */
   fases?: boolean;
   /** Después de la última repetición (sin medir): deja la escena como estaba. */
@@ -817,6 +849,242 @@ function escenariosReconectar(): Escenario[] {
   ];
 }
 
+// ── T16: pegar, duplicar y copiar (plan T16, sección 4) ─────────────────────
+
+/** Tamaños de la previa de pegar, en elementos (componentes + cables del recorte). */
+const TAMANOS_PREVIA = [40, 80, 160, 320, 500];
+/** Puntos de grilla del barrido de la previa: cada paso es un punto nuevo. */
+const PUNTOS_PREVIA = 60;
+/**
+ * Barrido de la previa: de dx −30 a +29 con dy = 1, respecto del lugar del
+ * original. Lo pegado pasa por encima del mismo grupo y de sus vecinos, con
+ * bornes y cables debajo en cada punto (el banco lo comprueba: conflictos > 0).
+ */
+const desplazamientoPrevia = (i: number) => ({ dx: i - PUNTOS_PREVIA / 2, dy: 1 });
+
+/**
+ * La zona densa: a un cuarto del ancho de la escena desde la izquierda, a
+ * media altura. Lejos del anillo vacío alrededor del grupo del centro.
+ */
+function zonaDensa(): { x: number; y: number } {
+  const k = editorCables!.escena.caja!;
+  return { x: Math.round(k.x + k.ancho / 4), y: Math.round(k.y + k.alto / 2) };
+}
+
+/**
+ * El recorte de los componentes más cercanos a `q` con el mayor número de
+ * elementos que no pasa de `n` (los cables entre ellos entran solos, D2a).
+ */
+function recorteCercano(q: { x: number; y: number }, n: number): Recorte {
+  const hoja = editorCables!.documento.hojas[0]!;
+  const d = (c: { x: number; y: number }) => (c.x - q.x) ** 2 + (c.y - q.y) ** 2;
+  const orden = [...hoja.componentes].sort((a, b) => d(a) - d(b)).map((c) => c.id);
+  // Los elementos no bajan al sumar componentes: búsqueda binaria del mayor k.
+  let lo = 1;
+  let hi = orden.length;
+  while (lo < hi) {
+    const m = Math.ceil((lo + hi) / 2);
+    if (elementosRecorte(recortar(hoja, orden.slice(0, m))) <= n) lo = m;
+    else hi = m - 1;
+  }
+  return recortar(hoja, orden.slice(0, lo));
+}
+
+/** El punto de grilla que la herramienta pone bajo el mouse: el centro de la caja del recorte. */
+function centroRecorte(r: Recorte): { x: number; y: number } {
+  const k = r.caja!;
+  return { x: ajustarAGrilla(k.x + k.ancho / 2), y: ajustarAGrilla(k.y + k.alto / 2) };
+}
+
+const pegarBanco = {
+  recorte: null as Recorte | null,
+  centro: { x: 0, y: 0 },
+  /** Desplazamiento de Pegar 500: a la derecha de la escena, sin conflictos. */
+  lado: { dx: 0, dy: 0 },
+  revisiones: [] as number[],
+  conflictosMin: Infinity,
+  conflictosMax: 0,
+  /** Todo lo de la escena (para duplicar y copiar). */
+  todos: [] as string[],
+};
+
+function prepararRecorte(n: number): void {
+  const r = recorteCercano(zonaDensa(), n);
+  pegarBanco.recorte = r;
+  pegarBanco.centro = centroRecorte(r);
+  pegarBanco.revisiones = [];
+  pegarBanco.conflictosMin = Infinity;
+  pegarBanco.conflictosMax = 0;
+}
+
+/** Abre la previa de pegar el recorte del banco, con la selección vacía. */
+function abrirPrevia(): void {
+  const ed = editorCables!;
+  ed.cancelarHerramienta();
+  ed.seleccionarIds([]);
+  if (!ed.iniciarPegar(pegarBanco.recorte!)) throw new Error("Pegar: no abre la previa.");
+}
+
+/** El mouse en el punto de la previa con desplazamiento (dx, dy). */
+const eventoPrevia = (c: Camara, dx: number, dy: number, botones = 0) => {
+  const p = pegarBanco.centro;
+  return { ...evento(c, p.x + dx, p.y + dy), botones };
+};
+
+/** Un punto del barrido: la herramienta revisa (o no, por encima del tope) y la previa se mueve. */
+function moverPrevia(c: Camara, _: Capas, __: Escena, i: number): void {
+  const ed = editorCables!;
+  const { dx, dy } = desplazamientoPrevia(i);
+  ed.aplicar(ed.activa.mover(eventoPrevia(c, dx, dy)));
+  const v = ed.pegando?.previa;
+  if (!v || v.dx !== dx || v.dy !== dy) throw new Error(`Previa de pegar: no está en (${dx}, ${dy}).`);
+}
+
+/** La revisión por punto, aparte del paso: `problemasPegado` con la consulta y los contadores del editor, con cualquier tamaño. */
+function revisarPrevia(i: number, medido: boolean): void {
+  if (!medido) return;
+  const ed = editorCables!;
+  const { dx, dy } = desplazamientoPrevia(i);
+  const t0 = performance.now();
+  const n = problemasPegado(pegarBanco.recorte!, dx, dy, ed.consulta, ed.documento.contadores).length;
+  pegarBanco.revisiones.push(performance.now() - t0);
+  pegarBanco.conflictosMin = Math.min(pegarBanco.conflictosMin, n);
+  pegarBanco.conflictosMax = Math.max(pegarBanco.conflictosMax, n);
+}
+
+function revisionPrevia(): RevisionPrevia {
+  const r = pegarBanco.recorte!;
+  return {
+    ...tiempoPaso(pegarBanco.revisiones),
+    puntos: pegarBanco.revisiones.length,
+    elementos: elementosRecorte(r),
+    componentes: r.componentes.length,
+    cables: r.cables.length,
+    conflictosMin: pegarBanco.conflictosMin,
+    conflictosMax: pegarBanco.conflictosMax,
+  };
+}
+
+/** Pegar 500: en los pares, el clic que suelta (revisa, crea y ejecuta); en los impares, deshacer. */
+function pegarYDeshacer(c: Camara, _: Capas, __: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 1) {
+    ed.deshacer();
+    return;
+  }
+  const n = hechos();
+  ed.aplicar(ed.activa.presionar(eventoPrevia(c, pegarBanco.lado.dx, pegarBanco.lado.dy, 1)));
+  if (hechos() !== n + 1) throw new Error(`Pegar 500: no pega ("${ultimoAviso}").`);
+}
+
+/** Ctrl+D con todo seleccionado en los pares; deshacer en los impares. */
+function duplicarYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 1) {
+    ed.deshacer();
+    return;
+  }
+  const n = hechos();
+  ed.accion("duplicar");
+  if (hechos() !== n + 1) throw new Error(`Duplicar todo: no pega al lado ("${ultimoAviso}").`);
+}
+
+/** Los escenarios de T16, con la escena como está (al final, después de los de v0.1.3). */
+function escenariosPegar(): Escenario[] {
+  const ed = () => editorCables!;
+  return [
+    ...TAMANOS_PREVIA.map(
+      (n): Escenario => ({
+        // La previa flotante de Ctrl+V barriendo la zona densa. El paso es el
+        // de la app (revisa solo hasta TOPE_PREVIA_PEGAR); la revisión por
+        // punto se mide aparte, con cualquier tamaño.
+        nombre: `Previa de pegar ${n} al 31 %`,
+        preparar: (c) => {
+          prepararRecorte(n);
+          const q = zonaDensa();
+          c.zoom = ZOOM_TEXTOS;
+          c.centrar(q.x, q.y, ANCHO, ALTO);
+        },
+        reiniciar: () => abrirPrevia(),
+        antes: (i, medido) => revisarPrevia(i, medido),
+        terminar: () => ed().cancelarHerramienta(),
+        cuadros: PUNTOS_PREVIA,
+        paso: moverPrevia,
+        repeticiones: 2,
+        dinamico: () => ed().dibujarDinamico,
+        medirPaso: true,
+        revision: revisionPrevia,
+      }),
+    ),
+    {
+      // Pegar 500 a la derecha de la escena (sin conflictos) y deshacer. Abrir
+      // la previa va fuera del paso; el paso es el clic que suelta.
+      nombre: "Pegar 500 y deshacer al 31 %",
+      preparar: (c, e) => {
+        prepararRecorte(500);
+        const k = e.caja!;
+        const r = pegarBanco.recorte!;
+        pegarBanco.lado = { dx: Math.ceil(k.x + k.ancho - r.caja!.x) + 10, dy: 0 };
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      antes: (i) => {
+        if (i % 2 === 0) abrirPrevia();
+      },
+      terminar: () => {
+        ed().cancelarHerramienta();
+        ed().seleccionarIds([]);
+      },
+      cuadros: 10,
+      paso: pegarYDeshacer,
+      repeticiones: 3,
+      dinamico: () => ed().dibujarDinamico,
+      medirPaso: true,
+      pasoImpar: true,
+      nota: () => {
+        const r = pegarBanco.recorte!;
+        return `${elementosRecorte(r)} elementos (${r.componentes.length} componentes + ${r.cables.length} cables), pegados en dx = ${pegarBanco.lado.dx}`;
+      },
+    },
+    {
+      // Ctrl+D con todo seleccionado (2000 + 3030): al lado, sin conflictos, y deshacer.
+      nombre: "Duplicar todo (2000) y deshacer al 31 %",
+      preparar: (c, e) => {
+        const h = ed().documento.hojas[0]!;
+        pegarBanco.todos = [...h.componentes, ...h.cables].map((x) => x.id);
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      antes: (i) => {
+        if (i % 2 === 0) ed().seleccionarIds(pegarBanco.todos);
+      },
+      terminar: () => ed().seleccionarIds([]),
+      cuadros: 4,
+      paso: duplicarYDeshacer,
+      repeticiones: 2,
+      dinamico: () => ed().dibujarDinamico,
+      medirPaso: true,
+      pasoImpar: true,
+      nota: () => `${pegarBanco.todos.length} elementos`,
+    },
+    {
+      // Ctrl+C con todo seleccionado: solo se informa.
+      nombre: "Copiar 2000 al 31 %",
+      preparar: (c, e) => {
+        const h = ed().documento.hojas[0]!;
+        ed().seleccionarIds([...h.componentes, ...h.cables].map((x) => x.id));
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      terminar: () => ed().seleccionarIds([]),
+      cuadros: 4,
+      paso: () => {
+        if (!ed().accion("copiar")) throw new Error(`Copiar 2000: no copia ("${ultimoAviso}").`);
+      },
+      repeticiones: 2,
+      dinamico: () => ed().dibujarDinamico,
+      medirPaso: true,
+    },
+  ];
+}
+
 /** Escenarios de la escena con cables: los de dibujo de siempre y los de edición. `t12`: la escena de T12. */
 const escenariosCables = (t12: boolean): Escenario[] => [
   ...ESCENARIOS.filter((x) =>
@@ -1062,6 +1330,8 @@ const escenariosCables = (t12: boolean): Escenario[] => [
   },
   // T14c, al final: los de antes corren en el mismo orden que en la base.
   ...(t12 ? [] : escenariosReconectar()),
+  // T16, después de todo lo de v0.1.3 (así lo de antes corre igual).
+  ...(t12 ? [] : escenariosPegar()),
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {
@@ -1079,6 +1349,12 @@ function contexto(canvas = document.createElement("canvas")): CanvasRenderingCon
 
 function percentil(ordenados: number[], p: number): number {
   return ordenados[Math.min(ordenados.length - 1, Math.floor(p * ordenados.length))]!;
+}
+
+/** Mediana, p95 y máximo de una lista de ms (la ordena). */
+function tiempoPaso(ms: number[]): TiempoPaso {
+  ms.sort((a, b) => a - b);
+  return { mediana: percentil(ms, 0.5), p95: percentil(ms, 0.95), maximo: ms.at(-1) ?? 0 };
 }
 
 function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): Omit<Medicion, "componentes" | "escenario" | "modo"> {
@@ -1128,6 +1404,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
 
   const tiempos: number[] = [];
   const pasos: number[] = [];
+  const pasosImpares: number[] = [];
   let total = 0;
   const usoPrimero = { aciertos: 0, fallos: 0 };
   const usoResto = { aciertos: 0, fallos: 0 };
@@ -1159,11 +1436,13 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     let m: MedidaCuadro | null = null;
     for (let i = 0; i < escenario.cuadros; i++) {
       fase = i === 0 ? "inicio" : i === escenario.cuadros - 1 ? "soltar" : "intermedios";
+      escenario.antes?.(i, medido);
       const p0 = performance.now();
       const inv0 = invalidaciones;
       escenario.paso(camara, capas, escena, i);
       if (medido && fase === "intermedios") invalidacionesIntermedias += invalidaciones - inv0;
-      if (medido && escenario.medirPaso && (escenario.pasoMedido?.(i) ?? true)) pasos.push(performance.now() - p0);
+      if (medido && escenario.medirPaso && (escenario.pasoMedido?.(i) ?? true))
+        (escenario.pasoImpar && i % 2 === 1 ? pasosImpares : pasos).push(performance.now() - p0);
       t += CUADRO;
       const antes = { ...capas.textosDinamica };
       const [m2, ms] = cuadro();
@@ -1182,7 +1461,6 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
   capasActivas = null;
   canvas.width = canvas.height = 0;
   tiempos.sort((a, b) => a - b);
-  pasos.sort((a, b) => a - b);
   return {
     cuadros: tiempos.length,
     mediana: percentil(tiempos, 0.5),
@@ -1193,7 +1471,9 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     cache,
     mosaicosMax,
     ...(escenario.textos ? { textos: { primero: usoPrimero, resto: usoResto } } : {}),
-    ...(escenario.medirPaso ? { paso: { mediana: percentil(pasos, 0.5), maximo: pasos.at(-1) ?? 0 } } : {}),
+    ...(escenario.medirPaso ? { paso: tiempoPaso(pasos) } : {}),
+    ...(escenario.pasoImpar ? { pasoImpar: tiempoPaso(pasosImpares) } : {}),
+    ...(escenario.revision ? { revision: escenario.revision() } : {}),
     ...(escenario.fases ? { fases, invalidacionesIntermedias } : {}),
     ...(escenario.rechazados ? { rechazados: escenario.rechazados() } : {}),
     ...(escenario.nota?.() ? { nota: escenario.nota() } : {}),
