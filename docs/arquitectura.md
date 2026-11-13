@@ -1,6 +1,6 @@
 # Plan: Bornera, simulador de automatismos eléctricos
 
-Nov 6, 2026 · @Bruno · Última revisión: 2026-11-12
+Nov 6, 2026 · @Bruno · Última revisión: 2026-11-13
 
 ## Visión y objetivos
 
@@ -146,7 +146,7 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
 - Referencias cruzadas: debajo de cada bobina, la lista de dónde están sus contactos.
 - Validaciones en vivo: bornes sin conectar y cables sueltos marcados en naranja.
 
-> Nota (2026-11-12): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3 (`docs/plan-fase3.md` los propone como T16–T19). Ubicación pendiente de decisión de Bruno.
+> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`).
 
 **Atajos principales:** F5 alterna editar/simular, Ctrl+N nuevo, Ctrl+O abre, Ctrl+S guarda, Ctrl+Mayús+S guarda como, Ctrl+P exporta PDF (con la exportación, fase 7), Esc cancela la herramienta actual. Tema claro y oscuro.
 
@@ -255,6 +255,8 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
    - Pasa cuando: 2000 símbolos de prueba se mueven fluido en la netbook.
 3. **Editor:** paleta, colocar, mover, rotar, borrar, cables con codos, selección, deshacer/rehacer.
    - Pasa cuando: se puede dibujar a mano una marcha-parada completa.
+   - **3b. Editor, segunda parte** (decisión de Bruno, 2026-11-13; plan en `docs/plan-fase3b.md`): copiar, cortar, pegar y duplicar (T16), etiquetado automático (T17), referencias cruzadas (T18) y validaciones en vivo (T19). Va después de la fase 3, cerrada con la 0.1.3, y antes de la 4.
+     - Pasa cuando: se arma a mano un mando de dos contactores con enclavamiento duplicando la rama de K1, con los contactos bien vinculados a su bobina, las referencias cruzadas correctas y nada marcado en naranja (criterio completo en el plan).
 4. **Guardar y abrir:** formato `.brn`, validación, autoguardado.
    - Nota (2026-11-13): lo básico (formato `.brn` y validación) se adelantó en la fase 3 (T15a), con la fase 3 ya cerrada. En esta fase quedan el autoguardado, las migraciones y los circuitos de referencia (`tests/circuitos/marcha-parada.brn` es el primero).
    - Pasa cuando: guardar → cerrar → abrir deja el circuito idéntico (test automático).

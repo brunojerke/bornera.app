@@ -17,7 +17,7 @@ Si se recibe un argumento, es la tarea o etapa a retomar. Si no, se toma la tare
    - Si Bruno indicó un commit esperado, confirmar que HEAD sea ese commit o descienda de él.
 
 2. **Ubicar la tarea**
-   - Buscar el plan vigente en `docs/` (hoy `docs/plan-fase3.md`) y localizar la tarea con búsqueda de texto.
+   - Buscar el plan vigente en `docs/` (hoy `docs/plan-fase3b.md`) y localizar la tarea con búsqueda de texto.
    - Leer solo la sección de esa tarea y lo que ella referencie.
 
 3. **Reconstruir lo hecho**

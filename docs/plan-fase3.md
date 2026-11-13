@@ -512,7 +512,7 @@ Están en la sección "Editor" del plan, pero el criterio de la fase no los pide
 - referencias cruzadas bajo cada bobina;
 - validaciones en vivo (bornes y cables sueltos en naranja).
 
-Propuesta: hacerlos después de T15, como T16–T19, antes de abrir la fase 4.
+Propuesta: hacerlos después de T15, como T16–T19, antes de abrir la fase 4. **Decidido el 2026-11-13 (Bruno): van en la fase 3b, con su plan en `docs/plan-fase3b.md`.**
 
 ### UI y símbolos (después de T15)
 - Ajustar `tamano` al dibujo con cajas descentradas (pulsadores y contacto auxiliar: la caja sobra a la derecha). Toca el pivote, la selección, el render, el índice y la regla de cuerpo sobre cuerpo de T14a (que hoy rechaza donde no se ve dibujo encimado).
