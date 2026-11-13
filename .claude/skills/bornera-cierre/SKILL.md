@@ -1,6 +1,6 @@
 ---
-name: bornera-cierre
-description: Cierra una tarea o etapa de Bornera con tests, check, humo, bench si corresponde, plan, commit local, Obsidian y resumen en términos eléctricos. Usar al cerrar o commitear una tarea. No hace push ni publica.
+name: "bornera-cierre"
+description: "Cierra una tarea o etapa de Bornera con tests, check, humo, bench si corresponde, plan, commit local, Obsidian y resumen en términos eléctricos. Usar al cerrar o commitear una tarea. No hace push ni publica."
 ---
 
 # Cierre de tarea en Bornera
@@ -22,7 +22,7 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
    - No decir que algo quedó "reparado" sin mostrar la búsqueda vacía.
 
 3. **Revisión independiente (solo si se pidió)**
-   - Lanzar un subagente de solo lectura con el plan de la tarea y el diff, sin el razonamiento de la implementación.
+   - Lanzar un subagente de solo lectura, con modelo sonnet, con el plan de la tarea y el diff, sin el razonamiento de la implementación.
    - Pedirle errores concretos con archivo y línea.
    - Mostrar los hallazgos a Bruno antes del commit. No hacer por cuenta propia cambios de alcance.
 
@@ -56,3 +56,4 @@ Mantenerlo breve y usar este orden:
 - **Commit:** hash y mensaje.
 - **arquitectura.md:** qué se corrigió, o "sin cambios".
 - **No probado o pendiente:** decirlo siempre, sobre todo lo que depende de la netbook.
+- **Próxima sesión:** recordar a Bruno que haga /clear antes de seguir y darle un prompt de retome corto (tarea, etapa siguiente, HEAD esperado y decisiones vigentes) para pegar en la sesión nueva.
