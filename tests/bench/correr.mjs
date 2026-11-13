@@ -11,6 +11,9 @@
 //                      optimización (tarda el triple)
 //   --escena-t12       la escena con cables de T12 (40 del centro sin cables,
 //                      sin T), para comparar con mediciones anteriores
+//   --escena-012       las escenas de 100, 500 y 2000 con los 5 símbolos de
+//                      v0.1.2, como en esa versión (para comparar contra ella;
+//                      la escena con cables no cambia)
 //   --json             imprime el resultado crudo en JSON
 
 import { spawn } from "node:child_process";
@@ -53,7 +56,8 @@ function informe(r, sinGpu) {
   lineas.push(
     `Banco de dibujado · lienzo ${r.ancho}×${r.alto} · dpr ${r.dpr} · ${motor} · ` +
       (sinGpu ? "rasterizado por software" : "con GPU") +
-      (r.escenaCables === "T12" ? " · escena con cables de T12" : ""),
+      (r.escenaCables === "T12" ? " · escena con cables de T12" : "") +
+      (r.escena012 ? " · escenas de 100, 500 y 2000 de 0.1.2" : ""),
   );
   lineas.push(
     "Tiempo por cuadro en ms, incluye rasterizar. Lentos = cuadros de más de 16 ms (⚠ si hay alguno).",
@@ -201,7 +205,13 @@ async function main() {
   await servidor.listen();
   const raiz = servidor.resolvedUrls?.local[0];
   if (!raiz) throw new Error("Vite no informó la dirección del servidor.");
-  const consulta = [bandera("comparar") ? "comparar" : null, bandera("escena-t12") ? "escena-t12" : null].filter(Boolean).join("&");
+  const consulta = [
+    bandera("comparar") ? "comparar" : null,
+    bandera("escena-t12") ? "escena-t12" : null,
+    bandera("escena-012") ? "escena-012" : null,
+  ]
+    .filter(Boolean)
+    .join("&");
   const url = consulta ? `${raiz}?${consulta}` : raiz;
 
   const perfil = mkdtempSync(join(tmpdir(), "bornera-bench-"));

@@ -16,7 +16,7 @@
 // si no, solo se mediría cuánto tarda en anotar las órdenes de dibujo, no en
 // dibujarlas. (Los mosaicos ya los rasteriza Capas al terminar cada uno.)
 
-import { CANTIDADES_BANCO, crearEscenaBanco, idBanco } from "../../src/render/banco";
+import { CANTIDADES_BANCO, crearEscenaBanco, idBanco, simbolosEscena012 } from "../../src/render/banco";
 import { Camara, PX_POR_UNIDAD } from "../../src/render/camara";
 import {
   Capas,
@@ -110,6 +110,8 @@ export interface Resultado {
   tope: MedidaTope[];
   /** La escena con cables medida. */
   escenaCables: "T14a" | "T12";
+  /** Las escenas de 100, 500 y 2000 con los símbolos de 0.1.2 (`--escena-012`). */
+  escena012: boolean;
 }
 
 interface Escenario {
@@ -1219,6 +1221,7 @@ async function correr(): Promise<void> {
   const parametros = new URLSearchParams(location.search);
   const comparar = parametros.has("comparar");
   const t12 = parametros.has("escena-t12");
+  const escena012 = parametros.has("escena-012");
   const modos: Modo[] = comparar ? ["optimizado", "sin caché de textos", "sin optimizar"] : ["optimizado"];
   const resultado: Resultado = {
     navegador: navigator.userAgent,
@@ -1229,10 +1232,11 @@ async function correr(): Promise<void> {
     memoria: [],
     tope: [],
     escenaCables: t12 ? "T12" : "T14a",
+    escena012,
   };
 
   for (const n of CANTIDADES_BANCO) {
-    const escena = crearEscenaBanco(n);
+    const escena = escena012 ? crearEscenaBanco(n, 1, simbolosEscena012()) : crearEscenaBanco(n);
     resultado.memoria.push({ componentes: n, heapMB: heapMB() });
 
     for (const escenario of ESCENARIOS) {

@@ -2,9 +2,33 @@
 // El azar sale de una semilla fija, así dos corridas (o dos máquinas) dibujan
 // exactamente la misma escena y los tiempos se pueden comparar.
 
-import { SIMBOLOS, type Rotacion } from "../core/symbols";
+import { buscarSimbolo, SIMBOLOS, type DefinicionSimbolo, type Rotacion } from "../core/symbols";
 import type { ComponenteEscena } from "./escena";
 import { EscenaEditable } from "./escenaEditable";
+
+/**
+ * Tipos de símbolo de la escena del banco en v0.1.2, en el orden de su
+ * `SIMBOLOS`. Desde c638a35 (Fase y Neutro) `SIMBOLOS` tiene 7 y, con la misma
+ * semilla, la escena sale con otros símbolos (las posiciones, rotaciones y
+ * espejados no cambian). Para comparar contra 0.1.2 se elige entre estos:
+ * `npm run bench -- --escena-012`.
+ */
+export const TIPOS_ESCENA_012 = [
+  "pulsador.na",
+  "pulsador.nc",
+  "contactor.bobina",
+  "contactor.auxiliar_na",
+  "senalizacion.lampara",
+] as const;
+
+/** Las definiciones de `TIPOS_ESCENA_012`, buscadas por tipo y no por su lugar en `SIMBOLOS`. */
+export function simbolosEscena012(): DefinicionSimbolo[] {
+  return TIPOS_ESCENA_012.map((tipo) => {
+    const def = buscarSimbolo(tipo);
+    if (!def) throw new Error(`El símbolo "${tipo}" de la escena de 0.1.2 ya no existe.`);
+    return def;
+  });
+}
 
 /** Tamaños de escena del banco, como pide la arquitectura. */
 export const CANTIDADES_BANCO = [100, 500, 2000] as const;
@@ -34,9 +58,10 @@ export function azar(semilla: number): () => number {
 
 /**
  * Genera `cantidad` componentes al azar sobre una grilla cuadrada de
- * posiciones separadas PASO_BANCO, sin repetir posición.
+ * posiciones separadas PASO_BANCO, sin repetir posición. Los símbolos salen de
+ * `simbolos` (por defecto, todos los de la biblioteca).
  */
-export function generarBanco(cantidad: number, semilla = 1): ComponenteEscena[] {
+export function generarBanco(cantidad: number, semilla = 1, simbolos: readonly DefinicionSimbolo[] = SIMBOLOS): ComponenteEscena[] {
   const rnd = azar(semilla);
   const elegir = <T>(lista: readonly T[]): T => lista[Math.floor(rnd() * lista.length)]!;
 
@@ -50,7 +75,7 @@ export function generarBanco(cantidad: number, semilla = 1): ComponenteEscena[] 
 
   const contadores: Record<string, number> = {};
   return posiciones.slice(0, cantidad).map((p) => {
-    const def = elegir(SIMBOLOS);
+    const def = elegir(simbolos);
     const letra = LETRAS[def.tipo.split(".")[0]!] ?? "X";
     contadores[letra] = (contadores[letra] ?? 0) + 1;
     return {
@@ -68,6 +93,6 @@ export function generarBanco(cantidad: number, semilla = 1): ComponenteEscena[] 
 export const idBanco = (i: number) => `b${i}`;
 
 /** La escena del banco, editable como la del editor (es lo que se quiere medir). */
-export function crearEscenaBanco(cantidad: number, semilla = 1): EscenaEditable {
-  return new EscenaEditable(generarBanco(cantidad, semilla).map((c, i) => [idBanco(i), c]));
+export function crearEscenaBanco(cantidad: number, semilla = 1, simbolos: readonly DefinicionSimbolo[] = SIMBOLOS): EscenaEditable {
+  return new EscenaEditable(generarBanco(cantidad, semilla, simbolos).map((c, i) => [idBanco(i), c]));
 }
