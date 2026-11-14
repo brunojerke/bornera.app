@@ -28,8 +28,8 @@
 - **`compararRedes`** (`src/core/circuitos/compararRedes.ts`): nombra cada borne "etiqueta·borne". Si dos componentes comparten etiqueta y tipo, salen como "Hay 2…" y las redes no se comparan. Un auxiliar sin etiqueta da hoy "Falta "K1"" y "Sobra un componente sin etiqueta" (test de T17 que fija eso).
 
 ### Supuestos (a verificar)
-- Que "Contacto auxiliar NC" entre en una línea de la paleta a 1024×600. La lista tiene scroll, así que entrar entra. Lo mira el humo.
-- Que `src/core/model/portapapeles.ts` no tenga nada que dependa del tipo de contacto. **Lo cierra el test de pegar y duplicar con NC de la etapa 1**, y se anota acá como verificado.
+- ~~Que `src/core/model/portapapeles.ts` no tenga nada que dependa del tipo de contacto.~~ **Verificado en la etapa 1 (2026-11-14):** Ctrl+C / Ctrl+V y Ctrl+D con la bobina en el lote llevan al NC a K2 junto con el NA (`src/editor/armarEtiquetas.test.ts`, "Editor: contacto auxiliar NC").
+- ~~Que "Contacto auxiliar NC" entre en la paleta a 1024×600.~~ El humo `t07` (8 símbolos) lo arrastra al lienzo sin tocar el paso de 80 px de las columnas.
 
 ## 2. Diseño
 
@@ -73,6 +73,8 @@ Dos contactos en paralelo entre las mismas redes tienen firmas idénticas: son i
   - **Límite conocido:** duplicar la rama de K1 con su NC "K2" de enclavamiento (sin bobina K2 en la hoja). La copia queda con bobina K2, NA K2 y NC K2: el NC conserva porque su bobina no está en el lote. El test fija este comportamiento; el aviso es pendiente de T19.
 - **`.brn`:** un documento con NC se guarda y se abre igual.
 - **Banco:** el sha256 de `ESCENA_ACTUAL` sigue igual y `generarBanco` no incluye el NC.
+- **Humo `t07`:** pasa a esperar 8 símbolos en esta etapa y no en la 3 (ajuste de Bruno, 2026-11-14), para que `npm run humo` entero quede en verde al cerrar cada etapa.
+- **Test al azar de `src/editor/uniones.test.ts`:** elegía los tipos de `SIMBOLOS`. Con 8, la semilla 20261111 daba otra secuencia y no llegaba a la cobertura mínima (147 aceptadas contra más de 150). Ningún resultado estaba mal: la corrida recorría otra cosa. Igual que D3, esa corrida usa `TIPOS_ESCENA_013` y vuelve a dar la secuencia de siempre, con los mismos umbrales. Se suma una **segunda corrida con `SIMBOLOS` completa** (incluye el NC), con la semilla 20261112, la primera probada que llega a todos los umbrales sin bajarlos. Las dos comprueban que cada tipo de su lista se haya colocado.
 
 ### Etapa 2: `compararRedes`
 - Dos NA de K1 en la base y en el dibujo (con otros ids, otro orden y movido): 0 diferencias.
@@ -85,9 +87,16 @@ Dos contactos en paralelo entre las mismas redes tienen firmas idénticas: son i
 - El test de T17 "un contacto auxiliar sin etiqueta: lo que informa hoy" pasa al mensaje nuevo.
 - `tests/circuitos/marcha-parada.brn` congelado contra `marchaParada()`: 0 diferencias (`tests/circuitos/marcha-parada.test.ts`).
 
+### Etapa 1: resultados (2026-11-14)
+- **Vitest:** 1581 tests en verde (1 saltado, `npm run circuito` sin `BORNERA_BRN`). **`npm run check`:** 0 errores. **Humo entero:** 611 de 611. **Banco:** no se corre (D3): el sha256 de `ESCENA_ACTUAL` no cambia.
+- **Hecho:** `CONTACTO_AUXILIAR_NC` en `biblioteca.ts` y en `SIMBOLOS` (8 símbolos). `TIPOS_ESCENA_013` y `simbolosEscena013()` en `src/render/banco.ts`, por defecto en `generarBanco` y `crearEscenaBanco`. El NC "K1" en la escena de prueba.
+- **Tests nuevos:** bornes y dibujo del NC, seguidores `[NA, NC]`, etiquetado del núcleo y del editor (colocar, pegar, duplicar, vacíos, renombrar), `.brn` con NC, escena fija del banco, NC al lado del NA en la paleta.
+- **Límite fijado** (`etiquetado.test.ts` y `armarEtiquetas.test.ts`): al duplicar la rama de K1 con su NC "K2" de enclavamiento, todo queda en K2. Pendiente de T19.
+- **Expectativas cambiadas:** de 7 a 8 símbolos en los conteos. En `comandos.test.ts`, el caso de rotar todos los símbolos gana una 8.ª posición, (2, 3), que mantiene la caja impar×par, y "Borrar varios en varias hojas" corre sus ids (c8 pasa a la hoja 1). En `uniones.test.ts`, lo de arriba.
+
 ## 4. Humo, banco y netbook
 
-- **Humo** `tests/humo/t17b-contacto-nc.mjs` a 1024×600: la paleta muestra "Contacto auxiliar NC", se arrastra al lienzo, entra vacío con los bornes 21 y 22, se guarda y se reabre igual. `t07` pasa a esperar 8 símbolos. Al cerrar la tarea, `npm run humo` entero.
+- **Humo** `tests/humo/t17b-contacto-nc.mjs` a 1024×600: la paleta muestra "Contacto auxiliar NC", se arrastra al lienzo, entra vacío con los bornes 21 y 22, se guarda y se reabre igual. `t07` pasa a esperar 8 símbolos **desde la etapa 1** (ajuste de Bruno). Al cerrar cada etapa, `npm run humo` entero.
 - **Banco:** no se mide (D3). No cambia la escena ni el dibujo de ningún símbolo existente.
 - **Netbook:** nada nuevo. Sigue lo vigente para el cierre de la fase 3b (`docs/plan-T17.md`).
 
@@ -98,9 +107,9 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | Etapa | Qué | Modelo sugerido |
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T17b apunta acá, tarea aparte del número de orden, pendiente de T19) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | Sonnet |
-| 1 | Símbolo NC, escena fija del banco, conteos, escena de prueba, tests de símbolo, etiquetado, portapapeles y `.brn`. | Opus alto |
+| 1 | Símbolo NC, escena fija del banco, conteos (también el humo `t07`), escena de prueba, tests de símbolo, etiquetado, portapapeles y `.brn`. **Hecha el 2026-11-14.** | Opus alto |
 | 2 | `compararRedes` (D2a y D2b), sus tests y el congelado de la marcha-parada. | Opus xhigh (lógica del núcleo) |
-| 3 | Humo t17b, `t07`, `npm run humo` entero y cierre de docs (este plan, `plan-fase3b.md`, Obsidian). | Sonnet |
+| 3 | Humo t17b, `npm run humo` entero y cierre de docs (este plan, `plan-fase3b.md`, Obsidian). | Sonnet |
 
 En PowerShell, `npm.cmd`.
 

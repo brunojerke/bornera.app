@@ -9,7 +9,8 @@ import type { Cable, Extremo, Hoja } from "../core/model/documento";
 import { codos, opuesta, type ExtremoRuta } from "../core/model/ruteo";
 import { consultaHoja, problemasTrazado } from "../core/model/trazado";
 import { uniones } from "../core/model/uniones";
-import { SIMBOLOS, buscarSimbolo, type Rotacion } from "../core/symbols";
+import { buscarSimbolo, SIMBOLOS, type Rotacion } from "../core/symbols";
+import { TIPOS_ESCENA_013 } from "../render/banco";
 import type { Caja } from "../render/camara";
 import { cajaUnion } from "../render/escenaEditable";
 import { documentoBancoCables } from "./banco";
@@ -44,6 +45,8 @@ function generador(semilla: number): () => number {
 }
 
 const SEMILLA = 20261111;
+/** Semilla de la segunda corrida al azar, con la biblioteca completa (T17b): la primera que llega a la cobertura mínima. */
+const SEMILLA_COMPLETA = 20261112;
 
 function rutaDe(hoja: Hoja, e: Extremo): ExtremoRuta {
   if (e.tipo !== "borne") return { x: e.x, y: e.y };
@@ -156,11 +159,14 @@ function revisarHoja(hoja: Hoja, contexto: string): void {
   }
 }
 
-/** Editor con componentes en una grilla, cables entre bornes y T, algunas en cascada. */
-function editorAzar(azar: () => number): { ed: Editor; cascadas: number } {
+/**
+ * Editor con componentes en una grilla, cables entre bornes y T, algunas en cascada.
+ * Por defecto, los tipos son la lista fija de 0.1.3 (T17b): con `SIMBOLOS`, cada
+ * símbolo nuevo cambiaría la secuencia de la semilla y lo que la prueba recorre.
+ */
+function editorAzar(azar: () => number, tipos: readonly string[] = TIPOS_ESCENA_013): { ed: Editor; cascadas: number } {
   const ed = new Editor(documentoNuevo());
   const doc = ed.documento;
-  const tipos = SIMBOLOS.map((s) => s.tipo);
   const rotaciones: Rotacion[] = [0, 90, 180, 270];
   for (let i = 0; i < 5; i++) {
     for (let j = 0; j < 4; j++) {
@@ -388,8 +394,11 @@ describe("Uniones de a poco", () => {
     }
   });
 
-  it(`al azar (semilla ${SEMILLA}): después de cada operación, igual que recorrer la hoja`, () => {
-    const azar = generador(SEMILLA);
+  it.each([
+    [`semilla ${SEMILLA}, los 7 tipos de 0.1.3`, SEMILLA, TIPOS_ESCENA_013],
+    [`semilla ${SEMILLA_COMPLETA}, la biblioteca completa con el NC`, SEMILLA_COMPLETA, SIMBOLOS.map((s) => s.tipo)],
+  ] as const)("al azar (%s): después de cada operación, igual que recorrer la hoja", (_, semilla, tipos) => {
+    const azar = generador(semilla);
     const n = {
       aceptadas: 0,
       rechazadas: 0,
@@ -401,13 +410,15 @@ describe("Uniones de a poco", () => {
       reconectados: 0,
       reconexionesRechazadas: 0,
     };
+    const colocados = new Set<string>();
     for (let d = 0; d < 25; d++) {
-      const { ed, cascadas } = editorAzar(azar);
+      const { ed, cascadas } = editorAzar(azar, tipos);
       n.cascadas += cascadas;
       const hoja = ed.documento.hojas[0]!;
+      for (const c of hoja.componentes) colocados.add(c.tipo);
       expect(ed.uniones.todas(), `documento ${d}`).toEqual(deHoja(ed));
       for (let k = 0; k < 25; k++) {
-        const contexto = `semilla ${SEMILLA}, documento ${d}, operación ${k}`;
+        const contexto = `semilla ${semilla}, documento ${d}, operación ${k}`;
         const todos = [...hoja.componentes.map((c) => c.id), ...hoja.cables.map((w) => w.id)];
         const r = azar();
         const antes = ed.uniones.todas();
@@ -465,5 +476,7 @@ describe("Uniones de a poco", () => {
     expect(n.conUniones, JSON.stringify(n)).toBeGreaterThan(200);
     expect(n.reconectados, JSON.stringify(n)).toBeGreaterThan(10);
     expect(n.reconexionesRechazadas, JSON.stringify(n)).toBeGreaterThan(10);
+    // Que cada tipo de la lista haya entrado en algún documento (en la segunda, también el NC).
+    expect([...colocados].sort()).toEqual([...tipos].sort());
   });
 });

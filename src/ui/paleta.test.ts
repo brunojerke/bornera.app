@@ -10,6 +10,17 @@ describe("agruparSimbolos", () => {
     expect(grupos[0]!.simbolos.map((s) => s.tipo)).toEqual(["fuente.fase", "fuente.neutro"]);
   });
 
+  it("en Mando, el auxiliar NC sale justo después del NA (T17b)", () => {
+    const mando = agruparSimbolos(SIMBOLOS).find((g) => g.nombre === "Mando")!;
+    expect(mando.simbolos.map((s) => s.nombre)).toEqual([
+      "Pulsador NA",
+      "Pulsador NC",
+      "Bobina de contactor",
+      "Contacto auxiliar NA",
+      "Contacto auxiliar NC",
+    ]);
+  });
+
   it("filtra por nombre sin distinguir tildes ni mayúsculas", () => {
     expect(agruparSimbolos(SIMBOLOS, "LAMPARA").flatMap((g) => g.simbolos.map((s) => s.nombre))).toEqual([
       "Lámpara",

@@ -29,7 +29,7 @@ function enL(a: { x: number; y: number }, b: { x: number; y: number }): [number,
   return a.x === b.x || a.y === b.y ? [] : [[a.x, b.y]];
 }
 
-/** Los 7 símbolos en las 4 rotaciones, con y sin espejo; sin cables. */
+/** Todos los símbolos en las 4 rotaciones, con y sin espejo; sin cables. */
 export function docRotados(): Documento {
   const doc = crearDocumento(meta);
   const hoja = doc.hojas[0]!;

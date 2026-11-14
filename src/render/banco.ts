@@ -2,7 +2,7 @@
 // El azar sale de una semilla fija, así dos corridas (o dos máquinas) dibujan
 // exactamente la misma escena y los tiempos se pueden comparar.
 
-import { buscarSimbolo, SIMBOLOS, type DefinicionSimbolo, type Rotacion } from "../core/symbols";
+import { buscarSimbolo, type DefinicionSimbolo, type Rotacion } from "../core/symbols";
 import type { ComponenteEscena } from "./escena";
 import { EscenaEditable } from "./escenaEditable";
 
@@ -21,13 +21,35 @@ export const TIPOS_ESCENA_012 = [
   "senalizacion.lampara",
 ] as const;
 
-/** Las definiciones de `TIPOS_ESCENA_012`, buscadas por tipo y no por su lugar en `SIMBOLOS`. */
-export function simbolosEscena012(): DefinicionSimbolo[] {
-  return TIPOS_ESCENA_012.map((tipo) => {
+/**
+ * Tipos de símbolo de la escena del banco desde v0.1.3, en el orden de su
+ * `SIMBOLOS`: Fase y Neutro más los de 0.1.2. Es la escena por defecto (T17b,
+ * D3): un símbolo nuevo en la biblioteca no la cambia, y las mediciones siguen
+ * siendo comparables con la misma semilla.
+ */
+export const TIPOS_ESCENA_013 = [
+  "fuente.fase",
+  "fuente.neutro",
+  ...TIPOS_ESCENA_012,
+] as const;
+
+/** Las definiciones de esos tipos, buscadas por tipo y no por su lugar en `SIMBOLOS`. */
+function simbolosPorTipo(tipos: readonly string[], version: string): DefinicionSimbolo[] {
+  return tipos.map((tipo) => {
     const def = buscarSimbolo(tipo);
-    if (!def) throw new Error(`El símbolo "${tipo}" de la escena de 0.1.2 ya no existe.`);
+    if (!def) throw new Error(`El símbolo "${tipo}" de la escena de ${version} ya no existe.`);
     return def;
   });
+}
+
+/** Las definiciones de `TIPOS_ESCENA_012`. */
+export function simbolosEscena012(): DefinicionSimbolo[] {
+  return simbolosPorTipo(TIPOS_ESCENA_012, "0.1.2");
+}
+
+/** Las definiciones de `TIPOS_ESCENA_013`: la escena por defecto del banco. */
+export function simbolosEscena013(): DefinicionSimbolo[] {
+  return simbolosPorTipo(TIPOS_ESCENA_013, "0.1.3");
 }
 
 /** Tamaños de escena del banco, como pide la arquitectura. */
@@ -59,9 +81,9 @@ export function azar(semilla: number): () => number {
 /**
  * Genera `cantidad` componentes al azar sobre una grilla cuadrada de
  * posiciones separadas PASO_BANCO, sin repetir posición. Los símbolos salen de
- * `simbolos` (por defecto, todos los de la biblioteca).
+ * `simbolos` (por defecto, los 7 de la escena de 0.1.3).
  */
-export function generarBanco(cantidad: number, semilla = 1, simbolos: readonly DefinicionSimbolo[] = SIMBOLOS): ComponenteEscena[] {
+export function generarBanco(cantidad: number, semilla = 1, simbolos: readonly DefinicionSimbolo[] = simbolosEscena013()): ComponenteEscena[] {
   const rnd = azar(semilla);
   const elegir = <T>(lista: readonly T[]): T => lista[Math.floor(rnd() * lista.length)]!;
 
@@ -93,6 +115,6 @@ export function generarBanco(cantidad: number, semilla = 1, simbolos: readonly D
 export const idBanco = (i: number) => `b${i}`;
 
 /** La escena del banco, editable como la del editor (es lo que se quiere medir). */
-export function crearEscenaBanco(cantidad: number, semilla = 1, simbolos: readonly DefinicionSimbolo[] = SIMBOLOS): EscenaEditable {
+export function crearEscenaBanco(cantidad: number, semilla = 1, simbolos: readonly DefinicionSimbolo[] = simbolosEscena013()): EscenaEditable {
   return new EscenaEditable(generarBanco(cantidad, semilla, simbolos).map((c, i) => [idBanco(i), c]));
 }

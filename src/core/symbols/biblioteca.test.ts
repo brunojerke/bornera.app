@@ -4,6 +4,7 @@ import {
   BOBINA_CONTACTOR,
   buscarSimbolo,
   CONTACTO_AUXILIAR_NA,
+  CONTACTO_AUXILIAR_NC,
   discontinua,
   FASE,
   LAMPARA,
@@ -24,6 +25,7 @@ const ESPERADOS: [DefinicionSimbolo, string, string][] = [
   [PULSADOR_NC, "11", "12"],
   [BOBINA_CONTACTOR, "A1", "A2"],
   [CONTACTO_AUXILIAR_NA, "13", "14"],
+  [CONTACTO_AUXILIAR_NC, "21", "22"],
   [LAMPARA, "X1", "X2"],
 ];
 
@@ -52,8 +54,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los siete símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(7);
+  it("tiene los ocho símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(8);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -115,10 +117,11 @@ describe("biblioteca de símbolos", () => {
     },
   );
 
-  it("pulsadores accionados a mano; el auxiliar, por la bobina", () => {
+  it("pulsadores accionados a mano; los auxiliares, por la bobina", () => {
     expect(PULSADOR_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_momentaneo" });
     expect(PULSADOR_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_momentaneo" });
     expect(CONTACTO_AUXILIAR_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "bobina" });
+    expect(CONTACTO_AUXILIAR_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "bobina" });
     expect(BOBINA_CONTACTOR.elemento).toBe("bobina");
     expect(LAMPARA).toMatchObject({ elemento: "carga", categoria: "senalizacion" });
   });
@@ -139,9 +142,37 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     ]);
   });
 
-  it("fase y neutro son fuentes; el auxiliar es el único seguidor (los pulsadores, a mano, se numeran)", () => {
+  it("fase y neutro son fuentes; los auxiliares NA y NC son los únicos seguidores (los pulsadores, a mano, se numeran)", () => {
     expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO]);
-    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA]);
+    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC]);
+  });
+});
+
+describe("contacto auxiliar NC (T17b)", () => {
+  it("es contactor.auxiliar_nc, va en Mando justo después del NA y entra sin prefijo", () => {
+    expect(CONTACTO_AUXILIAR_NC).toMatchObject({ tipo: "contactor.auxiliar_nc", nombre: "Contacto auxiliar NC", categoria: "mando" });
+    expect(CONTACTO_AUXILIAR_NC.prefijoEtiqueta).toBeUndefined();
+    expect(CONTACTO_AUXILIAR_NC.etiquetaInicial).toBeUndefined();
+    expect(buscarSimbolo("contactor.auxiliar_nc")).toBe(CONTACTO_AUXILIAR_NC);
+    const i = SIMBOLOS.indexOf(CONTACTO_AUXILIAR_NA);
+    expect(SIMBOLOS[i + 1]).toBe(CONTACTO_AUXILIAR_NC);
+  });
+
+  it("la caja es la del NA (2×4) y los nombres van a la izquierda: el tope está a la derecha", () => {
+    expect(CONTACTO_AUXILIAR_NC.tamano).toEqual(CONTACTO_AUXILIAR_NA.tamano);
+    expect(CONTACTO_AUXILIAR_NC.ladoNombresBornes).toBe("izquierda");
+    expect(CONTACTO_AUXILIAR_NC.primitivas.some((p) => p.forma === "linea" && p.y1 === -1 && p.y2 === -1 && p.x2 > 0)).toBe(true);
+  });
+
+  it("21 y 22 en (0, ∓2) quedan en enteros en las 4 rotaciones, espejado o no, y siempre a 4 de distancia", () => {
+    for (const rotacion of ROTACIONES) {
+      for (const espejado of [false, true]) {
+        const [a, b] = transformarBornes(CONTACTO_AUXILIAR_NC.bornes, { rotacion, espejado });
+        expect([a!.nombre, b!.nombre]).toEqual(["21", "22"]);
+        for (const p of [a!, b!]) expect(Number.isInteger(p.x) && Number.isInteger(p.y)).toBe(true);
+        expect(Math.abs(a!.x - b!.x) + Math.abs(a!.y - b!.y)).toBe(4);
+      }
+    }
   });
 });
 

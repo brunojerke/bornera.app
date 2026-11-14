@@ -19,6 +19,7 @@ import { vaciarPortapapeles } from "./portapapeles";
 
 const BOBINA = "contactor.bobina";
 const AUXILIAR = "contactor.auxiliar_na";
+const AUXILIAR_NC = "contactor.auxiliar_nc";
 const PULSADOR_NA = "pulsador.na";
 const PULSADOR_NC = "pulsador.nc";
 const LAMPARA = "senalizacion.lampara";
@@ -226,6 +227,94 @@ describe("Editor: pegar y duplicar con etiquetas (T17, D-duplicar C)", () => {
     mover(otro.editor, 0, 0);
     clic(otro.editor, 0, 0);
     expect(nuevas(otro.comps(), 0)).toEqual(["S1", "K1", "K1", "H1"]);
+  });
+});
+
+// ── Contacto auxiliar NC (T17b) ─────────────────────────────────────────────
+
+describe("Editor: contacto auxiliar NC (T17b)", () => {
+  /** La rama de K1 con sus dos auxiliares, sin cables: S1, NA K1, NC `nc`, la bobina K1 y H1. */
+  function ramaNC(nc = "K1") {
+    const a = armar();
+    const ids = {
+      s: a.poner(PULSADOR_NA, 0, 0, "S1"),
+      na: a.poner(AUXILIAR, 4, 0, "K1"),
+      nc: a.poner(AUXILIAR_NC, 8, 0, nc),
+      bobina: a.poner(BOBINA, 0, 10, "K1"),
+      h: a.poner(LAMPARA, 4, 10, "H1"),
+    };
+    return { ...a, ids, todos: Object.values(ids) };
+  }
+  /** Etiqueta de cada tipo agregado después de los primeros `desde` (uno de cada tipo). */
+  const porTipo = (comps: readonly Componente[], desde: number) =>
+    Object.fromEntries(comps.slice(desde).map((c) => [c.tipo, c.etiqueta]));
+
+  it("colocar un NC: entra vacío, en el resultado y en la previa", () => {
+    const { editor, comps } = armar(marchaParada().doc);
+    const n = comps().length;
+    editor.iniciarColocar(def(AUXILIAR_NC), "clic");
+    mover(editor, 60, 0);
+    expect(editor.colocar!.previa!.etiqueta).toBe("");
+    clic(editor, 60, 0);
+    expect(comps().slice(n).map((c) => [c.tipo, c.etiqueta])).toEqual([[AUXILIAR_NC, ""]]);
+  });
+
+  it("Ctrl+C y Ctrl+V con la bobina en el lote: el NC la sigue, como el NA (cierra el supuesto del portapapeles)", () => {
+    const { editor, todos, comps } = ramaNC();
+    editor.seleccionarIds(todos);
+    expect(editor.accion("copiar")).toBe(true);
+    editor.accion("pegar");
+    mover(editor, 40, 40);
+    clic(editor, 40, 40);
+    expect(porTipo(comps(), 5)).toEqual({ [PULSADOR_NA]: "S2", [AUXILIAR]: "K2", [AUXILIAR_NC]: "K2", [BOBINA]: "K2", [LAMPARA]: "H2" });
+    expect(validarHoja(editor.documento.hojas[0]!)).toEqual([]);
+  });
+
+  it("Ctrl+D con la bobina en el lote: el NC la sigue; deshacer y rehacer exactos", () => {
+    const { editor, todos, comps } = ramaNC();
+    editor.seleccionarIds(todos);
+    expect(editor.accion("duplicar")).toBe(true);
+    expect(porTipo(comps(), 5)).toEqual({ [PULSADOR_NA]: "S2", [AUXILIAR]: "K2", [AUXILIAR_NC]: "K2", [BOBINA]: "K2", [LAMPARA]: "H2" });
+    const tras = structuredClone(comps());
+    editor.deshacer();
+    expect(comps()).toHaveLength(5);
+    editor.rehacer();
+    expect(comps()).toEqual(tras);
+  });
+
+  it("Ctrl+D de un NC solo, sin su bobina: conserva K1", () => {
+    const { editor, ids, comps } = ramaNC();
+    editor.seleccionarIds([ids.nc]);
+    expect(editor.accion("duplicar")).toBe(true);
+    expect(porTipo(comps(), 5)).toEqual({ [AUXILIAR_NC]: "K1" });
+  });
+
+  it("límite conocido (aviso en T19): la rama de K1 con su NC \"K2\" de enclavamiento, duplicada, deja el NC en K2", () => {
+    // Sin bobina K2 en la hoja: el NC enclava contra otra rama que todavía no está dibujada.
+    const { editor, todos, comps } = ramaNC("K2");
+    editor.seleccionarIds(todos);
+    expect(editor.accion("duplicar")).toBe(true);
+    // La bobina y el NA pasan a K2. El NC conserva K2 porque su bobina (K2) no está en el lote:
+    // queda enclavando contra su propia bobina. Debería quedar en K1; lo avisa T19.
+    expect(porTipo(comps(), 5)).toEqual({ [PULSADOR_NA]: "S2", [AUXILIAR]: "K2", [AUXILIAR_NC]: "K2", [BOBINA]: "K2", [LAMPARA]: "H2" });
+  });
+
+  it("\"Etiquetar los vacíos\" no lo toca", () => {
+    const { editor, poner, etiqueta } = armar();
+    const b = poner(BOBINA, 0, 0, "");
+    const nc = poner(AUXILIAR_NC, 10, 0, "");
+    expect(editor.etiquetarVacios()).toBe(true);
+    expect([etiqueta(b), etiqueta(nc)]).toEqual(["K1", ""]);
+  });
+
+  it("renombrar K1 a K5 desde el panel arrastra al NA y al NC, en un paso", () => {
+    const { editor, ids, pasos, etiqueta } = ramaNC();
+    editor.seleccionarIds([ids.bobina]);
+    const n = pasos();
+    expect(editor.cambiarEtiqueta(ids.bobina, "K5")).toBe(true);
+    expect(pasos()).toBe(n + 1);
+    expect([etiqueta(ids.bobina), etiqueta(ids.na), etiqueta(ids.nc)]).toEqual(["K5", "K5", "K5"]);
+    expect(editor.resumenSeleccion().unico!.renombre).toMatchObject({ vieja: "K1", nueva: "K5", contactos: 2 });
   });
 });
 

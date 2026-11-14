@@ -24,6 +24,7 @@ import { pegar, recortar } from "./portapapeles";
 
 const BOBINA = "contactor.bobina";
 const AUXILIAR = "contactor.auxiliar_na";
+const AUXILIAR_NC = "contactor.auxiliar_nc";
 const PULSADOR_NA = "pulsador.na";
 const PULSADOR_NC = "pulsador.nc";
 const LAMPARA = "senalizacion.lampara";
@@ -54,7 +55,7 @@ function etiquetaDe(doc: Documento, id: string): string {
 // ── Clases ─────────────────────────────────────────────────────────────────
 
 describe("titular y prefijo", () => {
-  it("se numeran la bobina (K), los pulsadores (S) y la lámpara (H); las fuentes y el auxiliar, no", () => {
+  it("se numeran la bobina (K), los pulsadores (S) y la lámpara (H); las fuentes y los auxiliares, no", () => {
     expect(SIMBOLOS.map((s) => [s.tipo, esTitular(s), prefijoDe(s)])).toEqual([
       [FASE, false, null],
       [NEUTRO, false, null],
@@ -62,6 +63,7 @@ describe("titular y prefijo", () => {
       [PULSADOR_NC, true, "S"],
       [BOBINA, true, "K"],
       [AUXILIAR, false, null],
+      [AUXILIAR_NC, false, null],
       [LAMPARA, true, "H"],
     ]);
   });
@@ -426,5 +428,66 @@ describe("CambiarEtiquetas", () => {
     expect(historial.puedeDeshacer).toBe(false);
     historial.rehacer();
     expect(foto(doc)).toEqual(despues);
+  });
+});
+
+// ── Contacto auxiliar NC (T17b) ─────────────────────────────────────────────
+
+describe("contacto auxiliar NC (T17b): se etiqueta igual que el NA", () => {
+  it("no es titular ni tiene prefijo, y no reserva su etiqueta", () => {
+    const nc = buscarSimbolo(AUXILIAR_NC);
+    expect(esTitular(nc)).toBe(false);
+    expect(prefijoDe(nc)).toBeNull();
+    expect(etiquetasDeTitulares(hoja(comp("b", BOBINA, "K1"), comp("c", AUXILIAR_NC, "K7")))).toEqual(new Set(["K1"]));
+  });
+
+  it("colocar un NC: entra vacío", () => {
+    const doc = crearDocumento(META);
+    colocar(doc, { tipo: AUXILIAR_NC, x: 0, y: 0, rot: 0, espejado: false, etiqueta: "", params: {} }).aplicar(doc);
+    expect(doc.hojas[0]!.componentes[0]!.etiqueta).toBe("");
+  });
+
+  it("con su bobina en el lote, el NC la sigue, como el NA", () => {
+    const h = hoja(comp("a", BOBINA, "K1"), comp("b", AUXILIAR, "K1"), comp("c", AUXILIAR_NC, "K1"));
+    const lote = [comp("x", BOBINA, "K1", 0, 0), comp("y", AUXILIAR, "K1", 0, 10), comp("z", AUXILIAR_NC, "k1", 5, 10)];
+    expect(Object.fromEntries(etiquetarLote(etiquetasDeTitulares(h), lote))).toEqual({ x: "K2", y: "K2", z: "K2" });
+  });
+
+  it("sin su bobina en el lote, conserva: es otro contacto del mismo contactor", () => {
+    const h = hoja(comp("a", BOBINA, "K1"), comp("c", AUXILIAR_NC, "K1"));
+    expect(etiquetarLote(etiquetasDeTitulares(h), [comp("x", AUXILIAR_NC, "K1")]).size).toBe(0);
+  });
+
+  it("límite conocido (aviso en T19): la rama de K1 con su NC \"K2\" de enclavamiento, sin bobina K2, duplicada queda toda en K2", () => {
+    const h = hoja(comp("a", BOBINA, "K1", 0, 0), comp("b", AUXILIAR, "K1", 0, 10), comp("c", AUXILIAR_NC, "K2", 0, 20));
+    const lote = h.componentes.map((c) => ({ ...c, id: `${c.id}2` }));
+    const cambios = etiquetarLote(etiquetasDeTitulares(h), lote);
+    // La bobina y su NA pasan a K2; el NC conserva K2 porque su bobina (K2) no está en el lote.
+    // Debería quedar en K1 (enclava contra la K1 original): lo avisa T19.
+    expect(Object.fromEntries(cambios)).toEqual({ a2: "K2", b2: "K2" });
+    expect(lote.map((c) => cambios.get(c.id) ?? c.etiqueta)).toEqual(["K2", "K2", "K2"]);
+  });
+
+  it("\"Etiquetar los vacíos\" no lo toca", () => {
+    const h = hoja(comp("b", BOBINA, "", 0, 0), comp("na", AUXILIAR, "", 0, 10), comp("nc", AUXILIAR_NC, "", 0, 20));
+    expect([...etiquetarVacios(h)]).toEqual([["b", "K1"]]);
+  });
+
+  it("renombrar K1 a K5 arrastra al NC y al NA", () => {
+    const h = hoja(comp("b", BOBINA, "K1"), comp("na", AUXILIAR, "K1"), comp("nc", AUXILIAR_NC, "k1"));
+    expect(planRenombrarBobina(h, "b", "K5")).toEqual({
+      cambios: new Map([
+        ["b", "K5"],
+        ["na", "K5"],
+        ["nc", "K5"],
+      ]),
+      arrastre: true,
+      motivo: null,
+    });
+  });
+
+  it("renombrar solo con un NC (sin NA) también lo arrastra", () => {
+    const h = hoja(comp("b", BOBINA, "K1"), comp("nc", AUXILIAR_NC, "K1"));
+    expect(planRenombrarBobina(h, "b", "K5").cambios).toEqual(new Map([["b", "K5"], ["nc", "K5"]]));
   });
 });

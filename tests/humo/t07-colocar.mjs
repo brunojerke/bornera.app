@@ -14,7 +14,7 @@ const componentes = (p) => p.evaluar("bornera.editor.documento.hojas[0].componen
 
 export default async function (p, comprobar) {
   const lista = await items(p);
-  comprobar("la paleta muestra los 7 símbolos", lista.length === 7, lista.map((i) => i.texto).join(", "));
+  comprobar("la paleta muestra los 8 símbolos", lista.length === 8, lista.map((i) => i.texto).join(", "));
   const lienzo = await p.caja("canvas");
 
   // 1) Arrastrar cada ítem al lienzo, en columnas.

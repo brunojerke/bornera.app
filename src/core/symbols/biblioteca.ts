@@ -161,6 +161,27 @@ export const CONTACTO_AUXILIAR_NA: DefinicionSimbolo = {
   ],
 };
 
+/**
+ * Contacto auxiliar NC del contactor (T17b): lo acciona la bobina con su misma
+ * etiqueta, al revés que el NA. Bornes 21-22 fijos (D1-A): el número de orden
+ * (31-32, 41-42…) es tarea aparte.
+ */
+export const CONTACTO_AUXILIAR_NC: DefinicionSimbolo = {
+  tipo: "contactor.auxiliar_nc",
+  nombre: "Contacto auxiliar NC",
+  categoria: "mando",
+  elemento: "contacto_nc",
+  accionamiento: "bobina",
+  tamano: { ancho: 2, alto: 4 },
+  primitivas: contactoNC(),
+  // El tope del contacto está a la derecha: los nombres, del otro lado.
+  ladoNombresBornes: "izquierda",
+  bornes: [
+    { nombre: "21", x: 0, y: -2, direccion: "arriba" },
+    { nombre: "22", x: 0, y: 2, direccion: "abajo" },
+  ],
+};
+
 /** Radio del círculo de la lámpara. */
 const R_LAMPARA = 0.75;
 /** Extremo de la cruz de la lámpara, sobre el círculo a 45°. */
@@ -259,6 +280,7 @@ export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   PULSADOR_NC,
   BOBINA_CONTACTOR,
   CONTACTO_AUXILIAR_NA,
+  CONTACTO_AUXILIAR_NC,
   LAMPARA,
 ];
 

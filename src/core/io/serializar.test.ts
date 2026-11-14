@@ -159,6 +159,26 @@ describe("ida y vuelta: serializar → deserializar", () => {
   });
 });
 
+describe("contacto auxiliar NC en el .brn (T17b)", () => {
+  it("un documento con NC, girado, espejado y cableado por 21 y 22, se guarda y se abre igual", () => {
+    const doc = crearDocumento(meta);
+    const hoja = doc.hojas[0]!;
+    hoja.componentes.push({ id: generarId(doc), ...datos("contactor.bobina", 0, 0), etiqueta: "K1" });
+    const nc = { id: generarId(doc), ...datos("contactor.auxiliar_nc", 10, 0, 90, true), etiqueta: "K1" };
+    const vacio = { id: generarId(doc), ...datos("contactor.auxiliar_nc", 20, 0) };
+    hoja.componentes.push(nc, vacio);
+    // Girado 90° y espejado, 21 queda en (12, 0) y 22 en (8, 0).
+    hoja.cables.push(
+      { id: generarId(doc, "w"), desde: { tipo: "borne", comp: nc.id, borne: "21" }, hasta: { tipo: "libre", x: 12, y: 5 }, codos: [] },
+      { id: generarId(doc, "w"), desde: { tipo: "borne", comp: nc.id, borne: "22" }, hasta: { tipo: "libre", x: 8, y: 5 }, codos: [] },
+    );
+    expect(invariantes(doc)).toEqual([]);
+    const texto = serializar(doc);
+    expect(texto).toContain('"tipo":"contactor.auxiliar_nc"');
+    expect(deserializar(texto)).toEqual({ ok: true, documento: doc, avisos: [] });
+  });
+});
+
 // ── Claves sin ñ ni tildes ─────────────────────────────────────────────────
 
 describe("claves sin ñ ni tildes", () => {
@@ -180,7 +200,7 @@ describe("claves sin ñ ni tildes", () => {
       const malas = clavesYTipos(JSON.parse(serializar(doc))).filter((k) => !/^[a-z0-9_.]+$/.test(k));
       expect(malas, nombre).toEqual([]);
     }
-    // Los tres tipos de extremo y los 7 símbolos aparecen en los documentos de prueba.
+    // Los tres tipos de extremo y todos los símbolos aparecen en los documentos de prueba.
     const todos = new Set(documentosDePrueba().flatMap(([, doc]) => clavesYTipos(JSON.parse(serializar(doc)))));
     for (const t of ["borne", "cable", "libre", ...SIMBOLOS.map((s) => s.tipo)]) expect(todos.has(t), t).toBe(true);
   });

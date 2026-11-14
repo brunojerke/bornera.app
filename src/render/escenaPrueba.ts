@@ -19,6 +19,7 @@ const ETIQUETAS: Record<string, string> = {
   "pulsador.nc": "S2",
   "contactor.bobina": "K1",
   "contactor.auxiliar_na": "K1",
+  "contactor.auxiliar_nc": "K1",
   "senalizacion.lampara": "H1",
 };
 

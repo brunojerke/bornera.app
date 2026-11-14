@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { SIMBOLOS } from "../core/symbols";
-import { CANTIDADES_BANCO, generarBanco, simbolosEscena012, TIPOS_ESCENA_012 } from "./banco";
+import {
+  CANTIDADES_BANCO,
+  crearEscenaBanco,
+  generarBanco,
+  idBanco,
+  simbolosEscena012,
+  simbolosEscena013,
+  TIPOS_ESCENA_012,
+  TIPOS_ESCENA_013,
+} from "./banco";
 import type { ComponenteEscena } from "./escena";
 
 /** Una línea por componente: tipo, x, y, rotación, espejado (0 o 1) y etiqueta. */
@@ -73,5 +82,36 @@ describe("escena de 0.1.2 en el banco (--escena-012)", () => {
   it("la lista de símbolos cambia los tipos, no las posiciones, rotaciones ni espejados", () => {
     const sinTipo = (lista: ComponenteEscena[]) => lista.map((c) => [c.x, c.y, c.rotacion, c.espejado]);
     expect(sinTipo(generarBanco(2000, 1, simbolosEscena012()))).toEqual(sinTipo(generarBanco(2000)));
+  });
+});
+
+describe("escena fija del banco desde 0.1.3 (T17b, D3)", () => {
+  it("son los 7 tipos de 0.1.3, en su orden, buscados por tipo", () => {
+    expect([...TIPOS_ESCENA_013]).toEqual([
+      "fuente.fase",
+      "fuente.neutro",
+      "pulsador.na",
+      "pulsador.nc",
+      "contactor.bobina",
+      "contactor.auxiliar_na",
+      "senalizacion.lampara",
+    ]);
+    expect(simbolosEscena013().map((d) => d.tipo)).toEqual([...TIPOS_ESCENA_013]);
+  });
+
+  it("la biblioteca crece, la escena no: el NC no entra y el sha256 es el de siempre", async () => {
+    expect(SIMBOLOS.length).toBeGreaterThan(TIPOS_ESCENA_013.length);
+    for (const n of CANTIDADES_BANCO) {
+      const lista = generarBanco(n);
+      expect(lista.some((c) => c.def.tipo === "contactor.auxiliar_nc"), `NC en ${n}`).toBe(false);
+      expect(await sha256(lineas(lista).join("\n")), `escena de ${n}`).toBe(ESCENA_ACTUAL[n]);
+    }
+  });
+
+  it("crearEscenaBanco (el del bench) usa la misma escena fija", () => {
+    const escena = crearEscenaBanco(500);
+    const lista = generarBanco(500);
+    expect(escena.cantidad).toBe(500);
+    lista.forEach((c, i) => expect(escena.obtener(idBanco(i))?.def.tipo).toBe(c.def.tipo));
   });
 });
