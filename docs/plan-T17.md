@@ -199,6 +199,27 @@ Numerar recorre la hoja, así que se mide. Escena con cables (2000 componentes +
 
 Si algo no pasa, se frena y se presentan opciones antes de optimizar.
 
+**Cambio de criterio (Bruno, 2026-11-14, después de medir).**
+- **Por qué:** con los topes fijos, Pegar 500 y Duplicar todo no pasaron. Ese día la PC midió el código de T16 (`d969019`) por encima de los mismos topes: los topes salían de números de otro día.
+- **Criterio nuevo** para los escenarios de T16 y T17: relativo a `d969019`, medido en la misma sesión con ABBA ×3 y dos tandas, con la fórmula de arriba.
+  - Pegar 500: mediana del paso ≤ `d969019` + max(10 %, 1 ms).
+  - Duplicar todo: mediana del paso ≤ `d969019` × 1,10.
+  - Los dos tienen que cumplirlo en las dos tandas.
+  - Siguen los topes absolutos (150/300 ms en Duplicar y 40/80 ms en deshacer) y 0 lentos.
+- **Etiquetar los vacíos** conserva sus topes fijos (40/80 ms): pasa con amplio margen.
+- **Desde ahora** vale la regla general de `docs/plan-fase3b.md` (Reglas).
+
+Paso en ms: mediana de las 6 corridas de cada tanda (T1 / T2).
+
+| Escenario | HEAD (contra `v0.1.3`) | HEAD (diagnóstico) | `d969019` (diagnóstico) | Tope relativo | Tope fijo viejo | Resultado |
+|---|---:|---:|---:|---:|---:|---|
+| Pegar 500 | 5,05 / 5,15 | 6,05 / 5,30 | 5,15 / 4,75 | 6,15 / 5,75 | 4,8 | pasa (relativo) |
+| Duplicar todo (2000) | 51,4 / 54,8 | 59,35 / 59,20 | 54,35 / 57,30 | 59,79 / 63,03 | 46,8 | pasa (relativo) |
+
+- **Pegar 500:** T17 suma 0,9 y 0,55 ms (+17 % y +12 %), por debajo de 1 ms.
+- **Duplicar todo:** T17 suma 9 % y 3 %. La tanda 1 pasa justo (59,35 contra 59,79).
+- **El mismo código, otro día:** `d969019` midió 4,75–5,15 ms en Pegar (T16 había medido 3,8) y 54–57 ms en Duplicar (T16 había medido 42,5). También Copiar 2000 pasó de 2,1 a 2,9–3,1 ms, y no lo toca T17.
+
 ### Netbook
 Solo si en la PC un paso pasa la mitad de su tope o aparece un cuadro lento. Si no, va en la medición de cierre de la fase 3b.
 
@@ -210,7 +231,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 | 0 | Docs: este plan, `plan-fase3b.md` (T17 apunta acá, T17b anotada) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | la sesión del plan |
 | 1 | Núcleo: `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts`, `CambiarEtiquetas` y sus tests, con los de al azar. `npm test` y `npm run check`. **Hecha el 2026-11-14** (resultado abajo). | Opus xhigh |
 | 2 | Editor y panel: `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos", renombrado con arrastre y las notas del panel. Tests del editor. Prueba a mano en `npm run dev`. **Hecha el 2026-11-14** (resultado abajo). | Opus alto |
-| 3 | Humo t17 y banco: escenario nuevo, las tres mediciones y la regresión contra `v0.1.3`, `docs/bench.md`. | Opus alto |
+| 3 | Humo t17 y banco: escenario nuevo, las tres mediciones y la regresión contra `v0.1.3`, `docs/bench.md`. **Hecha el 2026-11-14** (resultado abajo). | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md`, Obsidian y `npm run humo` entero. | Sonnet |
 
 ### Etapa 1, resultado (2026-11-14)
@@ -245,6 +266,42 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
   - Humo `t15-marcha-parada.mjs`: desde la paleta entran L, S1, S2, vacío, K1, H1 y N (numerar al colocar). En el panel se escriben solo las 3 que difieren de la marcha-parada (S0, S1 y el auxiliar K1), así que hay 10 pasos antes de los cables y 18 al final, en lugar de 12 y 20. Las redes y el `.brn` siguen dando 0 diferencias.
 - **Verificación:** `npm test` 1551 bien (1 salteado: `circuito`), `npm run check` sin errores, `npm run humo` 579 de 579. Prueba visual con capturas a 1024×600 (botón del panel, aviso, nota de repetida y previa con K2), con un humo temporal que se borró. Sin banco: se mide en la etapa 3.
 - **Para la etapa 3:** humo `t17-etiquetado.mjs` y banco (sección 4).
+
+### Etapa 3, resultado (2026-11-14)
+- **Decisiones al aprobar (Bruno):**
+  - Los topes de los escenarios nuevos no pasan si se superan en las dos tandas. Un cuadro lento en cualquier corrida es «no pasa».
+  - *Etiquetar los vacíos* se mide vaciando antes todos los titulares de la escena, fuera de lo medido. La nota dice cuántos se numeran.
+- **Humo `tests/humo/t17-etiquetado.mjs`** (32 comprobaciones, 1024×600). Cada bloque arranca en un documento nuevo:
+  - **Colocar desde la paleta:**
+    - dos bobinas seguidas en modo clic dan K1 y K2, en la previa y en el resultado;
+    - los pulsadores NA, NA y NC dan S1, S2 y S3;
+    - borrar K1 y colocar otra bobina da K1;
+    - el auxiliar entra vacío, también en la previa, y la Fase y el Neutro entran L y N;
+    - cada colocación es un paso de Ctrl+Z.
+  - **La rama de K1:**
+    - Ctrl+D da S2, K2, K2 y H2 en un paso;
+    - Ctrl+Z y Ctrl+Y son exactos;
+    - Ctrl+X y pegar en otro lado conservan las etiquetas.
+  - **Panel:**
+    - K2 a K5 arrastra al contacto, con «1 contacto pasó a K5.»;
+    - a vacío no arrastra, y aparece la nota `nueva_vacia`;
+    - la lámpara escrita H1 a mano muestra «Otra lámpara ya se llama H1.»;
+    - dos Fase L no muestran nota;
+    - cada caso se deshace con un Ctrl+Z.
+  - **"Etiquetar los vacíos":**
+    - con vacíos, numera en orden (y, x) en un paso, y deja vacío el auxiliar y la Fase en L;
+    - Ctrl+Z y Ctrl+Y;
+    - sin vacíos, aparece el aviso y no hay paso;
+    - en Simular, el botón queda deshabilitado.
+  - Al final, `validarHoja` en 0 y ningún error de la página.
+- **Banco:** escenario *Etiquetar los vacíos (2000) y deshacer al 31 %* en `tests/bench/pagina.ts`, con 1128 titulares numerados.
+  - 24 corridas contra `v0.1.3` y 24 de diagnóstico contra `d969019`, todas enchufada (79 %), en Mejor rendimiento y con Opera y Gemini cerrados.
+  - *Etiquetar los vacíos* pasa: el paso da de 2,6 a 3,1 ms (máximo 5,2) y deshacer de 1,5 a 1,7 ms (máximo 3,7), contra un tope de 40/80. 0 lentos.
+  - Pegar 500 y Duplicar todo pasan con el cambio de criterio (sección 4).
+  - Contra `v0.1.3`: 3 celdas sin editor suben en las dos tandas y quedan **aceptadas como ruido** (decisión de Bruno). Números en `docs/bench.md`.
+- **Verificación:** `npm test` 1551 bien (1 salteado: `circuito`), `npm run check` sin errores, `npm run humo` 611 de 611.
+- **Pendiente opcional (Bruno, no ahora):** que Pegar no vuelva a juntar las etiquetas de toda la hoja en cada pegado. Hoy `EtiquetasHoja` se invalida con cada comando y el pegado siguiente recorre los 2000. A lo sumo recupera los 0,5–0,9 ms que suma T17.
+- **Para la etapa 4:** el cierre (este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian), con `npm run humo` entero.
 
 ## 6. Riesgos
 - **Contactos huérfanos que se enganchan solos.** Los seguidores no cuentan como choque: si hay contactos "K2" sin bobina y K1 está ocupada, la próxima bobina que se coloque es K2 y esos contactos pasan a seguirla. Puede ser lo buscado (se dibujaron primero los contactos) o no. T19 marca los contactos sin bobina.

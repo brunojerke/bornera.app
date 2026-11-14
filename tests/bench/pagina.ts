@@ -37,7 +37,9 @@ import { medirTope, type MedidaTope } from "../../src/editor/medicionTope";
 import { clasesDelRecorrido, gestoReconexion, type ClaseReconexion, type GestoReconexion } from "../../src/editor/medicionReconectar";
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
-import { bornesColocados } from "../../src/core/symbols";
+import { bornesColocados, buscarSimbolo } from "../../src/core/symbols";
+import { CambiarEtiquetas } from "../../src/core/model/comandos";
+import { esTitular } from "../../src/core/model/etiquetado";
 import { problemasPegado, recortar, type Recorte } from "../../src/core/model/portapapeles";
 import { elementosRecorte } from "../../src/editor/herramientas/pegar";
 import { ajustarAGrilla } from "../../src/editor/herramientas/colocar";
@@ -989,6 +991,36 @@ function duplicarYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
   if (hechos() !== n + 1) throw new Error(`Duplicar todo: no pega al lado ("${ultimoAviso}").`);
 }
 
+// ── T17: etiquetar los vacíos (plan T17, sección 4) ─────────────────────────
+
+const vaciosBanco = {
+  /** Titulares de la escena que el escenario vacía y vuelve a numerar. */
+  titulares: 0,
+};
+
+/**
+ * Vacía la etiqueta de todos los titulares de la escena en un paso, fuera de
+ * lo medido (las fuentes y los contactos quedan como están). Al terminar el
+ * escenario se deshace, así la escena vuelve a ser la de siempre.
+ */
+function vaciarTitulares(): void {
+  const ed = editorCables!;
+  const ids = ed.documento.hojas[0]!.componentes.filter((c) => esTitular(buscarSimbolo(c.tipo)) && c.etiqueta !== "").map((c) => c.id);
+  vaciosBanco.titulares = ids.length;
+  ed.ejecutar(new CambiarEtiquetas(ids.map((id) => [id, ""] as const)));
+}
+
+/** "Etiquetar los vacíos" en los pares (un paso con todos los titulares); deshacer en los impares. */
+function etiquetarYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 1) {
+    ed.deshacer();
+    return;
+  }
+  const n = hechos();
+  if (!ed.etiquetarVacios() || hechos() !== n + 1) throw new Error(`Etiquetar los vacíos: no etiqueta ("${ultimoAviso}").`);
+}
+
 /** Los escenarios de T16, con la escena como está (al final, después de los de v0.1.3). */
 function escenariosPegar(): Escenario[] {
   const ed = () => editorCables!;
@@ -1064,6 +1096,23 @@ function escenariosPegar(): Escenario[] {
       medirPaso: true,
       pasoImpar: true,
       nota: () => `${pegarBanco.todos.length} elementos`,
+    },
+    {
+      // T17: con los titulares de la escena vacíos (fuera de lo medido),
+      // "Etiquetar los vacíos" los numera en un paso, y deshacer.
+      nombre: "Etiquetar los vacíos (2000) y deshacer al 31 %",
+      preparar: (c, e) => {
+        vaciarTitulares();
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      terminar: () => ed().deshacer(),
+      cuadros: 4,
+      paso: etiquetarYDeshacer,
+      repeticiones: 2,
+      dinamico: () => ed().dibujarDinamico,
+      medirPaso: true,
+      pasoImpar: true,
+      nota: () => `${vaciosBanco.titulares} titulares numerados`,
     },
     {
       // Ctrl+C con todo seleccionado: solo se informa.

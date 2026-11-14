@@ -29,6 +29,7 @@ Las mismas de la fase 3:
 - Una tarea por sesión. Primero el plan (`docs/plan-TNN.md`) y, con el "aprobado" de Bruno, el código.
 - Al cerrar cada etapa: `npm test`, `npm run check` y commit local. Si hay algo visible en la app, también su humo `tests/humo/tNN-*.mjs`, y al cerrar la tarea `npm run humo` entero.
 - Si la tarea toca el editor o el dibujo: banco contra `v0.1.3` en la PC, con el criterio fijado en el plan antes de medir. A la netbook se va solo si el banco da algo dudoso.
+- **Topes de los escenarios que `v0.1.3` no tiene** (regla nueva de Bruno, 2026-11-14, desde T17): se fijan contra el commit anterior a la tarea, medido en la misma sesión con ABBA ×3 y dos tandas, no contra números de otro día. Un día la PC midió el mismo código hasta un 30 % más lento (T17, sección 4). La netbook, al cierre de la fase, sigue siendo la que decide.
 - Sin push ni versión sin autorización de Bruno.
 
 ## Tareas
@@ -49,7 +50,7 @@ Las mismas de la fase 3:
 - **Etapa 0 (docs):** hecha el 2026-11-14.
 - **Etapa 1 (núcleo):** `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts` y `CambiarEtiquetas`, con tests. Hecha el 2026-11-14.
 - **Etapa 2 (editor y panel):** `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" (botón del panel sin selección), renombrado con arrastre y las notas del panel. Hecha el 2026-11-14.
-- **Etapa 3 (humo t17 y banco).**
+- **Etapa 3 (humo t17 y banco):** hecha el 2026-11-14. Humo t17 con 32 comprobaciones. *Etiquetar los vacíos* pasa sus topes fijos. Pegar 500 y Duplicar todo pasan con el criterio relativo a `d969019` (cambio de criterio de Bruno). Contra `v0.1.3`, 3 celdas sin editor quedan aceptadas como ruido. Detalle en `docs/plan-T17.md` (sección 4 y etapa 3) y en `docs/bench.md`.
 - **Etapa 4 (cierre).**
 
 ### T17b. Contacto auxiliar NC y `compararRedes`

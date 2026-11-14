@@ -18,6 +18,58 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 abajo). Las comparaciones contra 0.1.2 usan esta opción.
 
+## Etiquetado automático (fase 3b, T17 etapa 3) — 2026-11-14
+
+**Resultado:**
+- **Escenario nuevo, *Etiquetar los vacíos (2000) y deshacer*: pasa** sus topes fijos, con 0 lentos.
+- **Pegar 500 y Duplicar todo: pasan con el criterio relativo a `d969019`**, el cierre de T16 medido en la misma sesión. Con los topes fijos de T16 no pasaban, pero ese día tampoco los cumplía el código de T16. El cambio de criterio lo decidió Bruno (`docs/plan-T17.md`, sección 4), y desde ahora es regla de la fase (`docs/plan-fase3b.md`).
+- **Contra `v0.1.3`:** 3 celdas suben en las dos tandas. Bruno las **aceptó como ruido** (abajo).
+- Lentos: 0 en las 24 corridas de HEAD.
+
+**Cómo se midió:**
+- HEAD es la etapa 3 sobre `2b94228`, sin commit al medir.
+- Dos comparaciones en la misma sesión, cada una con ABBA ×3 en dos tandas: 6 corridas por versión en cada tanda y, por celda, la mediana de las 6.
+  - **Contra `v0.1.3`** (10:51 a 10:59): 62 celdas comunes, con la regla de T16.
+  - **Diagnóstico contra `d969019`** (11:00 a 11:09): 70 celdas comunes, incluidos los escenarios de T16.
+- En cada comparación, la otra versión corre desde un worktree con su propio `npm ci`, después de `git fetch --tags`.
+- Condiciones de la PC, en las 48 corridas: Ryzen 7 170, Edge 157 headless, enchufada y cargando (79 %), modo "Mejor rendimiento", Opera y Gemini cerrados. Las anotó el script en cada corrida.
+- Una corrida de prueba anterior, sin confirmar las condiciones, se descartó.
+
+### Escenarios de T16 y T17 (escena con cables, al 31 %)
+
+Paso en ms, T1 / T2: mediana de las 6 corridas de cada tanda. Deshacer de HEAD: el rango de las medianas de las 4 tandas y el máximo de las 24 corridas.
+
+| Escenario | HEAD (contra `v0.1.3`) | HEAD (diagnóstico) | `d969019` | Criterio | Deshacer HEAD: medianas / máx. | Resultado |
+|---|---:|---:|---:|---|---:|---|
+| Pegar 500 | 5,05 / 5,15 | 6,05 / 5,30 | 5,15 / 4,75 | ≤ `d969019` + max(10 %, 1 ms): 6,15 / 5,75 | 1,0–1,1 / 2,9 | pasa |
+| Duplicar todo (2000) | 51,4 / 54,8 | 59,35 / 59,20 | 54,35 / 57,30 | ≤ `d969019` × 1,10: 59,79 / 63,03; máx. ≤ 300 (74,6) | 9,7–11,9 / 21,6 | pasa |
+| Etiquetar los vacíos (2000), nuevo | 2,60 / 2,85 | 3,10 / 2,85 | – | cada paso: mediana ≤ 40, máx. ≤ 80 (máx. 5,2) | 1,5–1,7 / 3,7 | pasa |
+| Copiar 2000 (se informa) | 2,90 / 3,05 | 2,95 / 3,25 | 2,85 / 3,10 | – | – | – |
+
+- *Etiquetar los vacíos*: antes de medir, se vacían los 1128 titulares de la escena con un `CambiarEtiquetas`, fuera de lo medido. Las fuentes y los contactos quedan como están. El paso es el botón del editor (un `CambiarEtiquetas` con los 1128) y después deshacer. Al terminar se deshace el vaciado. Cuadro: 8,5 / 9,0 / 10,0 ms (mediana / p95 / máximo).
+- **Lo que suma T17:** en Pegar 500, de 0,55 a 0,9 ms (+12 % a +17 %), por renumerar los 224 componentes del lote y volver a juntar las etiquetas de la hoja. En Duplicar todo, de 3 % a 9 %.
+- **El mismo código, otro día:** `d969019` dio 4,75–5,15 ms en Pegar y 54–57 ms en Duplicar. El 2026-11-13 había dado 3,8 y 42,5.
+
+### Celdas comunes con suba repetida: aceptadas como ruido
+
+Cada celda: mediana / p95 por cuadro en ms, mediana de las 6 corridas.
+
+| Comparación · celda | Otra versión T1 | HEAD T1 | Otra versión T2 | HEAD T2 | Suba T1 | Suba T2 |
+|---|---:|---:|---:|---:|---|---|
+| `v0.1.3` · 100 · Mover todo al 31 % | 0,70 / 1,65 | 0,80 / 1,95 | 0,70 / 1,65 | 0,75 / 1,90 | mediana, p95 | p95 |
+| `v0.1.3` · 100 · Arrastrar 40 completos al 58 % | 1,25 / 3,30 | 1,50 / 3,40 | 1,15 / 3,15 | 1,40 / 3,70 | mediana | mediana, p95 |
+| `v0.1.3` · 500 · Arrastrar 40 en contornos al 58 % | 0,55 / 2,40 | 0,60 / 2,70 | 0,55 / 2,20 | 0,50 / 2,60 | p95 | p95 |
+| `d969019` · 100 · Seleccionar al 31 % | 0,60 / 0,90 | 0,60 / 1,00 | 0,55 / 0,95 | 0,60 / 1,05 | p95 | p95 |
+| `d969019` · 500 · Encuadrar (F) | 2,05 / 8,90 | 6,00 / 8,05 | 3,90 / 8,90 | 6,05 / 8,55 | mediana | mediana |
+
+Por qué se aceptan como ruido (decisión de Bruno, 2026-11-14):
+- `src/render` no cambió desde `v0.1.3`.
+- Las escenas de 100 y 500 no usan el editor.
+- Las celdas que suben no se repiten de una comparación a la otra. Ninguna de las 3 de `v0.1.3` sube en las dos tandas contra `d969019`, y las 2 de `d969019` no suben contra `v0.1.3`.
+- HEAD tuvo 0 lentos en las 24 corridas. `v0.1.3` tuvo 1 y `d969019`, 2.
+
+En *Encuadrar (F)* la mediana de la tanda salta entre dos valores (2 o 6 ms), según en qué cuadro cae la cola de mosaicos. El p95 no sube.
+
 ## Copiar, cortar, pegar y duplicar (fase 3b, T16 etapa 3) — 2026-11-13
 
 **Resultado:**
