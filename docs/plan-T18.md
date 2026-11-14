@@ -20,9 +20,9 @@
 | Topes nuevos del banco | **× 1,15 y + 1 ms** | *Rehacer con referencias*: por gesto hasta base × 1,15. *Mover 1 contacto con referencias*: paso hasta base + 1 ms. La base es `234b7e6` con el escenario copiado a su worktree. |
 
 **Ajustes de Bruno al aprobar:**
-1. **Ctrl+D contra el ancho de la lista.** Antes de programar el dibujo (primer paso de la etapa 2), verificar con un test que duplicar la rama de K1 no deja la lista de K1 encima de la rama de K2. Es el flujo del criterio de la fase 3b. Si choca, frenar y presentar opciones (fila más corta, lista en otro lado, otro desplazamiento).
+1. **Ctrl+D contra el ancho de la lista.** Antes de programar el dibujo (primer paso de la etapa 2), verificar con un test que duplicar la rama de K1 no deja la lista de K1 encima de la rama de K2. Es el flujo del criterio de la fase 3b. Si choca, frenar y presentar opciones (fila más corta, lista en otro lado, otro desplazamiento). **Ampliado antes de la etapa 2:** el test se hace también con `marchaParada({ ramaNC: true })`, la rama más ancha (NC en x = 24). Ahí la lista de K1 no puede tocar ni la rama copiada ni el NC y la H2 propios.
 2. **Misma convención que la barra de estado.** Las coordenadas de la lista usan el mismo origen y el mismo punto del componente. Un test lo fija.
-3. **Sin restos.** Al cambiar la lista se invalidan la caja vieja y la nueva de la bobina: si la lista se achica o desaparece, no queda nada dibujado. Un test lo fija.
+3. **Sin restos.** Al cambiar la lista se invalidan la caja vieja y la nueva de la bobina: si la lista se achica o desaparece, no queda nada dibujado. Un test lo fija. **Ampliado antes de la etapa 2:** el test incluye borrar el último contacto: la lista desaparece y su caja vieja se redibuja.
 4. **Qué es "referencias cruzadas correctas"** para el criterio de la fase 3b: sección 3.
 5. **Opcionales para después**, anotados en `docs/plan-fase3b.md`: la línea en el panel al seleccionar un contacto («Bobina K1 en (x, y)») y el clic para ir.
 
@@ -46,7 +46,7 @@
 - **S2.** En la inversión de giro, cada contactor usa un NA (retención) y un NC (enclavamiento), así que con bornes fijos no hay filas repetidas. `tests/circuitos/inversion.brn` todavía no existe.
 - **S3.** Recalcular toda la hoja cuesta menos de 1 ms con 2000 componentes, por analogía con los 0,5–0,9 ms que suma T17 al juntar las etiquetas. Lo mide el banco.
 - **S4.** Los nombres de los bornes de una bobina acostada no chocan con la lista. Se prueba en la etapa 2.
-- **S5.** Duplicar la rama de K1 de la marcha-parada no deja la lista de K1 sobre la copia (ajuste 1). Estimación, sin test todavía: la rama (S1, auxiliar K1, bobina K1, H1 y sus cables) ocupa de x = −2 a 17, así que dx = 21. La lista de K1 va de x ≈ 1,5 a 9,8 y la copia empieza en x ≈ 17. Lo confirma o lo niega el test del primer paso de la etapa 2.
+- **S5.** Duplicar la rama de K1 de la marcha-parada no deja la lista de K1 sobre la copia (ajuste 1). Estimación, sin test todavía: la rama (S1, auxiliar K1, bobina K1, H1 y sus cables) ocupa de x = −2 a 17, así que dx = 21. La lista de K1 va de x ≈ 1,5 a 9,8 y la copia empieza en x ≈ 17. Lo confirma o lo niega el test del primer paso de la etapa 2. Con la rama NC, la rama ocupa de x ≈ −2 a 25, así que dx ≈ 29. La copia empieza en x ≈ 27. Lo más cerca de la lista de K1 es su propio NC y su H2, en x = 24, a unas 13 unidades del final de la lista. Los cables horizontales de esa rama van en y = 2 y en y = 30, lejos de la lista, que está a la altura de la bobina (y ≈ 22). También sin test todavía. **Confirmado el 2026-11-14:** dx = 21 y 29, sin choques (ver "Ctrl+D (ajuste 1)" en la sección 4).
 
 ## 2. Diseño
 
@@ -60,18 +60,18 @@
 Bajo K1, con un NA y un NC:
 
 ```
-NA 13-14  (10, 11)
-NC 21-22  (24, 11)
+NA 13-14 (10, 11)
+NC 21-22 (24, 11)
 ```
 
 Con dos NA de la misma bobina (D0-A, bornes fijos), las dos filas dicen 13-14 y se distinguen por la ubicación:
 
 ```
-NA 13-14  (10, 11)
-NA 13-14  (24, 11)
+NA 13-14 (10, 11)
+NA 13-14 (24, 11)
 ```
 
-La separación exacta entre las partes de la fila se ajusta en la etapa 2 con la captura a 1024×600.
+La separación entre las partes de la fila es un espacio: la eligió Bruno en la etapa 2 con las capturas a 1024×600 (ver "Etapa 2").
 
 ### Núcleo: `src/core/model/referencias.ts` (puro, sin DOM)
 - `referenciasCruzadas(hoja, indiceHoja = 0)`: id de bobina → sus filas. Solo trae las bobinas que tienen al menos una fila. Una pasada por la hoja, con un mapa por etiqueta.
@@ -166,6 +166,7 @@ Nadie más tiene lista. Se comprueba al cierre de la fase, con el armado de refe
 - `cajaDibujo` de una bobina con lista cubre todas las líneas, también con "WWWW", en las 4 rotaciones y espejado.
 - La caja de la lista no toca la etiqueta, ni los nombres ni las marcas de los bornes de su bobina, en las 4 rotaciones y espejado (S4).
 - **Sin restos (ajuste 3):** una bobina cuya lista pasa de dos filas a una, y de una a ninguna, devuelve cajas que cubren la caja vieja entera.
+  - **Borrar el último contacto**, pasando por el editor (comando `Borrar` y `reflejar`), con la marcha-parada: la bobina K1 queda sin lista y lo invalidado cubre la caja vieja entera de K1, la que tenía la lista. No alcanza con que se invalide la caja del contacto borrado, que está en otro lado. Con la invalidación de la bobina anulada a propósito, falla.
 - En la marcha-parada y en la rama con NC, la caja de cada lista no toca ningún tramo de cable ni el dibujo de otro componente.
 - Sin `referencias`, un componente hace las mismas llamadas al `Renderer` que hoy.
 - El sha256 de `ESCENA_ACTUAL` (100, 500 y 2000) no cambia.
@@ -174,7 +175,25 @@ Nadie más tiene lista. Se comprueba al cierre de la fase, con el armado de refe
 - Con el editor: armar la marcha-parada, seleccionar la rama de K1 (S1, auxiliar K1, bobina K1 y H1, con sus cables) y duplicar con Ctrl+D.
 - La caja de la lista de K1 no toca ningún cuerpo, etiqueta, nombre de borne ni cable de la copia.
 - La lista de K2 tampoco toca nada de la rama de K1.
+- **Con la rama NC** (`marchaParada({ ramaNC: true })`), la rama más ancha: se selecciona la rama de K1 junto con el auxiliar NC "K1" en (24, 11), la H2 en (24, 22) y sus cables, así el ancho del recorte, y con él el dx de Ctrl+D, sale de la rama entera. El test anota el dx que dio.
+  - La lista de K1 no toca nada de la rama copiada (cuerpos, etiquetas, nombres de bornes y cables, también su NC y su H2).
+  - La lista de K1 tampoco toca su propio NC, su H2 ni los cables de esa rama (w9 a w11).
+  - La lista de K2, lo mismo del otro lado: nada de la rama de K1 ni su propio NC y H2.
 - **Si choca, se frena** antes de programar el dibujo y se presentan opciones: fila más corta, lista en otro lado, otro desplazamiento de Ctrl+D.
+- **Hecho el 2026-11-14:** `src/editor/referenciasDuplicar.test.ts` (2 tests), **sin choques**. La caja de la lista es provisoria hasta que exista el dibujo: a la derecha del cuerpo con 0,5 de margen, letra de 0,7, ancho por exceso (`anchoTexto`) y 1 unidad por fila, centrada en la bobina. Los obstáculos son la `cajaDibujo` de cada componente (por exceso) y cada tramo de cable ± 0,1. Holguras medidas, en unidades:
+
+| | Marcha-parada | Rama NC |
+|---|---|---|
+| dx real de Ctrl+D | **21** (recorte de −2 a 17) | **29** (recorte de −2 a 25) |
+| Lista de K1 contra la copia | 6,58 (etiqueta de K2) | 13,58 (etiqueta de S2) |
+| Lista de K1 contra su NC, su H2 y w9 a w11 | — | 6,9 (w11, en y = 30) |
+| Lista de K2 contra la rama de K1 | 4,0 (H1) | 4,0 (la H2 original) |
+| Lo más cerca de cada lista | 1,4 (w4 y w6, sus propios cables en x = 0) | 1,4 |
+| Lámpara de la propia rama (H1; en la copia, H2 o H3) | 1,58 | 1,58 |
+
+  - La copia renumera así: en la marcha-parada, S2, K2, K2 y H2. Con la rama NC, S2, tres K2, H3 y H4.
+  - **Techo para la separación de `textoFila`:** la lámpara de la propia rama, a 1,58 de su `cajaDibujo` por exceso. Con la geometría provisoria, la fila puede crecer unas 3 letras como mucho (0,49 cada una). Contra la etiqueta real de H1 hay unas 2,8.
+  - Prueba a propósito: con la lista 4,5 más a la derecha, los dos tests fallan.
 
 ## 5. Humo, banco y netbook (criterio fijado antes de medir)
 
@@ -189,6 +208,7 @@ Nadie más tiene lista. Se comprueba al cierre de la fase, con el armado de refe
 - Dos bobinas K1: las dos con la misma lista, sin naranja.
 - Guardar y reabrir: las mismas listas.
 - Alejar hasta apagar los textos: la lista se apaga con ellos.
+- **El indicador de zoom de la barra se actualiza al cambiar el zoom con la rueda** (pedido de Bruno al elegir el separador: en las capturas de la etapa 2, con el zoom fijado por código, seguía diciendo "59 %").
 - `validarHoja` en 0 y ningún error de la página.
 - Al cerrar la tarea, `npm run humo` entero.
 
@@ -222,8 +242,8 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T18 apunta acá, número de orden revisado, opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | Sonnet |
 | 1 | Núcleo: `src/core/model/referencias.ts` y sus tests (marcha-parada, rama con NC, casos, al azar contra el cálculo lento, `.brn`). `npm test` y `npm run check`. **Hecha el 2026-11-14** (ver "Etapa 1, hecha"). | Opus xhigh (lógica del núcleo) |
-| 2 | Dibujo y editor. Primero, el test de Ctrl+D (ajuste 1). Después: la lista en la bobina, `cajaDibujo`, `src/editor/referenciasHoja.ts`, `reflejar` y los tests del editor y del dibujo. Prueba visual a 1024×600. | Opus alto |
-| 3 | Humo t18 y banco: los dos escenarios nuevos, la comparación contra `234b7e6` y `docs/bench.md`. | Opus alto |
+| 2 | Dibujo y editor. Primero, el test de Ctrl+D (ajuste 1), con la marcha-parada y con la rama NC. Después: la lista en la bobina, `cajaDibujo`, `src/editor/referenciasHoja.ts`, `reflejar` y los tests del editor y del dibujo. Prueba visual a 1024×600. **Hecha el 2026-11-14** (ver "Etapa 2, hecha"). | Opus alto |
+| 3 | Humo t18 (con el indicador de zoom al usar la rueda) y banco: los dos escenarios nuevos, la comparación contra `234b7e6` y `docs/bench.md`. | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian. `npm run humo` entero. | Sonnet |
 
 ### Etapa 1, hecha (2026-11-14)
@@ -238,6 +258,98 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
   - `marchaParada.test.ts`: casos de la rama NC.
   - `tests/circuitos/marcha-parada.test.ts`: con las referencias calculadas, `serializar` da el mismo texto que el `.brn` congelado.
 - **Resultado:** `npm test` con 1624 tests que pasan y 1 salteado; `npm run check` con 0 errores. No se tocó dibujo, editor ni interfaz.
+
+### Etapa 2, plan concreto (aprobado el 2026-11-14)
+
+**`src/render/simbolo.ts`**
+- `OpcionesSimbolo.referencias?: readonly string[]`: las líneas ya armadas. `dibujarSimbolo` las escribe dentro del bloque de textos, con `ALTO_BORNE` (0,7), así que se apagan con los demás textos.
+- Una sola función decide dónde va la lista: `posicionReferencias(def, c, n)`, con punto de partida, paso entre filas y alineación. La usan `dibujarSimbolo`, `cajaDibujo` y `cajaReferencias`.
+  - **Bobina derecha (0° o 180°):** a la derecha del cuerpo, con 0,5 de margen, alineada a la izquierda y centrada en la altura de la bobina. Paso de 0,9 por fila; el valor exacto sale de la captura.
+  - **Nombres A1 y A2 del mismo lado** (180°, o 0° espejada, porque `ladoNombresBornes` "izquierda" queda a la derecha): la lista empieza después del nombre más ancho, por exceso, más 0,25. Si no, desde 3 filas chocaría con A1 y A2. Lo fija S4.
+  - **Acostada (90° o 270°):** debajo del cuerpo, con 0,5 de margen y centrada en x. La etiqueta va arriba y los cables salen por los costados.
+- `cajaReferencias(def, c, lineas, anchoLetra)`: la caja de la lista. Con `ANCHO_LETRA` sirve para "no tapa" y para el test de Ctrl+D, que deja la caja provisoria y pasa a usar esta. Con `ANCHO_LETRA_MAXIMO` sirve para `cajaDibujo`.
+- `cajaDibujo(def, c, etiqueta?, referencias?)`: suma la caja de la lista con la letra más ancha y medio alto de letra de margen, como la etiqueta. Sin `referencias`, da lo mismo que hoy.
+
+**`src/render/escena.ts` y `escenaEditable.ts`**
+- `ComponenteEscena.referencias?: readonly string[]`. El dibujo no sabe qué es una bobina.
+- Los 3 llamados a `cajaDibujo` (en `Escena`, y en `agregar` y `actualizar` de `EscenaEditable`) pasan `c.referencias`. `dibujarComponentes` las pasa a `dibujarSimbolo`.
+- La forma para elegir (`formaComponente`) no cambia: la lista no es zona de clic ni cuenta para el rectángulo, que usa `formas`. Ya está verificado que el rectángulo no mira `cajaDibujo`.
+- Las previas de Colocar (`editor.ts`) y Pegar (`dibujoPegar.ts`) no pasan `referencias`.
+
+**`src/editor/referenciasHoja.ts`** (nuevo; caché sin vista, como `EtiquetasHoja`)
+- Guarda `lineas(idBobina)`: un arreglo de `textoFila`, o `undefined` si no hay lista.
+- `relevantes`: los ids de las bobinas y seguidores del último cálculo, con o sin etiqueta.
+- `reflejar(idsCambio, componentesActuales)` devuelve las bobinas cuya lista cambió:
+  - Se saltea si ningún id del cambio está en `relevantes` y ninguno de los componentes actuales es bobina o seguidor (`esBobina`, `sigueABobina`).
+  - Si no, llama a `referenciasCruzadas(hoja)` y compara bobina por bobina, por las líneas unidas. Devuelve las que cambiaron, aparecieron o se quedaron sin lista.
+- Cuenta sus cálculos (`calculos`) y se arma una vez en el constructor del editor.
+
+**`src/editor/editor.ts`: `reflejar` con caja vieja y caja nueva**
+- `aEscena(c)` suma `referencias: this.referencias.lineas(c.id)`.
+- En `reflejar`, después de poner al día `indiceHoja.componentes` y **antes** del recorrido por la escena: `const cambiadas = this.referencias.reflejar(ids, actuales)`.
+- El recorrido pasa por `ids ∪ cambiadas`. Para cada bobina de `cambiadas`, `escena.actualizar(id, aEscena(c))` devuelve la caja vieja (con la lista anterior) y la nueva, o una sola si una contiene a la otra, y las dos van a `invalidarRegion`. Así no quedan restos. Ejemplo: al borrar el último contacto, el cambio solo nombra al contacto, pero K1 entra por `cambiadas` y se invalida su caja vieja, la que tenía la lista.
+- Si la bobina está oculta, `actualizar` devuelve `[]`, porque la capa dinámica la dibuja con su `ComponenteEscena` ya actualizado. Al soltar, `mostrar` invalida su caja.
+- Durante el arrastre no se llama a `reflejar` (no hay comando), así que no se recalcula. Al soltar hay un `Mover` y ahí sí.
+
+**Tests del editor:** `src/editor/referenciasHoja.test.ts` y casos en `editor.test.ts`
+- Recorrido al azar por el editor (colocar, mover, borrar, renombrar con y sin arrastre, pegar, duplicar, deshacer y rehacer): después de cada paso, el caché da igual que `referenciasCruzadas` hecho de nuevo, y la `ComponenteEscena` de cada bobina tiene esas líneas.
+- No recalcula con `pointermove` ni durante un arrastre; sí al soltar.
+- No recalcula al cablear ni al mover un pulsador (`calculos` sin cambio).
+- Mover un contacto actualiza solo la bobina de su etiqueta: `cambiadas` = {K1}.
+- Renombrar K1 a K5 con arrastre: la lista sigue completa. Sin arrastre, K5 queda sin lista.
+- **Sin restos (ajuste 3, por el editor):** con la marcha-parada, borrar el último contacto deja a K1 sin lista, y lo que pasa por `invalidarRegion` cubre la caja vieja entera de K1. Lo mismo de 2 filas a 1 con la rama NC. Ctrl+Z la devuelve y se invalida la caja nueva.
+- Pruebas a propósito: con la actualización del caché anulada fallan los tests de caché, y con `cambiadas` vacío falla el de sin restos.
+
+**Tests del dibujo:** `simbolo.test.ts`, `escenaEditable.test.ts` y `escena.test.ts`
+- `cajaDibujo` con lista cubre todas las líneas, también con "WWWW", en las 4 rotaciones y espejado.
+- **S4:** la caja de la lista (con `ANCHO_LETRA`) no toca la etiqueta, el cuerpo ni los nombres y marcas de los bornes, en las 4 rotaciones, con y sin espejado, con 1, 2 y 5 filas.
+- **Sin restos:** `actualizar` de 2 filas a 1 y de 1 a ninguna devuelve cajas que cubren la vieja entera.
+- En la marcha-parada y en la rama NC, ninguna lista toca un tramo de cable ni la `cajaDibujo` de otro componente.
+- Sin `referencias`, las mismas llamadas al `Renderer` que hoy (renderer falso que las registra).
+- El sha256 de `ESCENA_ACTUAL` (100, 500 y 2000) no cambia.
+- El test de Ctrl+D pasa a usar `cajaReferencias` real. Si las holguras se mueven por el paso o la separación nuevos, se vuelven a anotar.
+
+**Captura a 1024×600 para ajustar `textoFila`**
+- Un script temporal en la carpeta de trabajo de la sesión, no en el repo, con `tests/humo/cdp.mjs`: arma en Node la rama NC con Ctrl+D hecho, la guarda como `.brn`, la abre en la app con Abrir (como t15a) y captura con F (encuadrar), al 100 % y al 31 %.
+- Tres variantes, cambiando solo `textoFila`: `NA 13-14  (10, 11)` (dos espacios, la de hoy), `NA 13-14 (10, 11)` y `NA 13-14 · (10, 11)`. Si hace falta, también dos valores de paso (0,9 y 1,0).
+- Te muestro las capturas, elegís, y fijo la variante en `textoFila` y sus tests. Con la geometría de hoy, ninguna puede ser más de 3 letras más larga que la actual (techo de 1,58).
+- **No se hace en esta etapa:** humo t18 y banco, que son de la etapa 3.
+
+**Ajustes de Bruno al aprobar la etapa 2:**
+1. Test del peor caso de ancho: una fila con coordenadas largas y negativas («(-120, -345)») en la rama NC duplicada. Si choca con H1 no bloquea, pero se anota como límite conocido con el ancho exacto que entra.
+2. Separador: tres capturas (dos espacios, un espacio y punto medio) al 100 % y al 31 % con la rama NC duplicada, con el margen contra H1 de cada una. Elige Bruno; hasta entonces queda el de hoy.
+3. El test de Ctrl+D pasa a la caja real. Si el margen baja de 1 unidad contra cualquier cosa, se frena y se avisa.
+4. Commit local y `/bornera-cierre` después de elegir el separador.
+
+### Etapa 2, hecha (2026-11-14)
+- **Dibujo** (`src/render/simbolo.ts`): `posicionReferencias`, `cajaReferencias` (ancho promedio por exceso), `cajaDibujo(def, c, etiqueta?, referencias?)` con la letra más ancha, y las líneas en `dibujarSimbolo` con `ALTO_BORNE`, paso `PASO_REFERENCIAS` = 0,9 y dentro del bloque de textos. Si A1 y A2 caen del lado de la lista (180°, o 0° espejado), la lista empieza en x = 1,97 en lugar de 1,5.
+- **Escena:** `ComponenteEscena.referencias`, que se pasa a `cajaDibujo` (en `Escena` y en `agregar`/`actualizar` de `EscenaEditable`) y a `dibujarSimbolo`. `formaComponente` no cambia.
+- **Editor:** `src/editor/referenciasHoja.ts` (caché, `reflejar` devuelve las bobinas cuya lista cambió) y `Editor.reflejar`, que actualiza en la escena esas bobinas antes que los ids del cambio. Así se invalidan su caja vieja y la nueva.
+- **Ctrl+D con la caja real** (`referenciasDuplicar.test.ts`, 4 tests): sin choques, y la menor holgura contra cualquier cosa es **1,4** (≥ 1, no hizo falta frenar). Cambió respecto de la caja provisoria:
+  - en la marcha-parada, contra sus propios cables: de 1,4 a 1,55 (una fila mide 0,7 de alto, no 1);
+  - en la rama NC, contra w11: de 6,9 a 7,1;
+  - todo lo demás, igual: la copia (6,58 y 13,58), la rama de K1 vista desde K2 (4,0) y la lámpara propia (1,58).
+  - **Con el separador de un espacio** (elegido abajo), toda holgura medida hacia la derecha crece una letra (0,49): la copia, 7,07 y 14,07; la lámpara propia, **2,07**. Las demás no cambian (1,4; 1,55; 7,1; 4,0).
+  - Sin duplicar, en la marcha-parada y en la rama NC, la lista de K1 tampoco toca nada (holgura ≥ 1) y nadie más tiene lista.
+- **Límite conocido: el peor caso de ancho** (con el separador de un espacio). En la rama NC duplicada, la fila `NC 21-22 (-120, -345)` tiene **21 letras** y la lista termina en x = 11,79:
+  - contra la `cajaDibujo` de H1 (por exceso), entra justo: **+0,11**;
+  - contra la etiqueta de H1 como se dibuja, quedan **1,31**;
+  - **lo que entra:** 21 letras sin tocar la `cajaDibujo` de H1 y 23 sin tocar su etiqueta. El peor caso ocupa ese tope: una letra más (por ejemplo `(-1200, -345)`) ya la toca. Una fila común como `NA 13-14 (10, 11)` (17 letras) tiene 4 letras de margen. En general no se garantiza (sección 2, "Qué se garantiza").
+  - Con dos espacios, la misma fila tenía 22 letras y tocaba (−0,38). Lo fija el test "peor caso de ancho" de `referenciasDuplicar.test.ts`.
+- **Tests nuevos:** `simbolo.test.ts` (S4 en las 4 rotaciones con y sin espejado, con 1, 2 y 5 filas; caja con «WWWW»; sin lista, las mismas llamadas al `Renderer`; con los textos apagados no se dibuja; no es zona para elegir), `escenaEditable.test.ts` (sin restos de 2 filas a 1 y de 1 a ninguna) y `referenciasHoja.test.ts` (11: no recalcula con el mouse, el arrastre, los cables ni los pulsadores; mover un contacto actualiza solo su bobina; renombrar con y sin arrastre; sin restos por el editor al borrar el último contacto y de 2 filas a 1; 600 operaciones al azar contra un cálculo nuevo).
+- **Pruebas a propósito:** sin correr la lista después de A1 y A2, S4 falla. Sin mirar si los componentes actuales son bobina o contacto, fallan 5 tests del caché. Con las bobinas cambiadas sin pasar a la escena, la caja vieja no se invalida. Con el caché anulado, el recorrido al azar encuentra diferencias.
+- **Separador:** un espacio, fijado en `textoFila` y en los textos esperados de los tests.
+- **Resultado:** `npm test` con 1669 tests que pasan y 1 salteado; `npm run check` con 0 errores; `npm run humo` con 631 de 631 bien.
+- **Banco, una corrida de control** (no es la comparación ABBA de la etapa 3): 0 cuadros lentos en todas las escenas. *Pegar 500* 5,1 ms (deshacer 1,3 ms) y *Duplicar todo (2000)* 49,2 ms (deshacer 8,2 ms), dentro de los topes absolutos (150 y 40 ms). La escena del banco no tiene listas: sus bobinas no tienen contactos con su etiqueta.
+- **Pendiente para la etapa 3:** humo t18 (incluido el indicador de zoom al usar la rueda), los dos escenarios nuevos del banco y la comparación ABBA contra `234b7e6`.
+
+**Separador de `textoFila`: un espacio**, elegido por Bruno el 2026-11-14 (capturas a 1024×600 de la rama NC duplicada, al 100 % = 20 px por unidad y al 31 % = 6,2 px por unidad; márgenes en unidades, por exceso):
+
+| Variante | Fila | Letras | Fin de la lista | Contra la `cajaDibujo` de H1 | Contra la etiqueta de H1 |
+|---|---|---|---|---|---|
+| Dos espacios (la de antes) | `NA 13-14  (10, 11)` | 18 | 10,32 | 1,58 | 2,78 |
+| **Un espacio (elegida)** | `NA 13-14 (10, 11)` | 17 | 9,83 | 2,07 | 3,27 |
+| Punto medio | `NA 13-14 · (10, 11)` | 19 | 10,81 | 1,09 | 2,29 |
 
 ## 7. Riesgos
 - **Atlas de textos.** Con coordenadas, cada fila es un texto distinto. Con cientos de bobinas con lista, el atlas puede llenarse y el dibujo cae a `fillText`. Lo muestra *Rehacer con referencias*. Salida prevista: dibujar la fila en partes ("NA", "13-14" y la ubicación), que se repiten mucho más.

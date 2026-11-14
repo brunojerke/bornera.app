@@ -23,11 +23,14 @@ import {
   anchoTexto,
   cajaDibujo,
   cajaEtiqueta,
+  cajaReferencias,
   cajaSimbolo,
   dibujarSimbolo,
+  PASO_REFERENCIAS,
   posicionEtiqueta,
   posicionNombreBorne,
 } from "./simbolo";
+import { transformarDireccion } from "../core/symbols";
 
 /** Renderer falso que anota cada llamada. */
 function grabador(): { r: Renderer; llamadas: unknown[][] } {
@@ -464,5 +467,129 @@ describe("cajaCuerpo (core) = la cuenta anterior de render", () => {
     expect(lista(cajaSimbolo(def, c))).toEqual(simbolo);
     expect(lista(cajaDibujo(def, c, "K12"))).toEqual(dibujo);
     expect(formaComponente(c).zonas.map(lista)).toEqual(zonas);
+  });
+});
+
+// ── Lista de referencias cruzadas (T18) ───────────────────────────────────
+
+describe("lista de referencias de la bobina (T18)", () => {
+  const FILAS = {
+    1: ["NA 13-14 (10, 11)"],
+    2: ["NA 13-14 (10, 11)", "NC 21-22 (-120, -345)"],
+    5: ["NA 13-14 (10, 11)", "NC 21-22 (24, 11)", "NA 13-14 (-3, 7)", "NA 13-14 (100, 200)", "NC 21-22 (5, 5)"],
+  } as const;
+  const dentro = (k: Caja, x0: number, y0: number, x1: number, y1: number) =>
+    x0 >= k.x - 1e-9 && y0 >= k.y - 1e-9 && x1 <= k.x + k.ancho + 1e-9 && y1 <= k.y + k.alto + 1e-9;
+  /** True si dos cajas se tocan (comparten algo más que un borde de ancho cero). */
+  const tocan = (a: Caja, b: Caja) => a.x < b.x + b.ancho && b.x < a.x + a.ancho && a.y < b.y + b.alto && b.y < a.y + a.alto;
+  /** Caja de un texto anotado, con `anchoLetra` por letra. */
+  const cajaTexto = (tx: { x: number; y: number; texto: string; alto: number; alineacion: string }, anchoLetra: number): Caja => {
+    const w = tx.texto.length * tx.alto * anchoLetra;
+    const x = tx.alineacion === "derecha" ? tx.x - w : tx.alineacion === "centro" ? tx.x - w / 2 : tx.x;
+    return { x, y: tx.y - tx.alto / 2, ancho: w, alto: tx.alto };
+  };
+
+  it.each(ORIENTACIONES)("con %o: cada línea se dibuja derecha, con la letra de los bornes y en orden hacia abajo", (t) => {
+    const c = { x: 4, y: -6, ...t };
+    const g = grabadorConMatriz();
+    dibujarSimbolo(g.r, BOBINA_CONTACTOR, c, { etiqueta: "K1", referencias: FILAS[2] });
+    const lineas = g.textos.filter((tx) => (FILAS[2] as readonly string[]).includes(tx.texto));
+    expect(lineas.map((tx) => tx.texto)).toEqual(FILAS[2]);
+    for (const tx of lineas) {
+      expect(tx.m).toEqual(IDENTIDAD);
+      expect(tx.alto).toBe(ALTO_BORNE);
+    }
+    expect(lineas[1]!.y - lineas[0]!.y).toBeCloseTo(PASO_REFERENCIAS, 12);
+    expect(lineas[1]!.x).toBe(lineas[0]!.x);
+  });
+
+  it.each(ORIENTACIONES)("con %o: cajaDibujo cubre la lista entera, también con «WWWW» (1, 2 y 5 filas)", (t) => {
+    for (const filas of [FILAS[1], FILAS[2], FILAS[5], ["WWWWWWWWWWWWWWWWWW", "W"]]) {
+      const c = { x: -5, y: 2, ...t };
+      const k = cajaDibujo(BOBINA_CONTACTOR, c, "K1", filas);
+      const g = grabadorConMatriz();
+      dibujarSimbolo(g.r, BOBINA_CONTACTOR, c, { etiqueta: "K1", referencias: filas });
+      for (const tx of g.textos) {
+        const b = cajaTexto(tx, ANCHO_LETRA_MAXIMO);
+        expect(dentro(k, b.x, b.y, b.x + b.ancho, b.y + b.alto), `"${tx.texto}"`).toBe(true);
+      }
+      // La lista agranda la caja; sin lista, la de siempre.
+      expect(cajaDibujo(BOBINA_CONTACTOR, c, "K1", [])).toEqual(cajaDibujo(BOBINA_CONTACTOR, c, "K1"));
+    }
+  });
+
+  it.each(ORIENTACIONES)("con %o: la lista no toca el cuerpo, la etiqueta ni los nombres y marcas de los bornes (S4)", (t) => {
+    for (const filas of [FILAS[1], FILAS[2], FILAS[5]]) {
+      for (const etiqueta of ["K1", "K12", "WWWWWWWW"]) {
+        const c = { x: 3, y: 9, ...t };
+        const lista = cajaReferencias(BOBINA_CONTACTOR, c, filas)!;
+        const que = `${filas.length} filas, "${etiqueta}"`;
+        expect(tocan(lista, cajaSimbolo(BOBINA_CONTACTOR, c)), `cuerpo, ${que}`).toBe(false);
+        // La etiqueta, con el ancho promedio y con la letra más ancha.
+        const e = cajaEtiqueta(BOBINA_CONTACTOR, c, etiqueta)!;
+        const pe = posicionEtiqueta(BOBINA_CONTACTOR, c);
+        const eMax = cajaTexto({ x: c.x + pe.x, y: c.y + pe.y, texto: etiqueta, alto: ALTO_ETIQUETA, alineacion: pe.alineacion }, ANCHO_LETRA_MAXIMO);
+        expect(tocan(lista, e), `etiqueta, ${que}`).toBe(false);
+        expect(tocan(lista, eMax), `etiqueta por exceso, ${que}`).toBe(false);
+        // Nombres de bornes, con la letra más ancha, y marcas (punto y trazo de salida, ± grosor).
+        const lado = transformarDireccion(BOBINA_CONTACTOR.ladoNombresBornes ?? "izquierda", c);
+        for (const b of transformarBornes(BOBINA_CONTACTOR.bornes, c)) {
+          const n = posicionNombreBorne(b.x, b.y, b.direccion, lado);
+          const nombre = cajaTexto({ x: c.x + n.x, y: c.y + n.y, texto: b.nombre, alto: ALTO_BORNE, alineacion: n.alineacion }, ANCHO_LETRA_MAXIMO);
+          expect(tocan(lista, nombre), `borne ${b.nombre}, ${que}`).toBe(false);
+          const [vx, vy] = { derecha: [1, 0], izquierda: [-1, 0], abajo: [0, 1], arriba: [0, -1] }[b.direccion];
+          const bx = c.x + b.x;
+          const by = c.y + b.y;
+          const ex = bx + vx! * 0.8;
+          const ey = by + vy! * 0.8;
+          const marca = { x: Math.min(bx, ex) - 0.2, y: Math.min(by, ey) - 0.2, ancho: Math.abs(ex - bx) + 0.4, alto: Math.abs(ey - by) + 0.4 };
+          expect(tocan(lista, marca), `marca ${b.nombre}, ${que}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("con los nombres A1 y A2 del lado de la lista (180°, o 0° espejado), la lista empieza después de ellos", () => {
+    const derecha = cajaReferencias(BOBINA_CONTACTOR, { x: 0, y: 0, rotacion: 0, espejado: false }, FILAS[1])!;
+    const a180 = cajaReferencias(BOBINA_CONTACTOR, { x: 0, y: 0, rotacion: 180, espejado: false }, FILAS[1])!;
+    const espejada = cajaReferencias(BOBINA_CONTACTOR, { x: 0, y: 0, rotacion: 0, espejado: true }, FILAS[1])!;
+    expect(derecha.x).toBeCloseTo(1.5, 12); // cuerpo (1) + 0,5
+    expect(a180.x).toBeCloseTo(0.25 + 2 * ALTO_BORNE * ANCHO_LETRA_MAXIMO + 0.25, 12);
+    expect(espejada.x).toBeCloseTo(a180.x, 12);
+  });
+
+  it("acostada (90° o 270°): debajo del cuerpo, centrada en x", () => {
+    for (const rotacion of [90, 270] as const) {
+      const c = { x: 10, y: 20, rotacion, espejado: false };
+      const k = cajaReferencias(BOBINA_CONTACTOR, c, FILAS[2])!;
+      const s = cajaSimbolo(BOBINA_CONTACTOR, c);
+      expect(k.y).toBeGreaterThanOrEqual(s.y + s.alto + 0.5 - 1e-9);
+      expect(k.x + k.ancho / 2).toBeCloseTo(c.x, 12);
+    }
+  });
+
+  it("sin lista (o vacía) hace las mismas llamadas al Renderer que antes de T18", () => {
+    for (const def of TODOS_LOS_SIMBOLOS) {
+      for (const t of ORIENTACIONES) {
+        const c = { x: 1, y: 2, ...t };
+        const sin = grabador();
+        const vacia = grabador();
+        dibujarSimbolo(sin.r, def, c, { etiqueta: "K1" });
+        dibujarSimbolo(vacia.r, def, c, { etiqueta: "K1", referencias: [] });
+        expect(vacia.llamadas).toEqual(sin.llamadas);
+        expect(cajaReferencias(def, c, [])).toBeNull();
+      }
+    }
+  });
+
+  it("con los textos apagados (zoom alejado), la lista no se dibuja", () => {
+    const g = grabador();
+    dibujarSimbolo(g.r, BOBINA_CONTACTOR, { x: 0, y: 0, rotacion: 0, espejado: false }, { etiqueta: "K1", referencias: FILAS[2], textos: false });
+    expect(g.llamadas.filter((l) => l[0] === "texto")).toEqual([]);
+  });
+
+  it("la lista no es zona para elegir con el mouse", () => {
+    const c = { def: BOBINA_CONTACTOR, x: 0, y: 0, rotacion: 0 as const, espejado: false, etiqueta: "K1" };
+    expect(formaComponente({ ...c, referencias: FILAS[5] })).toEqual(formaComponente(c));
   });
 });

@@ -658,7 +658,7 @@ export class EscenaEditable implements Contenido {
       return this.cajas[this.lugarDe.get(id)!]!;
     }
     const n = this.libres.pop() ?? this.lugares.length;
-    const k = cajaDibujo(c.def, c, c.etiqueta);
+    const k = cajaDibujo(c.def, c, c.etiqueta, c.referencias);
     this.lugares[n] = c;
     this.cajas[n] = k;
     this.formas[n] = formaComponente(c);
@@ -697,7 +697,7 @@ export class EscenaEditable implements Contenido {
     const n = this.lugarDe.get(id);
     if (n === undefined) return [this.agregar(id, c)];
     const vieja = this.cajas[n]!;
-    const nueva = cajaDibujo(c.def, c, c.etiqueta);
+    const nueva = cajaDibujo(c.def, c, c.etiqueta, c.referencias);
     this.lugares[n] = c;
     this.cajas[n] = nueva;
     this.formas[n] = formaComponente(c);

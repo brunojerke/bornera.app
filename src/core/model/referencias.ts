@@ -139,7 +139,11 @@ export function textoUbicacion(u: Ubicacion): string {
   return `(${u.x}, ${u.y})`;
 }
 
-/** La línea que se dibuja bajo la bobina: "NA 13-14  (10, 11)". La separación se ajusta en la etapa 2. */
+/**
+ * La línea que se dibuja bajo la bobina: "NA 13-14 (10, 11)". Un espacio entre
+ * las partes (elegido con las capturas de la etapa 2: es la más corta y deja
+ * más margen contra lo que está a la derecha de la lista).
+ */
 export function textoFila(f: FilaReferencia): string {
-  return `${f.clase} ${f.bornes.join("-")}  ${textoUbicacion(f.ubicacion)}`;
+  return `${f.clase} ${f.bornes.join("-")} ${textoUbicacion(f.ubicacion)}`;
 }

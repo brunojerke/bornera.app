@@ -49,6 +49,8 @@ export interface ComponenteEscena extends Colocacion {
   def: DefinicionSimbolo;
   /** Designación: "S1", "K1", "H1". */
   etiqueta?: string;
+  /** Lista de referencias cruzadas de una bobina (T18), ya armada; sin lista, undefined. */
+  referencias?: readonly string[];
 }
 
 export interface OpcionesEscena {
@@ -73,7 +75,7 @@ export class Escena implements Contenido {
     this.visibles = new Uint32Array(componentes.length);
     let total: Caja | null = null;
     componentes.forEach((c, i) => {
-      const k = cajaDibujo(c.def, c, c.etiqueta);
+      const k = cajaDibujo(c.def, c, c.etiqueta, c.referencias);
       this.cajas.set([k.x, k.y, k.x + k.ancho, k.y + k.alto], i * 4);
       total = total ? unirCajas(total, k) : k;
     });
@@ -133,7 +135,7 @@ export function dibujarComponentes(
   r.estilo({ trazo: colores.simbolo, relleno: colores.simbolo, grosor: g });
   for (let i = 0; i < n; i++) {
     const c = componentes[indices[i]!]!;
-    dibujarSimbolo(r, c.def, c, { etiqueta: c.etiqueta, textos: detalle.textos });
+    dibujarSimbolo(r, c.def, c, { etiqueta: c.etiqueta, textos: detalle.textos, referencias: c.referencias });
   }
 
   if (marcarBornes && detalle.bornes) {

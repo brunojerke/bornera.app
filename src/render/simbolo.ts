@@ -1,5 +1,6 @@
 // Dibujo de un símbolo colocado: posición, rotación, espejado, nombres de
-// bornes y etiqueta (S1, K1, H1). Funciona con cualquier Renderer.
+// bornes, etiqueta (S1, K1, H1) y, en una bobina, la lista de referencias
+// cruzadas (T18). Funciona con cualquier Renderer.
 // La geometría gira y se espeja con el símbolo; los textos no: quedan siempre
 // derechos y legibles, en la posición transformada.
 
@@ -28,10 +29,16 @@ export interface OpcionesSimbolo {
   /** Escribe el nombre de cada borne (13, 14, A1…) junto a su conexión. Por defecto, sí. */
   nombresBornes?: boolean;
   /**
-   * Dibuja textos (propios del símbolo, nombres de bornes y etiqueta). Por
-   * defecto, sí; con zoom muy alejado se apagan todos de una vez.
+   * Dibuja textos (propios del símbolo, nombres de bornes, etiqueta y lista de
+   * referencias). Por defecto, sí; con zoom muy alejado se apagan todos de una vez.
    */
   textos?: boolean;
+  /**
+   * Lista de referencias cruzadas (T18): una línea por contacto, ya armada
+   * ("NA 13-14 (10, 11)"). El dibujo no sabe qué es una bobina: la dibuja si
+   * viene y no está vacía.
+   */
+  referencias?: readonly string[];
 }
 
 /** Alto de la letra de la etiqueta: 2,5 mm. */
@@ -44,6 +51,12 @@ const SEPARACION_NOMBRE_Y = 0.6;
 const SEPARACION_NOMBRE_X = 0.25;
 /** Separación entre la caja del símbolo y su etiqueta. */
 const MARGEN_ETIQUETA = 0.5;
+/** Separación entre la caja del símbolo y su lista de referencias. */
+const MARGEN_REFERENCIAS = 0.5;
+/** Separación entre los nombres de bornes y la lista, si caen del mismo lado. */
+const MARGEN_NOMBRES_REFERENCIAS = 0.25;
+/** Paso entre las filas de la lista de referencias (la letra mide `ALTO_BORNE`). */
+export const PASO_REFERENCIAS = 0.9;
 
 /** Caja que ocupa el símbolo colocado (la rotación de 90° o 270° la traspone). */
 export function cajaSimbolo(def: DefinicionSimbolo, c: Colocacion): Caja {
@@ -81,7 +94,7 @@ export function anchoTexto(texto: string, alto: number): number {
  * promedio): con 90° o 270° va centrada y sobresale a los dos lados.
  * Para elegir y resaltar se usa `cajaEtiqueta`, más ajustada.
  */
-export function cajaDibujo(def: DefinicionSimbolo, c: Colocacion, etiqueta?: string): Caja {
+export function cajaDibujo(def: DefinicionSimbolo, c: Colocacion, etiqueta?: string, referencias?: readonly string[]): Caja {
   const s = cajaSimbolo(def, c);
   let x0 = s.x - MARGEN_TEXTOS;
   let y0 = s.y - MARGEN_TEXTOS;
@@ -96,7 +109,87 @@ export function cajaDibujo(def: DefinicionSimbolo, c: Colocacion, etiqueta?: str
     x1 = Math.max(x1, e.x + e.ancho + m);
     y1 = Math.max(y1, e.y + e.alto + m);
   }
+  const l = cajaTextoReferencias(def, c, referencias, ANCHO_LETRA_MAXIMO);
+  if (l) {
+    // El mismo margen que la etiqueta.
+    const m = ALTO_ETIQUETA / 2;
+    x0 = Math.min(x0, l.x - m);
+    y0 = Math.min(y0, l.y - m);
+    x1 = Math.max(x1, l.x + l.ancho + m);
+    y1 = Math.max(y1, l.y + l.alto + m);
+  }
   return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
+}
+
+/**
+ * Dónde va la lista de referencias de `n` filas, relativo al centro del
+ * símbolo: el punto de la primera fila (centro vertical del texto), el paso
+ * hacia abajo y la alineación. Del lado opuesto a la etiqueta:
+ * - Derecho (0° o 180°): a la derecha del cuerpo, centrada en su altura
+ *   (debajo no se puede: ahí sale el cable del borne de abajo). Si los
+ *   nombres de los bornes caen a la derecha (180°, o 0° espejado), empieza
+ *   después del más ancho, medido por exceso.
+ * - Acostado (90° o 270°): debajo del cuerpo y de los nombres de bornes,
+ *   centrada en x (los cables salen por los costados).
+ */
+export function posicionReferencias(
+  def: DefinicionSimbolo,
+  t: Transformacion,
+  n: number,
+): { x: number; y: number; paso: number; alineacion: Alineacion } {
+  const nombres = def.mostrarNombresBornes !== false ? cajasNombresBornes(def, t) : [];
+  if (t.rotacion === 0 || t.rotacion === 180) {
+    let x = def.tamano.ancho / 2 + MARGEN_REFERENCIAS;
+    for (const k of nombres) if (k.x + k.ancho > 0) x = Math.max(x, k.x + k.ancho + MARGEN_NOMBRES_REFERENCIAS);
+    return { x, y: (-(n - 1) * PASO_REFERENCIAS) / 2, paso: PASO_REFERENCIAS, alineacion: "izquierda" };
+  }
+  let abajo = def.tamano.ancho / 2;
+  for (const k of nombres) abajo = Math.max(abajo, k.y + k.alto);
+  return { x: 0, y: abajo + MARGEN_REFERENCIAS + ALTO_BORNE / 2, paso: PASO_REFERENCIAS, alineacion: "centro" };
+}
+
+/**
+ * Cajas de los nombres de los bornes, relativas al centro del símbolo, con la
+ * letra más ancha (por exceso): la lista nunca los pisa.
+ */
+function cajasNombresBornes(def: DefinicionSimbolo, t: Transformacion): Caja[] {
+  const lado = transformarDireccion(def.ladoNombresBornes ?? "izquierda", t);
+  return transformarBornes(def.bornes, t).map((b) => {
+    const n = posicionNombreBorne(b.x, b.y, b.direccion, lado);
+    const ancho = b.nombre.length * ALTO_BORNE * ANCHO_LETRA_MAXIMO;
+    const x = n.alineacion === "izquierda" ? n.x : n.alineacion === "derecha" ? n.x - ancho : n.x - ancho / 2;
+    return { x, y: n.y - ALTO_BORNE / 2, ancho, alto: ALTO_BORNE };
+  });
+}
+
+/**
+ * Caja que ocupa la lista de referencias, con el ancho promedio por exceso
+ * (`anchoTexto`); null si no hay lista. Sirve para comprobar que no tapa nada;
+ * `cajaDibujo` usa la letra más ancha.
+ */
+export function cajaReferencias(def: DefinicionSimbolo, c: Colocacion, referencias?: readonly string[]): Caja | null {
+  return cajaTextoReferencias(def, c, referencias, ANCHO_LETRA);
+}
+
+/** Caja de la lista con `anchoLetra` por letra (en altos de letra). */
+function cajaTextoReferencias(
+  def: DefinicionSimbolo,
+  c: Colocacion,
+  referencias: readonly string[] | undefined,
+  anchoLetra: number,
+): Caja | null {
+  if (!referencias || referencias.length === 0) return null;
+  const p = posicionReferencias(def, c, referencias.length);
+  let letras = 0;
+  for (const l of referencias) letras = Math.max(letras, l.length);
+  const ancho = letras * ALTO_BORNE * anchoLetra;
+  const izquierda = c.x + p.x - (p.alineacion === "centro" ? ancho / 2 : p.alineacion === "derecha" ? ancho : 0);
+  return {
+    x: izquierda,
+    y: c.y + p.y - ALTO_BORNE / 2,
+    ancho,
+    alto: (referencias.length - 1) * p.paso + ALTO_BORNE,
+  };
 }
 
 /**
@@ -232,5 +325,13 @@ export function dibujarSimbolo(
   if (opciones.etiqueta) {
     const e = posicionEtiqueta(def, c);
     r.texto(c.x + e.x, c.y + e.y, opciones.etiqueta, ALTO_ETIQUETA, e.alineacion);
+  }
+
+  const lista = opciones.referencias;
+  if (lista && lista.length > 0) {
+    const p = posicionReferencias(def, c, lista.length);
+    for (let i = 0; i < lista.length; i++) {
+      r.texto(c.x + p.x, c.y + p.y + i * p.paso, lista[i]!, ALTO_BORNE, p.alineacion);
+    }
   }
 }

@@ -51,14 +51,14 @@ describe("referenciasCruzadas: marcha-parada", () => {
     const refs = referenciasCruzadas(doc.hojas[0]!);
     expect([...refs.keys()]).toEqual([c.k1Bobina]);
     expect(refs.get(c.k1Bobina)).toEqual([{ contacto: c.k1Auxiliar, clase: "NA", bornes: ["13", "14"], ubicacion: { hoja: 0, x: 10, y: 11 } }]);
-    expect(lineas(refs)).toEqual([[c.k1Bobina, ["NA 13-14  (10, 11)"]]]);
+    expect(lineas(refs)).toEqual([[c.k1Bobina, ["NA 13-14 (10, 11)"]]]);
   });
 
   it("rama con NC: K1 tiene dos filas, primero la NA de retención y después la NC de la lámpara H2", () => {
     const { doc, comp: c } = marchaParada({ ramaNC: true });
     const refs = referenciasCruzadas(doc.hojas[0]!);
     expect(contactos(refs)).toEqual([[c.k1Bobina, [c.k1Auxiliar, c.k1AuxiliarNC!]]]);
-    expect(lineas(refs)).toEqual([[c.k1Bobina, ["NA 13-14  (10, 11)", "NC 21-22  (24, 11)"]]]);
+    expect(lineas(refs)).toEqual([[c.k1Bobina, ["NA 13-14 (10, 11)", "NC 21-22 (24, 11)"]]]);
   });
 
   it.each([
@@ -131,12 +131,12 @@ describe("normalización", () => {
 describe("orden de las filas", () => {
   it("por el primer borne: la NC 21-22 va después de la NA 13-14, aunque esté más arriba y antes en la hoja", () => {
     const refs = referenciasCruzadas(hojaCon([BOBINA, "K1", 0, 0], [NC, "K1", 5, -10], [NA, "K1", 20, 30]));
-    expect(lineas(refs)).toEqual([["c1", ["NA 13-14  (20, 30)", "NC 21-22  (5, -10)"]]]);
+    expect(lineas(refs)).toEqual([["c1", ["NA 13-14 (20, 30)", "NC 21-22 (5, -10)"]]]);
   });
 
   it("dos NA de una bobina salen en orden (y, x), sin importar su lugar en la hoja", () => {
     const hoja = hojaCon([BOBINA, "K1", 0, 0], [NA, "K1", 20, 5], [NA, "K1", 10, 11], [NA, "K1", 5, 11]);
-    const esperado = [["c1", ["NA 13-14  (20, 5)", "NA 13-14  (5, 11)", "NA 13-14  (10, 11)"]]];
+    const esperado = [["c1", ["NA 13-14 (20, 5)", "NA 13-14 (5, 11)", "NA 13-14 (10, 11)"]]];
     expect(lineas(referenciasCruzadas(hoja))).toEqual(esperado);
     // Todas las permutaciones de la lista de la hoja dan el mismo orden.
     const permutaciones = <T>(xs: T[]): T[][] => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => permutaciones([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])));
@@ -224,7 +224,7 @@ describe("coordenadas: las de la barra de estado (ajuste 2)", () => {
   it("un negativo va con su signo, como en la barra: (-3, -7)", () => {
     const fila = referenciasCruzadas(hojaCon([BOBINA, "K1", 0, 0], [NA, "K1", -3, -7])).get("c1")![0]!;
     expect(textoUbicacion(fila.ubicacion)).toBe("(-3, -7)");
-    expect(textoFila(fila)).toBe("NA 13-14  (-3, -7)");
+    expect(textoFila(fila)).toBe("NA 13-14 (-3, -7)");
   });
 
   it("la ubicación lleva el índice de la hoja; el texto de hoy no lo muestra", () => {

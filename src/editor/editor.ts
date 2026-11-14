@@ -128,6 +128,7 @@ import { armarDibujoPegado, dibujarPegado, type DibujoPegado } from "./dibujoPeg
 import { guardarRecorte, recorteGuardado } from "./portapapeles";
 import { HerramientaPegar } from "./herramientas/pegar";
 import { EtiquetasHoja } from "./armarEtiquetas";
+import { ReferenciasHoja } from "./referenciasHoja";
 import { BornesConCable } from "./bornesConCable";
 import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
@@ -440,6 +441,8 @@ export class Editor {
   private dibujoPegado: DibujoPegado | null = null;
   /** Etiquetas de los titulares de la hoja, en memoria hasta el próximo cambio (T17). */
   readonly etiquetas: EtiquetasHoja;
+  /** Listas de referencias cruzadas de las bobinas de la hoja, al día con cada cambio (T18). */
+  readonly referencias: ReferenciasHoja;
   /** La nota del último renombrado, con el id del componente; se borra con el próximo cambio o selección. */
   private notaRenombre: { id: string; nota: NotaRenombre } | null = null;
   /** La nota del renombrado que se está ejecutando: pasa a `notaRenombre` al reflejar su cambio. */
@@ -452,6 +455,7 @@ export class Editor {
   ) {
     this.historial = new Historial(documento);
     this.etiquetas = new EtiquetasHoja(documento, hoja);
+    this.referencias = new ReferenciasHoja(documento, hoja);
     for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
     const h = documento.hojas[hoja];
     const indice = h ? indexarHoja(h) : { componentes: new Map<string, Componente>(), cables: new Map<string, Cable>() };
@@ -1658,7 +1662,10 @@ export class Editor {
         console.warn(`Bornera: el símbolo "${c.tipo}" no está en la biblioteca; se dibuja como desconocido.`);
       }
     }
-    return { def, x: c.x, y: c.y, rotacion: c.rot, espejado: c.espejado, etiqueta: c.etiqueta || undefined };
+    const e: ComponenteEscena = { def, x: c.x, y: c.y, rotacion: c.rot, espejado: c.espejado, etiqueta: c.etiqueta || undefined };
+    const referencias = this.referencias.lineas(c.id);
+    if (referencias) e.referencias = referencias;
+    return e;
   }
 
   /**
@@ -1667,6 +1674,10 @@ export class Editor {
    * quita. Cada componente invalida sus propias cajas, y la vieja y la nueva
    * por separado: unirlas marcaría de más si están lejos entre sí (dos
    * componentes lejanos, o deshacer un movimiento largo).
+   *
+   * Las bobinas cuya lista de referencias cambió (T18) pasan por lo mismo
+   * aunque el cambio no las nombre (borrar su último contacto): la escena
+   * invalida su caja vieja, con la lista anterior, y la nueva.
    */
   private reflejar(cambio: Cambio): Cambio {
     // Las etiquetas en memoria ya no valen (T17); la nota del renombrado dura hasta el próximo cambio.
@@ -1687,6 +1698,12 @@ export class Editor {
       const c = actuales.get(id);
       if (c) this.indiceHoja.componentes.set(id, c);
       else this.indiceHoja.componentes.delete(id);
+    }
+    // Antes de la escena: `aEscena` toma las listas ya al día.
+    for (const id of this.referencias.reflejar(ids, actuales)) {
+      if (ids.has(id)) continue;
+      const c = this.indiceHoja.componentes.get(id);
+      if (c) for (const k of this.escena.actualizar(id, this.aEscena(c))) this.vista?.invalidarRegion(k);
     }
 
     let tocaSeleccion = false;

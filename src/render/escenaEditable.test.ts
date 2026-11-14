@@ -103,6 +103,30 @@ describe("EscenaEditable", () => {
     for (const k of cajas) expect(seTocan(k, { x: 250, y: 150, ancho: 0, alto: 0 })).toBe(false);
   });
 
+  it("sin restos (T18, ajuste 3): una bobina cuya lista pasa de 2 filas a 1 y de 1 a ninguna devuelve cajas que cubren la vieja entera", () => {
+    const bobina = SIMBOLOS.find((d) => d.tipo === "contactor.bobina")!;
+    const k1 = (referencias?: readonly string[]): ComponenteEscena => ({ def: bobina, x: 0, y: 22, rotacion: 0, espejado: false, etiqueta: "K1", ...(referencias ? { referencias } : {}) });
+    // La segunda fila, más larga: de 2 a 1 la caja se achica.
+    const dos = ["NA 13-14 (10, 11)", "NC 21-22 (-120, -345)"];
+    const una = ["NA 13-14 (10, 11)"];
+    const cubren = (cajas: readonly Caja[], k: Caja) =>
+      cajas.some((c) => c.x <= k.x + 1e-9 && c.y <= k.y + 1e-9 && c.x + c.ancho >= k.x + k.ancho - 1e-9 && c.y + c.alto >= k.y + k.alto - 1e-9);
+    const e = new EscenaEditable([["k1", k1(dos)]]);
+    const conDos = cajaDibujo(bobina, k1(), "K1", dos);
+    const conUna = cajaDibujo(bobina, k1(), "K1", una);
+    const sinLista = cajaDibujo(bobina, k1(), "K1");
+    expect(conDos.ancho).toBeGreaterThan(conUna.ancho);
+    expect(conUna.ancho).toBeGreaterThan(sinLista.ancho);
+
+    const deDosAUna = e.actualizar("k1", k1(una));
+    expect(cubren(deDosAUna, conDos)).toBe(true);
+    const deUnaANinguna = e.actualizar("k1", k1());
+    expect(cubren(deUnaANinguna, conUna)).toBe(true);
+    expect(e.obtener("k1")!.referencias).toBeUndefined();
+    // Al volver (Ctrl+Z), la caja nueva, con la lista, también se rehace.
+    expect(cubren(e.actualizar("k1", k1(dos)), conDos)).toBe(true);
+  });
+
   it("si una caja contiene a la otra, devuelve solo la grande", () => {
     const e = new EscenaEditable([["a", en(0, 0, "K1")]]);
     const larga = cajaDibujo(def, en(0, 0), "K1-PRINCIPAL");
