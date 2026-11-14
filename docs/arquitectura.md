@@ -142,11 +142,11 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
 - Copiar, cortar, pegar y duplicar (Ctrl+D; también Ctrl+Insert, Mayús+Insert y Mayús+Supr). Hecho en T16 (fase 3b), con portapapeles interno.
 - Deshacer/rehacer ilimitado (Ctrl+Z / Ctrl+Y).
 - Zoom con la rueda centrado en el mouse; desplazamiento con botón del medio o espacio + arrastrar; "encuadrar todo" (F).
-- Etiquetado automático: el segundo contactor que se coloca es K2, el tercer pulsador S3, etc.
+- Etiquetado automático: el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Hecho en T17 (fase 3b, 2026-11-14): se numera al colocar con el menor libre (K bobina, S pulsadores, H lámpara; `prefijoEtiqueta` en la definición); al pegar y duplicar se renumera solo lo que choca con la hoja, la bobina junto con sus contactos; "Etiquetar los vacíos" y el renombrado de bobina, que arrastra a sus contactos, son un paso de deshacer cada uno. Fase y Neutro quedan fuera. Lo escrito a mano se respeta y, si repite otra etiqueta, el panel lo avisa con una nota. Plan en `docs/plan-T17.md`.
 - Referencias cruzadas: debajo de cada bobina, la lista de dónde están sus contactos.
 - Validaciones en vivo: bornes sin conectar y cables sueltos marcados en naranja.
 
-> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`). T16 (copiar y pegar) está hecha desde el 2026-11-13. Siguen T17 a T19.
+> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`). T16 (copiar y pegar) está hecha desde el 2026-11-13 y T17 (etiquetado automático) desde el 2026-11-14. Sigue T17b (contacto auxiliar NC) y después T18 y T19.
 
 **Atajos principales:** F5 alterna editar/simular, Ctrl+N nuevo, Ctrl+O abre, Ctrl+S guarda, Ctrl+Mayús+S guarda como, Ctrl+P exporta PDF (con la exportación, fase 7), Esc cancela la herramienta actual. Tema claro y oscuro.
 

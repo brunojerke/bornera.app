@@ -23,6 +23,7 @@ El armado de referencia, el `inversion.brn` y la comparación se hacen al cerrar
 **En la netbook, al cerrar la fase, junto con la prueba de la inversión** (decisión de Bruno, 2026-11-13; T16 no espera por esto):
 - *Duplicar todo (2000)*: en la PC, en las condiciones de T15, tarda 42,5 ms de mediana y 55,8 de máximo; el tope es 150/300 ms. En la primera corrida, con la PC inestable, dio ~116 ms (`docs/plan-T16.md`, sección 9).
 - La previa de pegar con `TOPE_PREVIA_PEGAR = 160`: en la netbook con Mint, unas 6 veces más lenta que la PC según T14a, la revisión por punto podría pasar los 16 ms. Verificarlo ahí. En la PC, toda la serie hasta 500 da p95 ≤ 5 ms, y el tope se revisa con lo que dé la netbook.
+- **Desde T17** (`docs/plan-T17.md`, "Vigente para el cierre de la fase 3b"): *Duplicar todo (2000)* pasó justo en la PC contra `d969019` (59,35 y 59,79 ms) y *Pegar 500* suma de 0,55 a 0,9 ms. Medir las dos en la netbook, junto con el tope 160.
 
 ## Reglas
 Las mismas de la fase 3:
@@ -51,7 +52,8 @@ Las mismas de la fase 3:
 - **Etapa 1 (núcleo):** `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts` y `CambiarEtiquetas`, con tests. Hecha el 2026-11-14.
 - **Etapa 2 (editor y panel):** `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" (botón del panel sin selección), renombrado con arrastre y las notas del panel. Hecha el 2026-11-14.
 - **Etapa 3 (humo t17 y banco):** hecha el 2026-11-14. Humo t17 con 32 comprobaciones. *Etiquetar los vacíos* pasa sus topes fijos. Pegar 500 y Duplicar todo pasan con el criterio relativo a `d969019` (cambio de criterio de Bruno). Contra `v0.1.3`, 3 celdas sin editor quedan aceptadas como ruido. Detalle en `docs/plan-T17.md` (sección 4 y etapa 3) y en `docs/bench.md`.
-- **Etapa 4 (cierre).**
+- **Etapa 4 (cierre, solo docs):** hecha el 2026-11-14. Detalle en `docs/plan-T17.md` (etapa 4 y "Vigente para el cierre de la fase 3b").
+- **T17 hecha el 2026-11-14.** Sigue T17b. Para la netbook, al cierre de la fase: Duplicar todo (2000), que pasó justo en la PC (59,35 y 59,79 ms), Pegar 500 y el tope 160 de la previa.
 
 ### T17b. Contacto auxiliar NC y `compararRedes`
 Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sale de dos hallazgos al planear T17:

@@ -232,7 +232,7 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 | 1 | Núcleo: `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts`, `CambiarEtiquetas` y sus tests, con los de al azar. `npm test` y `npm run check`. **Hecha el 2026-11-14** (resultado abajo). | Opus xhigh |
 | 2 | Editor y panel: `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos", renombrado con arrastre y las notas del panel. Tests del editor. Prueba a mano en `npm run dev`. **Hecha el 2026-11-14** (resultado abajo). | Opus alto |
 | 3 | Humo t17 y banco: escenario nuevo, las tres mediciones y la regresión contra `v0.1.3`, `docs/bench.md`. **Hecha el 2026-11-14** (resultado abajo). | Opus alto |
-| 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md`, Obsidian y `npm run humo` entero. | Sonnet |
+| 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian. Solo docs: valen las verificaciones de `0b86506`. **Hecha el 2026-11-14** (resultado abajo). | Sonnet |
 
 ### Etapa 1, resultado (2026-11-14)
 - **Catálogo:** `prefijoEtiqueta` en `DefinicionSimbolo`: K en la bobina, S en los dos pulsadores y H en la lámpara. `esFuente` y `esSeguidor` en `src/core/symbols/tipos.ts`. `validarDefinicion` exige que cada símbolo sea fuente, seguidor o tenga prefijo, y que el prefijo sea solo letras mayúsculas.
@@ -302,6 +302,20 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 - **Verificación:** `npm test` 1551 bien (1 salteado: `circuito`), `npm run check` sin errores, `npm run humo` 611 de 611.
 - **Pendiente opcional (Bruno, no ahora):** que Pegar no vuelva a juntar las etiquetas de toda la hoja en cada pegado. Hoy `EtiquetasHoja` se invalida con cada comando y el pegado siguiente recorre los 2000. A lo sumo recupera los 0,5–0,9 ms que suma T17.
 - **Para la etapa 4:** el cierre (este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian), con `npm run humo` entero.
+
+### Etapa 4, resultado (2026-11-14)
+Cierre, solo docs: este plan, `plan-fase3b.md`, `arquitectura.md` ("Etiquetado automático: hecho en T17") y Obsidian. Sin tests, check, humo ni banco, porque no cambia código: valen los de `0b86506` (`npm test` 1551 bien, 1 salteado; `npm run check` sin errores; `npm run humo` 611 de 611). **T17 queda hecha el 2026-11-14.** Sigue T17b.
+
+## Vigente para el cierre de la fase 3b
+Lo que T17 deja anotado para la medición en la netbook con Windows, junto con la prueba de la inversión (`docs/plan-fase3b.md`):
+- **Duplicar todo (2000):** pasó justo en la PC contra `d969019` (59,35 y 59,79 ms, tope relativo 59,79 en la tanda 1). Medirlo en la netbook; si la netbook lo da cerca del tope absoluto (150/300 ms), mirar primero el recorrido de etiquetas de `EtiquetasHoja`.
+- **Pegar 500:** T17 suma de 0,55 a 0,9 ms en la PC (+12 % y +17 %). Medirlo en la netbook.
+- **Tope 160 de la previa de pegar** (`TOPE_PREVIA_PEGAR`, de T16): sigue limitado hasta la netbook. La previa no numera (muestra las originales y resuelve al hacer clic), así que T17 no cambia este tope.
+- **Regla de los topes:** los escenarios nuevos se fijan contra el commit anterior a la tarea, en la misma sesión (`docs/plan-fase3b.md`, Reglas). La netbook decide.
+
+## Pendientes opcionales (Bruno, no ahora)
+- **Pegar sin volver a juntar las etiquetas de toda la hoja.** Hoy `EtiquetasHoja` se invalida con cada comando y el pegado siguiente recorre todos los titulares. A lo sumo recupera los 0,5–0,9 ms que suma T17.
+- **Botón "Etiquetar los vacíos" con el panel plegado.** Vive en el panel sin selección y no se ve plegado. Se resuelve con la interfaz posterior a T15 (reabrir el panel).
 
 ## 6. Riesgos
 - **Contactos huérfanos que se enganchan solos.** Los seguidores no cuentan como choque: si hay contactos "K2" sin bobina y K1 está ocupada, la próxima bobina que se coloque es K2 y esos contactos pasan a seguirla. Puede ser lo buscado (se dibujaron primero los contactos) o no. T19 marca los contactos sin bobina.
