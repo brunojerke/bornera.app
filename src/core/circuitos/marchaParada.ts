@@ -17,6 +17,10 @@
 //   no lo dejaría, el armado tira un error.
 // - `dosNeutros`: la lámpara va a un segundo Neutro "N" (c8), sin cable entre
 //   los dos neutros. Por cables quedan 5 redes; por nombre se unirían en 4.
+// - `ramaNC` (T18): suma la rama de la lámpara de parado. De L sale una T en
+//   (0, 2) hasta el auxiliar NC "K1" 21-22 en (24, 11), que prende la lámpara
+//   H2 en (24, 22), y H2 vuelve al Neutro con una T sobre w6 en (0, 30). La
+//   bobina K1 queda con dos contactos: el NA de retención y este NC.
 
 import { indexarHoja } from "../model/cables";
 import { CambiarEtiqueta, cablear, colocar } from "../model/comandos";
@@ -31,6 +35,8 @@ export const META_MARCHA_PARADA = { titulo: "Marcha-parada", autor: "", fecha: "
 export interface OpcionesMarchaParada {
   /** La lámpara va a un segundo Neutro "N", sin cable entre los dos neutros. */
   dosNeutros?: boolean;
+  /** Suma el auxiliar NC "K1" que prende la lámpara H2 (la lámpara de parado). */
+  ramaNC?: boolean;
 }
 
 /** Ids de los componentes, por su papel en el circuito. */
@@ -46,6 +52,10 @@ export interface ComponentesMarchaParada {
   neutro: string;
   /** El Neutro de la lámpara, solo con `dosNeutros`. */
   neutro2?: string;
+  /** Contacto auxiliar NC del contactor (K1 21-22), solo con `ramaNC`. */
+  k1AuxiliarNC?: string;
+  /** La lámpara de parado, solo con `ramaNC`. */
+  h2?: string;
 }
 
 export interface MarchaParada {
@@ -53,11 +63,12 @@ export interface MarchaParada {
   /** El historial con el que se armó: deshacer todo deja la hoja vacía. */
   historial: Historial;
   comp: ComponentesMarchaParada;
-  /** Ids de los cables, w1 a w8 en el orden de la tabla del plan. */
+  /** Ids de los cables, w1 a w8 en el orden de la tabla del plan (con `ramaNC`, después w9 a w11). */
   cables: string[];
 }
 
 export function marchaParada(opciones: OpcionesMarchaParada = {}): MarchaParada {
+  if (opciones.dosNeutros && opciones.ramaNC) throw new Error("Marcha-parada: ramaNC no se combina con dosNeutros (el cable de H2 cruzaría w8).");
   const doc = crearDocumento({ ...META_MARCHA_PARADA });
   const historial = new Historial(doc);
 
@@ -78,6 +89,8 @@ export function marchaParada(opciones: OpcionesMarchaParada = {}): MarchaParada 
   const h1 = poner("senalizacion.lampara", 16, 22, "H1");
   const neutro = poner("fuente.neutro", 0, 33, null, 180);
   const neutro2 = opciones.dosNeutros ? poner("fuente.neutro", 16, 33, null, 180) : undefined;
+  const k1AuxiliarNC = opciones.ramaNC ? poner("contactor.auxiliar_nc", 24, 11, "K1") : undefined;
+  const h2 = opciones.ramaNC ? poner("senalizacion.lampara", 24, 22, "H2") : undefined;
 
   const tender = (desde: Extremo, hasta: Extremo, codos: [number, number][] = []): string => {
     const hoja = doc.hojas[0]!;
@@ -102,7 +115,18 @@ export function marchaParada(opciones: OpcionesMarchaParada = {}): MarchaParada 
   const w7 = tender(enCable(w4, 0, 16), borne(h1, "X1"), [[16, 16]]);
   const w8 = neutro2 ? tender(borne(h1, "X2"), borne(neutro2, "N")) : tender(enCable(w6, 0, 28), borne(h1, "X2"), [[16, 28]]);
 
+  const cables = [w1, w2, w3, w4, w5, w6, w7, w8];
+  if (k1AuxiliarNC && h2) {
+    cables.push(
+      tender(enCable(w1, 0, 2), borne(k1AuxiliarNC, "21"), [[24, 2]]),
+      tender(borne(k1AuxiliarNC, "22"), borne(h2, "X1")),
+      tender(enCable(w6, 0, 30), borne(h2, "X2"), [[24, 30]]),
+    );
+  }
+
   const comp: ComponentesMarchaParada = { fase, s0, s1, k1Auxiliar, k1Bobina, h1, neutro };
   if (neutro2) comp.neutro2 = neutro2;
-  return { doc, historial, comp, cables: [w1, w2, w3, w4, w5, w6, w7, w8] };
+  if (k1AuxiliarNC) comp.k1AuxiliarNC = k1AuxiliarNC;
+  if (h2) comp.h2 = h2;
+  return { doc, historial, comp, cables };
 }

@@ -155,3 +155,17 @@ export function esFuente(def: DefinicionSimbolo): boolean {
 export function esSeguidor(def: DefinicionSimbolo): boolean {
   return def.accionamiento !== undefined && !ACCIONAMIENTOS_MANUALES.has(def.accionamiento);
 }
+
+/**
+ * Bobina de contactor: la única que arrastra a sus contactos al renombrarla
+ * (T17, D4) y la que lleva la lista de sus contactos (T18). Un símbolo
+ * desconocido (`undefined`) no lo es.
+ */
+export function esBobina(def: DefinicionSimbolo | undefined): boolean {
+  return def?.elemento === "bobina";
+}
+
+/** Contacto que sigue a una bobina por la etiqueta: hoy, los auxiliares NA y NC del contactor. */
+export function sigueABobina(def: DefinicionSimbolo | undefined): boolean {
+  return def?.accionamiento === "bobina";
+}

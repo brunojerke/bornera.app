@@ -18,7 +18,7 @@
 // dan ya salen normalizadas. Los mapas que devuelven estas funciones traen
 // solo los ids cuya etiqueta cambia.
 
-import { buscarSimbolo, esFuente, esSeguidor, type DefinicionSimbolo } from "../symbols";
+import { buscarSimbolo, esBobina, esFuente, esSeguidor, sigueABobina, type DefinicionSimbolo } from "../symbols";
 import type { Componente, Hoja } from "./documento";
 import { normalizarEtiqueta } from "./etiquetas";
 import type { Recorte } from "./portapapeles";
@@ -36,16 +36,6 @@ export function esTitular(def: DefinicionSimbolo | undefined): boolean {
 /** El prefijo con que se numera; null para la fuente, el seguidor y el símbolo desconocido. */
 export function prefijoDe(def: DefinicionSimbolo | undefined): string | null {
   return def !== undefined && esTitular(def) ? (def.prefijoEtiqueta ?? null) : null;
-}
-
-/** Bobina de contactor: la única que arrastra a sus contactos (D4). */
-function esBobina(def: DefinicionSimbolo | undefined): boolean {
-  return def?.elemento === "bobina";
-}
-
-/** Contacto que sigue a una bobina. */
-function sigueABobina(def: DefinicionSimbolo | undefined): boolean {
-  return def?.accionamiento === "bobina";
 }
 
 /** Las etiquetas normalizadas y no vacías de los titulares de la hoja. */

@@ -7,7 +7,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { compararRedes } from "../../src/core/circuitos/compararRedes";
 import { marchaParada } from "../../src/core/circuitos/marchaParada";
-import { deserializar } from "../../src/core/io";
+import { deserializar, serializar } from "../../src/core/io";
+import { referenciasCruzadas } from "../../src/core/model/referencias";
 import { desempaquetar } from "../../src/ui/brn";
 
 // Los mismos que exporta marcha-parada.mjs: importarlo traería sus módulos de
@@ -41,6 +42,13 @@ describe(`tests/circuitos/${NOMBRE}: el archivo congelado`, () => {
       r.documento,
       `El armado de marchaParada() cambió y ${NOMBRE} no. Si el cambio es a propósito, regeneralo con \`${REGENERAR}\` y commitealo; si no, revisá el cambio`,
     ).toEqual(marchaParada().doc);
+  });
+
+  it("con las referencias cruzadas calculadas (T18), serializar da el mismo texto que el archivo congelado: el .brn no cambia", async () => {
+    const { texto } = await abrirCongelado();
+    const { doc } = marchaParada();
+    expect(referenciasCruzadas(doc.hojas[0]!).size).toBe(1);
+    expect(serializar(doc)).toBe(texto);
   });
 
   it(`compararRedes contra marchaParada(): 0 diferencias, en menos de ${TOPE_COMPARAR_MS} ms (una medición en frío)`, async () => {

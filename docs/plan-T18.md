@@ -87,6 +87,7 @@ La separación exacta entre las partes de la fila se ajusta en la etapa 2 con la
 - La ubicación de una fila es `Componente.x` e `y` del contacto: el centro del símbolo.
 - Es la misma convención que la barra de estado: con el cursor sobre el centro del contacto, la barra muestra los mismos dos números (origen en el (0, 0) de la grilla, Y hacia abajo, enteros).
 - Los números se escriben igual que en la barra (un negativo, con su signo).
+- **Verificado en la etapa 1:** la barra muestra el cursor, no un punto de un componente: `Math.round(camara.aGrilla(mouse))`, sin imán. `Componente.x` e `y` son el centro del símbolo (pivote, centro de `cajaCuerpo`, punto al que se traslada el dibujo) y siempre son enteros (`Colocar`, `Mover` y `deserializar` lo exigen). Con el cursor a menos de media unidad del centro, la barra muestra exactamente `x, y`. El plan no necesitó corrección.
 
 ### Editor: `src/editor/referenciasHoja.ts` (caché, sin vista)
 - Guarda la lista de cada bobina de la hoja, ya como líneas de texto, y el id del contacto de cada fila.
@@ -145,8 +146,11 @@ Nadie más tiene lista. Se comprueba al cierre de la fase, con el armado de refe
 - **Orden:** dos NA de una bobina salen en orden (y, x); el orden no depende del lugar en la lista de la hoja.
 - **Rotar o espejar** un contacto no cambia su fila.
 - **Coordenadas (ajuste 2):** la ubicación de la fila es `x` e `y` del componente, y el texto lleva esos dos números.
+  - **La barra real no se prueba en Vitest** (decisión de Bruno al aprobar la etapa 1: sin test de `BarraEstado` con `svelte/server`). La prueba el humo t18 (etapa 3): con el mouse sobre el centro del contacto, la barra muestra los mismos números que la fila.
+  - En el núcleo: ubicación = `(x, y)` = centro de `cajaCuerpo`, en las 4 rotaciones y espejado, con negativos, y el texto da lo mismo que `Math.round` con el cursor corrido hasta 0,4.
 - **Al azar con semilla fija:** hojas con bobinas y contactos K1 a K5, vacíos y repetidos, y secuencias de colocar, mover, borrar, renombrar, pegar, duplicar, deshacer y rehacer. Después de cada paso, el cálculo es igual al de referencia lento: por cada bobina, filtrar toda la hoja.
-- **Prueba a propósito:** con una regla anulada (por ejemplo, la normalización), el test al azar tiene que fallar.
+  - El cálculo lento **no usa `normalizarEtiqueta`**: normaliza por su cuenta con `trim().toUpperCase()`, escrito en el test. Si no, el reemplazo de la prueba a propósito lo anularía en los dos y coincidirían.
+- **Prueba a propósito:** con la normalización anulada (`vi.doMock` de `./etiquetas`, solo para un `referencias` cargado de nuevo), el mismo recorrido al azar tiene que encontrar al menos una diferencia.
 - **`.brn`:** `serializar` de la marcha-parada da los mismos bytes que antes de T18.
 
 ### Editor: `src/editor/referenciasHoja.test.ts` y `editor.test.ts`
@@ -217,10 +221,23 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | Etapa | Qué | Modelo sugerido |
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T18 apunta acá, número de orden revisado, opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | Sonnet |
-| 1 | Núcleo: `src/core/model/referencias.ts` y sus tests (marcha-parada, rama con NC, casos, al azar contra el cálculo lento, `.brn`). `npm test` y `npm run check`. | Opus xhigh (lógica del núcleo) |
+| 1 | Núcleo: `src/core/model/referencias.ts` y sus tests (marcha-parada, rama con NC, casos, al azar contra el cálculo lento, `.brn`). `npm test` y `npm run check`. **Hecha el 2026-11-14** (ver "Etapa 1, hecha"). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor. Primero, el test de Ctrl+D (ajuste 1). Después: la lista en la bobina, `cajaDibujo`, `src/editor/referenciasHoja.ts`, `reflejar` y los tests del editor y del dibujo. Prueba visual a 1024×600. | Opus alto |
 | 3 | Humo t18 y banco: los dos escenarios nuevos, la comparación contra `234b7e6` y `docs/bench.md`. | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian. `npm run humo` entero. | Sonnet |
+
+### Etapa 1, hecha (2026-11-14)
+- **`src/core/model/referencias.ts`:** `referenciasCruzadas`, `bornesDeFila`, `textoUbicacion` y `textoFila`. Una pasada con un mapa por etiqueta. Las bobinas salen en el orden de la hoja y dos con la misma etiqueta comparten el mismo arreglo. `textoFila` da `NA 13-14  (10, 11)` y la separación se ajusta en la etapa 2.
+- **`esBobina` y `sigueABobina`** pasaron a `src/core/symbols/tipos.ts`, sin cambiar lo que hacen. `etiquetado.ts` las importa de ahí.
+- **Rama con NC:** opción `ramaNC` de `marchaParada()`: auxiliar NC "K1" en (24, 11) y lámpara H2 en (24, 22). De L sale una T en (0, 2) hasta el borne 21, del 22 se va a H2 X1, y H2 X2 vuelve con una T sobre w6 en (0, 30). Son 5 redes y todos los cables pasan la validación de W. No se combina con `dosNeutros`. La etapa 2 la reusa.
+- **Tests:**
+  - `referencias.test.ts` (25): marcha-parada, rama con NC, los casos de la tabla, normalización, orden, rotar y espejar, coordenadas, recorrido al azar y prueba a propósito.
+  - El recorrido al azar: 1000 operaciones, semilla 20261114, partiendo de la marcha-parada con rama NC. Exige que cada operación salga al menos una vez y que se den las situaciones que prueban cada regla: lista de varias filas, bobinas repetidas, etiquetas que solo coinciden normalizadas, vacíos, contacto sin bobina, desconocido y pulsador con la etiqueta de una bobina, orden distinto del de la hoja y empate de borne y lugar.
+  - Con la normalización anulada, el recorrido difiere en 777 pasos.
+  - Probadas a mano y revertidas: sin la regla de etiqueta vacía, con el desempate invertido, sin orden por y, y con los pulsadores como seguidores. El recorrido las detecta todas (entre 660 y 779 pasos con diferencias).
+  - `marchaParada.test.ts`: casos de la rama NC.
+  - `tests/circuitos/marcha-parada.test.ts`: con las referencias calculadas, `serializar` da el mismo texto que el `.brn` congelado.
+- **Resultado:** `npm test` con 1624 tests que pasan y 1 salteado; `npm run check` con 0 errores. No se tocó dibujo, editor ni interfaz.
 
 ## 7. Riesgos
 - **Atlas de textos.** Con coordenadas, cada fila es un texto distinto. Con cientos de bobinas con lista, el atlas puede llenarse y el dibujo cae a `fillText`. Lo muestra *Rehacer con referencias*. Salida prevista: dibujar la fila en partes ("NA", "13-14" y la ubicación), que se repiten mucho más.

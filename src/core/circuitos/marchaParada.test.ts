@@ -8,7 +8,7 @@ import { porNombre, redes, type BorneRed, type Red } from "../model/redes";
 import { consultaHoja, prepararCableExistente } from "../model/trazado";
 import { uniones } from "../model/uniones";
 import { buscarSimbolo } from "../symbols";
-import { META_MARCHA_PARADA, marchaParada } from "./marchaParada";
+import { META_MARCHA_PARADA, marchaParada, type OpcionesMarchaParada } from "./marchaParada";
 
 function copia<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
@@ -28,10 +28,11 @@ function particion(lista: Red[], sin?: string): string[][] {
   return lista.map((r) => r.bornes.filter((x) => x.comp !== sin).map((x) => `${x.comp}:${x.borne}`));
 }
 
-const CASOS: [string, boolean, number][] = [
-  // nombre, dosNeutros, pasos de deshacer (colocar + CambiarEtiqueta + cablear)
-  ["base", false, 7 + 5 + 8],
-  ["con dos Neutro", true, 8 + 5 + 8],
+const CASOS: [string, OpcionesMarchaParada, number][] = [
+  // nombre, opciones, pasos de deshacer (colocar + CambiarEtiqueta + cablear)
+  ["base", {}, 7 + 5 + 8],
+  ["con dos Neutro", { dosNeutros: true }, 8 + 5 + 8],
+  ["con rama NC", { ramaNC: true }, 9 + 7 + 11],
 ];
 
 describe("marcha-parada: armado", () => {
@@ -76,23 +77,24 @@ describe("marcha-parada: armado", () => {
     ]);
   });
 
-  it.each(CASOS)("%s: cada cable pasa la validación de W también con la hoja terminada", (_n, dosNeutros) => {
-    const hoja = marchaParada({ dosNeutros }).doc.hojas[0]!;
+  it.each(CASOS)("%s: cada cable pasa la validación de W también con la hoja terminada", (_n, opciones) => {
+    const hoja = marchaParada(opciones).doc.hojas[0]!;
     const indice = indexarHoja(hoja);
     const consulta = consultaHoja(hoja, indice);
     for (const w of hoja.cables) expect(prepararCableExistente(indice, consulta, w).problemas, w.id).toEqual([]);
     expect(validarHoja(hoja)).toEqual([]);
   });
 
-  it.each(CASOS)("%s: solo con comandos; deshacer todo deja la hoja vacía y rehacer todo, igual", (_n, dosNeutros, pasos) => {
-    const { doc, historial } = marchaParada({ dosNeutros });
+  it.each(CASOS)("%s: solo con comandos; deshacer todo deja la hoja vacía y rehacer todo, igual", (_n, opciones, pasos) => {
+    const { doc, historial } = marchaParada(opciones);
     const armado = copia(doc);
+    const hoja = armado.hojas[0]!;
     let deshechos = 0;
     while (historial.deshacer()) deshechos++;
     expect(deshechos).toBe(pasos);
     // Los contadores quedan arriba: `generarId` es la excepción a la regla de los comandos.
     expect(doc).toEqual({ ...crearDocumento(META_MARCHA_PARADA), contadores: armado.contadores });
-    expect(armado.contadores).toEqual({ c: dosNeutros ? 9 : 8, w: 9 });
+    expect(armado.contadores).toEqual({ c: hoja.componentes.length + 1, w: hoja.cables.length + 1 });
     while (historial.rehacer()) deshechos--;
     expect(deshechos).toBe(0);
     expect(doc).toEqual(armado);
@@ -120,8 +122,8 @@ describe("marcha-parada: conectividad", () => {
     expect(redes(hoja, { unirPorNombre: true })).toEqual(lista);
   });
 
-  it.each(CASOS)("%s: cada borne está en una sola red y ninguna red queda sin cable", (_n, dosNeutros) => {
-    const hoja = marchaParada({ dosNeutros }).doc.hojas[0]!;
+  it.each(CASOS)("%s: cada borne está en una sola red y ninguna red queda sin cable", (_n, opciones) => {
+    const hoja = marchaParada(opciones).doc.hojas[0]!;
     const lista = redes(hoja);
     const todos = hoja.componentes.flatMap((c) => buscarSimbolo(c.tipo)!.bornes.map((d) => `${c.id}:${d.nombre}`));
     expect(particion(lista).flat().sort()).toEqual(todos.sort());
@@ -199,9 +201,45 @@ describe("marcha-parada con dos Neutro", () => {
   });
 });
 
+describe("marcha-parada con rama NC (T18)", () => {
+  it("suma el auxiliar NC K1 en (24, 11) y la lámpara H2 en (24, 22), con sus cables y dos T nuevas", () => {
+    const { doc, comp: c, cables: w } = marchaParada({ ramaNC: true });
+    const hoja = doc.hojas[0]!;
+    const fila = (id: string) => {
+      const k = hoja.componentes.find((x) => x.id === id)!;
+      return [k.id, k.tipo, k.etiqueta, k.x, k.y, k.rot, k.espejado];
+    };
+    expect(fila(c.k1AuxiliarNC!)).toEqual(["c8", "contactor.auxiliar_nc", "K1", 24, 11, 0, false]);
+    expect(fila(c.h2!)).toEqual(["c9", "senalizacion.lampara", "H2", 24, 22, 0, false]);
+    const indice = indexarHoja(hoja);
+    expect(w.slice(8).map((id) => hoja.cables.find((x) => x.id === id)!).map((x) => [x.id, nodoExtremo(x.desde), nodoExtremo(x.hasta), recorridoCable(indice, x)])).toEqual([
+      ["w9", "cable:w1", "borne:c8:21", [0, 2, 24, 2, 24, 9]],
+      ["w10", "borne:c8:22", "borne:c9:X1", [24, 13, 24, 20]],
+      ["w11", "cable:w6", "borne:c9:X2", [0, 30, 24, 30, 24, 24]],
+    ]);
+  });
+
+  it("5 redes: el NC entre L y H2, y H2 al Neutro; el resto, como la base", () => {
+    const { doc } = marchaParada({ ramaNC: true });
+    const hoja = doc.hojas[0]!;
+    expect(legibles(hoja, redes(hoja))).toEqual([
+      ["L·L", "S0·11", "K1·21"],
+      ["S0·12", "S1·13", "K1·13"],
+      ["S1·14", "K1·14", "K1·A1", "H1·X1"],
+      ["K1·A2", "H1·X2", "N·N", "H2·X2"],
+      ["K1·22", "H2·X1"],
+    ]);
+  });
+
+  it("sin la opción, el armado es el de siempre; con dosNeutros, no se combina", () => {
+    expect(marchaParada({ ramaNC: false }).doc).toEqual(marchaParada().doc);
+    expect(() => marchaParada({ ramaNC: true, dosNeutros: true })).toThrow(/no se combina/);
+  });
+});
+
 describe("marcha-parada: guardar y abrir", () => {
-  it.each(CASOS)("%s: vuelve igual, sin avisos y con las mismas redes", (_n, dosNeutros) => {
-    const { doc } = marchaParada({ dosNeutros });
+  it.each(CASOS)("%s: vuelve igual, sin avisos y con las mismas redes", (_n, opciones) => {
+    const { doc } = marchaParada(opciones);
     expect(invariantes(doc)).toEqual([]);
     const r = deserializar(serializar(doc));
     if (!r.ok) throw new Error(JSON.stringify(r.errores));
