@@ -2,7 +2,7 @@
 
 Decidida el 2026-11-13 (Bruno): las cuatro funciones del editor que quedaron fuera del criterio de la fase 3 forman la fase 3b. Va después de la fase 3, cerrada con la versión 0.1.3, y antes de la fase 4.
 
-Orden: T16 → T17 → T17b → T18 → T19. El número de orden de los contactos auxiliares es una tarea aparte, que se revisa al planear T18.
+Orden: T16 → T17 → T17b → T18 → T19. El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
 
 ## Contexto
 La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`). Su sección "Fuera del criterio de pasaje" dejó para después cuatro funciones de la lista "Funciones del editor" de `docs/arquitectura.md`:
@@ -13,7 +13,7 @@ La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`)
 
 **Pasa cuando** (confirmado por Bruno el 2026-11-13): a partir de la marcha-parada, se arma a mano a 1024×600 una inversión de giro con enclavamiento eléctrico entre K1 y K2. La rama de K2 se hace duplicando la de K1 con Ctrl+D, no dibujándola de nuevo. Al terminar:
 - no hay bobinas repetidas y cada contacto queda vinculado a su bobina por la etiqueta;
-- las referencias cruzadas bajo K1 y K2 son correctas;
+- las referencias cruzadas bajo K1 y K2 son correctas: cada lista muestra exactamente sus NA y NC y ninguna tapa la otra rama (definición completa en `docs/plan-T18.md`, sección 3);
 - nada queda en naranja;
 - el `.brn` dibujado se compara por redes con el archivo congelado `tests/circuitos/inversion.brn` usando `npm run circuito`, como en T15;
 - el banco no empeora contra `v0.1.3` en la PC, y la prueba a mano anda en la netbook con Windows.
@@ -68,12 +68,19 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 ### Número de orden de contactos auxiliares (tarea aparte)
 - **Qué:** que los auxiliares de una misma bobina lleven el número de orden en sus bornes (13-14, 23-24, 31-32…), en lugar de 13-14 y 21-22 fijos.
 - **De dónde sale:** D1 de `docs/plan-T17b.md` (Bruno, 2026-11-14). Hoy los nombres de los bornes son fijos por definición y los cables guardan `{comp, borne}`, así que cambiar el número toca los cables, el dibujo por componente, `redes`, el `.brn` y el panel.
-- **Cuándo:** se revisa al planear T18, porque las referencias cruzadas muestran los bornes de cada contacto.
+- **Cuándo:** se revisó al planear T18 (Bruno, 2026-11-14, D0-A de `docs/plan-T18.md`): **no hace falta para T18**. En la inversión cada contactor usa un NA y un NC, así que no hay filas repetidas. Con dos NA de una misma bobina, la lista muestra dos filas 13-14 que se distinguen por la ubicación. T18 lee los bornes de cada fila por una sola función, así el número de orden entra después sin rehacer la lista. Sigue como tarea aparte, sin fecha.
 - **Plan:** sin escribir.
 
 ### T18. Referencias cruzadas
-- **Qué:** debajo de cada bobina, la lista de dónde están sus contactos (los que tienen su misma etiqueta).
-- **Plan:** sin escribir.
+- **Qué:** debajo de cada bobina, la lista de sus contactos (los que tienen su misma etiqueta): NA o NC, bornes y dónde está cada uno, en coordenadas de grilla. Se deriva: no se guarda en el `.brn`.
+- **Plan:** `docs/plan-T18.md`, aprobado el 2026-11-14. Solo bajo la bobina, coordenadas con la convención de la barra de estado, cálculo por comando, capa estática sin interruptor, sin naranja y sin clic.
+- **Etapa 0 (docs):** hecha el 2026-11-14.
+- **Etapa 1 (núcleo, `src/core/model/referencias.ts`):** pendiente.
+- **Etapa 2 (dibujo y editor):** pendiente. Empieza por el test de Ctrl+D contra el ancho de la lista.
+- **Etapa 3 (humo t18 y banco):** pendiente.
+- **Etapa 4 (cierre):** pendiente.
+- **Opcional para después (Bruno, 2026-11-14, no va en T18):** al seleccionar un contacto, una línea en el panel con su bobina («Bobina K1 en (x, y)»).
+- **Opcional para después (Bruno, 2026-11-14, no va en T18):** clic en una fila de la lista para ir al contacto, o en un contacto para ir a su bobina.
 
 ### T19. Validaciones en vivo
 - **Qué:** bornes sin conectar y cables sueltos, marcados en naranja.
