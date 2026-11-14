@@ -2,7 +2,7 @@
 
 Decidida el 2026-11-13 (Bruno): las cuatro funciones del editor que quedaron fuera del criterio de la fase 3 forman la fase 3b. Va después de la fase 3, cerrada con la versión 0.1.3, y antes de la fase 4.
 
-Orden: T16 → T17 → T17b → T18 → T19. El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
+Orden: T16 → T17 → T17b → T18 → T19. Hechas T16, T17, T17b y T18 (2026-11-14); sigue T19. El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
 
 ## Contexto
 La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`). Su sección "Fuera del criterio de pasaje" dejó para después cuatro funciones de la lista "Funciones del editor" de `docs/arquitectura.md`:
@@ -24,6 +24,7 @@ El armado de referencia, el `inversion.brn` y la comparación se hacen al cerrar
 - *Duplicar todo (2000)*: en la PC, en las condiciones de T15, tarda 42,5 ms de mediana y 55,8 de máximo; el tope es 150/300 ms. En la primera corrida, con la PC inestable, dio ~116 ms (`docs/plan-T16.md`, sección 9).
 - La previa de pegar con `TOPE_PREVIA_PEGAR = 160`: en la netbook con Mint, unas 6 veces más lenta que la PC según T14a, la revisión por punto podría pasar los 16 ms. Verificarlo ahí. En la PC, toda la serie hasta 500 da p95 ≤ 5 ms, y el tope se revisa con lo que dé la netbook.
 - **Desde T17** (`docs/plan-T17.md`, "Vigente para el cierre de la fase 3b"): *Duplicar todo (2000)* pasó justo en la PC contra `d969019` (59,35 y 59,79 ms) y *Pegar 500* suma de 0,55 a 0,9 ms. Medir las dos en la netbook, junto con el tope 160.
+- **Desde T18** (`docs/plan-T18.md`, "Vigente para el cierre de la fase 3b"): también *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*. En la PC pasaron sus topes con margen (por gesto, base × 1,04; paso, base + 0,3 ms).
 
 ## Reglas
 Las mismas de la fase 3:
@@ -75,10 +76,11 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 - **Qué:** debajo de cada bobina, la lista de sus contactos (los que tienen su misma etiqueta): NA o NC, bornes y dónde está cada uno, en coordenadas de grilla. Se deriva: no se guarda en el `.brn`.
 - **Plan:** `docs/plan-T18.md`, aprobado el 2026-11-14. Solo bajo la bobina, coordenadas con la convención de la barra de estado, cálculo por comando, capa estática sin interruptor, sin naranja y sin clic.
 - **Etapa 0 (docs):** hecha el 2026-11-14.
-- **Etapa 1 (núcleo, `src/core/model/referencias.ts`):** pendiente.
-- **Etapa 2 (dibujo y editor):** pendiente. Empieza por el test de Ctrl+D contra el ancho de la lista.
-- **Etapa 3 (humo t18 y banco):** pendiente.
-- **Etapa 4 (cierre):** pendiente.
+- **Etapa 1 (núcleo, `src/core/model/referencias.ts`):** hecha el 2026-11-14.
+- **Etapa 2 (dibujo y editor):** hecha el 2026-11-14. El test de Ctrl+D contra el ancho de la lista no dio choques (holgura mínima 1,4). Separador de un espacio, elegido por Bruno. Límite conocido: el peor caso de 21 letras.
+- **Etapa 3 (humo t18 y banco):** hecha el 2026-11-14. Humo t18 con 31 comprobaciones; los dos escenarios nuevos, Pegar 500 y Duplicar todo pasan contra `234b7e6`; 2 celdas comunes aceptadas como ruido. Detalle en `docs/plan-T18.md` y en `docs/bench.md`.
+- **Etapa 4 (cierre, solo docs):** hecha el 2026-11-14.
+- **T18 hecha el 2026-11-14.** Sigue T19. Para la netbook, al cierre de la fase: también *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %* (`docs/plan-T18.md`, "Vigente para el cierre de la fase 3b").
 - **Opcional para después (Bruno, 2026-11-14, no va en T18):** al seleccionar un contacto, una línea en el panel con su bobina («Bobina K1 en (x, y)»).
 - **Opcional para después (Bruno, 2026-11-14, no va en T18):** clic en una fila de la lista para ir al contacto, o en un contacto para ir a su bobina.
 

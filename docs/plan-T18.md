@@ -2,6 +2,8 @@
 
 **Aprobado el 2026-11-14** con las decisiones de la tabla de abajo. Cuarta tarea de la fase 3b (`docs/plan-fase3b.md`), después de T17b y antes de T19.
 
+**T18 hecha el 2026-11-14** (etapa 4, cierre en `03d45d8` + docs). Lo que queda para el cierre de la fase 3b está al final: "Vigente para el cierre de la fase 3b".
+
 **Estado de git al planear (verificado):** `main` en `234b7e6` (cierre de T17b), árbol limpio, 14 commits por delante de `origin/main`, sin push.
 
 **Qué es:** debajo de cada bobina de contactor, la lista de sus contactos (los que tienen su misma etiqueta): si es NA o NC, sus bornes y dónde está cada uno.
@@ -244,7 +246,7 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | 1 | Núcleo: `src/core/model/referencias.ts` y sus tests (marcha-parada, rama con NC, casos, al azar contra el cálculo lento, `.brn`). `npm test` y `npm run check`. **Hecha el 2026-11-14** (ver "Etapa 1, hecha"). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor. Primero, el test de Ctrl+D (ajuste 1), con la marcha-parada y con la rama NC. Después: la lista en la bobina, `cajaDibujo`, `src/editor/referenciasHoja.ts`, `reflejar` y los tests del editor y del dibujo. Prueba visual a 1024×600. **Hecha el 2026-11-14** (ver "Etapa 2, hecha"). | Opus alto |
 | 3 | Humo t18 (con el indicador de zoom al usar la rueda) y banco: los dos escenarios nuevos, la comparación contra `234b7e6` y `docs/bench.md`. **Hecha el 2026-11-14** (ver "Etapa 3, hecha"). | Opus alto |
-| 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian. `npm run humo` entero. | Sonnet |
+| 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian. `npm run humo` entero. **Hecha el 2026-11-14** (ver "Etapa 4, hecha"): solo docs, así que valen los tests y el humo entero de `03d45d8`. | Sonnet |
 
 ### Etapa 1, hecha (2026-11-14)
 - **`src/core/model/referencias.ts`:** `referenciasCruzadas`, `bornesDeFila`, `textoUbicacion` y `textoFila`. Una pasada con un mapa por etiqueta. Las bobinas salen en el orden de la hoja y dos con la misma etiqueta comparten el mismo arreglo. `textoFila` da `NA 13-14  (10, 11)` y la separación se ajusta en la etapa 2.
@@ -380,7 +382,10 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 
 **Resultado:** `npm test` con 1669 tests que pasan y 1 salteado; `npm run check` con 0 errores; `npm run humo` entero con 662 de 662 bien. Sin cambios en `src`.
 
-**Pendiente, etapa 4:** cierre de T18 (`plan-fase3b.md`, `arquitectura.md` y Obsidian).
+### Etapa 4, hecha (2026-11-14)
+- **Solo docs:** este plan (tabla de etapas y "Vigente para el cierre de la fase 3b"), `docs/plan-fase3b.md` (T18 hecha; sigue T19), `docs/arquitectura.md` (referencias cruzadas: hecho en T18, con las reglas en resumen) y Obsidian.
+- **Verificación:** sin cambios en `src` ni en los tests, así que valen los de `03d45d8`: `npm test` con 1669 tests que pasan y 1 salteado, `npm run check` con 0 errores y `npm run humo` entero con 662 de 662 bien. No se volvieron a correr.
+- **T18 hecha.** Sigue T19.
 
 ## 7. Riesgos
 - **Atlas de textos.** Con coordenadas, cada fila es un texto distinto. Con cientos de bobinas con lista, el atlas puede llenarse y el dibujo cae a `fillText`. Lo muestra *Rehacer con referencias*. Salida prevista: dibujar la fila en partes ("NA", "13-14" y la ubicación), que se repiten mucho más.
@@ -399,3 +404,14 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 - **Marco y zonas:** fase 7. Cuando llegue, cambia `textoUbicacion`.
 - **Todo el naranja:** T19, con sus pendientes (el NC de enclavamiento que queda K2 al duplicar y la etiqueta con prefijo que no corresponde al tipo).
 - **`tests/circuitos/inversion.brn`:** al cierre de la fase 3b.
+
+## 9. Vigente para el cierre de la fase 3b
+Lo que T18 deja fijado para el cierre de la fase (`docs/plan-fase3b.md`), junto con la prueba de la inversión:
+- **Separador de `textoFila`: un espacio** (`NA 13-14 (10, 11)`), elegido por Bruno con las capturas a 1024×600 (etapa 2).
+- **Límite conocido: el peor caso de 21 letras.** En la rama NC duplicada, `NC 21-22 (-120, -345)` entra justo contra la `cajaDibujo` de H1 (+0,11) y una letra más ya la toca. Una fila común (17 letras) tiene 4 de margen. No se garantiza en general: lo fija el test "peor caso de ancho" de `referenciasDuplicar.test.ts`.
+- **Banco:** las 2 celdas comunes que subieron en las dos tandas (*2000 · Editar al 100 %* y *500 · Mover todo al 31 %*) quedan **aceptadas como ruido** por Bruno (`docs/bench.md`, "Referencias cruzadas").
+- **Netbook con Windows, al cierre de la fase:** lo que ya venía de T16 y T17 (*Duplicar todo (2000)*, *Pegar 500* y el tope 160 de la previa de pegar, `docs/plan-T17.md`) y, desde T18, los dos escenarios nuevos:
+  - *Rehacer al 31 % con referencias*: en la PC, 22,58 / 22,26 ms por gesto contra 21,75 / 21,42 de la base (tope base × 1,15).
+  - *Mover 1 contacto con referencias al 31 %*: en la PC, 1,10 ms de paso contra 0,80 / 0,75 de la base (tope base + 1 ms).
+  - En la PC no hizo falta la netbook (ningún paso pasó la mitad de su tope, sin lentos). Si en la netbook suben, la primera salida prevista es el índice incremental por etiqueta (D-cuándo B); si se llena el atlas, dibujar la fila en partes (sección 7).
+- **Referencias cruzadas correctas** en la inversión: las cuatro condiciones de la sección 3, con el armado de referencia y `tests/circuitos/inversion.brn`.
