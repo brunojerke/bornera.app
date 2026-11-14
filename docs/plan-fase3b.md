@@ -63,7 +63,7 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 - **Etapa 0 (docs):** hecha el 2026-11-14.
 - **Etapa 1 (símbolo NC, escena fija del banco, tests de símbolo, etiquetado, portapapeles y `.brn`):** hecha el 2026-11-14.
 - **Etapa 2 (`compararRedes`):** hecha el 2026-11-14. Contactos repetidos por firma y vacíos informados. Límite conocido: dos cadenas iguales en paralelo no se identifican (`docs/plan-T17b.md`, sección 2).
-- **Etapa 3 (humo t17b, `npm run humo` entero y cierre):** pendiente.
+- **Etapa 3 (humo t17b, `npm run humo` entero y cierre):** hecha el 2026-11-14. **T17b hecha.** Sigue T18 (antes, revisar el número de orden de los auxiliares).
 
 ### Número de orden de contactos auxiliares (tarea aparte)
 - **Qué:** que los auxiliares de una misma bobina lleven el número de orden en sus bornes (13-14, 23-24, 31-32…), en lugar de 13-14 y 21-22 fijos.

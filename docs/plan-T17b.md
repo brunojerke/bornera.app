@@ -138,7 +138,9 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | 0 | Docs: este plan, `plan-fase3b.md` (T17b apunta acá, tarea aparte del número de orden, pendiente de T19) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | Sonnet |
 | 1 | Símbolo NC, escena fija del banco, conteos (también el humo `t07`), escena de prueba, tests de símbolo, etiquetado, portapapeles y `.brn`. **Hecha el 2026-11-14.** | Opus alto |
 | 2 | `compararRedes` (D2a y D2b), sus tests y el congelado de la marcha-parada. **Hecha el 2026-11-14.** | Opus xhigh (lógica del núcleo) |
-| 3 | Humo t17b, `npm run humo` entero y cierre de docs (este plan, `plan-fase3b.md`, Obsidian). | Sonnet |
+| 3 | Humo t17b, `npm run humo` entero y cierre de docs (este plan, `plan-fase3b.md`, Obsidian). **Hecha el 2026-11-14.** | Sonnet |
+
+**T17b queda hecha el 2026-11-14.** Etapa 3: humo `t17b-contacto-nc.mjs` con 20 comprobaciones (paleta con el NC justo después del NA; arrastrar entra vacío con 21-22 y un cable sale de cada borne; renombrar la bobina K1 a K5 arrastra al NA y al NC con «2 contactos pasaron a K5.» y con solo el NC «1 contacto pasó a K5.», un Ctrl+Z por paso; «Etiquetar los vacíos» deja vacío al NC; guardar con Ctrl+S y reabrir con Ctrl+O da un documento idéntico). Los contactos reciben "K1" escrito a mano en el panel: «Etiquetar los vacíos» no los toca, por diseño, y el humo lo comprueba. `npm run humo` entero: 631 de 631. 1591 tests, check limpio.
 
 En PowerShell, `npm.cmd`.
 

@@ -146,7 +146,7 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
 - Referencias cruzadas: debajo de cada bobina, la lista de dónde están sus contactos.
 - Validaciones en vivo: bornes sin conectar y cables sueltos marcados en naranja.
 
-> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`). T16 (copiar y pegar) está hecha desde el 2026-11-13 y T17 (etiquetado automático) desde el 2026-11-14. Sigue T17b (contacto auxiliar NC) y después T18 y T19.
+> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`). T16 (copiar y pegar) está hecha desde el 2026-11-13 y T17 (etiquetado automático) y T17b (contacto auxiliar NC) desde el 2026-11-14. Siguen T18 y T19.
 
 **Atajos principales:** F5 alterna editar/simular, Ctrl+N nuevo, Ctrl+O abre, Ctrl+S guarda, Ctrl+Mayús+S guarda como, Ctrl+P exporta PDF (con la exportación, fase 7), Esc cancela la herramienta actual. Tema claro y oscuro.
 
