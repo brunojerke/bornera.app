@@ -58,6 +58,20 @@ Dos contactos en paralelo entre las mismas redes tienen firmas idénticas: son i
 
 `marcha-parada.brn` no tiene contactos repetidos ni vacíos: tiene que seguir dando 0 diferencias sin tocar el archivo.
 
+#### Precisiones de la etapa 2 (Bruno, 2026-11-14)
+- **Cuándo se empareja.** En cada vuelta se calculan todas las firmas y recién después se empareja. Una firma con un contacto en cada lado se empareja siempre. Una firma con varios se empareja solo si ninguna de sus anclas está vacía: están en paralelo entre las mismas redes y van en el orden de la hoja. **Una firma con un ancla vacía y varios contactos espera a otra vuelta.**
+- **El tope no se alcanza.** Cada vuelta útil empareja al menos un par, así que el corte por "una vuelta sin parejas" llega antes que el tope de tantas vueltas como contactos repetidos haya. El tope queda como red de seguridad.
+- **Por qué no esconde errores.** Las anclas se arman con nombres que se conocen a la vez en los dos documentos y solo ganan nombres, así que una firma del dibujo que la base no tiene no la va a tener nunca. Las 0 diferencias salen de la partición completa: emparejar mal solo puede dar diferencias de más.
+- **Mensajes:**
+  - `"K1" (contactor.auxiliar_na, c9) con 13 en {L·L, S0·11} y 14 en {S1·14, K1·A1, H1·X1}: la base no lo tiene entre esas redes.`
+  - `No se pudo identificar "K1" (contactor.auxiliar_na, c9) con 13 en {A·L} y 14 en {sin bornes conocidos}: alguna de sus redes solo tiene contactos repetidos.`
+  - Cada red muestra como mucho 3 nombres conocidos, en el orden de la hoja, y "…" si hay más. Una red sin nombres conocidos sale como `{sin bornes conocidos}`.
+  - Base con un contacto vacío: tira `compararRedes: la base tiene un contacto sin etiqueta (tipo, id).`
+- **Orden del informe:** primero los contactos sin emparejar del dibujo y después "se partió" o "se unieron", con los nombres ya puestos ("K1·13#1").
+
+#### Límite conocido: cadenas iguales en paralelo
+Dos cadenas A–K1–m1–K1–B y A–K1–m2–K1–B no se identifican: las redes del medio solo tienen contactos repetidos, y las dos firmas de cada extremo son iguales. **El mismo circuito comparado consigo mismo da 4 "No se pudo identificar"**, una diferencia que no existe. Termina en la primera vuelta y no cicla. Lo fija el test "límite conocido: dos cadenas en serie, en paralelo entre sí…" de `compararRedes.test.ts`. Si aparece en un circuito real (por ejemplo en `inversion.brn`), se revisa.
+
 ## 3. Tests (Vitest)
 
 ### Etapa 1: símbolo, etiquetado, `.brn` y banco
@@ -94,6 +108,21 @@ Dos contactos en paralelo entre las mismas redes tienen firmas idénticas: son i
 - **Límite fijado** (`etiquetado.test.ts` y `armarEtiquetas.test.ts`): al duplicar la rama de K1 con su NC "K2" de enclavamiento, todo queda en K2. Pendiente de T19.
 - **Expectativas cambiadas:** de 7 a 8 símbolos en los conteos. En `comandos.test.ts`, el caso de rotar todos los símbolos gana una 8.ª posición, (2, 3), que mantiene la caja impar×par, y "Borrar varios en varias hojas" corre sus ids (c8 pasa a la hoja 1). En `uniones.test.ts`, lo de arriba.
 
+### Etapa 2: resultados (2026-11-14)
+- **Vitest:** 1591 tests en verde (1 saltado, `npm run circuito` sin `BORNERA_BRN`), 10 más que en la etapa 1. **`npm run check`:** 0 errores. **Humo entero:** 611 de 611, también `t15`, que compara su `.brn` con `compararRedes`. **Banco:** no se corre (no toca el dibujo).
+- **Hecho:** `src/core/circuitos/compararRedes.ts` con contactos repetidos por firma (D2a, `identificarRepetidos`) y vacíos (D2b), con las precisiones de la sección 2.
+- **Tests nuevos** (`compararRedes.test.ts`):
+  - Dos armados: la marcha-parada con una rama H2 prendida por un segundo NA de K1, y una hoja de prueba con Fases A, B y C y NA de K1 entre ellas.
+  - Casos: igual movido, renumerado y en otro orden; cruce; corrido a la red del Neutro (3 nombres y "…"); tres contra dos; serie (igual, al revés, corrido y partido); paralelo (igual y corrido); límite conocido; NC vacío; la base con un contacto vacío, con dos NA y con dos bobinas.
+- **Congelado** (`tests/circuitos/marcha-parada.test.ts`): `marcha-parada.brn` contra `marchaParada()` da 0 diferencias. El control de tiempo mide la primera llamada, en frío, con tope de 50 ms y el valor en el mensaje de falla. **Medido en la PC: 1,2 a 1,6 ms** (tres corridas). No es banco.
+- **Expectativa cambiada a propósito:** el test de T17 "un contacto auxiliar sin etiqueta" pasa de "Sobra un componente sin etiqueta" al mensaje de D2b.
+- **Prueba a propósito de D2a-B.** Se reemplazó temporalmente la identificación por firmas por el multiconjunto de redes descartado: los repetidos se llaman "K1·13" sin distinguirlos. Los tests corrieron con `expect.soft`, 20 comprobaciones, y después se restauró el archivo (mismo sha256).
+  - **No detectó:** el cruce de los dos NA de K1 entre sus redes. Dio `[]`. Es el único caso.
+  - **Detectó, con otro texto:** el corrido a la red del Neutro, la serie corrida, la serie partida y el paralelo corrido.
+  - **Igual que la versión nueva:** los casos iguales (dan `[]`) y los de componentes (cantidad, vacíos, base).
+  - **Límite conocido:** D2a-B da `[]`, que ahí es lo correcto (es el mismo circuito). La versión nueva da 4 diferencias que no existen.
+- **Visto de paso:** `Cablear` valida que los tramos sean horizontales o verticales al aplicarse. Los armados de prueba tienden los cables en L.
+
 ## 4. Humo, banco y netbook
 
 - **Humo** `tests/humo/t17b-contacto-nc.mjs` a 1024×600: la paleta muestra "Contacto auxiliar NC", se arrastra al lienzo, entra vacío con los bornes 21 y 22, se guarda y se reabre igual. `t07` pasa a esperar 8 símbolos **desde la etapa 1** (ajuste de Bruno). Al cerrar cada etapa, `npm run humo` entero.
@@ -108,18 +137,19 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T17b apunta acá, tarea aparte del número de orden, pendiente de T19) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | Sonnet |
 | 1 | Símbolo NC, escena fija del banco, conteos (también el humo `t07`), escena de prueba, tests de símbolo, etiquetado, portapapeles y `.brn`. **Hecha el 2026-11-14.** | Opus alto |
-| 2 | `compararRedes` (D2a y D2b), sus tests y el congelado de la marcha-parada. | Opus xhigh (lógica del núcleo) |
+| 2 | `compararRedes` (D2a y D2b), sus tests y el congelado de la marcha-parada. **Hecha el 2026-11-14.** | Opus xhigh (lógica del núcleo) |
 | 3 | Humo t17b, `npm run humo` entero y cierre de docs (este plan, `plan-fase3b.md`, Obsidian). | Sonnet |
 
 En PowerShell, `npm.cmd`.
 
 ## 6. Riesgos
 - **La escena del banco cambia sin querer:** si `generarBanco` sigue tomando `SIMBOLOS` en algún lado (bench, `src/editor/banco.ts`), la escena cambia. Lo detecta el sha256 de `ESCENA_ACTUAL`.
-- **Firmas con anclas vacías:** circuitos con muchos contactos repetidos encadenados pueden quedar sin identificar aunque sean iguales. El tope evita que cicle; si pasa con un circuito real, se informa y se revisa.
+- **Firmas con anclas vacías:** circuitos con muchos contactos repetidos encadenados pueden quedar sin identificar aunque sean iguales. El tope evita que cicle; si pasa con un circuito real, se informa y se revisa. Pasó a límite conocido con su test (sección 2, "Límite conocido").
 - **Mensajes de `compararRedes`:** el test de T17 que fijaba el mensaje de un auxiliar vacío cambia a propósito.
 
 ## 7. Fuera de T17b
 - **Número de orden de contactos auxiliares** (13-14, 23-24, 31-32…): tarea aparte, a revisar al planear T18 (`docs/plan-fase3b.md`).
 - **Aviso del NC de enclavamiento que queda con la etiqueta vieja al duplicar:** pendiente de T19.
+- **Etiqueta con un prefijo que no corresponde al tipo (por ejemplo, un pulsador "K1"):** sus bornes se llaman igual que los de un auxiliar "K1" ("K1·13") y `compararRedes` puede confundirlos. Visto en la etapa 2; pendiente de T19 (Bruno, 2026-11-14).
 - **`tests/circuitos/inversion.brn`:** al cierre de la fase 3b.
 - **Simulación del NC:** fase 4.

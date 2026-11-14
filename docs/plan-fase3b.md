@@ -61,8 +61,8 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 - **`compararRedes`:** hoy da por repetidos dos auxiliares NA de una misma bobina (misma etiqueta y mismo tipo), y con T17 un contacto nuevo queda sin etiqueta. Decidir cómo los compara.
 - **Plan:** `docs/plan-T17b.md`, aprobado el 2026-11-14. NC 21-22 fijo (NA 13-14), `compararRedes` con firma por redes para los contactos repetidos e informe de los vacíos, escena del banco fija en los 7 tipos de `v0.1.3` (sin banco).
 - **Etapa 0 (docs):** hecha el 2026-11-14.
-- **Etapa 1 (símbolo NC, escena fija del banco, tests de símbolo, etiquetado, portapapeles y `.brn`):** pendiente.
-- **Etapa 2 (`compararRedes`):** pendiente.
+- **Etapa 1 (símbolo NC, escena fija del banco, tests de símbolo, etiquetado, portapapeles y `.brn`):** hecha el 2026-11-14.
+- **Etapa 2 (`compararRedes`):** hecha el 2026-11-14. Contactos repetidos por firma y vacíos informados. Límite conocido: dos cadenas iguales en paralelo no se identifican (`docs/plan-T17b.md`, sección 2).
 - **Etapa 3 (humo t17b, `npm run humo` entero y cierre):** pendiente.
 
 ### Número de orden de contactos auxiliares (tarea aparte)
@@ -80,6 +80,7 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 - **Plan:** sin escribir.
 - **Pendiente (de T16):** el naranja de la previa de pegar en conflicto (`--aviso`) choca con el naranja de las validaciones en vivo. Decidir cómo se distinguen.
 - **Pendiente (de T17b):** al duplicar la rama de K1 con su NC "K2" de enclavamiento, la copia queda con NC "K2" y debería ser K1: el contacto conserva su etiqueta porque su bobina no está en el lote. Avisarlo. Lo fija un test de T17b (`docs/plan-T17b.md`, sección 3).
+- **Pendiente (de T17b):** etiqueta con prefijo que no corresponde al tipo (p. ej. pulsador K1). Sus bornes se llaman como los del auxiliar "K1" ("K1·13") y `compararRedes` puede confundirlos (`docs/plan-T17b.md`, sección 7).
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/plan-fase3.md`, T14b). Está en los riesgos de `docs/plan-T16.md`.

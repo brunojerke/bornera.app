@@ -5,6 +5,7 @@
 // @ts-expect-error sin el paquete @types/node (como vite.config.js)
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { compararRedes } from "../../src/core/circuitos/compararRedes";
 import { marchaParada } from "../../src/core/circuitos/marchaParada";
 import { deserializar } from "../../src/core/io";
 import { desempaquetar } from "../../src/ui/brn";
@@ -15,22 +16,40 @@ const NOMBRE = "marcha-parada.brn";
 const RUTA = new URL(`./${NOMBRE}`, import.meta.url);
 const REGENERAR = "node tests/circuitos/marcha-parada.mjs";
 
+/** Tope del control de tiempo de `compararRedes` (T17b): no es banco, solo que no se dispare. */
+const TOPE_COMPARAR_MS = 50;
+
+/** El archivo congelado: sus bytes, el texto descomprimido y lo que da al leerlo. Tira si falta o no abre. */
+async function abrirCongelado() {
+  if (!existsSync(RUTA)) throw new Error(`Falta tests/circuitos/${NOMBRE}. Generalo con: ${REGENERAR}`);
+  const bytes = new Uint8Array(readFileSync(RUTA));
+  const abierto = await desempaquetar(bytes);
+  if (!abierto.ok) throw new Error(`No se pudo descomprimir: ${abierto.error}`);
+  const r = deserializar(abierto.texto);
+  if (!r.ok) throw new Error(`No abre: ${JSON.stringify(r.errores)}`);
+  return { bytes, texto: abierto.texto, r };
+}
+
 describe(`tests/circuitos/${NOMBRE}: el archivo congelado`, () => {
   it("es gzip, formato versión 1, y abre sin avisos igual que marchaParada()", async () => {
-    if (!existsSync(RUTA)) throw new Error(`Falta tests/circuitos/${NOMBRE}. Generalo con: ${REGENERAR}`);
-    const bytes = new Uint8Array(readFileSync(RUTA));
+    const { bytes, texto, r } = await abrirCongelado();
     expect([bytes[0], bytes[1]], "No empieza con la marca de gzip (1f 8b)").toEqual([0x1f, 0x8b]);
-
-    const abierto = await desempaquetar(bytes);
-    if (!abierto.ok) throw new Error(`No se pudo descomprimir: ${abierto.error}`);
-    expect(JSON.parse(abierto.texto).version, "El archivo congelado es de la versión 1 del formato").toBe(1);
-    const r = deserializar(abierto.texto);
-    if (!r.ok) throw new Error(`No abre: ${JSON.stringify(r.errores)}`);
+    expect(JSON.parse(texto).version, "El archivo congelado es de la versión 1 del formato").toBe(1);
     expect(r.avisos).toEqual([]);
 
     expect(
       r.documento,
       `El armado de marchaParada() cambió y ${NOMBRE} no. Si el cambio es a propósito, regeneralo con \`${REGENERAR}\` y commitealo; si no, revisá el cambio`,
     ).toEqual(marchaParada().doc);
+  });
+
+  it(`compararRedes contra marchaParada(): 0 diferencias, en menos de ${TOPE_COMPARAR_MS} ms (una medición en frío)`, async () => {
+    const { r } = await abrirCongelado();
+    const base = marchaParada().doc;
+    const t0 = performance.now();
+    const diferencias = compararRedes(r.documento, base);
+    const ms = performance.now() - t0;
+    expect(diferencias).toEqual([]);
+    expect(ms, `compararRedes tardó ${ms.toFixed(2)} ms con la marcha-parada (tope ${TOPE_COMPARAR_MS} ms)`).toBeLessThan(TOPE_COMPARAR_MS);
   });
 });
