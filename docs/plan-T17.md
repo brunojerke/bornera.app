@@ -20,10 +20,19 @@
 | D-previa | **como se propuso** | La previa de Colocar muestra la etiqueta que va a recibir. La de pegar muestra las originales y resuelve al hacer clic. |
 
 **Otras definiciones de Bruno:**
-- La numeración va en el armado del comando (`src/editor/etiquetado.ts`), no dentro de `colocar()` del núcleo. `marchaParada()` y `tests/circuitos/marcha-parada.brn` no cambian.
+- La numeración va en el armado del comando (`src/editor/armarEtiquetas.ts`), no dentro de `colocar()` del núcleo. `marchaParada()` y `tests/circuitos/marcha-parada.brn` no cambian.
 - Las etiquetas usadas quedan en memoria y se invalidan con cada comando, no con cada `pointermove`.
 - `CambiarEtiqueta` del núcleo no cambia.
 - El contacto auxiliar NC y los cambios a `compararRedes` van en una tarea corta aparte, **T17b**, después de T17 y antes de T18 (`docs/plan-fase3b.md`).
+
+**Ajustes al empezar la etapa 1 (Bruno, 2026-11-14):**
+- El archivo del editor se llama `src/editor/armarEtiquetas.ts` (su test, `armarEtiquetas.test.ts`), no `etiquetado.ts`, para no repetir el nombre de `src/core/model/etiquetado.ts`.
+- **D1.** `esFuente` y `esSeguidor` van en `src/core/symbols/tipos.ts`: `validarDefinicion` los usa sin que `symbols` importe de `model`. Seguidor: definición con accionamiento que no es a mano, sin nombrar el térmico (los pulsadores siguen numerándose con S).
+- **D2.** Un símbolo desconocido (un tipo que no está en la biblioteca) es un titular sin prefijo: su etiqueta queda reservada. No se duplica, no se renumera y no se rellena.
+- **D3.** La regla 6 de pegar cambia: la primera bobina en (y, x) encabeza el grupo (sección 2).
+- **D4.** Al pegar, solo la bobina arrastra a sus contactos.
+- `CambiarEtiquetas` valida y normaliza cada etiqueta con las reglas de `etiquetas.ts` (trim y mayúsculas; una fuente no puede quedar vacía). Un id cuya etiqueta no cambia no entra al mapa.
+- Test al azar: el invariante deja fuera las etiquetas vacías. El ayudante que simula el armado del editor es provisorio: en la etapa 2 el mismo test pasa por `armarEtiquetas.ts` (y se muda fuera de `src/core`, que no puede importar el editor).
 
 ## 1. Estado verificado (2026-11-14, sobre `d969019`)
 
@@ -49,8 +58,8 @@
 
 ### Palabras
 - **Fuente:** `elemento: "fuente"`. Su etiqueta es el nombre de la red. T17 no la toca nunca.
-- **Seguidor:** contacto con `accionamiento: "bobina"` o `"termico"`. Su etiqueta dice a quién sigue. Hoy, solo el auxiliar NA.
-- **Titular:** todo lo demás (bobina, pulsadores, lámpara). Es lo que se numera.
+- **Seguidor:** contacto con accionamiento que no es a mano (`esSeguidor`, D1). Su etiqueta dice a quién sigue. Hoy, solo el auxiliar NA; cuando llegue, también el contacto del térmico.
+- **Titular:** todo lo demás (bobina, pulsadores, lámpara). Es lo que se numera. Un símbolo desconocido es titular sin prefijo (D2).
 - **Choca:** una etiqueta choca si, normalizada y no vacía, es la de un titular que ya está en la hoja. Los seguidores y las fuentes nunca cuentan como choque.
 
 ### Catálogo: `prefijoEtiqueta`
@@ -59,21 +68,23 @@
 - `validarDefinicion` y un test exigen que cada símbolo sea fuente, seguidor o tenga prefijo (solo letras mayúsculas).
 
 ### Núcleo: `src/core/model/etiquetado.ts` (reglas puras, sin DOM)
-- `esSeguidor(def)`, `esTitular(def)` y `prefijoDe(def)`.
+- `esTitular(def)` y `prefijoDe(def)`. `esFuente` y `esSeguidor` están en `src/core/symbols/tipos.ts` (D1).
 - `etiquetasDeTitulares(hoja)`: el conjunto de etiquetas normalizadas no vacías de los titulares.
 - `menorLibre(usadas, prefijo)`: `prefijo + n` con el menor n ≥ 1 que no esté en `usadas`. "K01" ocupa el 1: se comparan los números, no los textos.
 - `etiquetarLote(usadas, lote)`: las etiquetas nuevas de un lote que se pega, con la regla de abajo. Devuelve id → etiqueta solo para lo que cambia.
+- `conEtiquetas(recorte, cambios)`: el recorte con esas etiquetas; es lo que el editor le pasa a `pegar()`.
 - `etiquetarVacios(hoja)`: id → etiqueta para los titulares vacíos, en orden (y, x).
-- `planRenombrarBobina(hoja, id, nueva)`: los ids que cambian (la bobina y, si corresponde, sus contactos) y si hubo arrastre.
-- Comando nuevo `CambiarEtiquetas` en `comandos.ts`: cambia varias etiquetas con una sola pasada por la hoja y guarda las anteriores. Un paso de deshacer. `CambiarEtiqueta` queda como está.
+- `planRenombrarBobina(hoja, id, nueva)`: `{ cambios, arrastre, motivo }`. `cambios` es id → etiqueta de lo que cambia (la bobina y, si corresponde, sus contactos). `motivo` dice por qué no hubo arrastre cuando había contactos con la etiqueta vieja (`otra_bobina_vieja` u `otra_bobina_nueva`); si no, es null.
+- Los números salen de un contador por prefijo que solo avanza: con 2000 que chocan no se recorre la lista 2000 veces.
+- Comando nuevo `CambiarEtiquetas` en `comandos.ts`: cambia varias etiquetas con una sola pasada por la hoja y guarda las anteriores. Un paso de deshacer. Valida y normaliza cada etiqueta con `etiquetas.ts`. `CambiarEtiqueta` queda como está.
 
 ### Regla al pegar y duplicar (D-duplicar C)
 1. `usadas` arranca con las etiquetas de los titulares de la hoja, como está al hacer clic.
 2. Los titulares del lote que **no** chocan conservan su etiqueta, y esa etiqueta se suma a `usadas` (nadie del lote la puede recibir).
 3. Los titulares del lote que chocan se recorren en orden estable, por posición (y, x) y, a igualdad, en el orden del recorte. Cada uno recibe el menor libre de su prefijo y lo suma a `usadas`. Si su símbolo no tiene prefijo, conserva.
-4. Si el que choca es una bobina, los contactos seguidores **del lote** con su misma etiqueta toman la nueva junto con ella.
+4. Si el que choca es una bobina, los contactos seguidores **del lote** con su misma etiqueta toman la nueva junto con ella. Solo la bobina arrastra (D4).
 5. Los contactos del lote sin su bobina en el lote conservan la etiqueta: son otro contacto del mismo contactor.
-6. Si el lote trae dos bobinas con la misma etiqueta, cada una recibe su número y los contactos no se arrastran (no se sabe a cuál siguen): conservan.
+6. Si el lote trae varias bobinas con la misma etiqueta, la primera en orden (y, x) encabeza el grupo. Si choca con la hoja, toma el número nuevo y los contactos del lote con esa etiqueta la siguen; las demás bobinas reciben cada una su número, sin contactos. Si no choca, todo conserva (D3, cambiada el 2026-11-14).
 7. Los titulares vacíos del lote quedan vacíos: no chocan. Los rellena "Etiquetar los vacíos".
 8. Las fuentes conservan siempre.
 
@@ -81,7 +92,7 @@ Ejemplos: duplicar la rama de K1 (S1, K1 auxiliar, K1 bobina, H1) da S2, K2, K2 
 
 Se calcula al hacer clic, con el documento de ese momento, igual que las ids (E1-A de T16). El comando `Pegar` guarda el lote ya etiquetado: rehacer repite las mismas etiquetas.
 
-### Editor: `src/editor/etiquetado.ts` (armado de los comandos)
+### Editor: `src/editor/armarEtiquetas.ts` (armado de los comandos)
 - Guarda en memoria las etiquetas de los titulares de la hoja. Se invalida con cada comando (ejecutar, deshacer, rehacer) y al cambiar de documento, nunca con `pointermove`. Se vuelve a calcular recién cuando alguien las pide.
 - **Colocar:** `HerramientaColocar` recibe del editor la etiqueta al armar el comando. Para un titular con prefijo es el menor libre; para una fuente, su `etiquetaInicial`; para un seguidor o un titular sin prefijo, vacío. La etiqueta va dentro del `Colocar`: un paso. `colocar()` del núcleo no cambia.
 - **Previa de Colocar:** muestra la etiqueta que va a recibir. En modo clic se actualiza después de cada colocación y de cada deshacer, junto con `revisarDeNuevo`.
@@ -108,12 +119,14 @@ Se calcula al hacer clic, con el documento de ese momento, igual que las ids (E1
 ### Núcleo: `src/core/model/etiquetado.test.ts` y `biblioteca.test.ts`
 - Cada símbolo es fuente, seguidor o tiene prefijo.
 - `menorLibre`: vacío da 1; rellena huecos (borro K2, el próximo es K2); "K01" ocupa el 1; "k1 " normalizada ocupa el 1; S0 no cambia nada; otra letra no cuenta.
+- Con contactos "K2" sin bobina y K1 ocupada, la próxima bobina colocada es K2 (Bruno, etapa 1).
 - `etiquetarLote`:
   - la rama de K1 duplicada da S2, K2 (auxiliar), K2 (bobina) y H2;
   - dos bobinas que chocan, K1 y K3, dan K2 y K4 si están libres;
   - un contacto sin su bobina en el lote conserva;
   - un titular que no choca conserva y reserva su número;
-  - dos bobinas iguales en el lote: cada una su número y los contactos conservan;
+  - dos bobinas K1 con contactos K1, pegadas en una hoja con K1: ningún contacto pegado queda en K1 (la primera bobina en (y, x) se los lleva y la otra recibe su número); sin K1 en la hoja, todo conserva (D3);
+  - un símbolo desconocido conserva y reserva su etiqueta (D2);
   - los vacíos quedan vacíos;
   - Fase y Neutro intactas;
   - el orden (y, x) decide el reparto, no el orden del recorte.
@@ -123,12 +136,14 @@ Se calcula al hacer clic, con el documento de ese momento, igual que las ids (E1
   - renombrar una bobina vacía no arrastra a los contactos vacíos;
   - renombrar a una etiqueta que ya tiene otra bobina no arrastra;
   - con dos bobinas de la etiqueta vieja no arrastra.
-- `CambiarEtiquetas`: aplicar, deshacer y rehacer exactos; un id que no existe tira y no cambia nada.
-- **Al azar con semilla fija:** secuencias de colocar, borrar, pegar, duplicar, deshacer y rehacer. Después de cada paso: nunca dos titulares con la misma etiqueta (ninguna se escribe a mano en la secuencia), Fase y Neutro intactas, `validarHoja` en 0, y deshacer todo más rehacer todo da el mismo documento.
+- `CambiarEtiquetas`: aplicar, deshacer y rehacer exactos; un id que no existe tira y no cambia nada; valida y normaliza.
+- `CambiarEtiquetas` sobre 2000 componentes en un solo paso, con deshacer y rehacer exactos, y no es un `Grupo` (Bruno, etapa 1).
+- **Al azar con semilla fija:** secuencias de colocar, borrar, pegar, duplicar, deshacer y rehacer. Después de cada paso: nunca dos titulares con la misma etiqueta no vacía (ninguna se escribe a mano en la secuencia), Fase y Neutro intactas, `validarHoja` en 0, y deshacer todo más rehacer todo da el mismo documento. El ayudante que arma los comandos como el editor es provisorio hasta la etapa 2.
 - **`compararRedes` con contactos vacíos:** un test que fija lo que informa hoy con un auxiliar sin etiqueta. Lo que haya que cambiar va en T17b.
 - `marchaParada()` da el mismo documento que antes y `tests/circuitos/marcha-parada.test.ts` pasa sin tocar el `.brn`.
 
-### Editor: `src/editor/etiquetado.test.ts` y los que ya existen
+### Editor: `src/editor/armarEtiquetas.test.ts` y los que ya existen
+- El test al azar del núcleo, pasando por `armarEtiquetas.ts` en lugar del ayudante provisorio.
 - Colocar: la segunda bobina es K2 y el tercer pulsador S3 (NA y NC comparten la S); colocar, borrar y volver a colocar rellena el hueco; el auxiliar entra vacío; la Fase entra "L".
 - Colocar es un solo paso; deshacer y rehacer dan la misma etiqueta.
 - La previa de Colocar lleva la etiqueta que después tiene el componente.
@@ -176,10 +191,26 @@ Cada etapa es una sesión, cierra con `/bornera-cierre` y hace commit local. Sin
 | Etapa | Qué | Modelo |
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T17 apunta acá, T17b anotada) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | la sesión del plan |
-| 1 | Núcleo: `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts`, `CambiarEtiquetas` y sus tests, con los de al azar. `npm test` y `npm run check`. | Opus xhigh |
-| 2 | Editor y panel: `src/editor/etiquetado.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos", renombrado con arrastre y las notas del panel. Tests del editor. Prueba a mano en `npm run dev`. | Opus alto |
+| 1 | Núcleo: `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts`, `CambiarEtiquetas` y sus tests, con los de al azar. `npm test` y `npm run check`. **Hecha el 2026-11-14** (resultado abajo). | Opus xhigh |
+| 2 | Editor y panel: `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos", renombrado con arrastre y las notas del panel. Tests del editor. Prueba a mano en `npm run dev`. | Opus alto |
 | 3 | Humo t17 y banco: escenario nuevo, las tres mediciones y la regresión contra `v0.1.3`, `docs/bench.md`. | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md`, Obsidian y `npm run humo` entero. | Sonnet |
+
+### Etapa 1, resultado (2026-11-14)
+- **Catálogo:** `prefijoEtiqueta` en `DefinicionSimbolo`: K en la bobina, S en los dos pulsadores y H en la lámpara. `esFuente` y `esSeguidor` en `src/core/symbols/tipos.ts`. `validarDefinicion` exige que cada símbolo sea fuente, seguidor o tenga prefijo, y que el prefijo sea solo letras mayúsculas.
+- **`src/core/model/etiquetado.ts`:** `esTitular`, `prefijoDe`, `etiquetasDeTitulares`, `menorLibre`, `etiquetarLote` (reglas 1 a 8, con la regla 6 de D3), `conEtiquetas`, `etiquetarVacios` y `planRenombrarBobina`. Los números salen de un contador por prefijo que solo avanza.
+- **`CambiarEtiquetas`** en `comandos.ts`: valida y normaliza al construir, una pasada por las hojas en `aplicar` y en `deshacer`, y una fuente no puede quedar vacía.
+- **Tests:** `etiquetado.test.ts` (36), con los dos que pidió Bruno: contactos "K2" sin bobina, y 2000 componentes en un paso, que no es un `Grupo`. Más casos en `validar.test.ts`, `biblioteca.test.ts` y `compararRedes.test.ts` (auxiliar vacío: fija lo que informa hoy).
+- **Al azar** (semilla 20261114, 400 operaciones, unos 90 ms): en esa corrida hubo 176 titulares renumerados al pegar, 42 contactos que siguieron a su bobina y 8 "Etiquetar los vacíos". Con la regla del choque anulada a propósito, falla en la operación 7.
+- **Tests que ya existían y cambiaron:**
+  - El `PULSADOR` de `validar.test.ts` lleva prefijo S.
+  - La bobina de prueba de `transformar.test.ts` lleva prefijo K.
+  - `editor.test.ts`: `SIMBOLO_DESCONOCIDO` queda sin prefijo a propósito (D2), así que su validación espera ahora dos reparos (sin prefijo y sin bornes) en lugar de uno.
+- **Verificación:** `npm test` 1525 bien (1 salteado: `circuito`, sin `BORNERA_BRN`), `npm run check` sin errores, `npm run humo` 579 de 579. Sin banco: la etapa no toca el editor ni el dibujo. Se mide en la etapa 3.
+- **Para la etapa 2:**
+  - Renombrar una bobina a vacío arrastra a sus contactos a vacío, porque las tres condiciones no lo impiden. Revisarlo con Bruno junto con las notas del panel.
+  - El test al azar se muda fuera de `src/core` y pasa por `armarEtiquetas.ts`.
+  - `CambiarEtiqueta` (de a uno) sigue sin validar ni normalizar en el núcleo: lo hace el panel.
 
 ## 6. Riesgos
 - **Contactos huérfanos que se enganchan solos.** Los seguidores no cuentan como choque: si hay contactos "K2" sin bobina y K1 está ocupada, la próxima bobina que se coloque es K2 y esos contactos pasan a seguirla. Puede ser lo buscado (se dibujaron primero los contactos) o no. T19 marca los contactos sin bobina.

@@ -12,6 +12,7 @@
 //   inversa: así es exacto aunque la operación ajuste coordenadas.
 // - Las coordenadas quedan siempre enteras.
 
+import { buscarSimbolo, esFuente } from "../symbols";
 import { copiarCable, indexarHoja, puntoExtremo, validarCable, type IndiceHoja } from "./cables";
 import {
   buscarComponente,
@@ -23,6 +24,7 @@ import {
   type Extremo,
   type Hoja,
 } from "./documento";
+import { normalizarEtiqueta, validarEtiqueta } from "./etiquetas";
 import {
   MENSAJE_NO_REHACER,
   planearReconexion,
@@ -695,6 +697,78 @@ export class CambiarEtiqueta implements Comando {
     const c = buscarComponente(doc, this.id);
     if (!c) throw new Error(`No existe el componente "${this.id}".`);
     return c;
+  }
+}
+
+/**
+ * Cambia varias etiquetas de una vez (T17): "Etiquetar los vacíos" y el
+ * renombrado de una bobina con sus contactos. Un solo paso de deshacer y una
+ * sola pasada por el documento en cada `aplicar` y `deshacer`: un `Grupo` de
+ * `CambiarEtiqueta` buscaría cada id en toda la hoja (cuadrático con miles).
+ *
+ * Cada etiqueta se valida (`validarEtiqueta`) y se normaliza
+ * (`normalizarEtiqueta`) al construir; un id repetido o una lista vacía
+ * tiran. Quien lo arma deja afuera los ids cuya etiqueta no cambia.
+ * `aplicar` revisa todo antes de tocar el documento: si falta un id, o una
+ * fuente quedaría sin nombre de red, tira y no cambia nada. Guarda las
+ * etiquetas anteriores, y deshacer las devuelve tal cual estaban.
+ */
+export class CambiarEtiquetas implements Comando {
+  private readonly etiquetas: ReadonlyMap<string, string>;
+  private anteriores: ReadonlyMap<string, string> | null = null;
+
+  constructor(cambios: Iterable<readonly [string, string]>) {
+    const etiquetas = new Map<string, string>();
+    for (const [id, texto] of cambios) {
+      if (etiquetas.has(id)) throw new Error(`CambiarEtiquetas: el componente "${id}" está repetido.`);
+      const error = validarEtiqueta(texto, false);
+      if (error !== null) throw new Error(`CambiarEtiquetas: la etiqueta "${texto}" de "${id}" no vale: ${error}.`);
+      etiquetas.set(id, normalizarEtiqueta(texto));
+    }
+    if (etiquetas.size === 0) throw new Error("CambiarEtiquetas: no hay etiquetas para cambiar.");
+    this.etiquetas = etiquetas;
+  }
+
+  /** Id → etiqueta nueva, ya normalizada. */
+  get cambios(): ReadonlyMap<string, string> {
+    return this.etiquetas;
+  }
+
+  aplicar(doc: Documento): Cambio {
+    const componentes = this.ubicar(doc);
+    for (const c of componentes) {
+      const def = buscarSimbolo(c.tipo);
+      if (def && esFuente(def) && this.etiquetas.get(c.id) === "") {
+        throw new Error(`La alimentación "${c.id}" necesita un nombre de red.`);
+      }
+    }
+    const anteriores = new Map<string, string>();
+    for (const c of componentes) {
+      anteriores.set(c.id, c.etiqueta);
+      c.etiqueta = this.etiquetas.get(c.id)!;
+    }
+    this.anteriores = anteriores;
+    return soloComponentes([...this.etiquetas.keys()]);
+  }
+
+  deshacer(doc: Documento): Cambio {
+    const anteriores = this.anteriores;
+    if (anteriores === null) throw new Error("No se puede deshacer un comando que no se aplicó.");
+    for (const c of this.ubicar(doc)) c.etiqueta = anteriores.get(c.id)!;
+    return soloComponentes([...this.etiquetas.keys()]);
+  }
+
+  /**
+   * Los componentes de los ids, con una pasada por las hojas (cada id, en la
+   * primera hoja donde está, como `buscarComponente`). Tira si falta alguno.
+   */
+  private ubicar(doc: Documento): Componente[] {
+    const encontrados = new Map<string, Componente>();
+    for (const hoja of doc.hojas) {
+      for (const c of hoja.componentes) if (this.etiquetas.has(c.id) && !encontrados.has(c.id)) encontrados.set(c.id, c);
+    }
+    for (const id of this.etiquetas.keys()) if (!encontrados.has(id)) throw new Error(`No existe el componente "${id}".`);
+    return [...encontrados.values()];
   }
 }
 

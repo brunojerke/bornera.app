@@ -102,4 +102,14 @@ describe("compararRedes: un .brn contra la marcha-parada por \"etiqueta·borne\"
       SIN_COMPARAR_REDES,
     ]);
   });
+
+  it("un contacto auxiliar sin etiqueta: lo que informa hoy (lo que haya que cambiar va en T17b)", () => {
+    const { doc, historial, comp } = marchaParada();
+    historial.ejecutar(new CambiarEtiqueta(comp.k1Auxiliar, ""));
+    expect(compararRedes(doc, base())).toEqual([
+      'Falta "K1" (contactor.auxiliar_na).',
+      `Sobra un componente sin etiqueta (contactor.auxiliar_na, ${comp.k1Auxiliar}).`,
+      SIN_COMPARAR_REDES,
+    ]);
+  });
 });

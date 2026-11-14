@@ -47,8 +47,8 @@ Las mismas de la fase 3:
 - **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Lo pegado y lo duplicado se renumera solo si choca con la hoja, la bobina junto con sus contactos (reemplaza a D3-A de `docs/plan-T16.md`). Comando "Etiquetar los vacíos" y renombrado de bobina que arrastra a sus contactos.
 - **Plan:** `docs/plan-T17.md`, aprobado el 2026-11-14.
 - **Etapa 0 (docs):** hecha el 2026-11-14.
-- **Etapa 1 (núcleo):** `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts` y `CambiarEtiquetas`, con tests.
-- **Etapa 2 (editor y panel):** `src/editor/etiquetado.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" y las notas del panel.
+- **Etapa 1 (núcleo):** `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts` y `CambiarEtiquetas`, con tests. Hecha el 2026-11-14.
+- **Etapa 2 (editor y panel):** `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" y las notas del panel.
 - **Etapa 3 (humo t17 y banco).**
 - **Etapa 4 (cierre).**
 

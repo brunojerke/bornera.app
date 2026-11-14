@@ -94,7 +94,7 @@ Todo el programa gira alrededor de un único **Documento**: el editor lo modific
 
 - Todas las coordenadas van en **unidades de grilla** (enteros), no en píxeles. Así el zoom y el PDF no cambian nada del modelo.
 - Los contactos se vinculan a su bobina **por etiqueta**: todo lo que se llame K1 sigue a la bobina K1.
-- Ningún cambio se aplica directo: todo pasa por un **comando** (colocar, mover, rotar, espejar, borrar, cablear, cambiar un extremo, cambiar la etiqueta, y varios juntos en un grupo). Eso da deshacer/rehacer gratis y evita estados corruptos.
+- Ningún cambio se aplica directo: todo pasa por un **comando** (colocar, mover, rotar, espejar, borrar, cablear, cambiar un extremo, pegar, cambiar una etiqueta o varias de una vez, y varios juntos en un grupo). Eso da deshacer/rehacer gratis y evita estados corruptos.
 - El núcleo del modelo no depende del navegador: se puede probar entero con tests sin abrir la interfaz.
 
 ## Motor de simulación

@@ -122,8 +122,36 @@ export type DefinicionSimbolo = Comportamiento & {
    */
   etiquetaInicial?: string;
   /**
+   * Letras con que se numera al colocarlo (T17): "K" da K1, K2… Solo letras
+   * mayúsculas. La llevan los símbolos que se numeran solos (bobina,
+   * pulsadores, lámpara); la fuente y el seguidor no la llevan
+   * (`validarDefinicion`).
+   */
+  prefijoEtiqueta?: string;
+  /**
    * Dibujar los nombres de los bornes. Por defecto, sí. La fase y el neutro no
    * los dibujan: su nombre visible es la etiqueta, y si no se vería dos veces.
    */
   mostrarNombresBornes?: boolean;
 };
+
+// ── Clases para el etiquetado (T17) ────────────────────────────────────────
+// Fuente, seguidor o titular (docs/plan-T17.md, sección 2). El titular, lo
+// que se numera, se define en src/core/model/etiquetado.ts.
+
+/** Accionamientos a mano: el contacto es un pulsador o un selector, que se numera solo (S1, S2). */
+const ACCIONAMIENTOS_MANUALES: ReadonlySet<Accionamiento> = new Set<Accionamiento>(["manual_momentaneo", "manual_enclavado"]);
+
+/** Fase o neutro: su etiqueta es el nombre de la red. */
+export function esFuente(def: DefinicionSimbolo): boolean {
+  return def.elemento === "fuente";
+}
+
+/**
+ * Contacto que sigue a otro componente por la etiqueta, como el auxiliar a su
+ * bobina: todo contacto con un accionamiento que no es a mano. Su etiqueta
+ * dice a quién sigue, así que no se numera.
+ */
+export function esSeguidor(def: DefinicionSimbolo): boolean {
+  return def.accionamiento !== undefined && !ACCIONAMIENTOS_MANUALES.has(def.accionamiento);
+}

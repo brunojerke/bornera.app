@@ -1,7 +1,10 @@
 // Chequeos de una definición de símbolo que el sistema de tipos no puede hacer.
 // Cada símbolo nuevo debe pasar `validarDefinicion` en su test de bornes.
 
-import type { DefinicionSimbolo, Direccion } from "./tipos";
+import { esFuente, esSeguidor, type DefinicionSimbolo, type Direccion } from "./tipos";
+
+/** Prefijo de etiqueta válido: solo letras mayúsculas. */
+const PREFIJO_VALIDO = /^[A-Z]+$/;
 
 /**
  * Hacia dónde queda afuera desde un punto del borde de una caja de
@@ -27,6 +30,19 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
 
   if (!Number.isInteger(ancho) || !Number.isInteger(alto) || ancho <= 0 || alto <= 0) {
     errores.push(`El tamaño debe ser entero y positivo (es ${ancho}×${alto}).`);
+  }
+
+  // Etiquetado (T17): cada símbolo es fuente, seguidor o tiene prefijo.
+  const prefijo = def.prefijoEtiqueta;
+  if (esFuente(def) || esSeguidor(def)) {
+    if (prefijo !== undefined) {
+      const quien = esFuente(def) ? "Una fuente" : "Un contacto que sigue a otro";
+      errores.push(`${quien} no lleva prefijo de etiqueta (tiene "${prefijo}").`);
+    }
+  } else if (prefijo === undefined) {
+    errores.push("Falta el prefijo de etiqueta: el símbolo se numera al colocarlo.");
+  } else if (!PREFIJO_VALIDO.test(prefijo)) {
+    errores.push(`El prefijo de etiqueta tiene que ser solo letras mayúsculas (es "${prefijo}").`);
   }
 
   if (def.bornes.length === 0) errores.push("El símbolo no tiene bornes.");

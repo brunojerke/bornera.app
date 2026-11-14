@@ -100,6 +100,7 @@ export const PULSADOR_NA: DefinicionSimbolo = {
   categoria: "mando",
   elemento: "contacto_na",
   accionamiento: "manual_momentaneo",
+  prefijoEtiqueta: "S",
   tamano: { ancho: 4, alto: 4 },
   primitivas: [...contactoNA(), ...pulsacion(xEnCentro(PUNTA_NA, BISAGRA_Y))],
   // La cuchilla se inclina a la izquierda: los nombres, del otro lado.
@@ -117,6 +118,7 @@ export const PULSADOR_NC: DefinicionSimbolo = {
   categoria: "mando",
   elemento: "contacto_nc",
   accionamiento: "manual_momentaneo",
+  prefijoEtiqueta: "S",
   tamano: { ancho: 4, alto: 4 },
   primitivas: [...contactoNC(), ...pulsacion(xEnCentro(PUNTA_NC, BISAGRA_Y))],
   // El tope del contacto está a la derecha: los nombres, del otro lado.
@@ -133,6 +135,7 @@ export const BOBINA_CONTACTOR: DefinicionSimbolo = {
   nombre: "Bobina de contactor",
   categoria: "mando",
   elemento: "bobina",
+  prefijoEtiqueta: "K",
   tamano: { ancho: 2, alto: 4 },
   primitivas: [...conexiones(0.75), { forma: "rectangulo", x: -1, y: -0.75, ancho: 2, alto: 1.5 }],
   bornes: [
@@ -169,6 +172,7 @@ export const LAMPARA: DefinicionSimbolo = {
   nombre: "Lámpara",
   categoria: "senalizacion",
   elemento: "carga",
+  prefijoEtiqueta: "H",
   tamano: { ancho: 2, alto: 4 },
   primitivas: [
     ...conexiones(R_LAMPARA),

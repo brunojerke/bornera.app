@@ -12,7 +12,7 @@ import {
   PULSADOR_NC,
   SIMBOLOS,
 } from "./biblioteca";
-import type { DefinicionSimbolo, Primitiva, Rotacion } from "./tipos";
+import { esFuente, esSeguidor, type DefinicionSimbolo, type Primitiva, type Rotacion } from "./tipos";
 import { transformarBornes } from "./transformar";
 import { validarDefinicion } from "./validar";
 
@@ -121,6 +121,27 @@ describe("biblioteca de símbolos", () => {
     expect(CONTACTO_AUXILIAR_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "bobina" });
     expect(BOBINA_CONTACTOR.elemento).toBe("bobina");
     expect(LAMPARA).toMatchObject({ elemento: "carga", categoria: "senalizacion" });
+  });
+});
+
+describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
+  it.each(SIMBOLOS.map((s) => [s.tipo, s] as const))("%s es fuente, seguidor o tiene prefijo, y no dos a la vez", (_, s) => {
+    const clases = [esFuente(s), esSeguidor(s), s.prefijoEtiqueta !== undefined].filter(Boolean);
+    expect(clases).toHaveLength(1);
+  });
+
+  it("K en la bobina, S en los dos pulsadores y H en la lámpara", () => {
+    expect(SIMBOLOS.filter((s) => s.prefijoEtiqueta !== undefined).map((s) => [s.tipo, s.prefijoEtiqueta])).toEqual([
+      ["pulsador.na", "S"],
+      ["pulsador.nc", "S"],
+      ["contactor.bobina", "K"],
+      ["senalizacion.lampara", "H"],
+    ]);
+  });
+
+  it("fase y neutro son fuentes; el auxiliar es el único seguidor (los pulsadores, a mano, se numeran)", () => {
+    expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO]);
+    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA]);
   });
 });
 

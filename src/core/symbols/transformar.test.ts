@@ -127,6 +127,7 @@ describe("transformarBornes", () => {
         nombre: "Prueba",
         categoria: "mando",
         elemento: "bobina",
+        prefijoEtiqueta: "K",
         tamano: { ancho: 4, alto: 4 },
         primitivas: [],
         bornes: transformarBornes(BORNES, t),

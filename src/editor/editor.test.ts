@@ -187,9 +187,13 @@ describe("Editor", () => {
     aviso.mockRestore();
   });
 
-  it("el símbolo desconocido es válido salvo por no tener bornes, y no está en la biblioteca", () => {
-    // Sin bornes a propósito: no se sabe dónde estarían. Es el único reparo.
-    expect(validarDefinicion(SIMBOLO_DESCONOCIDO)).toEqual(["El símbolo no tiene bornes."]);
+  it("el símbolo desconocido es válido salvo por no tener bornes ni prefijo, y no está en la biblioteca", () => {
+    // Sin bornes a propósito: no se sabe dónde estarían. Sin prefijo, también a
+    // propósito: un símbolo desconocido no se numera (T17, D2). Son los únicos reparos.
+    expect(validarDefinicion(SIMBOLO_DESCONOCIDO)).toEqual([
+      "Falta el prefijo de etiqueta: el símbolo se numera al colocarlo.",
+      "El símbolo no tiene bornes.",
+    ]);
     expect(SIMBOLO_DESCONOCIDO.bornes).toEqual([]);
     expect(SIMBOLOS).not.toContain(SIMBOLO_DESCONOCIDO);
   });

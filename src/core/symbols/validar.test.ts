@@ -9,6 +9,7 @@ const PULSADOR: DefinicionSimbolo = {
   categoria: "mando",
   elemento: "contacto_na",
   accionamiento: "manual_momentaneo",
+  prefijoEtiqueta: "S",
   tamano: { ancho: 2, alto: 4 },
   primitivas: [{ forma: "linea", x1: 0, y1: -2, x2: 0, y2: -0.5 }],
   bornes: [
@@ -108,6 +109,40 @@ describe("validarDefinicion", () => {
 
   it("rechaza un símbolo sin bornes", () => {
     expect(validarDefinicion(conBornes([]))).toEqual(["El símbolo no tiene bornes."]);
+  });
+});
+
+describe("validarDefinicion: prefijo de etiqueta (T17)", () => {
+  const FALTA = "Falta el prefijo de etiqueta: el símbolo se numera al colocarlo.";
+
+  it("lo que se numera (pulsador, selector, bobina, carga, protección) necesita prefijo", () => {
+    const { prefijoEtiqueta: _, ...sinPrefijo } = PULSADOR;
+    expect(validarDefinicion(sinPrefijo)).toEqual([FALTA]);
+    expect(validarDefinicion({ ...sinPrefijo, accionamiento: "manual_enclavado" })).toEqual([FALTA]);
+    for (const elemento of ["bobina", "carga", "proteccion"] as const) {
+      expect(validarDefinicion({ ...sinPrefijo, elemento, accionamiento: undefined }), elemento).toEqual([FALTA]);
+    }
+  });
+
+  it("el prefijo es solo letras mayúsculas", () => {
+    for (const prefijo of ["k", "K1", "", "K-"]) {
+      expect(validarDefinicion({ ...PULSADOR, prefijoEtiqueta: prefijo }), prefijo).toEqual([
+        `El prefijo de etiqueta tiene que ser solo letras mayúsculas (es "${prefijo}").`,
+      ]);
+    }
+    expect(validarDefinicion({ ...PULSADOR, prefijoEtiqueta: "KM" })).toEqual([]);
+  });
+
+  it("la fuente y el seguidor (auxiliar de la bobina, contacto del térmico) no llevan prefijo", () => {
+    const { prefijoEtiqueta: _, ...sinPrefijo } = PULSADOR;
+    const fuente = { ...sinPrefijo, elemento: "fuente", accionamiento: undefined } as const;
+    const auxiliar = { ...sinPrefijo, accionamiento: "bobina" } as const;
+    const termico = { ...sinPrefijo, elemento: "contacto_nc", accionamiento: "termico" } as const;
+    for (const def of [fuente, auxiliar, termico]) expect(validarDefinicion(def), def.elemento).toEqual([]);
+    expect(validarDefinicion({ ...fuente, prefijoEtiqueta: "L" })).toEqual(['Una fuente no lleva prefijo de etiqueta (tiene "L").']);
+    expect(validarDefinicion({ ...auxiliar, prefijoEtiqueta: "K" })).toEqual([
+      'Un contacto que sigue a otro no lleva prefijo de etiqueta (tiene "K").',
+    ]);
   });
 });
 
