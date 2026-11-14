@@ -2,7 +2,7 @@
 
 Decidida el 2026-11-13 (Bruno): las cuatro funciones del editor que quedaron fuera del criterio de la fase 3 forman la fase 3b. Va después de la fase 3, cerrada con la versión 0.1.3, y antes de la fase 4.
 
-Orden: T16 → T17 → T17b → T18 → T19.
+Orden: T16 → T17 → T17b → T18 → T19. El número de orden de los contactos auxiliares es una tarea aparte, que se revisa al planear T18.
 
 ## Contexto
 La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`). Su sección "Fuera del criterio de pasaje" dejó para después cuatro funciones de la lista "Funciones del editor" de `docs/arquitectura.md`:
@@ -59,6 +59,16 @@ Las mismas de la fase 3:
 Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sale de dos hallazgos al planear T17:
 - **Contacto auxiliar NC:** no existe en la biblioteca, y el enclavamiento eléctrico del criterio de la fase lo necesita. Definición y test de bornes.
 - **`compararRedes`:** hoy da por repetidos dos auxiliares NA de una misma bobina (misma etiqueta y mismo tipo), y con T17 un contacto nuevo queda sin etiqueta. Decidir cómo los compara.
+- **Plan:** `docs/plan-T17b.md`, aprobado el 2026-11-14. NC 21-22 fijo (NA 13-14), `compararRedes` con firma por redes para los contactos repetidos e informe de los vacíos, escena del banco fija en los 7 tipos de `v0.1.3` (sin banco).
+- **Etapa 0 (docs):** hecha el 2026-11-14.
+- **Etapa 1 (símbolo NC, escena fija del banco, tests de símbolo, etiquetado, portapapeles y `.brn`):** pendiente.
+- **Etapa 2 (`compararRedes`):** pendiente.
+- **Etapa 3 (humo t17b, `npm run humo` entero y cierre):** pendiente.
+
+### Número de orden de contactos auxiliares (tarea aparte)
+- **Qué:** que los auxiliares de una misma bobina lleven el número de orden en sus bornes (13-14, 23-24, 31-32…), en lugar de 13-14 y 21-22 fijos.
+- **De dónde sale:** D1 de `docs/plan-T17b.md` (Bruno, 2026-11-14). Hoy los nombres de los bornes son fijos por definición y los cables guardan `{comp, borne}`, así que cambiar el número toca los cables, el dibujo por componente, `redes`, el `.brn` y el panel.
+- **Cuándo:** se revisa al planear T18, porque las referencias cruzadas muestran los bornes de cada contacto.
 - **Plan:** sin escribir.
 
 ### T18. Referencias cruzadas
@@ -69,6 +79,7 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 - **Qué:** bornes sin conectar y cables sueltos, marcados en naranja.
 - **Plan:** sin escribir.
 - **Pendiente (de T16):** el naranja de la previa de pegar en conflicto (`--aviso`) choca con el naranja de las validaciones en vivo. Decidir cómo se distinguen.
+- **Pendiente (de T17b):** al duplicar la rama de K1 con su NC "K2" de enclavamiento, la copia queda con NC "K2" y debería ser K1: el contacto conserva su etiqueta porque su bobina no está en el lote. Avisarlo. Lo fija un test de T17b (`docs/plan-T17b.md`, sección 3).
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/plan-fase3.md`, T14b). Está en los riesgos de `docs/plan-T16.md`.
