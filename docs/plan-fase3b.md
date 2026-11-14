@@ -2,7 +2,7 @@
 
 Decidida el 2026-11-13 (Bruno): las cuatro funciones del editor que quedaron fuera del criterio de la fase 3 forman la fase 3b. Va después de la fase 3, cerrada con la versión 0.1.3, y antes de la fase 4.
 
-Orden: T16 → T17 → T18 → T19.
+Orden: T16 → T17 → T17b → T18 → T19.
 
 ## Contexto
 La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`). Su sección "Fuera del criterio de pasaje" dejó para después cuatro funciones de la lista "Funciones del editor" de `docs/arquitectura.md`:
@@ -44,7 +44,18 @@ Las mismas de la fase 3:
 - **T16 hecha el 2026-11-13.** La medición en la netbook queda para el cierre de la fase (arriba).
 
 ### T17. Etiquetado automático
-- **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Decidir también qué etiqueta lleva lo pegado: T16 la conserva (D3-A de `docs/plan-T16.md`).
+- **Qué:** el segundo contactor que se coloca es K2, el tercer pulsador S3, etc. Lo pegado y lo duplicado se renumera solo si choca con la hoja, la bobina junto con sus contactos (reemplaza a D3-A de `docs/plan-T16.md`). Comando "Etiquetar los vacíos" y renombrado de bobina que arrastra a sus contactos.
+- **Plan:** `docs/plan-T17.md`, aprobado el 2026-11-14.
+- **Etapa 0 (docs):** hecha el 2026-11-14.
+- **Etapa 1 (núcleo):** `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts` y `CambiarEtiquetas`, con tests.
+- **Etapa 2 (editor y panel):** `src/editor/etiquetado.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" y las notas del panel.
+- **Etapa 3 (humo t17 y banco).**
+- **Etapa 4 (cierre).**
+
+### T17b. Contacto auxiliar NC y `compararRedes`
+Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sale de dos hallazgos al planear T17:
+- **Contacto auxiliar NC:** no existe en la biblioteca, y el enclavamiento eléctrico del criterio de la fase lo necesita. Definición y test de bornes.
+- **`compararRedes`:** hoy da por repetidos dos auxiliares NA de una misma bobina (misma etiqueta y mismo tipo), y con T17 un contacto nuevo queda sin etiqueta. Decidir cómo los compara.
 - **Plan:** sin escribir.
 
 ### T18. Referencias cruzadas
