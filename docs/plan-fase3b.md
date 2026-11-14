@@ -48,7 +48,7 @@ Las mismas de la fase 3:
 - **Plan:** `docs/plan-T17.md`, aprobado el 2026-11-14.
 - **Etapa 0 (docs):** hecha el 2026-11-14.
 - **Etapa 1 (núcleo):** `prefijoEtiqueta` en el catálogo, `src/core/model/etiquetado.ts` y `CambiarEtiquetas`, con tests. Hecha el 2026-11-14.
-- **Etapa 2 (editor y panel):** `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" y las notas del panel.
+- **Etapa 2 (editor y panel):** `src/editor/armarEtiquetas.ts`, Colocar y su previa, pegar y duplicar, "Etiquetar los vacíos" (botón del panel sin selección), renombrado con arrastre y las notas del panel. Hecha el 2026-11-14.
 - **Etapa 3 (humo t17 y banco).**
 - **Etapa 4 (cierre).**
 

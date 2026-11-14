@@ -144,7 +144,8 @@ describe("Editor: copiar, cortar y pegar (T16)", () => {
     expect(pasos()).toBe(antes + 1);
     const nuevos = [comps(doc)[1]!.id, hoja(doc).cables[1]!.id];
     expect([...editor.seleccion].sort()).toEqual(nuevos.sort());
-    expect(comps(doc)[1]).toMatchObject({ x: 20, y: 5, etiqueta: "K1" });
+    // K1 sigue en la hoja: la copia choca y recibe el menor libre (T17, D-duplicar C).
+    expect(comps(doc)[1]).toMatchObject({ x: 20, y: 5, etiqueta: "K2" });
     expect(hoja(doc).cables[1]).toMatchObject({ desde: { tipo: "borne", comp: nuevos[0] }, hasta: { tipo: "libre", x: 20, y: -1 } });
     expect(validarHoja(hoja(doc))).toEqual([]);
   });
@@ -334,10 +335,11 @@ describe("Editor: duplicar (Ctrl+D, T16)", () => {
     expect(editor.herramienta).toBeNull();
     const d1 = comps(doc).at(-1)!;
     // Caja de la bobina: ancho 2 → dx = 2 + 2.
-    expect(d1).toMatchObject({ x: 4, y: 0, etiqueta: "K1" });
+    // Con K1 y K2 en la hoja, la copia de K1 es K3, y la de K3, K4 (T17, D-duplicar C).
+    expect(d1).toMatchObject({ x: 4, y: 0, etiqueta: "K3" });
     expect([...editor.seleccion]).toEqual([d1.id]);
     editor.accion("duplicar");
-    expect(comps(doc).at(-1)).toMatchObject({ x: 8, y: 0 });
+    expect(comps(doc).at(-1)).toMatchObject({ x: 8, y: 0, etiqueta: "K4" });
     expect(recorteGuardado()).toBe(recorte);
     expect(validarHoja(hoja(doc))).toEqual([]);
   });

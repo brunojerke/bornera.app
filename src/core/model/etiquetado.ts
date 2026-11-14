@@ -204,7 +204,9 @@ export type MotivoSinArrastre =
   /** Otra bobina tiene la etiqueta vieja: no se sabe a cuál seguían. */
   | "otra_bobina_vieja"
   /** Otra bobina ya tiene la etiqueta nueva. */
-  | "otra_bobina_nueva";
+  | "otra_bobina_nueva"
+  /** La bobina queda sin etiqueta: los contactos conservan la suya. */
+  | "nueva_vacia";
 
 export interface PlanRenombrar {
   /** Id → etiqueta nueva, normalizada: el componente y, si hay arrastre, sus contactos. Solo lo que cambia. */
@@ -218,9 +220,9 @@ export interface PlanRenombrar {
 /**
  * Qué cambia al ponerle `nueva` al componente `id` (D-manuales b). Si es una
  * bobina, sus contactos con la etiqueta vieja pasan a la nueva solo si se
- * cumplen las tres: la etiqueta vieja no está vacía, no hay otra bobina con
- * la vieja y ninguna otra bobina tiene ya la nueva. Si no, cambia solo la
- * bobina. Tira si el componente no está en la hoja.
+ * cumplen las cuatro: la etiqueta vieja no está vacía, la nueva tampoco, no
+ * hay otra bobina con la vieja y ninguna otra bobina tiene ya la nueva. Si
+ * no, cambia solo la bobina. Tira si el componente no está en la hoja.
  */
 export function planRenombrarBobina(hoja: ConComponentes, id: string, nueva: string): PlanRenombrar {
   const componente = hoja.componentes.find((c) => c.id === id);
@@ -246,6 +248,7 @@ export function planRenombrarBobina(hoja: ConComponentes, id: string, nueva: str
     }
   }
   if (contactos.length === 0) return { cambios, arrastre: false, motivo: null };
+  if (etiqueta === "") return { cambios, arrastre: false, motivo: "nueva_vacia" };
   if (otraVieja) return { cambios, arrastre: false, motivo: "otra_bobina_vieja" };
   if (otraNueva) return { cambios, arrastre: false, motivo: "otra_bobina_nueva" };
 

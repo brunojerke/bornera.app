@@ -22,6 +22,12 @@
 // conflicto, la pista dice por qué y el clic no coloca. La revisión la da el
 // editor (`revisar`, con su consulta indexada) y se rehace al cambiar de punto,
 // de orientación o el documento (`revisarDeNuevo`).
+//
+// Etiqueta (T17): la da el editor (`etiquetar`, de armarEtiquetas.ts): el
+// menor libre del prefijo, la inicial de una fuente o vacía. Se guarda para
+// la previa y se vuelve a pedir solo cuando cambia el documento
+// (`actualizarEtiqueta`), nunca al mover el mouse. El Colocar la lleva
+// adentro: un solo paso de deshacer.
 
 import { colocar } from "../../core/model/comandos";
 import { enMinuscula } from "../../core/model/seguir";
@@ -45,6 +51,8 @@ export interface Previa extends Transformacion {
   y: number;
   /** Conexiones aparentes que crearía colocarlo ahí (vacío si vale). */
   conflictos: readonly Conflicto[];
+  /** La etiqueta que va a recibir al colocarse. */
+  etiqueta: string;
 }
 
 /** El aviso de una previa que no se puede colocar. */
@@ -53,7 +61,13 @@ export function textoColocar(c: Conflicto): string {
 }
 
 /** Revisa una posición: las conexiones aparentes que crearía el símbolo ahí. */
-export type RevisarColocar = (p: Omit<Previa, "conflictos">) => Conflicto[];
+export type RevisarColocar = (p: Omit<Previa, "conflictos" | "etiqueta">) => Conflicto[];
+
+/** La etiqueta con que se coloca un símbolo, con el documento de ahora. */
+export type EtiquetarColocar = (def: DefinicionSimbolo) => string;
+
+/** Sin editor (tests): la etiqueta inicial del símbolo, o vacía. */
+const ETIQUETA_INICIAL: EtiquetarColocar = (def) => def.etiquetaInicial ?? "";
 
 /** Redondea al punto de grilla más cercano, sin −0. */
 export function ajustarAGrilla(v: number): number {
@@ -67,6 +81,8 @@ export class HerramientaColocar implements Herramienta {
   private _orientacion: Transformacion = SIN_TRANSFORMAR;
   /** Conflictos de la previa actual (se rehacen al cambiar punto u orientación). */
   private conflictos: readonly Conflicto[] = [];
+  /** La etiqueta que va a recibir (se ve en la previa). */
+  private _etiqueta: string;
 
   constructor(
     readonly def: DefinicionSimbolo,
@@ -74,7 +90,10 @@ export class HerramientaColocar implements Herramienta {
     private readonly doc: Documento,
     private readonly hoja = 0,
     private readonly revisar: RevisarColocar = () => [],
-  ) {}
+    private readonly etiquetar: EtiquetarColocar = ETIQUETA_INICIAL,
+  ) {
+    this._etiqueta = etiquetar(def);
+  }
 
   get modo(): ModoColocar {
     return this._modo;
@@ -85,7 +104,31 @@ export class HerramientaColocar implements Herramienta {
   }
 
   get previa(): Previa | null {
-    return this.punto && { def: this.def, x: this.punto.x, y: this.punto.y, ...this._orientacion, conflictos: this.conflictos };
+    return (
+      this.punto && {
+        def: this.def,
+        x: this.punto.x,
+        y: this.punto.y,
+        ...this._orientacion,
+        conflictos: this.conflictos,
+        etiqueta: this._etiqueta,
+      }
+    );
+  }
+
+  /** La etiqueta que va a recibir el próximo que se coloque. */
+  get etiqueta(): string {
+    return this._etiqueta;
+  }
+
+  /**
+   * Cambió el documento (colocar, deshacer, rehacer): vuelve a pedir la
+   * etiqueta. True si cambió y la previa se ve (hay que redibujar).
+   */
+  actualizarEtiqueta(): boolean {
+    const antes = this._etiqueta;
+    this._etiqueta = this.etiquetar(this.def);
+    return this._etiqueta !== antes && this.punto !== null;
   }
 
   /** Por qué no se puede colocar donde está la previa; null si se puede (o no se ve). */
@@ -191,12 +234,12 @@ export class HerramientaColocar implements Herramienta {
 
   /**
    * El id se fija acá (generarId), al construir el comando, como piden los
-   * comandos. La etiqueta es la inicial del símbolo (la fase entra como "L").
-   * La orientación es la de la vista previa.
+   * comandos. La etiqueta se pide de nuevo con el documento de ahora (es la
+   * misma que muestra la previa). La orientación es la de la vista previa.
    */
   private comando() {
     const p = this.punto!;
-    const etiqueta = this.def.etiquetaInicial ?? "";
+    const etiqueta = (this._etiqueta = this.etiquetar(this.def));
     const { rotacion: rot, espejado } = this._orientacion;
     return colocar(
       this.doc,

@@ -7,6 +7,13 @@
   // rotación comunes (o "Varias") y girar o espejar el grupo; la etiqueta, de
   // solo lectura. En Simular, todo de solo lectura.
   //
+  // Etiquetado (T17): bajo el campo, una nota (sin naranja) si otro titular
+  // ya tiene la misma etiqueta, y lo que hizo el último renombrado de una
+  // bobina con sus contactos. Mientras se escribe algo distinto, no se
+  // muestran: hablan de la etiqueta confirmada. Sin selección, el botón
+  // "Etiquetar los vacíos" (deshabilitado en Simular; con el panel plegado no
+  // se ve, ver docs/plan-T17.md).
+  //
   // Con un cable: "Cable" y sus extremos, sin etiqueta ni giro. Con varios
   // que incluyen cables: la cantidad de cada cosa; la etiqueta y la rotación
   // son las de los componentes, y girar o espejar avisa que no se puede
@@ -28,7 +35,18 @@
   import type { Accion } from "../editor/atajos";
   import { normalizarEtiqueta } from "../core/model/etiquetas";
   import { EdicionEtiqueta } from "./edicionEtiqueta";
-  import { NOTA_RED, textoCambioRed, textoCantidad, textoEtiqueta, textoExtremo, textoRed, textoRotacion } from "./propiedades";
+  import {
+    ETIQUETAR_VACIOS,
+    NOTA_RED,
+    textoCambioRed,
+    textoCantidad,
+    textoEtiqueta,
+    textoExtremo,
+    textoRed,
+    textoRenombre,
+    textoRepetida,
+    textoRotacion,
+  } from "./propiedades";
 
   let {
     abierto = $bindable(false),
@@ -61,6 +79,12 @@
   const redNueva = $derived.by(() => {
     void version;
     return edicion.redNueva;
+  });
+  /** Hay un borrador distinto de la etiqueta confirmada: las notas de etiquetado no se muestran. */
+  const escribiendoOtra = $derived.by(() => {
+    void version;
+    const u = seleccion.unico;
+    return edicion.activa && u !== null && normalizarEtiqueta(texto) !== normalizarEtiqueta(u.etiqueta);
   });
 
   function alternar(valor: boolean) {
@@ -164,6 +188,12 @@
   }
 
   const red = (etiqueta: string) => normalizarEtiqueta(etiqueta);
+
+  /** "Etiquetar los vacíos": un paso, o el aviso si no hay ninguno (lo da el editor). */
+  function etiquetarVacios() {
+    if (!editor || soloLectura) return;
+    editor.etiquetarVacios();
+  }
 </script>
 
 <aside class="panel" class:plegado={!abierto} aria-label="Propiedades">
@@ -226,6 +256,13 @@
               {redNueva ? textoCambioRed(red(edicion.base ?? c.etiqueta), redNueva) : textoRed(red(c.etiqueta), c.otrasEnRed)}
             </p>
             <p class="nota">{NOTA_RED}</p>
+          {:else if !escribiendoOtra}
+            {#if c.repetida}
+              <p class="nota">{textoRepetida(c.repetida, red(c.etiqueta))}</p>
+            {/if}
+            {#if c.renombre}
+              <p class="nota">{textoRenombre(c.renombre)}</p>
+            {/if}
           {/if}
         </div>
 
@@ -272,6 +309,7 @@
         <MousePointer2 size={22} />
         <p>Nada seleccionado</p>
         <p class="pista">Seleccioná un componente o un cable para ver sus datos.</p>
+        <button class="boton-texto" disabled={soloLectura || !editor} onclick={etiquetarVacios}>{ETIQUETAR_VACIOS}</button>
       </div>
     {/if}
   {:else}
@@ -362,6 +400,27 @@
 
   .pista {
     font-size: 12px;
+  }
+
+  .boton-texto {
+    margin-top: 14px;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .boton-texto:hover {
+    background: var(--hover);
+  }
+
+  .boton-texto:disabled {
+    color: var(--texto-suave);
+    opacity: 0.5;
+    cursor: default;
+    background: transparent;
   }
 
   .datos {

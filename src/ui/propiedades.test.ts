@@ -6,6 +6,8 @@ import {
   textoEtiqueta,
   textoExtremo,
   textoRed,
+  textoRenombre,
+  textoRepetida,
   textoRotacion,
 } from "./propiedades";
 
@@ -63,5 +65,31 @@ describe("textos del panel", () => {
     expect(textoRed("L1", 2)).toBe("Red L1: unida a 2 alimentaciones más");
     expect(textoCambioRed("L", "L1")).toBe("Al confirmar pasa de la red L a la red L1");
     expect(textoCambioRed("", "L1")).toBe("Al confirmar pasa a la red L1");
+  });
+});
+
+describe("notas del etiquetado (T17)", () => {
+  it("repetida: con el nombre del otro titular y su artículo", () => {
+    expect(textoRepetida("Bobina de contactor", "K1")).toBe("Otra bobina de contactor ya se llama K1.");
+    expect(textoRepetida("Lámpara", "H1")).toBe("Otra lámpara ya se llama H1.");
+    expect(textoRepetida("Pulsador NA", "S1")).toBe("Otro pulsador NA ya se llama S1.");
+    expect(textoRepetida("Símbolo desconocido", "M1")).toBe("Otro símbolo desconocido ya se llama M1.");
+  });
+
+  it("renombre con arrastre, en singular y en plural", () => {
+    expect(textoRenombre({ vieja: "K2", nueva: "K5", contactos: 1, motivo: null })).toBe("1 contacto pasó a K5.");
+    expect(textoRenombre({ vieja: "K2", nueva: "K5", contactos: 2, motivo: null })).toBe("2 contactos pasaron a K5.");
+  });
+
+  it("renombre sin arrastre, con su motivo", () => {
+    expect(textoRenombre({ vieja: "K1", nueva: "K5", contactos: 0, motivo: "otra_bobina_vieja" })).toBe(
+      "Los contactos K1 no cambiaron: hay otra bobina K1.",
+    );
+    expect(textoRenombre({ vieja: "K1", nueva: "K5", contactos: 0, motivo: "otra_bobina_nueva" })).toBe(
+      "Los contactos K1 no cambiaron: ya hay una bobina K5.",
+    );
+    expect(textoRenombre({ vieja: "K1", nueva: "", contactos: 0, motivo: "nueva_vacia" })).toBe(
+      "La bobina quedó sin etiqueta; los contactos siguen como K1.",
+    );
   });
 });

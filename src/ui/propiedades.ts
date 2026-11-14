@@ -9,7 +9,7 @@ export function abrirAlSeleccionar(antes: number, despues: number, plegadoPorUsu
   return antes === 0 && despues > 0 && !plegadoPorUsuario;
 }
 
-import type { ExtremoResumen } from "../editor/editor";
+import type { ExtremoResumen, NotaRenombre } from "../editor/editor";
 
 /** Cuánto dura un aviso en la barra de estado, en ms. */
 export const DURACION_AVISO_MS = 4000;
@@ -57,6 +57,36 @@ export function textoRed(red: string, otras: number): string {
   if (otras === 0) return `Red ${red}: sin otras alimentaciones`;
   return `Red ${red}: unida a ${otras} ${otras === 1 ? "alimentación" : "alimentaciones"} más`;
 }
+
+/**
+ * Etiqueta repetida (T17, D-manuales B): "Otra bobina de contactor ya se
+ * llama K1.", con el nombre del símbolo del otro titular. El artículo sale de
+ * la primera palabra del nombre: "Otra" si termina en "a" (bobina, lámpara),
+ * "Otro" si no (pulsador, símbolo).
+ */
+export function textoRepetida(nombreOtro: string, etiqueta: string): string {
+  const primera = nombreOtro.split(" ")[0] ?? "";
+  const articulo = primera.toLowerCase().endsWith("a") ? "Otra" : "Otro";
+  const nombre = nombreOtro.charAt(0).toLowerCase() + nombreOtro.slice(1);
+  return `${articulo} ${nombre} ya se llama ${etiqueta}.`;
+}
+
+/** Lo que hizo un renombrado de bobina con sus contactos (T17, D-manuales b). */
+export function textoRenombre(n: NotaRenombre): string {
+  switch (n.motivo) {
+    case null:
+      return n.contactos === 1 ? `1 contacto pasó a ${n.nueva}.` : `${n.contactos} contactos pasaron a ${n.nueva}.`;
+    case "otra_bobina_vieja":
+      return `Los contactos ${n.vieja} no cambiaron: hay otra bobina ${n.vieja}.`;
+    case "otra_bobina_nueva":
+      return `Los contactos ${n.vieja} no cambiaron: ya hay una bobina ${n.nueva}.`;
+    case "nueva_vacia":
+      return `La bobina quedó sin etiqueta; los contactos siguen como ${n.vieja}.`;
+  }
+}
+
+/** Botón del panel sin selección (T17): rellena los titulares vacíos de la hoja. */
+export const ETIQUETAR_VACIOS = "Etiquetar los vacíos";
 
 /** Mientras se escribe en una fuente: a qué red pasa al confirmar. */
 export function textoCambioRed(de: string, a: string): string {

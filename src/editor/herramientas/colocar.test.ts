@@ -33,7 +33,8 @@ describe("HerramientaColocar, modo clic", () => {
     const d = doc();
     const h = new HerramientaColocar(BOBINA, "clic", d);
     h.mover(ev(3.4, -1.6));
-    expect(h.previa).toEqual({ def: BOBINA, x: 3, y: -2, rotacion: 0, espejado: false, conflictos: [] });
+    // Sin editor que la dé, la etiqueta es la inicial del símbolo (la bobina no tiene).
+    expect(h.previa).toEqual({ def: BOBINA, x: 3, y: -2, rotacion: 0, espejado: false, conflictos: [], etiqueta: "" });
 
     const r = h.presionar(ev(3.4, -1.6));
     expect(r.terminar).toBeFalsy();

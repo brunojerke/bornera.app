@@ -247,7 +247,8 @@ describe("Editor con la herramienta Colocar", () => {
     expect(vista.cuadros).toBe(4); // 2, 3, 4 y 5: un cuadro por punto de grilla
 
     editor.aplicar(h.presionar(ev(4.9, 3.2)));
-    expect(vista.regiones).toEqual([cajaDe({ ...datos(5, 3), etiqueta: "" })]);
+    // La primera bobina entra como K1 (T17): la caja incluye su etiqueta.
+    expect(vista.regiones).toEqual([cajaDe({ ...datos(5, 3), etiqueta: "K1" })]);
     expect(vista.enteras).toBe(0);
     expect(editor.herramienta).toBe(h); // en modo clic sigue activa
 
@@ -394,6 +395,8 @@ describe("Editor: selección", () => {
         espejado: true,
         esFuente: false,
         otrasEnRed: 0,
+        repetida: null,
+        renombre: null,
       },
       varios: null,
     });

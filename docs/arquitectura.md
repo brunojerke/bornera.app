@@ -130,7 +130,7 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
 - **Arriba:** barra de herramientas (nuevo, abrir, guardar, exportar PDF, deshacer/rehacer, zoom) y el botón grande **Editar / Simular**.
 - **Izquierda:** paleta de componentes por categoría (fuentes, mando, potencia, señalización), con buscador. Plegable.
 - **Centro:** lienzo con grilla.
-- **Derecha:** propiedades del elemento seleccionado (etiqueta, tensión, rotación). Plegable; se abre solo al seleccionar.
+- **Derecha:** propiedades del elemento seleccionado (etiqueta, tensión, rotación). Plegable; se abre solo al seleccionar. Sin selección muestra el botón "Etiquetar los vacíos" (T17).
 - **Abajo:** barra de estado (coordenadas, zoom, avisos de simulación).
 
 **Funciones del editor:**

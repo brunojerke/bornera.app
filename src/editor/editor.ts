@@ -88,7 +88,7 @@
 // la capa dinámica y no invalida mosaicos.
 
 import { hayCablesEn, indexarHoja, puntoSobreRecorrido, recorridoCable, type IndiceHoja } from "../core/model/cables";
-import { Borrar, CambiarEtiqueta, CambiarExtremo, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import { Borrar, CambiarExtremo, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
 import { planearReconexion, type DestinoExtremo, type LadoCable, type ResultadoReconexion } from "../core/model/reconectar";
 import {
   enMinuscula,
@@ -110,8 +110,9 @@ import {
   type Extremo,
 } from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
+import { esTitular, type MotivoSinArrastre } from "../core/model/etiquetado";
 import { Historial, type MarcaGuardado } from "../core/model/historial";
-import { pegar, problemasPegado, recortar, recorteVacio, type Recorte } from "../core/model/portapapeles";
+import { problemasPegado, recortar, recorteVacio, type Recorte } from "../core/model/portapapeles";
 import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
@@ -126,6 +127,7 @@ import { esDePortapapeles, type Accion, type AccionPortapapeles } from "./atajos
 import { armarDibujoPegado, dibujarPegado, type DibujoPegado } from "./dibujoPegar";
 import { guardarRecorte, recorteGuardado } from "./portapapeles";
 import { HerramientaPegar } from "./herramientas/pegar";
+import { EtiquetasHoja } from "./armarEtiquetas";
 import { BornesConCable } from "./bornesConCable";
 import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
@@ -188,12 +190,35 @@ export interface ResumenSeleccion {
     esFuente: boolean;
     /** En una fuente: cuántas otras alimentaciones del documento están en su misma red; si no, 0. */
     otrasEnRed: number;
+    /**
+     * En un titular con etiqueta: el nombre del símbolo de otro titular de la
+     * hoja con la misma etiqueta ("Bobina de contactor"); si no hay, null.
+     * Nunca en una fuente: dos fuentes con el mismo nombre son la misma red.
+     */
+    repetida: string | null;
+    /** Lo que hizo el último renombrado de este componente desde el panel; null si no hay. */
+    renombre: NotaRenombre | null;
   } | null;
   /**
    * Con varios: la etiqueta y la rotación de los componentes, si todos tienen
    * la misma; null si son distintas o no hay componentes.
    */
   varios: { etiqueta: string | null; rot: number | null } | null;
+}
+
+/**
+ * Lo que hizo un renombrado de bobina con sus contactos (T17, D-manuales b),
+ * para la nota del panel. Dura hasta el próximo cambio del documento o de la
+ * selección.
+ */
+export interface NotaRenombre {
+  /** Etiqueta vieja y nueva de la bobina, normalizadas. */
+  vieja: string;
+  nueva: string;
+  /** Contactos que pasaron a la etiqueta nueva. */
+  contactos: number;
+  /** Por qué los contactos no la siguieron; null si la siguieron. */
+  motivo: MotivoSinArrastre | null;
 }
 
 export const SIN_SELECCION: ResumenSeleccion = Object.freeze({
@@ -227,6 +252,8 @@ export const AVISO_NADA_PARA_PEGAR = "No hay nada para pegar.";
 export const AVISO_DUPLICAR_SIN_LUGAR = "No hay lugar al lado: mové la copia y hacé clic para soltarla.";
 /** Solo cables seleccionados y ninguno con sus dos extremos en lo elegido: el recorte queda vacío (D2b-A). */
 export const AVISO_RECORTE_VACIO = "Para copiar un cable, seleccioná también lo que conecta en sus dos puntas.";
+/** "Etiquetar los vacíos" sin ningún titular vacío en la hoja (T17). */
+export const AVISO_SIN_VACIOS = "No hay componentes sin etiqueta.";
 /** Con un tramo en curso, ni copiar ni pegar. */
 export const AVISO_ESC_CABLE = "Esc cancela el cable en curso.";
 
@@ -411,6 +438,12 @@ export class Editor {
   private readonly desconocidos = new Set<string>();
   /** Lo que dibuja la previa de pegar, armado una vez por recorte. */
   private dibujoPegado: DibujoPegado | null = null;
+  /** Etiquetas de los titulares de la hoja, en memoria hasta el próximo cambio (T17). */
+  readonly etiquetas: EtiquetasHoja;
+  /** La nota del último renombrado, con el id del componente; se borra con el próximo cambio o selección. */
+  private notaRenombre: { id: string; nota: NotaRenombre } | null = null;
+  /** La nota del renombrado que se está ejecutando: pasa a `notaRenombre` al reflejar su cambio. */
+  private notaPendiente: { id: string; nota: NotaRenombre } | null = null;
 
   constructor(
     readonly documento: Documento = documentoNuevo(),
@@ -418,6 +451,7 @@ export class Editor {
     readonly hoja = 0,
   ) {
     this.historial = new Historial(documento);
+    this.etiquetas = new EtiquetasHoja(documento, hoja);
     for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
     const h = documento.hojas[hoja];
     const indice = h ? indexarHoja(h) : { componentes: new Map<string, Componente>(), cables: new Map<string, Cable>() };
@@ -527,6 +561,7 @@ export class Editor {
     if (nueva.size === actual.size && [...nueva].every((id) => actual.has(id))) return;
     this.limpiarCruces();
     this._seleccion = nueva;
+    this.notaRenombre = null;
     this.alCambiarSeleccion?.();
     this.vista?.invalidar();
   }
@@ -574,6 +609,7 @@ export class Editor {
     const c = unico;
     const def = buscarSimbolo(c.tipo) ?? SIMBOLO_DESCONOCIDO;
     const esFuente = def.elemento === "fuente";
+    const nota = this.notaRenombre;
     return {
       ...base,
       unico: {
@@ -584,8 +620,26 @@ export class Editor {
         espejado: c.espejado,
         esFuente,
         otrasEnRed: esFuente ? this.otrasEnRed(c) : 0,
+        repetida: this.titularRepetido(c),
+        renombre: nota && nota.id === c.id ? nota.nota : null,
       },
     };
+  }
+
+  /**
+   * Si `t` es un titular con etiqueta, el nombre del símbolo de otro titular
+   * de la hoja con la misma etiqueta; si no, null. Una pasada por la hoja,
+   * solo con un componente seleccionado. Las fuentes y los seguidores nunca.
+   */
+  private titularRepetido(t: Componente): string | null {
+    const e = normalizarEtiqueta(t.etiqueta);
+    if (e === "" || !esTitular(buscarSimbolo(t.tipo))) return null;
+    for (const c of this.componentesHoja()) {
+      if (c.id === t.id || normalizarEtiqueta(c.etiqueta) !== e) continue;
+      const def = buscarSimbolo(c.tipo);
+      if (esTitular(def)) return (def ?? SIMBOLO_DESCONOCIDO).nombre;
+    }
+    return null;
   }
 
   /** Un extremo para el panel: en un borne, la etiqueta del componente (o su id, si no tiene). */
@@ -617,16 +671,47 @@ export class Editor {
   }
 
   /**
-   * Cambia la etiqueta de un componente con un solo `CambiarEtiqueta` (un paso
-   * de deshacer). El texto llega ya validado y normalizado por el panel. No
-   * hace nada (y devuelve false) si el valor es el mismo, si el componente ya
-   * no está en la hoja o en medio de un gesto.
+   * Cambia la etiqueta de un componente con un solo `CambiarEtiquetas` (un
+   * paso de deshacer). Si es una bobina, sus contactos la siguen cuando se
+   * cumplen las cuatro condiciones de `planRenombrarBobina` (T17,
+   * D-manuales b), y el panel muestra una nota con lo que pasó. El texto
+   * llega ya validado y normalizado por el panel. No hace nada (y devuelve
+   * false) si el valor es el mismo, si el componente ya no está en la hoja o
+   * en medio de un gesto.
    */
   cambiarEtiqueta(id: string, etiqueta: string): boolean {
     if (this.enGesto) return false;
     const c = this.componentesHoja().find((k) => k.id === id);
     if (!c || c.etiqueta === etiqueta) return false;
-    this.ejecutar(new CambiarEtiqueta(id, etiqueta));
+    const { comando, plan } = this.etiquetas.renombrar(id, etiqueta);
+    if (!comando) return false;
+    const contactos = plan.cambios.size - (plan.cambios.has(id) ? 1 : 0);
+    if (contactos > 0 || plan.motivo !== null) {
+      const vieja = normalizarEtiqueta(c.etiqueta);
+      this.notaPendiente = { id, nota: { vieja, nueva: plan.cambios.get(id) ?? vieja, contactos, motivo: plan.motivo } };
+    }
+    try {
+      this.ejecutar(comando);
+    } finally {
+      this.notaPendiente = null;
+    }
+    return true;
+  }
+
+  /**
+   * "Etiquetar los vacíos" (T17): les da el menor libre de su prefijo a los
+   * titulares sin etiqueta de la hoja, en orden (y, x), en un solo paso. Sin
+   * ninguno, avisa y no hace paso. No en medio de un gesto ni con un tramo de
+   * cable en curso. Devuelve true si hizo algo.
+   */
+  etiquetarVacios(): boolean {
+    if (this.enGesto || this.enTramo) return false;
+    const comando = this.etiquetas.vacios();
+    if (!comando) {
+      this.alAvisar?.(AVISO_SIN_VACIOS);
+      return false;
+    }
+    this.ejecutar(comando);
     return true;
   }
 
@@ -868,9 +953,12 @@ export class Editor {
     return problemasPegado(r, dx, dy, this.consulta, this.documento.contadores);
   }
 
-  /** El comando que pega `r` desplazado en esta hoja (da las ids ahora). */
+  /**
+   * El comando que pega `r` desplazado en esta hoja: da las ids y renumera lo
+   * que choca con la hoja ahora (T17, D-duplicar C).
+   */
   private crearPegado(r: Recorte, dx: number, dy: number) {
-    return pegar(this.documento, r, dx, dy, this.hoja);
+    return this.etiquetas.pegado(r, dx, dy).comando;
   }
 
   /** Lo que dibuja la previa de `r` (se arma una vez por recorte). */
@@ -1016,13 +1104,20 @@ export class Editor {
   /** Empieza a colocar un símbolo de la paleta (cancela la herramienta cable). Sin vista no hace nada. */
   iniciarColocar(def: DefinicionSimbolo, modo: ModoColocar): HerramientaColocar | null {
     if (!this.vista) return null;
-    const h = new HerramientaColocar(def, modo, this.documento, this.hoja, (p) => this.revisarColocar(p));
+    const h = new HerramientaColocar(
+      def,
+      modo,
+      this.documento,
+      this.hoja,
+      (p) => this.revisarColocar(p),
+      (d) => this.etiquetas.alColocar(d),
+    );
     this.ponerHerramienta(h);
     return h;
   }
 
   /** Conexiones aparentes que crearía colocar la previa `p` (la misma regla que al mover). */
-  private revisarColocar(p: Omit<Previa, "conflictos">): Conflicto[] {
+  private revisarColocar(p: Omit<Previa, "conflictos" | "etiqueta">): Conflicto[] {
     const g = geometriaComponente({
       id: "nuevo",
       tipo: p.def.tipo,
@@ -1105,7 +1200,8 @@ export class Editor {
       this.vista?.invalidar();
     }
     // Colocando en modo clic, o con la previa de pegar, deshacer o rehacer
-    // pueden cambiar si la previa vale.
+    // pueden cambiar si la previa vale, y la etiqueta que va a recibir (T17).
+    if (this.colocar?.actualizarEtiqueta()) this.vista?.invalidar();
     if (this.colocar?.revisarDeNuevo() || this.pegando?.revisarDeNuevo()) {
       this.avisarPista();
       this.vista?.invalidar();
@@ -1501,7 +1597,7 @@ export class Editor {
     const color = valida ? info.colores.acento : (info.colores.aviso ?? info.colores.borne);
     r.estilo({ trazo: color, relleno: color, grosor: grosorLinea(info.escala) });
     const detalle = nivelDetalle(info.escala);
-    dibujarSimbolo(r, p.def, c, { textos: detalle.textos, etiqueta: p.def.etiquetaInicial });
+    dibujarSimbolo(r, p.def, c, { textos: detalle.textos, etiqueta: p.etiqueta });
     if (detalle.bornes) dibujarMarcasBornes(r, p.def, c);
     if (!valida) dibujarCruces(r, info, p.conflictos);
   };
@@ -1573,6 +1669,10 @@ export class Editor {
    * componentes lejanos, o deshacer un movimiento largo).
    */
   private reflejar(cambio: Cambio): Cambio {
+    // Las etiquetas en memoria ya no valen (T17); la nota del renombrado dura hasta el próximo cambio.
+    this.etiquetas.invalidar();
+    this.notaRenombre = this.notaPendiente;
+    this.notaPendiente = null;
     // Un cambio por otra vía en medio de un arrastre: el plan de la previa ya no vale.
     if (this.arrastre && !this.soltando) this.cancelarArrastrePorCambio();
     if (this.reconexion && !this.soltando) this.cancelarReconexionPorCambio();

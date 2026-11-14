@@ -1,11 +1,12 @@
 // Etiquetado automático (T17): reglas del núcleo y `CambiarEtiquetas`.
-// Casos de docs/plan-T17.md, sección 3.
+// Casos de docs/plan-T17.md, sección 3. El test al azar se mudó a
+// src/editor/armarEtiquetas.test.ts (etapa 2): pasa por el armado del editor.
 
 import { describe, expect, it } from "vitest";
 import { marchaParada } from "../circuitos/marchaParada";
-import { buscarSimbolo, esFuente, SIMBOLOS } from "../symbols";
+import { buscarSimbolo, SIMBOLOS } from "../symbols";
 import { validarHoja } from "./cables";
-import { Borrar, CambiarEtiquetas, colocar, Grupo } from "./comandos";
+import { CambiarEtiquetas, colocar, Grupo } from "./comandos";
 import { crearDocumento, type Componente, type Documento, type Hoja } from "./documento";
 import {
   conEtiquetas,
@@ -19,7 +20,7 @@ import {
 } from "./etiquetado";
 import { normalizarEtiqueta } from "./etiquetas";
 import { Historial } from "./historial";
-import { pegar, recortar, type Recorte } from "./portapapeles";
+import { pegar, recortar } from "./portapapeles";
 
 const BOBINA = "contactor.bobina";
 const AUXILIAR = "contactor.auxiliar_na";
@@ -277,7 +278,7 @@ describe("etiquetarVacios", () => {
 // ── Renombrar una bobina ───────────────────────────────────────────────────
 
 describe("planRenombrarBobina", () => {
-  it("arrastra a los contactos cuando se cumplen las tres condiciones", () => {
+  it("arrastra a los contactos cuando se cumplen las cuatro condiciones", () => {
     const { doc, comp: m } = marchaParada();
     expect(planRenombrarBobina(doc.hojas[0]!, m.k1Bobina, "k5 ")).toEqual({
       cambios: new Map([
@@ -301,6 +302,18 @@ describe("planRenombrarBobina", () => {
       arrastre: false,
       motivo: "otra_bobina_nueva",
     });
+  });
+
+  it("renombrar una bobina a vacío no arrastra: los contactos conservan su etiqueta", () => {
+    const { doc, comp: m } = marchaParada();
+    expect(planRenombrarBobina(doc.hojas[0]!, m.k1Bobina, "  ")).toEqual({
+      cambios: new Map([[m.k1Bobina, ""]]),
+      arrastre: false,
+      motivo: "nueva_vacia",
+    });
+    // Sin contactos con la etiqueta vieja no hay motivo.
+    const h = hoja(comp("b", BOBINA, "K1"), comp("c", AUXILIAR, "K2"));
+    expect(planRenombrarBobina(h, "b", "")).toEqual({ cambios: new Map([["b", ""]]), arrastre: false, motivo: null });
   });
 
   it("con dos bobinas de la etiqueta vieja no arrastra", () => {
@@ -413,184 +426,5 @@ describe("CambiarEtiquetas", () => {
     expect(historial.puedeDeshacer).toBe(false);
     historial.rehacer();
     expect(foto(doc)).toEqual(despues);
-  });
-});
-
-// ── Al azar ────────────────────────────────────────────────────────────────
-
-/** Generador de números con semilla (mulberry32), como en seguir.test.ts. */
-function generador(semilla: number): () => number {
-  let a = semilla >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const SEMILLA = 20261114;
-const OPERACIONES = 400;
-
-// PROVISORIO (etapa 1): estos dos ayudantes arman los comandos como lo va a
-// hacer el editor (src/editor/armarEtiquetas.ts, etapa 2). En la etapa 2 este
-// test pasa por armarEtiquetas.ts y se muda fuera de src/core, que no puede
-// importar el editor.
-
-/** La etiqueta con que se coloca: el menor libre del prefijo, la inicial de la fuente o vacía. */
-function etiquetaAlColocar(h: Hoja, tipo: string): string {
-  const def = buscarSimbolo(tipo)!;
-  if (esFuente(def)) return def.etiquetaInicial ?? "";
-  const prefijo = prefijoDe(def);
-  return prefijo === null ? "" : menorLibre(etiquetasDeTitulares(h), prefijo);
-}
-
-/**
- * El Pegar con las etiquetas de `etiquetarLote`, calculadas con la hoja de
- * este momento. También devuelve cuántos titulares se renumeraron y cuántos
- * contactos siguieron a su bobina, para ver que la secuencia los probó.
- */
-function armarPegado(doc: Documento, recorte: Recorte, dx: number, dy: number) {
-  const cambios = etiquetarLote(etiquetasDeTitulares(doc.hojas[0]!), recorte.componentes);
-  let arrastrados = 0;
-  for (const [id, etiqueta] of cambios) {
-    const c = recorte.componentes.find((k) => k.id === id)!;
-    expect(c.etiqueta, "solo entra lo que cambia").not.toBe(etiqueta);
-    if (c.tipo === AUXILIAR) arrastrados++;
-  }
-  return { comando: pegar(doc, conEtiquetas(recorte, cambios), dx, dy), renumerados: cambios.size - arrastrados, arrastrados };
-}
-
-/** Lo que tiene que valer después de cada paso; vacío si todo está bien. */
-function problemas(h: Hoja): string[] {
-  const salida: string[] = [];
-  const vistas = new Map<string, string>();
-  for (const c of h.componentes) {
-    const def = buscarSimbolo(c.tipo)!;
-    if (esFuente(def)) {
-      if (c.etiqueta !== def.etiquetaInicial) salida.push(`La fuente ${c.id} dice "${c.etiqueta}".`);
-      continue;
-    }
-    const e = normalizarEtiqueta(c.etiqueta);
-    if (!esTitular(def) || e === "") continue;
-    const otro = vistas.get(e);
-    if (otro !== undefined) salida.push(`${otro} y ${c.id} dicen "${e}".`);
-    vistas.set(e, c.id);
-  }
-  for (const p of validarHoja(h)) salida.push(p.mensaje);
-  return salida;
-}
-
-describe("al azar, con semilla fija", () => {
-  it(`${OPERACIONES} operaciones (semilla ${SEMILLA}): nunca dos titulares con la misma etiqueta no vacía, fuentes intactas, hoja válida, y deshacer todo y rehacer todo exactos`, () => {
-    const azar = generador(SEMILLA);
-    const entero = (min: number, max: number) => min + Math.floor(azar() * (max - min + 1));
-    const elegir = <T>(lista: readonly T[]): T => lista[Math.floor(azar() * lista.length)]!;
-
-    const { doc } = marchaParada();
-    const h = doc.hojas[0]!;
-    const historial = new Historial(doc);
-    const inicial = foto(doc);
-    const tipos = SIMBOLOS.map((s) => s.tipo);
-    let portapapeles: Recorte | null = null;
-    const hechas = {
-      colocar: 0,
-      colocarVacio: 0,
-      contactoDeBobina: 0,
-      borrar: 0,
-      copiar: 0,
-      pegar: 0,
-      duplicar: 0,
-      renumerados: 0,
-      arrastrados: 0,
-      etiquetarVacios: 0,
-      deshacer: 0,
-      rehacer: 0,
-    };
-
-    const bobinasConEtiqueta = () => h.componentes.filter((c) => c.tipo === BOBINA && c.etiqueta !== "");
-
-    /**
-     * Lo que se copia, se borra o se duplica. A veces, una bobina con todos sus
-     * contactos (la rama de un contactor); si no, de 1 a 6 componentes al azar.
-     * A veces suma un cable.
-     */
-    const algunos = (): string[] => {
-      const ids = new Set<string>();
-      const bobinas = bobinasConEtiqueta();
-      if (bobinas.length > 0 && azar() < 0.4) {
-        const bobina = elegir(bobinas);
-        ids.add(bobina.id);
-        for (const c of h.componentes) if (c.tipo === AUXILIAR && c.etiqueta === bobina.etiqueta) ids.add(c.id);
-        if (azar() < 0.5) ids.add(elegir(h.componentes).id);
-      } else {
-        const n = entero(1, Math.min(6, h.componentes.length));
-        while (ids.size < n) ids.add(elegir(h.componentes).id);
-      }
-      if (h.cables.length > 0 && azar() < 0.5) ids.add(elegir(h.cables).id);
-      return [...ids];
-    };
-
-    const contar = (p: ReturnType<typeof armarPegado>) => {
-      hechas.renumerados += p.renumerados;
-      hechas.arrastrados += p.arrastrados;
-      return p.comando;
-    };
-
-    for (let k = 0; k < OPERACIONES; k++) {
-      const r = azar();
-      const vacia = h.componentes.length === 0;
-      if (r < 0.3) {
-        const tipo = elegir(tipos);
-        const bobinas = bobinasConEtiqueta();
-        // Uno de cada cuatro titulares entra vacío, como en un .brn viejo: lo
-        // rellena "Etiquetar los vacíos". Un auxiliar, a veces, con la etiqueta
-        // de una bobina que ya está, como la escribiría el usuario: la
-        // etiqueta de un seguidor nunca cuenta como choque.
-        const sinEtiqueta = esTitular(buscarSimbolo(tipo)) && azar() < 0.25;
-        const deBobina = tipo === AUXILIAR && bobinas.length > 0 && azar() < 0.7;
-        const etiqueta = sinEtiqueta ? "" : deBobina ? elegir(bobinas).etiqueta : etiquetaAlColocar(h, tipo);
-        historial.ejecutar(colocar(doc, { tipo, x: entero(-60, 60), y: entero(-60, 60), rot: 0, espejado: false, etiqueta, params: {} }));
-        if (sinEtiqueta) hechas.colocarVacio++;
-        else if (deBobina) hechas.contactoDeBobina++;
-        else hechas.colocar++;
-      } else if (r < 0.42) {
-        if (vacia) continue;
-        historial.ejecutar(new Borrar(algunos()));
-        hechas.borrar++;
-      } else if (r < 0.5) {
-        if (vacia) continue;
-        portapapeles = recortar(h, algunos());
-        hechas.copiar++;
-      } else if (r < 0.62) {
-        if (!portapapeles) continue;
-        historial.ejecutar(contar(armarPegado(doc, portapapeles, entero(-40, 40), entero(-40, 40))));
-        hechas.pegar++;
-      } else if (r < 0.72) {
-        if (vacia) continue;
-        historial.ejecutar(contar(armarPegado(doc, recortar(h, algunos()), 3, 3)));
-        hechas.duplicar++;
-      } else if (r < 0.77) {
-        const cambios = etiquetarVacios(h);
-        if (cambios.size === 0) continue;
-        historial.ejecutar(new CambiarEtiquetas(cambios));
-        hechas.etiquetarVacios++;
-      } else if (r < 0.9) {
-        if (historial.deshacer()) hechas.deshacer++;
-      } else if (historial.rehacer()) {
-        hechas.rehacer++;
-      }
-      expect(problemas(h), `semilla ${SEMILLA}, operación ${k}`).toEqual([]);
-    }
-
-    // La secuencia probó de todo: también renumerar al pegar y contactos que siguen a su bobina.
-    for (const [operacion, n] of Object.entries(hechas)) expect(n, operacion).toBeGreaterThan(0);
-
-    const final = foto(doc);
-    while (historial.deshacer());
-    expect(foto(doc)).toEqual(inicial);
-    while (historial.rehacer());
-    expect(foto(doc)).toEqual(final);
   });
 });

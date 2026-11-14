@@ -17,6 +17,10 @@
 // etiqueta (solo que el editor no actúa: el portapapeles del sistema en un
 // navegador headless puede pedir permiso), Ctrl+N con «No guardar» y pegar
 // (el portapapeles sobrevive) y el aviso de un cable sin sus dos puntas.
+//
+// Desde T17 (D-duplicar C), pegar o duplicar con los originales en la hoja
+// renumera lo que choca: la copia de K1 y H1 es K2 y H2, y así. La Fase L1
+// conserva. Los pasos 5 y 7 esperan esas etiquetas nuevas.
 
 import { CTRL, esperar, MAYUS } from "./cdp.mjs";
 
@@ -88,10 +92,16 @@ export default async function (p, comprobar) {
     };
   };
   const ids = (n) => [...n.componentes, ...n.cables].map((e) => e.id).sort();
-  /** Cada componente nuevo es un original trasladado (dx, dy), con el mismo tipo y la misma etiqueta. */
-  const trasladados = (originales, copias, dx, dy) =>
+  /**
+   * Cada componente nuevo es un original trasladado (dx, dy), con el mismo
+   * tipo y la misma etiqueta, o la que diga `renumerada` (T17: lo que choca
+   * con la hoja recibe el menor libre).
+   */
+  const trasladados = (originales, copias, dx, dy, renumerada = {}) =>
     copias.length === originales.length &&
-    originales.every((o) => copias.some((c) => c.tipo === o.tipo && c.etiqueta === o.etiqueta && c.x === o.x + dx && c.y === o.y + dy));
+    originales.every((o) =>
+      copias.some((c) => c.tipo === o.tipo && c.etiqueta === (renumerada[o.etiqueta] ?? o.etiqueta) && c.x === o.x + dx && c.y === o.y + dy),
+    );
   const hayDialogo = () => p.esperarA(`!!document.querySelector('${DIALOGO}')`, 5000);
   const sinDialogo = () => p.esperarA(`!document.querySelector('${DIALOGO}')`, 5000);
   const responder = async (texto) => {
@@ -163,19 +173,19 @@ export default async function (p, comprobar) {
   const despuesPegar = await hoja();
   const pegado = nuevos(antesPegar, despuesPegar);
   comprobar(
-    "5. el clic pega en un paso: 3 componentes y 1 cable con ids nuevos, trasladados, y validarHoja en 0",
+    "5. el clic pega en un paso: 3 componentes y 1 cable con ids nuevos, trasladados (K1 y H1 pasan a K2 y H2), y validarHoja en 0",
     (await pasos()) === n + 1 &&
       pegado.cables.length === 1 &&
-      trasladados(antesPegar.componentes, pegado.componentes, pv.dx, pv.dy) &&
+      trasladados(antesPegar.componentes, pegado.componentes, pv.dx, pv.dy, { K1: "K2", H1: "H2" }) &&
       (await problemas()) === 0 &&
       (await herramienta()) === null,
     JSON.stringify(pegado),
   );
   const wp = pegado.cables[0];
-  const kp = pegado.componentes.find((c) => c.etiqueta === "K1");
-  const hp = pegado.componentes.find((c) => c.etiqueta === "H1");
+  const kp = pegado.componentes.find((c) => c.etiqueta === "K2");
+  const hp = pegado.componentes.find((c) => c.etiqueta === "H2");
   comprobar(
-    "el cable pegado va de la K1 pegada a la H1 pegada, borne a borne",
+    "el cable pegado va de la K2 pegada a la H2 pegada, borne a borne",
     wp?.desde.comp === kp?.id && wp?.desde.borne === "A1" && wp?.hasta.comp === hp?.id && wp?.hasta.borne === "X1",
     JSON.stringify(wp),
   );
@@ -198,9 +208,9 @@ export default async function (p, comprobar) {
   let dup = nuevos(antes, await hoja());
   const dup1 = dup;
   comprobar(
-    "7. Ctrl+D pega al lado (dx = ancho + 2) en un paso, y queda seleccionado",
+    "7. Ctrl+D pega al lado (dx = ancho + 2) en un paso, con K3 y H3, y queda seleccionado",
     (await pasos()) === n + 1 &&
-      trasladados(pegado.componentes, dup.componentes, ancho, 0) &&
+      trasladados(pegado.componentes, dup.componentes, ancho, 0, { K2: "K3", H2: "H3" }) &&
       dup.cables.length === 1 &&
       JSON.stringify(await seleccion()) === JSON.stringify(ids(dup)) &&
       (await problemas()) === 0,
@@ -210,8 +220,8 @@ export default async function (p, comprobar) {
   await tecla(D, CTRL);
   dup = nuevos(antes, await hoja());
   comprobar(
-    "Ctrl+D repetido arma una fila",
-    (await pasos()) === n + 2 && trasladados(dup1.componentes, dup.componentes, ancho, 0) && (await problemas()) === 0,
+    "Ctrl+D repetido arma una fila, con K4 y H4",
+    (await pasos()) === n + 2 && trasladados(dup1.componentes, dup.componentes, ancho, 0, { K3: "K4", H3: "H4" }) && (await problemas()) === 0,
     JSON.stringify(dup.componentes.map((c) => [c.etiqueta, c.x, c.y])),
   );
   comprobar("Ctrl+D no toca el portapapeles", JSON.stringify(JSON.parse(await guardado())) === JSON.stringify(r1));

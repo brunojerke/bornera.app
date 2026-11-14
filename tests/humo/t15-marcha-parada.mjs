@@ -2,7 +2,7 @@
 // netbook (docs/plan-T15.md, sección 4, "Humo").
 //
 // Nuevo; los 7 símbolos desde la paleta (6 arrastrados y el Neutro con clic,
-// R, R y clic); las 5 etiquetas en el panel; los 8 cables con W y clics (las
+// R, R y clic); las etiquetas en el panel; los 8 cables con W y clics (las
 // 2 T con un clic sobre el cable), un paso de deshacer por gesto. Se dibuja al
 // zoom inicial: si lo que se va a tocar no está a la vista, se desplaza la
 // vista con el botón del medio y se cuenta.
@@ -35,6 +35,13 @@ const S = ["s", "KeyS", 83];
 const O = ["o", "KeyO", 79];
 const ENTER = ["Enter", "Enter", 13];
 const CAMPO = "#prop-etiqueta";
+/**
+ * La etiqueta con que entra cada uno desde la paleta (T17: el menor libre de
+ * su prefijo, en el orden en que se colocan; el auxiliar vacío; las fuentes,
+ * su inicial). En el panel se escriben solo las que difieren de la sección 3:
+ * S0, S1 y el auxiliar K1. K1 y H1 ya entran bien.
+ */
+const AL_COLOCAR = { c1: "L", c2: "S1", c3: "S2", c4: "", c5: "K1", c6: "H1", c7: "N" };
 /** Lo que se va a tocar tiene que quedar a esta distancia (px) del borde del lienzo; si no, se desplaza la vista. */
 const MARGEN = 40;
 const ARCHIVO = "marcha-parada.brn";
@@ -229,10 +236,10 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
   }
   const puestos = await componentes();
   const esperados = plano(base.doc.hojas[0].componentes).map(({ id, tipo, x, y, rot, espejado }) => ({
-    id, tipo, x, y, rot, espejado, etiqueta: buscarSimbolo(tipo)?.etiquetaInicial ?? "",
+    id, tipo, x, y, rot, espejado, etiqueta: AL_COLOCAR[id],
   }));
   comprobar(
-    "los 7 colocados desde la paleta: tipo, posición y giro de la sección 3 (el Neutro a 180°), «L» y «N» automáticas",
+    "los 7 colocados desde la paleta: tipo, posición y giro de la sección 3 (el Neutro a 180°), con su etiqueta automática (L, S1, S2, vacío, K1, H1 y N)",
     isDeepStrictEqual(puestos, esperados),
     JSON.stringify(puestos),
   );
@@ -240,9 +247,11 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
 
   // ── 3. Etiquetas en el panel ──
   let etiquetasBien = true;
+  let aMano = 0;
   for (const [i, c] of COMPONENTES.entries()) {
-    if (!c.etiqueta) continue;
     const id = `c${i + 1}`;
+    if (!c.etiqueta || AL_COLOCAR[id] === c.etiqueta) continue;
+    aMano++;
     await aLaVista(c.x - 3, c.y - 3, c.x + 4, c.y + 3, `etiquetar ${id}`);
     await p.clic(await p.punto(c.x, c.y));
     await p.esperarA(`bornera.activo().resumenSeleccion().cantidad === 1 && !!document.querySelector("${CAMPO}")`, 5000).catch(() => undefined);
@@ -260,7 +269,11 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
       comprobar(`etiqueta de ${id} en el panel`, false, `quedó ${JSON.stringify(puesta)}, ${(await pasos()) - antes} pasos`);
     }
   }
-  comprobar("las 5 etiquetas, con clic en el símbolo, el campo del panel y Enter: un paso cada una", etiquetasBien && (await pasos()) === 12, `${await pasos()} pasos`);
+  comprobar(
+    "las 3 etiquetas que difieren (S0, S1 y el auxiliar K1), con clic en el símbolo, el campo del panel y Enter: un paso cada una",
+    etiquetasBien && aMano === 3 && (await pasos()) === 10,
+    `${aMano} a mano, ${await pasos()} pasos`,
+  );
   await p.esc(); // sin selección
 
   // ── 4. Los 8 cables con W ──
@@ -292,7 +305,7 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
       );
     }
   }
-  comprobar("los 8 cables con clics: cada uno en un gesto y un paso de deshacer (20 pasos en total)", fallas.length === 0 && (await pasos()) === 20, fallas.join(" | ") || `${await pasos()} pasos`);
+  comprobar("los 8 cables con clics: cada uno en un gesto y un paso de deshacer (18 pasos en total)", fallas.length === 0 && (await pasos()) === 18, fallas.join(" | ") || `${await pasos()} pasos`);
   await p.esc();
   comprobar("Esc sale de W", await p.evaluar("bornera.editor.cable === null"));
 
