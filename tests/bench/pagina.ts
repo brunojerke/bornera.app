@@ -5,6 +5,8 @@
 // (Ctrl+Shift+B), con reconectar uno de sus extremos libres (T14c) al final,
 // y el paso de la previa según los cables que se acomodan. Al final, T16:
 // la previa de pegar sobre la zona densa, pegar 500, duplicar todo y copiar.
+// Después, T18: rehacer y mover un contacto con los auxiliares siguiendo a
+// las bobinas (listas de referencias cruzadas).
 // Con `?escena-t12`, la de cables es la de T12 (para comparar).
 //
 // Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
@@ -1134,6 +1136,200 @@ function escenariosPegar(): Escenario[] {
   ];
 }
 
+// ── T18: referencias cruzadas (plan T18, sección 5) ─────────────────────────
+
+/** Auxiliares por bobina al renombrar (decisión de Bruno al aprobar la etapa 3). */
+const AUXILIARES_POR_BOBINA = 3;
+
+const referenciasBanco = {
+  bobinas: 0,
+  auxiliares: 0,
+  /** Bobinas que quedan con lista y filas en total (cuenta propia, sin `referencias.ts`). */
+  conLista: 0,
+  filas: 0,
+  /** Bobinas con lista en la escena del editor (0 en la base, que no las dibuja). */
+  enEscena: 0,
+  /** El contacto que se mueve y cuánto. */
+  contacto: "",
+  dx: 0,
+  dy: 0,
+  /** Atlas de textos, en las repeticiones medidas. */
+  atlas: { fillText: 0, llenados: 0, entradasMax: 0, medido: false },
+};
+
+/**
+ * Renombra los auxiliares de la escena para que sigan a las bobinas, en un
+ * paso y fuera de lo medido: en el orden de la hoja, el auxiliar i pasa a la
+ * etiqueta de la bobina floor(i / 3), hasta agotar auxiliares o bobinas.
+ * Las condiciones son las de `esBobina` y `sigueABobina` (escritas acá: en
+ * la base no se exportan). Al terminar el escenario se deshace.
+ */
+function seguirABobinas(): void {
+  const ed = editorCables!;
+  const cs = ed.documento.hojas[0]!.componentes;
+  const bobinas = cs.filter((c) => buscarSimbolo(c.tipo)?.elemento === "bobina");
+  const auxiliares = cs.filter((c) => buscarSimbolo(c.tipo)?.accionamiento === "bobina");
+  const pares: (readonly [string, string])[] = [];
+  const filas = new Map<string, number>();
+  for (let i = 0; i < auxiliares.length; i++) {
+    const b = bobinas[Math.floor(i / AUXILIARES_POR_BOBINA)];
+    if (!b || b.etiqueta === "") break;
+    pares.push([auxiliares[i]!.id, b.etiqueta]);
+    filas.set(b.etiqueta, (filas.get(b.etiqueta) ?? 0) + 1);
+  }
+  ed.ejecutar(new CambiarEtiquetas(pares));
+  const r = referenciasBanco;
+  r.bobinas = bobinas.length;
+  r.auxiliares = auxiliares.length;
+  // Dos bobinas con la misma etiqueta mostrarían la misma lista; en la escena no hay.
+  r.conLista = bobinas.filter((b) => filas.has(b.etiqueta)).length;
+  r.filas = bobinas.reduce((n, b) => n + (filas.get(b.etiqueta) ?? 0), 0);
+  r.enEscena = bobinas.filter((b) => ((ed.escena.obtener(b.id) as { referencias?: readonly string[] } | undefined)?.referencias?.length ?? 0) > 0).length;
+}
+
+/**
+ * Cuenta, en el caché de textos de las Capas que miden, los textos que caen a
+ * fillText porque el atlas está lleno, cuántas veces se llena y el máximo de
+ * textos guardados. Solo en las repeticiones medidas (`atlas.medido`).
+ */
+function contarAtlas(): void {
+  const a = referenciasBanco.atlas;
+  a.fillText = a.llenados = a.entradasMax = 0;
+  a.medido = false;
+  const t = (capasActivas as unknown as { textos: { lleno: boolean; cantidad: number; obtener(texto: string, px: number, color: string): unknown } }).textos;
+  const obtener = t.obtener.bind(t);
+  t.obtener = (texto, px, color) => {
+    const estaba = t.lleno;
+    const e = obtener(texto, px, color);
+    if (a.medido) {
+      if (!estaba && t.lleno) a.llenados++;
+      if (e === null && t.lleno) a.fillText++;
+      a.entradasMax = Math.max(a.entradasMax, t.cantidad);
+    }
+    return e;
+  };
+}
+
+function notaReferencias(): string {
+  const r = referenciasBanco;
+  const a = r.atlas;
+  return (
+    `${r.auxiliares} auxiliares en ${r.bobinas} bobinas, de a ${AUXILIARES_POR_BOBINA}: ${r.conLista} bobinas con lista y ${r.filas} filas` +
+    ` (en la escena: ${r.enEscena} con lista)` +
+    (r.contacto ? `; se mueve ${r.contacto} (${r.dx}, ${r.dy})` : "") +
+    `; atlas: ${a.fillText} textos con fillText por atlas lleno, ${a.llenados} veces lleno, hasta ${a.entradasMax} textos`
+  );
+}
+
+/** Desplazamientos que se prueban para mover el contacto, en orden. */
+const DESPLAZAMIENTOS_CONTACTO: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+  [2, 0],
+  [0, 2],
+];
+
+/**
+ * Elige el contacto que se mueve: el auxiliar renombrado más cercano al
+ * centro de la vista que se puede apretar en su centro y cuyo movimiento se
+ * acepta. La prueba va fuera de lo medido y se deshace.
+ */
+function elegirContacto(c: Camara): void {
+  const ed = editorCables!;
+  const e = ed.escena;
+  const centro = c.aGrilla(ANCHO / 2, ALTO / 2);
+  const hoja = ed.documento.hojas[0]!;
+  const nombres = new Set(hoja.componentes.filter((k) => buscarSimbolo(k.tipo)?.elemento === "bobina").map((k) => k.etiqueta));
+  const distancia = (k: { x: number; y: number }) => (k.x - centro.x) ** 2 + (k.y - centro.y) ** 2;
+  const candidatos = hoja.componentes
+    .filter((k) => buscarSimbolo(k.tipo)?.accionamiento === "bobina" && nombres.has(k.etiqueta) && e.idEnPunto(k.x, k.y, 0) === k.id)
+    .sort((a, b) => distancia(a) - distancia(b));
+  for (const k of candidatos.slice(0, 20)) {
+    for (const [dx, dy] of DESPLAZAMIENTOS_CONTACTO) {
+      prepararGesto([k.id]);
+      moverContacto(c, dx, dy, false);
+      if (gesto.pendiente) {
+        volverGesto();
+        Object.assign(referenciasBanco, { contacto: `${k.etiqueta} ${k.id}`, dx, dy });
+        prepararGesto([k.id]);
+        return;
+      }
+    }
+  }
+  throw new Error("Mover 1 contacto: ningún auxiliar cercano al centro se puede mover.");
+}
+
+/** Aprieta en el ancla, mueve (dx, dy) y suelta: un Mover si se acepta. */
+function moverContacto(c: Camara, dx: number, dy: number, medido: boolean): void {
+  const ed = editorCables!;
+  const p = gesto.ancla!;
+  ed.aplicar(ed.seleccionar.presionar(evento(c, p.x, p.y)));
+  ed.aplicar(ed.seleccionar.mover(evento(c, p.x + dx, p.y + dy)));
+  soltarGesto(c, p.x + dx, p.y + dy, medido);
+}
+
+/** Los escenarios de T18, con la escena como está (al final, después de todo lo anterior). */
+function escenariosReferencias(): Escenario[] {
+  const ed = () => editorCables!;
+  return [
+    {
+      // Rehacer la capa estática con las listas de referencias a la vista.
+      nombre: "Rehacer al 31 % con referencias",
+      preparar: (c, e) => {
+        referenciasBanco.contacto = "";
+        ed().seleccionarIds([]);
+        seguirABobinas();
+        contarAtlas();
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      antes: (_, medido) => {
+        referenciasBanco.atlas.medido = medido;
+      },
+      terminar: () => ed().deshacer(),
+      cuadros: 1,
+      paso: (_, capas) => capas.invalidarEstatica(),
+      repeticiones: 12,
+      nota: notaReferencias,
+    },
+    {
+      // Mover un contacto (apretar, mover y soltar: un Mover que recalcula la
+      // lista de su bobina) en los pares; deshacer en los impares.
+      nombre: "Mover 1 contacto con referencias al 31 %",
+      preparar: (c, e) => {
+        seguirABobinas();
+        contarAtlas();
+        centrar(c, e, ZOOM_TEXTOS);
+        elegirContacto(c);
+      },
+      antes: (_, medido) => {
+        referenciasBanco.atlas.medido = medido;
+      },
+      terminar: () => {
+        volverGesto();
+        ed().seleccionarIds([]);
+        ed().deshacer(); // el renombrado
+      },
+      cuadros: 10,
+      paso: (c, _, __, i) => {
+        if (i % 2 === 1) {
+          volverGesto();
+          return;
+        }
+        const { dx, dy } = referenciasBanco;
+        moverContacto(c, dx, dy, true);
+        if (!gesto.pendiente) throw new Error(`Mover 1 contacto: se rechaza ("${ultimoAviso}").`);
+      },
+      repeticiones: 3,
+      dinamico: () => ed().dibujarDinamico,
+      medirPaso: true,
+      pasoImpar: true,
+      nota: notaReferencias,
+    },
+  ];
+}
+
 /** Escenarios de la escena con cables: los de dibujo de siempre y los de edición. `t12`: la escena de T12. */
 const escenariosCables = (t12: boolean): Escenario[] => [
   ...ESCENARIOS.filter((x) =>
@@ -1381,6 +1577,8 @@ const escenariosCables = (t12: boolean): Escenario[] => [
   ...(t12 ? [] : escenariosReconectar()),
   // T16, después de todo lo de v0.1.3 (así lo de antes corre igual).
   ...(t12 ? [] : escenariosPegar()),
+  // T18, al final (así lo de antes corre igual que en la base).
+  ...(t12 ? [] : escenariosReferencias()),
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {

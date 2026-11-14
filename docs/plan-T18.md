@@ -243,7 +243,7 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | 0 | Docs: este plan, `plan-fase3b.md` (T18 apunta acá, número de orden revisado, opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-14.** | Sonnet |
 | 1 | Núcleo: `src/core/model/referencias.ts` y sus tests (marcha-parada, rama con NC, casos, al azar contra el cálculo lento, `.brn`). `npm test` y `npm run check`. **Hecha el 2026-11-14** (ver "Etapa 1, hecha"). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor. Primero, el test de Ctrl+D (ajuste 1), con la marcha-parada y con la rama NC. Después: la lista en la bobina, `cajaDibujo`, `src/editor/referenciasHoja.ts`, `reflejar` y los tests del editor y del dibujo. Prueba visual a 1024×600. **Hecha el 2026-11-14** (ver "Etapa 2, hecha"). | Opus alto |
-| 3 | Humo t18 (con el indicador de zoom al usar la rueda) y banco: los dos escenarios nuevos, la comparación contra `234b7e6` y `docs/bench.md`. | Opus alto |
+| 3 | Humo t18 (con el indicador de zoom al usar la rueda) y banco: los dos escenarios nuevos, la comparación contra `234b7e6` y `docs/bench.md`. **Hecha el 2026-11-14** (ver "Etapa 3, hecha"). | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` y Obsidian. `npm run humo` entero. | Sonnet |
 
 ### Etapa 1, hecha (2026-11-14)
@@ -350,6 +350,37 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | Dos espacios (la de antes) | `NA 13-14  (10, 11)` | 18 | 10,32 | 1,58 | 2,78 |
 | **Un espacio (elegida)** | `NA 13-14 (10, 11)` | 17 | 9,83 | 2,07 | 3,27 |
 | Punto medio | `NA 13-14 · (10, 11)` | 19 | 10,81 | 1,09 | 2,29 |
+
+### Etapa 3, hecha (2026-11-14)
+
+**Humo `tests/humo/t18-referencias.mjs`** (31 comprobaciones, a 1024×600)
+- **Carga:** la marcha-parada se arma en Node y se abre con Ctrl+O. Las listas se leen de la escena del editor y se comparan con un cálculo nuevo.
+- **Los 12 puntos de la sección 5:** lista de K1; barra de estado en el centro del contacto; mover el contacto; sumar un NC; renombrar K1 a K5; sin restos; Ctrl+D de la rama; dos bobinas K1; guardar y reabrir; textos apagados; indicador de zoom; `validarHoja` y errores.
+- **Indicador de zoom:** ya seguía a la rueda (`alRueda` → `alCambiar` → `cambio()`), sin tocar `src`. El "59 %" de las capturas de la etapa 2 venía de fijar la cámara por código, que no pasa por `cambio()`.
+- **Sin restos:**
+  - Las fotos de referencia salen de documentos recién abiertos: sin lista (el NA sin etiqueta), con 1 fila y con 2 filas.
+  - Desde el de sin lista, todo va por comandos: ni selección ni panel, así que solo se invalida lo que pide `reflejar`. Cada estado da los mismos píxeles que su referencia; al borrar el último contacto se compara en la caja de 2 filas.
+  - Se hace **al 200 %**. Al 100 % un mosaico (256 px) mide 12,8 unidades y el del NA incluye la fila de K1: redibujarlo tapaba un resto.
+  - **Probado a propósito:**
+    - con `EscenaEditable.actualizar` devolviendo solo la caja nueva, al 100 % el humo pasaba igual y al 200 % falla «borrar el NA» (205 píxeles);
+    - sin invalidar las bobinas cuya lista cambió, falla «crece a 2 filas».
+  - De 2 filas a 1 no puede quedar resto: la caja nueva, con el cuerpo de la bobina, cubre la segunda fila.
+- **Avisos:** con dos bobinas K1, lo que se comprueba es que no aparece ningún aviso nuevo. La barra ya tenía «Abierto en N ms».
+
+**Banco** (`tests/bench/pagina.ts`, al final de la escena con cables)
+- **Escenarios nuevos:** *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*.
+- **Reparto:** fuera de lo medido, el auxiliar i pasa a la bobina floor(i / 3). Quedan 93 bobinas con lista y 277 filas.
+- **Atlas:** se cuenta en la nota del escenario (textos con `fillText` por atlas lleno, veces lleno y máximo de textos).
+- **Resultado** (detalle en `docs/bench.md`, "Referencias cruzadas"): ABBA ×3 en dos tandas contra `234b7e6`.
+  - Pasan los dos escenarios nuevos (por gesto, base × 1,04; paso, base + 0,3 ms) y Pegar 500 y Duplicar todo.
+  - El atlas no se llena: 0 `fillText`, hasta 793 textos.
+  - 0 lentos en las 24 corridas.
+  - 2 de 71 celdas comunes subieron en las dos tandas: *2000 · Editar al 100 %* y *500 · Mover todo al 31 %*. El diagnóstico con 10 veces más cuadros (regla fijada antes de medir: 7 de 10 pares) dio 1 y 4 de 10, y Bruno las **aceptó como ruido**.
+- **Netbook:** no hace falta (ningún paso pasa la mitad de su tope, sin lentos).
+
+**Resultado:** `npm test` con 1669 tests que pasan y 1 salteado; `npm run check` con 0 errores; `npm run humo` entero con 662 de 662 bien. Sin cambios en `src`.
+
+**Pendiente, etapa 4:** cierre de T18 (`plan-fase3b.md`, `arquitectura.md` y Obsidian).
 
 ## 7. Riesgos
 - **Atlas de textos.** Con coordenadas, cada fila es un texto distinto. Con cientos de bobinas con lista, el atlas puede llenarse y el dibujo cae a `fillText`. Lo muestra *Rehacer con referencias*. Salida prevista: dibujar la fila en partes ("NA", "13-14" y la ubicación), que se repiten mucho más.

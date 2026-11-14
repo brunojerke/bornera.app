@@ -18,6 +18,72 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 abajo). Las comparaciones contra 0.1.2 usan esta opción.
 
+## Referencias cruzadas (fase 3b, T18 etapa 3) — 2026-11-14
+
+**Resultado:**
+- **Escenarios nuevos: pasan.** *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*, con 0 lentos.
+- **Pegar 500 y Duplicar todo: pasan** contra `234b7e6`, el cierre de T17b medido en la misma sesión.
+- **El atlas de textos no se llena** en la escena de 2000 con referencias: 0 textos caen a `fillText` en las 12 corridas de HEAD de cada escenario nuevo.
+- **Celdas comunes:** 2 de 71 suben más de 10 % en las dos tandas. Un diagnóstico con 10 veces más cuadros, con su regla fijada antes de medir, las dio como ruido y **Bruno las aceptó** (abajo).
+- Lentos: 0 en las 24 corridas, de las dos versiones.
+- Netbook: no hace falta. Ningún paso pasa la mitad de su tope y no apareció ningún lento (`docs/plan-T18.md`, sección 5).
+
+**Cómo se midió:**
+- HEAD es la etapa 3 sobre `4420832`, sin commit al medir.
+- La base es `234b7e6`, en un worktree con su propio `npm ci` y el `tests/bench/pagina.ts` de HEAD copiado sin commit. Así corre los mismos escenarios, pero su escena no dibuja listas. El `pagina.ts` era idéntico en los dos árboles (mismo sha256).
+- ABBA ×3 en dos tandas: 6 corridas por versión en cada tanda y, por celda, la mediana de las 6. Fue de 19:59:49 a 20:07:05 (hora de Argentina), unos 18 s por corrida.
+- Condiciones, anotadas por el script antes de cada corrida (las 24 iguales): Edge 157 headless; PC enchufada y cargando (79 %); modo "Mejor rendimiento"; sin Opera, Gemini ni ChatGPT abiertos.
+- El sha256 de `ESCENA_ACTUAL` no cambia (`banco.test.ts`, en `npm test`).
+
+### Escenarios nuevos (escena con cables, al 31 %)
+
+Antes de medir, los 277 auxiliares de la escena pasan a seguir a las bobinas, fuera de lo medido y en un solo `CambiarEtiquetas`. En el orden de la hoja, el auxiliar i recibe la etiqueta de la bobina floor(i / 3) (decisión de Bruno). Quedan **93 bobinas con lista y 277 filas**: en la escena de HEAD hay 93 con lista y en la de la base, 0. Al terminar se deshace.
+
+| Escenario | Medida | Base T1 / T2 | HEAD T1 / T2 | Criterio | Resultado |
+|---|---|---:|---:|---|---|
+| Rehacer al 31 % con referencias | por gesto (ms) | 21,75 / 21,42 | 22,58 / 22,26 | ≤ base × 1,15: 25,01 / 24,63; 0 lentos | pasa |
+| ″ | cuadro: mediana / p95 | 8,25 / 8,70 · 8,20 / 8,70 | 8,30 / 8,70 · 8,30 / 8,60 | – | – |
+| Mover 1 contacto con referencias al 31 % | paso (ms) | 0,80 / 0,75 | 1,10 / 1,10 | ≤ base + 1 ms: 1,80 / 1,75; 0 lentos | pasa |
+| ″ | deshacer (ms) | 0,20 / 0,25 | 0,60 / 0,50 | se informa | – |
+
+- *Rehacer con referencias*: 12 veces `invalidarEstatica`, como *Rehacer al 31 %*. Las listas suman unos 0,8 ms por gesto (+4 %).
+- *Mover 1 contacto*: en los pasos pares se aprieta, se mueve y se suelta (un `Mover`, que recalcula la lista de la bobina); en los impares se deshace. El contacto es el auxiliar con bobina más cercano al centro de la vista cuyo movimiento se acepta, elegido fuera de lo medido: K96 (`c916`), una unidad a la derecha, el mismo en las dos versiones. Lo que suma T18, unos 0,3 ms por paso, es el recálculo de las referencias de la hoja.
+- **Atlas:** en las dos corridas de cada escenario y en las 12 corridas de HEAD, 0 textos con `fillText` por atlas lleno y 0 veces lleno. Guarda hasta 793 textos (678 en la base, sin listas).
+
+### Pegar 500 y Duplicar todo
+
+Paso en ms, T1 / T2: mediana de las 6 corridas de cada tanda.
+
+| Escenario | `234b7e6` | HEAD | Criterio | Deshacer HEAD: medianas / máx. | Resultado |
+|---|---:|---:|---|---:|---|
+| Pegar 500 | 4,50 / 4,45 | 4,85 / 4,70 | ≤ base + max(10 %, 1 ms): 5,50 / 5,45 | 1,2 / 3,6 | pasa |
+| Duplicar todo (2000) | 46,25 / 44,70 | 45,70 / 45,25 | ≤ base × 1,10: 50,88 / 49,17; máx. ≤ 300 (54,9) | 7,7–7,75 / 9,7 | pasa |
+
+### Celdas comunes con suba repetida: aceptadas como ruido
+
+En las dos tandas (mediana / p95 por cuadro en ms, mediana de las 6 corridas):
+
+| Celda | Base T1 | HEAD T1 | Base T2 | HEAD T2 | Sube en las dos |
+|---|---:|---:|---:|---:|---|
+| 2000 · Editar al 100 % | 0,40 / 0,50 | 0,45 / 0,60 | 0,40 / 0,65 | 0,45 / 0,85 | mediana y p95 |
+| 500 · Mover todo al 31 % | 1,50 / 3,40 | 1,55 / 3,75 | 1,45 / 3,50 | 1,50 / 3,85 | p95 |
+
+Las dos escenas son sin cables y sin editor: ningún componente tiene lista. Para ellas, T18 solo suma en `cajaDibujo` una llamada que vuelve null enseguida y en `dibujarSimbolo` una propiedad más.
+
+**Diagnóstico** (opción de Bruno): ABBA ×5 contra la misma base, con las repeticiones de esas dos celdas multiplicadas por 10 (de 3 a 30). Son 10 pares; en cada bloque ABBA, (1.ª A, 1.ª B) y (2.ª B, 2.ª A).
+- **Regla, fijada antes de medir:** si en una celda HEAD supera a la base en más de 0,05 ms de mediana, o en más de 10 % de p95, en al menos 7 de los 10 pares, se saltea lo de referencias en el camino sin lista y se repiten las dos tandas. Si no, se acepta como ruido.
+- **Duración real:** de 20:13:47 a 20:15:07 (hora de Argentina), **80 s para las 20 corridas**, con un arranque cada 4 s.
+- **Por qué entran ~1500 cuadros por corrida en 4 s:** son 600 cuadros de *Editar* y 931 de *Mover todo*, más la repetición de calentamiento. Cada uno dibuja en 0,5 a 1,7 ms y el reloj del banco es simulado: los 16,7 ms entre cuadros no se esperan. Son unos 2 s de dibujo, más abrir el navegador headless y armar las escenas de 500 y 2000. La corrida completa del banco, con todas las escenas, tarda unos 18 s.
+- **Condiciones:** las mismas que en las tandas, anotadas en las 20 corridas. Un primer intento con ChatGPT abierto se frenó y se descartó sin mirarlo.
+- La opción `--diag-t18` fue un parche temporal en los dos árboles y no quedó en el repo.
+
+| Celda | Base: mediana / p95 | HEAD: mediana / p95 | HEAD arriba (mediana / p95) | Pares con > 0,05 ms de mediana | Pares con > 10 % de p95 | Pares con alguna |
+|---|---:|---:|---|---:|---:|---:|
+| 2000 · Editar al 100 % | 0,50 / 0,80 | 0,50 / 0,80 | 0 / 2 de 10 | 0 | 1 | **1 de 10** |
+| 500 · Mover todo al 31 % | 1,65 / 4,60 | 1,70 / 4,55 | 4 / 5 de 10 | 4 | 0 | **4 de 10** |
+
+Ninguna celda llega a 7 pares: **las dos se aceptan como ruido** (decisión de Bruno, 2026-11-14, con la regla de arriba). En *Mover todo*, las diferencias son de un escalón de 0,1 ms para un lado o para el otro, y el p95 de HEAD sale menor. Ninguna versión tuvo lentos.
+
 ## Etiquetado automático (fase 3b, T17 etapa 3) — 2026-11-14
 
 **Resultado:**
