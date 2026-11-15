@@ -28,6 +28,12 @@
 4. **Test de R6 con el enclavamiento bien hecho:** el NC "K2" en la rama de K1, junto a A1 de K1, da cero avisos. El duplicado mal hecho da exactamente uno.
 5. **Cambio de color de la previa en conflicto:** revisar el humo t16 y ajustarlo si comprueba ese color. Se justifica en el cierre.
 
+**Cambios de Bruno al arrancar la etapa 1 (2026-11-15):**
+6. **R4 se parte por casos.** Error solo si en el grupo hay algún titular que no es pulsador (con la biblioteca de hoy, bobinas y lámparas; un símbolo desconocido cuenta como "no pulsador"). Un pulsador NA y uno NC con la misma etiqueta se permiten: es un pulsador de doble contacto. Dos pulsadores del mismo tipo con la misma etiqueta dan aviso. Un pulsador "K1" con la bobina K1 es error. Resuelve S5.
+7. **Un solo aviso por la misma equivocación:** un componente con un error R4 no recibe además R5. Pulsador "K1" con bobina K1: 2 errores R4 y 0 avisos R5.
+8. **Anillo, opción C (después de la corrida de control, sección 9):** R7 y R8 van en la barra y en el panel. En el lienzo, los anillos se dibujan solo en la capa dinámica y solo para el único componente o cable seleccionado; con varios seleccionados, sin anillos. Descartadas: (A) los anillos en un solo trazo (no pasa), (B) solo barra y panel, (D) anillo solo al 100 % o más (*Rehacer al 100 %* ya sube de 8 a 20 %).
+9. **Contorno de etiqueta, opción P (después de su corrida de control, sección 9):** el contorno a rayas va en la capa estática como se diseñó. Se acepta como costo la suba del p95 de *Encuadrar (F)* con 500, que se mide en la netbook al cierre de la fase 3b (pasa si no hay cuadros lentos).
+
 ## 1. Estado verificado (2026-11-15, sobre `926915d`)
 
 - **Barra de estado** (`src/ui/BarraEstado.svelte`): muestra `aviso ?? "Sin avisos"` en `.avisos`. El aviso es un texto que dura 4 s (`DURACION_AVISO_MS`) y dice que una acción no se pudo hacer. No hay contador ni lista.
@@ -53,11 +59,11 @@
 - **Faltan:** `tests/circuitos/inversion.brn` y `tests/humo/t19-*.mjs`. `src/core/sim/` está vacío.
 
 ### Supuestos (a verificar)
-- **S1.** `redes()` con 2000 componentes cuesta de 1 a 3 ms en la PC. Lo mide la etapa 1. Si da menos de 1 ms, se reconsidera R10 (ajuste 2).
-- **S2.** La escena del banco tiene muchos bornes sin cable, así que dibujar un anillo en cada uno encarece todos los escenarios. Lo mide la etapa 1 (ajuste 1).
+- **S1.** `redes()` con 2000 componentes cuesta de 1 a 3 ms en la PC. Lo mide la etapa 1. Si da menos de 1 ms, se reconsidera R10 (ajuste 2). **Medido (sección 9): 1,1 a 1,6 ms con cables; R10 sigue en la fase 5.**
+- **S2.** La escena del banco tiene muchos bornes sin cable, así que dibujar un anillo en cada uno encarece todos los escenarios. Lo mide la etapa 1 (ajuste 1). **Medido (sección 9): se confirma; anillo en la opción C (cambio 8).**
 - **S3.** En la inversión de giro, el NC de enclavamiento va pegado a la bobina (su borne 22 en la red de A1). `inversion.brn` todavía no existe.
 - **S4.** Una pasada por los componentes para las reglas de etiqueta cuesta menos de 1 ms con 2000, por analogía con T17 y T18. Lo mide el banco.
-- **S5.** Que R4 sea *error* supone que la fase 5 no simula con titulares repetidos. Con dos bobinas K1 es claro: los contactos no saben a cuál siguen. Con dos pulsadores S1 lo decide la fase 5; si no la frenan, R4 se parte en dos.
+- **S5.** Que R4 sea *error* supone que la fase 5 no simula con titulares repetidos. Con dos bobinas K1 es claro: los contactos no saben a cuál siguen. Con dos pulsadores S1 lo decide la fase 5; si no la frenan, R4 se parte en dos. **Resuelto (cambio 6):** R4 se partió; los pulsadores repetidos no son error.
 
 ## 2. Diseño
 
@@ -73,7 +79,7 @@
 | R1 | Contacto sin etiqueta | aviso | el contacto | «Contacto sin etiqueta: no sigue a ninguna bobina.» |
 | R2 | Contacto sin bobina | aviso | el contacto | «No hay ninguna bobina K2 para este contacto.» |
 | R3 | Titular sin etiqueta | aviso | el titular | «Bobina de contactor sin etiqueta.» (con el nombre del símbolo) |
-| R4 | Titulares repetidos | error | todos los repetidos | «Otra bobina de contactor ya se llama K1.» (el texto de T17) |
+| R4 | Titulares repetidos | error o aviso (cambio 6) | los repetidos | «Otra bobina de contactor ya se llama K1.» (el texto de T17) |
 | R5 | Prefijo de otro tipo | aviso | el titular | «K1 es nombre de bobina y esto es un pulsador NA.» |
 | R6 | NC en la rama de su propia bobina | aviso | el NC | «El NC K2 corta a su propia bobina. ¿Es el enclavamiento de otro contactor?» |
 | R7 | Borne sin conectar | aviso | el borne | «Borne 14 sin conectar.» |
@@ -84,8 +90,16 @@ Detalle de cada una:
 - **R1.** Un seguidor (`esSeguidor`) con la etiqueta vacía.
 - **R2.** Un contacto que sigue a bobina (`sigueABobina`), con etiqueta, sin ninguna bobina en la hoja con esa etiqueta normalizada. Cubre también el auxiliar "S1" de la tabla de casos de T18.
 - **R3.** Un titular con prefijo (`prefijoDe` no nulo) y la etiqueta vacía. El símbolo desconocido no tiene prefijo y no se marca: ya avisa al abrir.
-- **R4.** Dos o más titulares con la misma etiqueta normalizada y no vacía, de cualquier tipo, como el choque de T17 (`etiquetasDeTitulares`). Se marcan todos.
-- **R5 (A).** Un titular con prefijo cuya etiqueta es letras y número, con letras distintas de su prefijo e iguales al prefijo de otro símbolo de la biblioteca. Hoy los prefijos son S, K y H: un pulsador "K1" o una lámpara "S2" avisan; una bobina "KM1" o un pulsador "MARCHA" no. Es el caso que confunde a `compararRedes` ("K1·13").
+- **R4 (cambio 6).** Titulares con la misma etiqueta normalizada y no vacía (`etiquetasDeTitulares`), por grupo:
+
+  | Grupo | Resultado |
+  |---|---|
+  | Algún titular que no es pulsador: dos bobinas, dos lámparas, bobina y lámpara, pulsador "K1" con bobina K1, desconocidos | **error** en todos |
+  | Pulsador NA y pulsador NC | nada: pulsador de doble contacto |
+  | Dos o más pulsadores del mismo tipo | **aviso** en los del mismo tipo (en NA, NA y NC se marcan las dos NA) |
+
+  El texto nombra al otro: el primero del grupo en el orden de la hoja (del mismo tipo, en el aviso).
+- **R5 (A).** Un titular con prefijo cuya etiqueta es letras y número, con letras distintas de su prefijo e iguales al prefijo de otro símbolo de la biblioteca. Hoy los prefijos son S, K y H: un pulsador "K1" o una lámpara "S2" avisan; una bobina "KM1" o un pulsador "MARCHA" no. Es el caso que confunde a `compararRedes` ("K1·13"). **No se suma a un error R4 del mismo componente (cambio 7).**
 - **R6 (A).** Un auxiliar NC con etiqueta E, una bobina con etiqueta E, y un borne del NC en la misma red que un borne de esa bobina, si esa red no tiene nombre de alimentación (`red.nombres` vacío).
   - **Por qué sin nombre:** todas las bobinas tienen A2 en la red N, y un NC que cuelga de L o de N comparte esa red sin estar en la rama.
   - **Falsos avisos conocidos:** un intermitente hecho a propósito (la bobina cortada por su propio NC). En la marcha-parada, en la rama NC y en el enclavamiento bien hecho da cero.
@@ -129,7 +143,7 @@ Detalle de cada una:
 ### Lienzo (`src/render`)
 - **Capa estática**, como la lista de T18: `ComponenteEscena` suma lo que hay que marcar, ya resuelto. El dibujo no sabe de reglas.
 - **Aviso de etiqueta (R1 a R6 y R9):** contorno a rayas sobre el cuerpo del símbolo, en `--aviso`. Al 31 % mide 12×25 px en un símbolo de 2×4.
-- **Borne sin conectar y extremo suelto (R7 y R8):** anillo hueco de 0,5 de radio alrededor de la marca, en `--aviso`. Al 31 % mide 6 px. **Condicionado (ajuste 1).**
+- **Borne sin conectar y extremo suelto (R7 y R8):** anillo hueco de 0,5 de radio alrededor de la marca, en `--aviso`. Al 31 % mide 6 px. **Opción C (cambio 8):** solo en la capa dinámica, para el único componente o cable seleccionado. La capa estática no dibuja anillos.
 - **Error y aviso:** misma forma. La severidad se lee en la barra y en el panel.
 - **Debajo de 6 px por unidad:** las marcas se apagan con los bornes. Queda el contador de la barra.
 - **`cajaDibujo` no cambia:** contorno y anillo entran en el margen de 1,5. Lo fija un test.
@@ -164,7 +178,8 @@ En la inversión de giro dibujada a mano (`docs/plan-fase3b.md`, "Pasa cuando"),
 ### Núcleo: `src/core/model/validaciones.test.ts`
 - **Marcha-parada y rama NC:** cero avisos.
 - **Por regla:** un caso que la dispara, con su cuenta exacta, y un caso vecino que no. Se arman con `marchaParada({ ramaNC })` más comandos, o con casos chicos armados con comandos.
-- **R5:** pulsador "K7" avisa solo R5; pulsador "K1" con bobina K1 avisa R5 y R4; bobina "KM1" y pulsador "MARCHA" no avisan.
+- **R4 (cambio 6):** pulsador NA y NC "S1": cero; dos pulsadores NA "S1": dos avisos R4; dos bobinas K1: dos errores R4. También dos lámparas, NA, NA y NC (aviso solo en las NA) y un desconocido repetido.
+- **R5:** pulsador "K7" avisa solo R5; pulsador "K1" con bobina K1 da 2 errores R4 y 0 avisos R5 (cambio 7); bobina "KM1" y pulsador "MARCHA" no avisan.
 - **R6 (ajuste 4):**
   - Enclavamiento bien hecho: el NC "K2" en la rama de K1, junto a A1 de K1, con las dos bobinas. Cero avisos.
   - Duplicado mal hecho, el límite de T17b: la copia queda con el NC "K2" junto a A1 de K2. Exactamente un R6, en ese NC.
@@ -229,7 +244,7 @@ Obligatorio: T19 toca el dibujo y el editor.
 - Si algo no pasa, se frena y se presentan opciones antes de optimizar.
 
 ### Netbook
-Solo si en la PC un paso pasa la mitad de su tope o aparece un cuadro lento. Si no, va al cierre de la fase 3b, junto con lo vigente: *Duplicar todo (2000)*, *Pegar 500*, el tope 160 de la previa, *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*.
+Solo si en la PC un paso pasa la mitad de su tope o aparece un cuadro lento. Si no, va al cierre de la fase 3b, junto con lo vigente: *Duplicar todo (2000)*, *Pegar 500*, el tope 160 de la previa, *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*. **Suma de la etapa 1:** *Encuadrar (F)* con 500 y los contornos de etiqueta, que pasa si no hay cuadros lentos (sección 9, cambio 9).
 
 ## 6. Etapas
 Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versión. En PowerShell, `npm.cmd`.
@@ -237,17 +252,45 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | Etapa | Qué | Modelo sugerido |
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T19 apunta acá y los opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-15.** | Sonnet |
-| 1 | Núcleo: `src/core/model/validaciones.ts` y sus tests (por regla, R6 con el enclavamiento bien y mal hecho, al azar contra el cálculo lento, reglas anuladas, `.brn`). Mediciones S1 y S2 y la corrida de control del anillo (ajuste 1). `npm test` y `npm run check`. | Opus xhigh (lógica del núcleo) |
+| 1 | Núcleo: `src/core/model/validaciones.ts` y sus tests (por regla, R6 con el enclavamiento bien y mal hecho, al azar contra el cálculo lento, reglas anuladas, `.brn`). Mediciones S1 y S2 y la corrida de control del anillo (ajuste 1). `npm test` y `npm run check`. **Hecha el 2026-11-15** (abajo). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor: `src/editor/avisosHoja.ts`, `reflejar`, contorno y anillo (según la etapa 1), `--conflicto`, contador de la barra y notas del panel, con sus tests. Prueba visual a 1024×600. | Opus alto |
 | 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` (validaciones hechas y la definición de severidad) y Obsidian. `npm run humo` entero. | Sonnet |
+
+### Etapa 1 hecha (2026-11-15)
+- **`src/core/model/validaciones.ts`**, puro y sin DOM:
+  - `validar(hoja, reglas = TODAS)`: los avisos en un orden fijo. Primero los componentes, en el orden de la hoja: en cada uno, por regla, y los de R7 por borne en el orden de su definición. Después los cables (R8). Con un subconjunto de reglas da lo mismo que filtrar el resultado completo, porque R5 mira la condición de R4 aunque R4 no se pida.
+  - También `textoAviso`, `contarAvisos` y el tipo `Aviso`, una unión por regla con los datos de su texto.
+- **R4 (cambios 6 y 7):** el "pulsador" se generaliza como *contacto a mano*, que es un titular con accionamiento: hoy, los pulsadores NA y NC. Un selector futuro entra igual.
+  - El texto nombra al primer otro del grupo en el orden de la hoja; en el aviso, al primero del mismo tipo.
+  - El símbolo desconocido se nombra «Símbolo desconocido», como en el editor (`SIMBOLO_DESCONOCIDO`).
+- **R5:** los prefijos salen de la biblioteca, cada uno con la palabra que nombra: K «bobina», S «pulsador» y H «lámpara».
+- **R6:** llama a `redes()` solo si hay un auxiliar NC con la etiqueta de una bobina.
+- **`textoRepetida`** pasó de `src/ui/propiedades.ts` al núcleo, porque es el texto de R4. `propiedades.ts` la reexporta y el panel no cambia.
+- **Tests:**
+  - **`validaciones.test.ts`, 41 tests:**
+    - La marcha-parada (con rama NC y con dos neutros), la hoja vacía y el mando de inversión con el enclavamiento bien hecho dan cero con todas las reglas.
+    - Cada regla tiene un caso que la dispara y uno vecino que no. R4 cubre sus tres casos pedidos y R5 queda callado por un error R4.
+    - El duplicado mal hecho da exactamente un R6, en el NC de la copia. El límite S3 queda fijado.
+    - Orden, subconjuntos, textos y cuentas.
+    - Que validar no cambie el documento ni el `.brn`.
+  - **Al azar:** 600 operaciones, semilla 20261115. Colocar, mover, rotar, espejar, borrar, renombrar (también fuentes y con arrastre), cablear (de borne a borne, de NC a bobina, a un extremo libre y en T), copiar, pegar, duplicar, deshacer y rehacer.
+    - Se compara contra un cálculo lento escrito aparte: normalización propia y búsqueda a lo ancho por los cables, sin `redes()`.
+    - Cada regla sale, también R4 en sus dos severidades, el pulsador de doble contacto sin aviso y R5 callado por R4.
+    - **Reglas anuladas:** sin cualquiera de las nueve, el recorrido da distinto. También con la normalización anulada y con las redes anuladas (R6 se apaga).
+    - Unos 1,4 s en la PC.
+  - **`tests/circuitos/marcha-parada.test.ts`:** con las validaciones calculadas, `serializar` da el mismo texto que el `.brn` congelado.
+- **Verificación:** `npm test` 1711 en verde (1 saltado, `npm run circuito` sin `BORNERA_BRN`), `npm run check` 0 errores. Sin banco: la etapa no toca el dibujo; las corridas de control están en la sección 9.
+- **Queda para la etapa 2:**
+  - La nota de T17 en el panel (`repetida`) hoy avisa también a un NA y un NC con la misma etiqueta. Se reemplaza por el texto de R4, que los permite.
+  - Contorno y anillo según los cambios 8 y 9: el contorno, sin crear objetos por componente al dibujar.
 
 ## 7. Riesgos y límites
 
 - **Anillos en la escena del banco (S2).** Si hay miles de bornes sueltos, cada mosaico dibuja más. Lo resuelve el ajuste 1.
 - **Un componente recién colocado sale con todos sus bornes marcados.** Es lo que pide "en vivo", pero ensucia el dibujo a medio hacer. Se mira en la prueba visual de la etapa 2.
 - **R6 no ve un NC alejado de la bobina** (S3). Límite conocido, con test.
-- **R4 como error** depende de lo que decida la fase 5 (S5).
+- **R4 como error** depende de lo que decida la fase 5 (S5). Con el cambio 6, solo para lo que no es pulsador.
 - **Contactos que se enganchan solos** (de T17): R2 se apaga cuando aparece una bobina con esa etiqueta, sea la buscada o no.
 - **Hoja a medio dibujar:** el contador casi nunca dice «Sin avisos» hasta terminar. Es el sentido del criterio de la fase.
 
@@ -257,3 +300,90 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 - R10 y las reglas de la tabla "Lo que no va en T19".
 - Arreglar el etiquetado al duplicar el NC de enclavamiento: T19 solo avisa (R6).
 - El armado de referencia de la inversión y `inversion.brn`: cierre de la fase 3b.
+
+## 9. Mediciones de la etapa 1 (2026-11-15, PC)
+
+### S1: `redes()` con 2000
+En Node (el V8 de Edge y WebView2), sobre `877fd69`: 20 vueltas de calentamiento y la mediana de 50, en 4 corridas.
+
+| Escena | Mediana | Bornes | Sin cable | Cables | Con extremo libre |
+|---|---:|---:|---:|---:|---:|
+| 2000 sin cables | 0,72 a 0,86 ms | 3405 | 3405 | 0 | 0 |
+| 2000 con cables | 1,10 a 1,63 ms | 3405 | 529 | 3030 | 30 |
+
+R10 se calcularía al cablear, así que decide la escena con cables: pasa de 1 ms. **R10 sigue en la fase 5.**
+
+### S2: bornes sin cable en las escenas del banco
+
+| Escena | 100 | 500 | 2000 |
+|---|---:|---:|---:|
+| Sin cables: bornes / sin cable | 171 / 171 | 858 / 858 | 3405 / 3405 |
+| Con cables: sin cable / cables con extremo libre | 73 / 30 | 194 / 30 | 529 / 30 |
+
+### Corrida de control del anillo (ajuste 1)
+- Worktree en `877fd69` con su propio `npm ci`, sin commit. Anillo hueco de 0,5 en **todos** los bornes, en la capa estática, cuando se dibujan las marcas: es la cota superior, y en la escena sin cables, la real.
+- Base: el árbol principal en `877fd69`, con el mismo código que `926915d`.
+- ABBA ×3 por tanda: 6 corridas por versión y, por celda, la mediana de las 6. T1 de 15:11 a 15:16 y T2 de 15:17 a 15:21 (UTC). Las 24 corridas, con la PC enchufada (79 %), en "Mejor rendimiento" y sin apps abiertas, anotado por el script. Edge 157 headless.
+- Por gesto en ms. ⚠ = sube más de 10 %.
+
+**T1: un anillo por borne.** 16 de 73 celdas suben más de 10 % por gesto. Lentos: 1 en la base y 0 con el anillo.
+
+| Escena | Escenario | Base | Anillo |
+|---|---|---:|---:|
+| 100 | Rehacer al 100 % | 11,96 | 13,50 (+13 %) ⚠ |
+| 100 | Encuadrar (F) | 10,04 | 12,01 (+20 %) ⚠ |
+| 100 | Editar al 31 % | 40,98 | 48,85 (+19 %) ⚠ |
+| 500 | Rehacer al 31 % | 16,56 | 18,73 (+13 %) ⚠ |
+| 500 | Arrastrar 40 completos al 58 % | 38,63 | 43,48 (+13 %) ⚠ |
+| 2000 | Rehacer al 100 % | 10,53 | 11,38 (+8 %) |
+| 2000 | Rehacer al 31 % | 23,14 | 26,15 (+13 %) ⚠ |
+| Con cables | Rehacer al 31 % | 23,87 | 26,91 (+13 %) ⚠ |
+| Con cables | Rehacer al 31 % con referencias | 24,08 | 27,15 (+13 %) ⚠ |
+| Con cables | Arrastrar 40 cableados al 58 % | 97,33 | 109,00 (+12 %) ⚠ |
+
+**T2: todos los anillos de un mosaico en un solo trazo** (un cambio de estilo y un `stroke`, con un `anillos()` de prueba en `RendererCanvas`; verificado con un contexto falso: un anillo por borne). 20 de 73 celdas suben más de 10 % por gesto. Lentos: 0 en la base y 1 con la variante (*Girar todo al 31 %*).
+
+| Escena | Escenario | Base | Un trazo |
+|---|---|---:|---:|
+| 100 | Rehacer al 100 % | 12,05 | 14,34 (+19 %) ⚠ |
+| 100 | Encuadrar (F) | 9,94 | 12,29 (+24 %) ⚠ |
+| 100 | Editar al 31 % | 39,38 | 46,02 (+17 %) ⚠ |
+| 500 | Rehacer al 100 % | 10,81 | 12,97 (+20 %) ⚠ |
+| 500 | Rehacer al 31 % | 16,20 | 18,10 (+12 %) ⚠ |
+| 500 | Arrastrar 40 completos al 58 % | 35,82 | 41,12 (+15 %) ⚠ |
+| 2000 | Rehacer al 100 % | 10,38 | 12,15 (+17 %) ⚠ |
+| 2000 | Rehacer al 31 % | 23,26 | 24,96 (+7 %) |
+| Con cables | Rehacer al 31 % con referencias | 24,10 | 25,77 (+7 %) |
+| Con cables | Arrastrar 40 cableados al 58 % | 93,33 | 103,67 (+11 %) ⚠ |
+
+**Lectura:** la mediana por cuadro casi no cambia (8,4 ms en *Rehacer*); sube la cola, los mosaicos que se rehacen. Juntar el trazo no ayuda: el costo es rasterizar miles de círculos por software, no la cantidad de llamadas. Las subas son de 1 a 3 ms por gesto, y en la netbook serían mayores. **Decisión de Bruno: opción C (cambio 8).**
+
+### Corrida de control del contorno de etiqueta (Bruno, después de elegir C)
+- **Conteo:** en la escena del banco, los únicos avisos de etiqueta son R2, en todos los auxiliares NA: 12 de 100, 75 de 500 y 277 de 2000 (igual con cables), el 14 %. El banco numera bobinas y auxiliares con el mismo contador K, así que ningún auxiliar tiene la etiqueta de una bobina. R1, R3, R4, R5, R6 y R9 dan 0, y no hay auxiliares NC.
+- **Contorno medido:** rayas de 0,5 (y huecos de 0,5) sobre la caja del cuerpo más 0,25 de margen, 16 rayas en un símbolo de 2×4. Solo en los auxiliares, solo con los bornes visibles (6 px por unidad o más), y todas las de un mosaico en un solo `lineas`, como lo haría la etapa 2. Verificado con un contexto falso: 12 auxiliares dan 192 rayas en una sola llamada. En los escenarios *con referencias* es cota superior: ahí los auxiliares siguen a una bobina y no darían R2.
+- Mismo worktree vuelto a `877fd69`, misma base y mismo método que el anillo. Una primera tanda se descartó: Opera estuvo abierto en las 12 corridas (corridas de 32 s en vez de 20 y la base entre 22 y 98 % más lenta). Se repitió con Opera cerrado: T3 de 15:47 a 15:51 y T4 de 15:51 a 15:55 (UTC), las 24 corridas con la PC enchufada, en "Mejor rendimiento" y sin apps.
+
+Por gesto en ms. ⚠ = sube más de 10 %.
+
+| Escena | Escenario | Base T3 | Contorno T3 | Base T4 | Contorno T4 |
+|---|---|---:|---:|---:|---:|
+| 100 | Editar al 31 % | 39,53 | 42,68 (+8 %) | 40,40 | 42,63 (+6 %) |
+| 500 | Rehacer al 31 % | 15,89 | 16,46 (+4 %) | 15,86 | 16,19 (+2 %) |
+| 500 | Encuadrar (F) | 7,29 | 7,93 (+9 %) | 7,13 | 7,94 (+11 %) ⚠ |
+| 500 | Mover 1 al 31 % | 11,42 | 13,52 (+18 %) ⚠ | 13,72 | 12,80 (−7 %) |
+| 2000 | Rehacer al 31 % | 23,00 | 24,04 (+5 %) | 23,24 | 23,62 (+2 %) |
+| Con cables | Rehacer al 31 % con referencias | 23,94 | 24,78 (+4 %) | 24,15 | 24,90 (+3 %) |
+| Con cables | Arrastrar todo seleccionado al 31 % | 67,02 | 74,98 (+12 %) ⚠ | 69,02 | 74,50 (+8 %) |
+
+- **Por gesto:** suben más de 10 % 2 celdas en T3 y 1 en T4; **ninguna en las dos**.
+- **La misma métrica en las dos tandas:** solo dos p95.
+  - *Seleccionar al 31 %* con 100: de 0,8 a 0,9 y de 0,7 a 0,8 ms, un paso del reloj del banco. Ruido.
+  - ***Encuadrar (F)* con 500: de 6,70 a 8,35 y de 6,45 a 9,30 ms, y el gesto de +0,6 a +0,8 ms. Costo aceptado (cambio 9).**
+    - **Qué pasa:** en 4 de las 6 corridas con contorno de cada tanda, la cola del gesto necesita 17 o 18 cuadros en vez de 16, con un cuadro de unos 9,5 ms. Ese cuadro es el p95. En la base pasa solo en la primera corrida de cada tanda, en frío, con 20 cuadros.
+    - **Lo que no es:** dibujar los contornos en el encuadre. A 500, el encuadre queda en 3,3 px por unidad (688 px para unas 208 unidades), debajo de los 6 px por unidad del umbral, y ahí los contornos se apagan con los bornes. Con 2000 tampoco se dibujan, y no sube.
+    - **Causa: sin identificar.** Los contornos solo se dibujan antes del gesto, al reiniciar al 100 %, fuera de lo medido. Con el anillo (T1 y T2), que se dibuja en el mismo lugar, no pasó (16 cuadros en las 24 corridas).
+    - **Se vuelve a medir:** en la etapa 3, con el dibujo real, y en la netbook al cierre de la fase.
+    - Al aceptarla, se creía que la suba venía de dibujar 75 contornos en el encuadre; se corrigió después, al revisar las corridas.
+- **Cuadros lentos:** 0 con el contorno en las dos tandas (1 en la base de T4).
+- Se mide en la netbook al cierre de la fase 3b: pasa si no hay cuadros lentos (sección 5, "Netbook", y `docs/plan-fase3b.md`).
+- **Decisión de Bruno: opción P (cambio 9).** Descartadas: (E) un contorno solo en las esquinas, (B) solo barra y panel y (C) contorno solo con el componente seleccionado.

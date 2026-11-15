@@ -9,6 +9,7 @@ import { compararRedes } from "../../src/core/circuitos/compararRedes";
 import { marchaParada } from "../../src/core/circuitos/marchaParada";
 import { deserializar, serializar } from "../../src/core/io";
 import { referenciasCruzadas } from "../../src/core/model/referencias";
+import { validar } from "../../src/core/model/validaciones";
 import { desempaquetar } from "../../src/ui/brn";
 
 // Los mismos que exporta marcha-parada.mjs: importarlo traería sus módulos de
@@ -48,6 +49,13 @@ describe(`tests/circuitos/${NOMBRE}: el archivo congelado`, () => {
     const { texto } = await abrirCongelado();
     const { doc } = marchaParada();
     expect(referenciasCruzadas(doc.hojas[0]!).size).toBe(1);
+    expect(serializar(doc)).toBe(texto);
+  });
+
+  it("con las validaciones calculadas (T19), serializar da el mismo texto que el archivo congelado: el .brn no cambia", async () => {
+    const { texto } = await abrirCongelado();
+    const { doc } = marchaParada();
+    expect(validar(doc.hojas[0]!)).toEqual([]);
     expect(serializar(doc)).toBe(texto);
   });
 

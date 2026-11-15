@@ -60,16 +60,10 @@ export function textoRed(red: string, otras: number): string {
 
 /**
  * Etiqueta repetida (T17, D-manuales B): "Otra bobina de contactor ya se
- * llama K1.", con el nombre del símbolo del otro titular. El artículo sale de
- * la primera palabra del nombre: "Otra" si termina en "a" (bobina, lámpara),
- * "Otro" si no (pulsador, símbolo).
+ * llama K1.". Desde T19 vive en el núcleo, porque es también el texto de la
+ * regla R4 (src/core/model/validaciones.ts).
  */
-export function textoRepetida(nombreOtro: string, etiqueta: string): string {
-  const primera = nombreOtro.split(" ")[0] ?? "";
-  const articulo = primera.toLowerCase().endsWith("a") ? "Otra" : "Otro";
-  const nombre = nombreOtro.charAt(0).toLowerCase() + nombreOtro.slice(1);
-  return `${articulo} ${nombre} ya se llama ${etiqueta}.`;
-}
+export { textoRepetida } from "../core/model/validaciones";
 
 /** Lo que hizo un renombrado de bobina con sus contactos (T17, D-manuales b). */
 export function textoRenombre(n: NotaRenombre): string {
