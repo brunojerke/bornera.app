@@ -26,6 +26,7 @@ El armado de referencia, el `inversion.brn` y la comparación se hacen al cerrar
 - **Desde T17** (`docs/plan-T17.md`, "Vigente para el cierre de la fase 3b"): *Duplicar todo (2000)* pasó justo en la PC contra `d969019` (59,35 y 59,79 ms) y *Pegar 500* suma de 0,55 a 0,9 ms. Medir las dos en la netbook, junto con el tope 160.
 - **Desde T18** (`docs/plan-T18.md`, "Vigente para el cierre de la fase 3b"): también *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*. En la PC pasaron sus topes con margen (por gesto, base × 1,04; paso, base + 0,3 ms).
 - **Desde T19** (`docs/plan-T19.md`, sección 9): *Encuadrar (F)* con 500 y los contornos de etiqueta. **Pasa si no hay cuadros lentos.** En la PC, el p95 del cuadro sube de 1,6 a 2,9 ms y el gesto de 0,6 a 0,8 ms, porque la cola del gesto suma un cuadro de unos 9,5 ms en 4 de 6 corridas. La causa no está identificada: a ese zoom los contornos no se dibujan. Costo aceptado por Bruno (2026-11-15); se vuelve a medir en la etapa 3 de T19.
+- **Desde T19, etapa 3** (`docs/plan-T19.md`, sección 5): *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %*, con el costo de cada pasada de R6 (`redes()` sobre la hoja entera). Va a la netbook aunque pase en la PC (decisión de Bruno, 2026-11-15).
 
 ## Reglas
 Las mismas de la fase 3:

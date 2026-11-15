@@ -269,6 +269,30 @@ describe("cuándo recalcula: solo por comando, y solo lo que el comando puede mo
     expect(editor.avisos.pasadasR6).toBe(r6 + 1);
   });
 
+  it("msUltimaR6 (para el banco): 0 sin pasadas; mide solo la pasada de R6 y no cambia si R6 no corre", () => {
+    const { editor, poner, tender } = armar();
+    const k = poner(BOBINA, 0, 0, "K1");
+    poner(AUXILIAR, 40, 0, "K1");
+    expect(editor.avisos.pasadasR6).toBe(0);
+    expect(editor.avisos.msUltimaR6).toBe(0);
+    const nc = poner(AUXILIAR_NC, 20, 0, "K1");
+    // Reloj falso: cada lectura avanza 2,5 ms; la pasada lee dos veces.
+    let t = 100;
+    const reloj = vi.spyOn(performance, "now").mockImplementation(() => (t += 2.5));
+    try {
+      const r6 = editor.avisos.pasadasR6;
+      tender(b(nc, "22"), b(k, "A1"), [[20, -2]]);
+      expect(editor.avisos.pasadasR6).toBe(r6 + 1);
+      expect(editor.avisos.msUltimaR6).toBe(2.5);
+      t += 1000;
+      editor.ejecutar(new Mover([k, nc], 0, 4));
+      expect(editor.avisos.pasadasR6).toBe(r6 + 1);
+      expect(editor.avisos.msUltimaR6).toBe(2.5);
+    } finally {
+      reloj.mockRestore();
+    }
+  });
+
   it("(b) nunca por cuadro: mover el mouse, arrastrar y dibujar cuadros no recalculan; soltar sí", () => {
     const { editor, poner } = armar();
     const s1 = poner(PULSADOR_NA, 0, 0, "S1");

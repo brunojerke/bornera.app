@@ -113,6 +113,7 @@ export class AvisosHoja {
   private _avisos = 0;
   private _pasadasEtiqueta = 0;
   private _pasadasR6 = 0;
+  private _msUltimaR6 = 0;
   private _bornesRevisados = 0;
 
   constructor(
@@ -150,6 +151,15 @@ export class AvisosHoja {
   /** Veces que se calculó R6 (con `redes()`). */
   get pasadasR6(): number {
     return this._pasadasR6;
+  }
+
+  /**
+   * ms de la última pasada de R6 (`validar` con R6, que llama a `redes()`), 0
+   * si nunca corrió. Lo lee el banco (plan T19, sección 5, D1-A); un solo
+   * número, así no crece con la sesión.
+   */
+  get msUltimaR6(): number {
+    return this._msUltimaR6;
   }
 
   /** Bornes revisados para R7 (cablear no recorre la hoja: solo los de los cables del cambio). */
@@ -344,7 +354,9 @@ export class AvisosHoja {
     const nuevos = new Map<string, Aviso>();
     if (this.candidatosR6) {
       this._pasadasR6++;
+      const t0 = performance.now();
       for (const a of validar(h, SOLO_R6)) nuevos.set(a.id, a);
+      this._msUltimaR6 = performance.now() - t0;
     }
     const cambiados = new Set<string>();
     const revisar = (id: string) => {

@@ -208,7 +208,7 @@ En la inversión de giro dibujada a mano (`docs/plan-fase3b.md`, "Pasa cuando"),
 ### Humo: `tests/humo/t19-validaciones.mjs` a 1024×600
 - Un componente recién colocado: el contador sube y, si el anillo va, se ve en sus bornes. Al cablear, baja y el anillo se va.
 - Deshacer y rehacer: el contador y las marcas siguen al documento.
-- Un contacto sin etiqueta y uno sin bobina: contorno y nota en el panel. Dos bobinas K1: «1 error», y las dos marcadas.
+- Un contacto sin etiqueta y uno sin bobina: contorno y nota en el panel. Dos bobinas K1: «2 errores» (uno por componente, como marca el núcleo; corregido por Bruno al arrancar la etapa 3), y las dos marcadas.
 - La marcha-parada completa: «Sin avisos».
 - **La previa de Pegar en conflicto y un aviso se distinguen:** los dos en pantalla a la vez, cada uno con su color por píxel y con su forma en la captura.
 - Se ve al 31 %. Alejando hasta apagar los bornes, las marcas se apagan y el contador sigue.
@@ -237,14 +237,18 @@ Obligatorio: T19 toca el dibujo y el editor.
 | Escenario nuevo | Pasa si |
 |---|---|
 | *Rehacer al 31 % con avisos* | por gesto ≤ base × 1,15 en las dos tandas, y 0 cuadros lentos nuevos |
+| *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %* (agregado al arrancar la etapa 3) | costo de R6: p95 ≤ 3 ms en las dos tandas y ninguna pasada de más de 8 ms; 0 cuadros lentos nuevos |
 
+- **Costo de R6 (D1-A, Bruno, 2026-11-15, fijado antes de medir):** la duración real de cada pasada de R6 dentro del paso (al cablear y al deshacer), que `AvisosHoja` guarda con `performance.now`. Por tanda, el p95 y el máximo de todas las pasadas de las 6 corridas de HEAD. Se informa también el paso contra la base (lo que suma T19 entero). **Si el p95 pasa de 3 ms o alguna pasada pasa de 8 ms, se frena** y se presentan opciones (R6 solo en las redes tocadas, etc.). Va a la lista de la netbook del cierre de la fase 3b igual.
+- **Resto de las celdas:** la regla de siempre (arriba): no pasa si sube más de 10 % en las dos tandas contra la base medida en la misma sesión, o si aparece un lento donde la base tiene 0.
+- ***Encuadrar (F)* con 500:** costo aceptado (cambio 9). Se informa en cuántas corridas aparece el cuadro de unos 9,5 ms en la cola, en la base y en HEAD.
 - **Base del escenario nuevo:** `926915d` con el escenario copiado a su worktree (solo `tests/bench/pagina.ts`, sin commit).
 - La otra versión corre desde un worktree con su propio `npm ci`.
 - Las 2 celdas aceptadas como ruido en T18 siguen aceptadas (`docs/plan-T18.md`).
 - Si algo no pasa, se frena y se presentan opciones antes de optimizar.
 
 ### Netbook
-Solo si en la PC un paso pasa la mitad de su tope o aparece un cuadro lento. Si no, va al cierre de la fase 3b, junto con lo vigente: *Duplicar todo (2000)*, *Pegar 500*, el tope 160 de la previa, *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*. **Suma de la etapa 1:** *Encuadrar (F)* con 500 y los contornos de etiqueta, que pasa si no hay cuadros lentos (sección 9, cambio 9).
+Solo si en la PC un paso pasa la mitad de su tope o aparece un cuadro lento. Si no, va al cierre de la fase 3b, junto con lo vigente: *Duplicar todo (2000)*, *Pegar 500*, el tope 160 de la previa, *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*. **Suma de la etapa 1:** *Encuadrar (F)* con 500 y los contornos de etiqueta, que pasa si no hay cuadros lentos (sección 9, cambio 9). **Suma de la etapa 3:** *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %*, con el costo de R6, aunque pase en la PC.
 
 ## 6. Etapas
 Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versión. En PowerShell, `npm.cmd`.
@@ -254,7 +258,7 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | 0 | Docs: este plan, `plan-fase3b.md` (T19 apunta acá y los opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-15.** | Sonnet |
 | 1 | Núcleo: `src/core/model/validaciones.ts` y sus tests (por regla, R6 con el enclavamiento bien y mal hecho, al azar contra el cálculo lento, reglas anuladas, `.brn`). Mediciones S1 y S2 y la corrida de control del anillo (ajuste 1). `npm test` y `npm run check`. **Hecha el 2026-11-15** (abajo). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor: `src/editor/avisosHoja.ts`, `reflejar`, contorno y anillo (según la etapa 1), `--conflicto`, contador de la barra y notas del panel, con sus tests. Prueba visual a 1024×600. **Hecha el 2026-11-15** (abajo). | Opus alto |
-| 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. | Opus alto |
+| 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. **3a hecha el 2026-11-15** (humo y primera medición, frenada); **3b pendiente**: `AvisosHoja` más incremental, nuevo ABBA y `docs/bench.md` (abajo). | Opus alto (3b: Opus xhigh) |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` (validaciones hechas y la definición de severidad) y Obsidian. `npm run humo` entero. | Sonnet |
 
 ### Etapa 1 hecha (2026-11-15)
@@ -306,6 +310,60 @@ Aprobada con D1 a D4 como se propusieron y tres ajustes de Bruno: (a) R1 a R5 y 
   - `escena.test.ts`, 5. Debajo del umbral, 0 lecturas de `conAviso` y las mismas llamadas que sin avisos (agregado 1). Encima: un trazo, en el color de aviso, sobre el cuerpo más 0,25, girado, y el mismo arreglo entre cuadros. Sin avisos, nada nuevo. `cajaDibujo` cubre contorno y anillos en las 4 rotaciones y espejado.
   - `propiedades.test.ts`, 3, y los de `repetida` pasados a R4 (más el pulsador de doble contacto).
 - **Prueba visual a 1024×600**, claro y oscuro, con capturas en grises: el contorno y la previa de Pegar en conflicto juntos se distinguen por color y por forma. En oscuro y en grises, el conflicto queda más apagado que en claro, pero conserva sus ✕. Al 31 % se ven los contornos; al 25 % se apagan y el contador sigue.
+
+### Etapa 3a hecha (2026-11-15): humo t19 y primera medición, frenada
+Aprobada con D1-A (costo de R6 medido dentro del paso) y dos agregados de Bruno: informar el máximo de R6 y frenar si alguna pasada supera 8 ms; contar en cuántas corridas de *Encuadrar (F)* con 500 aparece el cuadro de ~9,5 ms.
+
+- **Hecho (commit «T19 etapa 3a»):**
+  - `AvisosHoja.msUltimaR6`, con su test, y el banco que junta las pasadas de R6 de las repeticiones medidas.
+  - Humo `t19-validaciones.mjs`: 32 de 32. Los colores se comprueban por píxel (ajuste de mezcla con el fondo y residuo ≤ 7, así la marca de borne no cuenta como aviso), en claro y en oscuro.
+  - Sección 5 corregida (2 errores) y los criterios fijados antes de medir.
+- **ABBA ×3 en dos tandas contra `926915d`** (worktree con su `npm ci` y el mismo `pagina.ts`, sha256 igual). De 20:54 a 21:03 UTC, Edge 157, enchufada (79 %), "Mejor rendimiento". Sin apps con ventana salvo Claude y Configuración; los lanzadores de Gemini y Spotify y el WebView2 del sistema, abiertos sin ventana, se anotaron. 0 lentos en las 24 corridas.
+
+| Criterio | T1 | T2 | Resultado |
+|---|---|---|---|
+| R6: p95 ≤ 3 ms (180 pasadas por tanda) | 3,20 | 2,40 | **no pasa** |
+| R6: máximo ≤ 8 ms | 4,20 | 4,10 | pasa |
+| *Rehacer al 31 % con avisos*: por gesto ≤ base × 1,15 | 26,46 (tope 29,12) | 22,73 (tope 25,45) | pasa |
+| *Pegar 500*: paso ≤ base + 1 ms | 6,60 (tope 6,45) | 6,10 (tope 5,85) | **no pasa** |
+| *Duplicar todo*: paso ≤ base × 1,10 | 55,05 (tope 55,66) | 52,00 (tope 51,20) | **no pasa en T2** |
+| Celdas comunes (mediana, p95, por gesto) | 3 de 71 suben de p95 en las dos tandas | | diagnóstico: ruido |
+
+- **Más pasos que suben más de 10 % en las dos tandas** (no estaban en el criterio de celdas, que miraba los cuadros):
+  - *Girar todo al 31 %*: de 23,35 a 25,90 y de 21,95 a 24,25 ms.
+  - *Soltar con todo seleccionado*: de 15,55 a 17,55 y de 14,35 a 17,90 ms.
+  - *Borrar y deshacer uno con cables*: de 0,80 a 1,55 y de 0,70 a 1,50 ms.
+  - *Etiquetar los vacíos (2000)*: de 3,05 a 4,50 y de 2,80 a 4,40 ms.
+- ***Encuadrar (F)* con 500**, corridas con un cuadro de 8,5 ms o más:
+  - Base: 1 de 6 en T1 y 0 de 6 en T2.
+  - HEAD: 2 de 6 en T1 y 0 de 6 en T2.
+  - Aparece también en la base, así que no lo causa el contorno.
+- **Diagnóstico de las 3 celdas** (método de T18): ABBA ×5 con 10 veces más repeticiones, 10 pares, de 21:15 a 21:16 UTC. Una primera vuelta se descartó sin mirarla porque se abrió el Bloc de notas en la última corrida.
+  - **Regla, fijada antes:** la celda es real si HEAD supera a la base en más de 0,05 ms de mediana o en más de 10 % de p95 en al menos 7 de los 10 pares.
+  - **Resultado:** *Editar al 100 %* con 100, 4 de 10; *Mover 1 al 31 %* con 500, 4 de 10; *Mover 1 contacto con referencias*, 3 de 10. **Las tres son ruido; aceptado por Bruno (2026-11-15).**
+  - El parche `--diag-t19` fue temporal, en los dos árboles, y no quedó en el repo.
+- **Desglose en Node de `AvisosHoja.reflejar`**, paso más deshacer, mediana de 20 vueltas, con un test temporal que se borró:
+
+  | Parte | Duplicar 500 | Duplicar todo |
+  |---|---:|---:|
+  | Total | 3,17 ms | 6,88 ms |
+  | Pasada de etiquetas | 2,14 | 2,66 |
+  | R7 | 0,53 | 1,30 |
+  | R8 | 0,03 | 0,31 |
+  | Anotaciones por elemento (firmas de componentes y cables) | ~0,5 | ~2,6 |
+  | **Paso con avisos menos sin avisos** | **+1,76** | **+4,91** |
+
+- **Verificación del commit:** `npm test` 1743 en verde (1 saltado), `npm run check` 0 errores, `npm run humo` 695 de 695. El worktree base `..\bornera-base-926915d` queda armado (con su `npm ci` y este `pagina.ts`) para repetir el ABBA.
+
+### Etapa 3b (pendiente): `AvisosHoja` más incremental
+Decisión de Bruno (2026-11-15): los tres arreglos, en este orden, midiendo en Node después de cada uno (paso con y sin avisos y desglose de `reflejar`, como el diagnóstico de la etapa 3a), y al final el ABBA completo contra `926915d` con los criterios de la sección 5 tal como están. Los pasos de la tabla de arriba que suben (*Girar todo*, *Soltar con todo seleccionado*, *Borrar y deshacer uno con cables*, *Etiquetar los vacíos*) entran en la regla de siempre: no pasan si suben más de 10 % en las dos tandas.
+1. **Firmas sin textos:** comparar tipo, etiqueta y extremos de cada componente y cable del cambio contra lo guardado, sin armar un texto por elemento. Cubre *Girar todo*, *Soltar todo* y parte de *Duplicar*.
+2. **R6 solo en las redes tocadas:** recorrer las redes de los extremos viejos y nuevos de los cables que cambiaron y recalcular solo los pares NC y bobina con bornes en ellas. Con cambios de etiqueta, como hoy. El costo pasa a depender del tamaño de esas redes, no de la hoja.
+3. **Etiquetas incrementales:** R1 a R3 y R9 solo para los componentes del cambio; R4 y R5 solo para los grupos de etiqueta normalizada tocados (índice por etiqueta). *Etiquetar los vacíos* sigue cambiando 2000 etiquetas.
+
+Cada arreglo, con el recorrido al azar de `avisosHoja.test.ts` contra `validar` y una prueba a propósito que lo rompa.
+
+## 7. Riesgos y límites
 
 ## 7. Riesgos y límites
 

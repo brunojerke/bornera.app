@@ -109,6 +109,8 @@ export interface Medicion {
   invalidacionesIntermedias?: number;
   /** Lo que conviene saber del escenario (por ejemplo, por qué se rechaza). */
   nota?: string;
+  /** ms de cada pasada de R6 en los pasos medidos (T19; vacío en la base, sin validaciones). */
+  r6?: number[];
 }
 
 export interface TiempoPaso {
@@ -183,6 +185,8 @@ interface Escenario {
   rechazados?(): { rechazados: number; pasos: number };
   /** Nota para el informe, si el escenario la tiene (después de medir). */
   nota?(): string | undefined;
+  /** ms de cada pasada de R6 en los pasos medidos (T19), si el escenario los junta. */
+  r6?(): number[];
 }
 
 /** Aciertos y fallos del caché de textos de la capa dinámica. */
@@ -1340,10 +1344,14 @@ const validacionesBanco = {
   /** Borne del NC del que sale el cable y a dónde llega su extremo libre. */
   borne: "",
   libre: { x: 0, y: 0 },
+  /** Si la repetición en curso se mide (la primera es de calentamiento). */
+  medido: false,
+  /** ms de cada pasada de R6 en los pasos medidos, al cablear y al deshacer (D1-A, plan T19, sección 5). */
+  r6: [] as number[],
 };
 
 /** Lo que el editor sabe de las validaciones, si las tiene (en la base de comparación no existen). */
-type AvisosBanco = { lista(): readonly { regla: string }[]; pasadasR6: number; pasadasEtiqueta: number };
+type AvisosBanco = { lista(): readonly { regla: string }[]; pasadasR6: number; pasadasEtiqueta: number; msUltimaR6?: number };
 const avisosDe = (ed: Editor): AvisosBanco | undefined => (ed as unknown as { avisos?: AvisosBanco }).avisos;
 
 /**
@@ -1365,20 +1373,32 @@ function ponerParNC(e: Escena): void {
   const def = buscarSimbolo("contactor.auxiliar_nc")!;
   // El borne de arriba; el cable sube 3 unidades y queda con un extremo libre.
   const arriba = bornesColocados(def.bornes, x, y, { rotacion: 0, espejado: false }).sort((a, b) => a.y - b.y)[0]!;
-  Object.assign(validacionesBanco, { nc: cmd.id, etiqueta: bobina.etiqueta, borne: arriba.nombre, libre: { x: arriba.x, y: arriba.y - 3 } });
+  Object.assign(validacionesBanco, { nc: cmd.id, etiqueta: bobina.etiqueta, borne: arriba.nombre, libre: { x: arriba.x, y: arriba.y - 3 }, medido: false, r6: [] });
 }
 
 /** En los pares, un cable del NC del par a un punto libre (un comando que toca cables); en los impares, deshacer. */
 function cablearYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
   const ed = editorCables!;
+  const v = validacionesBanco;
+  const a = avisosDe(ed);
+  const pasadas = a?.pasadasR6 ?? 0;
   if (i % 2 === 1) {
     ed.deshacer();
-    return;
+  } else {
+    const n = hechos();
+    ed.ejecutar(cablear(ed.documento, { desde: { tipo: "borne", comp: v.nc, borne: v.borne }, hasta: { tipo: "libre", ...v.libre }, codos: [] }));
+    if (hechos() !== n + 1) throw new Error("Dibujar 1 cable: el comando no se ejecutó.");
   }
-  const v = validacionesBanco;
-  const n = hechos();
-  ed.ejecutar(cablear(ed.documento, { desde: { tipo: "borne", comp: v.nc, borne: v.borne }, hasta: { tipo: "libre", ...v.libre }, codos: [] }));
-  if (hechos() !== n + 1) throw new Error("Dibujar 1 cable: el comando no se ejecutó.");
+  // Lo que tardó R6 dentro de este paso (en la base no hay validaciones).
+  if (v.medido && a && a.pasadasR6 === pasadas + 1 && a.msUltimaR6 !== undefined) v.r6.push(a.msUltimaR6);
+}
+
+/** p95 y máximo de las pasadas de R6 medidas, para la nota. */
+function notaR6(): string {
+  const l = [...validacionesBanco.r6].sort((x, y) => x - y);
+  if (l.length === 0) return "R6 sin pasadas medidas";
+  const f = (x: number) => x.toFixed(2).replace(".", ",");
+  return `R6 medido ${l.length} veces: mediana ${f(percentil(l, 0.5))}, p95 ${f(percentil(l, 0.95))}, máx. ${f(l.at(-1)!)} ms`;
 }
 
 /** Cuántos avisos hay de cada regla y cuántas veces corrió R6 (sin validaciones, en la base, lo dice). */
@@ -1428,7 +1448,11 @@ function escenariosValidaciones(): Escenario[] {
       dinamico: () => ed().dibujarDinamico,
       medirPaso: true,
       pasoImpar: true,
-      nota: notaValidaciones,
+      antes: (_, medido) => {
+        validacionesBanco.medido = medido;
+      },
+      r6: () => [...validacionesBanco.r6],
+      nota: () => `${notaValidaciones()}; ${notaR6()}`,
     },
   ];
 }
@@ -1831,6 +1855,7 @@ function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCapas): O
     ...(escenario.nota?.() ? { nota: escenario.nota() } : {}),
     ...(escenario.acomodados ? { acomodados: escenario.acomodados() } : {}),
     ...(escenario.comandos ? { comandos: escenario.comandos() } : {}),
+    ...(escenario.r6 ? { r6: escenario.r6() } : {}),
   };
 }
 
