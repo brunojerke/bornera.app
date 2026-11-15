@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Aviso } from "../core/model/validaciones";
 import {
   abrirAlSeleccionar,
+  notasAvisos,
+  textoContador,
   textoCambioRed,
   textoCantidad,
   textoEtiqueta,
@@ -91,5 +94,40 @@ describe("notas del etiquetado (T17)", () => {
     expect(textoRenombre({ vieja: "K1", nueva: "", contactos: 0, motivo: "nueva_vacia" })).toBe(
       "La bobina quedó sin etiqueta; los contactos siguen como K1.",
     );
+  });
+});
+
+describe("validaciones en la barra y el panel (T19)", () => {
+  it("textoContador: «Sin avisos», singular, plural y los dos juntos", () => {
+    expect(textoContador({ errores: 0, avisos: 0 })).toBe("Sin avisos");
+    expect(textoContador({ errores: 1, avisos: 0 })).toBe("1 error");
+    expect(textoContador({ errores: 0, avisos: 1 })).toBe("1 aviso");
+    expect(textoContador({ errores: 2, avisos: 3 })).toBe("2 errores · 3 avisos");
+    expect(textoContador({ errores: 1, avisos: 1 })).toBe("1 error · 1 aviso");
+  });
+
+  it("notasAvisos: R4 error marcado; bornes sueltos en una línea donde estaba el primero (D2); R9 no se repite (D3)", () => {
+    const avisos: Aviso[] = [
+      { regla: "R4", severidad: "error", id: "c1", etiqueta: "K1", otro: "Bobina de contactor" },
+      { regla: "R7", severidad: "aviso", id: "c1", borne: "A1" },
+      { regla: "R7", severidad: "aviso", id: "c1", borne: "A2" },
+      { regla: "R9", severidad: "aviso", id: "c1" },
+    ];
+    expect(notasAvisos(avisos)).toEqual([
+      { texto: "Otra bobina de contactor ya se llama K1.", error: true },
+      { texto: "Bornes A1 y A2 sin conectar.", error: false },
+    ]);
+    expect(notasAvisos([{ regla: "R7", severidad: "aviso", id: "c1", borne: "14" }])).toEqual([{ texto: "Borne 14 sin conectar.", error: false }]);
+    expect(
+      notasAvisos(["13", "14", "21"].map((borne): Aviso => ({ regla: "R7", severidad: "aviso", id: "c1", borne }))),
+    ).toEqual([{ texto: "Bornes 13, 14 y 21 sin conectar.", error: false }]);
+    expect(notasAvisos([{ regla: "R8", severidad: "aviso", id: "w1" }])).toEqual([{ texto: "Cable con un extremo suelto.", error: false }]);
+    expect(notasAvisos([])).toEqual([]);
+  });
+
+  it("un R4 que es aviso (dos pulsadores NA) no lleva el rótulo de error", () => {
+    expect(notasAvisos([{ regla: "R4", severidad: "aviso", id: "c1", etiqueta: "S1", otro: "Pulsador NA" }])).toEqual([
+      { texto: "Otro pulsador NA ya se llama S1.", error: false },
+    ]);
   });
 });

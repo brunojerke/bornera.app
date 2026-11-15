@@ -35,6 +35,7 @@
     puedeRehacer = $bindable(false),
     modificado = $bindable(false),
     tituloDocumento = $bindable(""),
+    cuentaAvisos = $bindable(null),
     activo = $bindable(null),
     modo = "editar",
     escena = "documento",
@@ -65,6 +66,11 @@
     modificado?: boolean;
     /** `meta.titulo` del documento (para el título de la ventana). Solo lectura desde afuera. */
     tituloDocumento?: string;
+    /**
+     * Errores y avisos de las validaciones (T19) del editor a la vista; null en
+     * las escenas que no se editan. Solo lectura desde afuera.
+     */
+    cuentaAvisos?: { errores: number; avisos: number } | null;
     /** Editor de lo que se muestra (null en las escenas que no se editan). Solo lectura desde afuera. */
     activo?: Editor | null;
     /** Modo de trabajo: en Simular, los atajos de edición no actúan. */
@@ -112,6 +118,7 @@
       editor.alCambiarHerramienta = null;
       editor.alCambiarSeleccion = null;
       editor.alCambiarHistorial = null;
+      editor.alCambiarAvisos = null;
       editor.alAvisar = null;
       editor.alCambiarPista = null;
     }
@@ -132,7 +139,9 @@
       }
     };
     historial();
+    cuentaAvisos = ed?.avisos.cuenta ?? null;
     if (!ed) return;
+    ed.alCambiarAvisos = () => (cuentaAvisos = ed.avisos.cuenta);
     ed.vista = v;
     ed.alCambiarHerramienta = () => {
       colocando = ed.colocar?.def.tipo ?? null;

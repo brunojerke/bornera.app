@@ -6,7 +6,8 @@
 // y el paso de la previa según los cables que se acomodan. Al final, T16:
 // la previa de pegar sobre la zona densa, pegar 500, duplicar todo y copiar.
 // Después, T18: rehacer y mover un contacto con los auxiliares siguiendo a
-// las bobinas (listas de referencias cruzadas).
+// las bobinas (listas de referencias cruzadas). Al final, T19: rehacer con los
+// contornos de aviso y dibujar un cable con un par NC y bobina (R6).
 // Con `?escena-t12`, la de cables es la de T12 (para comparar).
 //
 // Cada escenario es un gesto (rehacer, zoom con la rueda, arrastre…) que se
@@ -40,7 +41,7 @@ import { clasesDelRecorrido, gestoReconexion, type ClaseReconexion, type GestoRe
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
 import type { MedidaCuadro } from "../../src/render/rendimiento";
 import { bornesColocados, buscarSimbolo } from "../../src/core/symbols";
-import { CambiarEtiquetas } from "../../src/core/model/comandos";
+import { CambiarEtiquetas, cablear, colocar } from "../../src/core/model/comandos";
 import { esTitular } from "../../src/core/model/etiquetado";
 import { problemasPegado, recortar, type Recorte } from "../../src/core/model/portapapeles";
 import { elementosRecorte } from "../../src/editor/herramientas/pegar";
@@ -1330,6 +1331,108 @@ function escenariosReferencias(): Escenario[] {
   ];
 }
 
+// ── T19: validaciones (plan T19, sección 5; ajuste (b) de Bruno en la etapa 2) ──
+
+const validacionesBanco = {
+  /** El auxiliar NC que se agrega con la etiqueta de una bobina (el par que hace correr R6). */
+  nc: "",
+  etiqueta: "",
+  /** Borne del NC del que sale el cable y a dónde llega su extremo libre. */
+  borne: "",
+  libre: { x: 0, y: 0 },
+};
+
+/** Lo que el editor sabe de las validaciones, si las tiene (en la base de comparación no existen). */
+type AvisosBanco = { lista(): readonly { regla: string }[]; pasadasR6: number; pasadasEtiqueta: number };
+const avisosDe = (ed: Editor): AvisosBanco | undefined => (ed as unknown as { avisos?: AvisosBanco }).avisos;
+
+/**
+ * Agrega, fuera de lo medido, un auxiliar NC con la etiqueta de la primera
+ * bobina, a la derecha de la escena: con ese par, cada comando que toca un
+ * cable hace correr R6 (`redes()` sobre la hoja entera), el peor caso. En la
+ * escena del banco no hay auxiliares NC. Al terminar se deshace.
+ */
+function ponerParNC(e: Escena): void {
+  const ed = editorCables!;
+  const doc = ed.documento;
+  const bobina = doc.hojas[0]!.componentes.find((c) => buscarSimbolo(c.tipo)?.elemento === "bobina" && c.etiqueta !== "");
+  if (!bobina) throw new Error("Validaciones: la escena no tiene ninguna bobina con etiqueta.");
+  const k = e.caja!;
+  const x = Math.ceil(k.x + k.ancho) + 6;
+  const y = Math.round(k.y + k.alto / 2);
+  const cmd = colocar(doc, { tipo: "contactor.auxiliar_nc", x, y, rot: 0, espejado: false, etiqueta: bobina.etiqueta, params: {} });
+  ed.ejecutar(cmd);
+  const def = buscarSimbolo("contactor.auxiliar_nc")!;
+  // El borne de arriba; el cable sube 3 unidades y queda con un extremo libre.
+  const arriba = bornesColocados(def.bornes, x, y, { rotacion: 0, espejado: false }).sort((a, b) => a.y - b.y)[0]!;
+  Object.assign(validacionesBanco, { nc: cmd.id, etiqueta: bobina.etiqueta, borne: arriba.nombre, libre: { x: arriba.x, y: arriba.y - 3 } });
+}
+
+/** En los pares, un cable del NC del par a un punto libre (un comando que toca cables); en los impares, deshacer. */
+function cablearYDeshacer(_: Camara, __: Capas, ___: Escena, i: number): void {
+  const ed = editorCables!;
+  if (i % 2 === 1) {
+    ed.deshacer();
+    return;
+  }
+  const v = validacionesBanco;
+  const n = hechos();
+  ed.ejecutar(cablear(ed.documento, { desde: { tipo: "borne", comp: v.nc, borne: v.borne }, hasta: { tipo: "libre", ...v.libre }, codos: [] }));
+  if (hechos() !== n + 1) throw new Error("Dibujar 1 cable: el comando no se ejecutó.");
+}
+
+/** Cuántos avisos hay de cada regla y cuántas veces corrió R6 (sin validaciones, en la base, lo dice). */
+function notaValidaciones(): string {
+  const v = validacionesBanco;
+  const a = avisosDe(editorCables!);
+  const par = `par NC ${v.nc} y bobina ${v.etiqueta}`;
+  if (!a) return `${par}; sin validaciones (base)`;
+  const porRegla = new Map<string, number>();
+  for (const x of a.lista()) porRegla.set(x.regla, (porRegla.get(x.regla) ?? 0) + 1);
+  const reglas = [...porRegla].sort(([x], [y]) => (x < y ? -1 : 1)).map(([r, n]) => `${r} ${n}`).join(", ");
+  return `${par}; avisos: ${reglas || "ninguno"}; R6 calculado ${a.pasadasR6} veces, etiquetas ${a.pasadasEtiqueta}`;
+}
+
+/** Los escenarios de T19, con la escena como está (al final, así lo de antes corre igual que en la base). */
+function escenariosValidaciones(): Escenario[] {
+  const ed = () => editorCables!;
+  return [
+    {
+      // Rehacer la capa estática con los contornos de aviso a la vista (R2 en
+      // los auxiliares sin bobina de la escena) y un par NC y bobina.
+      nombre: "Rehacer al 31 % con avisos",
+      preparar: (c, e) => {
+        ed().seleccionarIds([]);
+        ponerParNC(e);
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      terminar: () => ed().deshacer(),
+      cuadros: 1,
+      paso: (_, capas) => capas.invalidarEstatica(),
+      repeticiones: 12,
+      nota: notaValidaciones,
+    },
+    {
+      // Dibujar 1 cable con 2000 y un par NC y bobina: cada cable hace correr
+      // R6 con `redes()` sobre la hoja entera. Pares: el cable; impares: deshacer.
+      nombre: "Dibujar 1 cable con 2000 y un par NC+bobina al 31 %",
+      preparar: (c, e) => {
+        ed().seleccionarIds([]);
+        ponerParNC(e);
+        centrar(c, e, ZOOM_TEXTOS);
+      },
+      terminar: () => ed().deshacer(),
+      cuadros: 10,
+      paso: cablearYDeshacer,
+      repeticiones: 3,
+      dinamico: () => ed().dibujarDinamico,
+      medirPaso: true,
+      pasoImpar: true,
+      nota: notaValidaciones,
+    },
+  ];
+}
+
 /** Escenarios de la escena con cables: los de dibujo de siempre y los de edición. `t12`: la escena de T12. */
 const escenariosCables = (t12: boolean): Escenario[] => [
   ...ESCENARIOS.filter((x) =>
@@ -1579,6 +1682,8 @@ const escenariosCables = (t12: boolean): Escenario[] => [
   ...(t12 ? [] : escenariosPegar()),
   // T18, al final (así lo de antes corre igual que en la base).
   ...(t12 ? [] : escenariosReferencias()),
+  // T19, al final (así lo de antes corre igual que en la base).
+  ...(t12 ? [] : escenariosValidaciones()),
 ];
 
 const OPCIONES: Record<Modo, OpcionesCapas> = {

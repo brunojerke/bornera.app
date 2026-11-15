@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIMBOLOS, type Rotacion } from "../core/symbols";
+import { bornesColocados, SIMBOLOS, type Rotacion } from "../core/symbols";
 import { ampliarCaja, seTocan, unirCajas, type Caja } from "./camara";
 import { azar, CANTIDADES_BANCO, generarBanco, PASO_BANCO } from "./banco";
 import { DETALLE_COMPLETO, ESCALA_MIN_TEXTOS, nivelDetalle } from "./detalle";
@@ -156,3 +156,113 @@ describe("banco de pruebas", () => {
     }
   });
 });
+
+// ── Contorno de aviso (T19, opción P) ──────────────────────────────────────
+
+describe("contorno de aviso de etiqueta (T19)", () => {
+  const AVISO = "#f80";
+  const conAviso = { ...COLORES, aviso: AVISO };
+  const infoAviso = (escala: number): InfoDibujo => ({ escala, colores: conAviso, visible: TODO_ESCENA, detalle: nivelDetalle(escala) });
+
+  /** Un componente de cada símbolo, en fila, con `conAviso` leído por un getter que cuenta. */
+  function contados(): { lista: ComponenteEscena[]; lecturas: () => number } {
+    let n = 0;
+    const lista = SIMBOLOS.map((def, i) => {
+      const c = { def, x: i * 10, y: 0, rotacion: 0 as Rotacion, espejado: false, etiqueta: "K1" } as ComponenteEscena;
+      Object.defineProperty(c, "conAviso", {
+        get: () => {
+          n++;
+          return true as const;
+        },
+      });
+      return c;
+    });
+    return { lista, lecturas: () => n };
+  }
+
+  it("agregado 1: debajo de 6 px por unidad, el contorno no cuesta nada: ni una lectura de conAviso, y las mismas llamadas que sin avisos", () => {
+    const { lista, lecturas } = contados();
+    const sin = SIMBOLOS.map((def, i) => ({ def, x: i * 10, y: 0, rotacion: 0 as Rotacion, espejado: false, etiqueta: "K1" }));
+    for (const escala of [1, 3.3, 5.99]) {
+      const a = grabador();
+      new Escena(lista).dibujar(a.r, infoAviso(escala));
+      const b = grabador();
+      new Escena(sin).dibujar(b.r, infoAviso(escala));
+      expect(lecturas(), `escala ${escala}`).toBe(0);
+      expect(a.llamadas).toEqual(b.llamadas);
+    }
+    // A 6 px por unidad, sí: una lectura por componente.
+    new Escena(lista).dibujar(grabador().r, infoAviso(6));
+    expect(lecturas()).toBe(SIMBOLOS.length);
+  });
+
+  it("con los bornes visibles: todas las rayas en un solo trazo, en el color de aviso, sobre el cuerpo más 0,25", () => {
+    const def = SIMBOLOS.find((d) => d.tamano.ancho === 2 && d.tamano.alto === 4)!;
+    const c: ComponenteEscena = { def, x: 4, y: 6, rotacion: 0, espejado: false, etiqueta: "K1", conAviso: true };
+    const { r, llamadas } = grabador();
+    new Escena([c, { ...c, x: 20 }]).dibujar(r, infoAviso(20));
+    const lineas = llamadas.filter((l) => l[0] === "lineas");
+    expect(lineas).toHaveLength(1);
+    const [, seg, n] = lineas[0] as [string, number[], number];
+    // 2,5 × 4,5 con rayas y huecos de 0,5: 3 + 3 + 5 + 5 = 16 rayas por símbolo de 2×4.
+    expect(n).toBe(32);
+    const i = llamadas.indexOf(lineas[0]!);
+    const estilo = llamadas.slice(0, i).reverse().find((l) => l[0] === "estilo")![1] as { trazo: string };
+    expect(estilo.trazo).toBe(AVISO);
+    // Las del primero: sobre su cuerpo (2×4 centrado en 4, 6) más 0,25.
+    for (let k = 0; k < 16; k++) {
+      const [x0, y0, x1, y1] = seg.slice(k * 4, k * 4 + 4) as [number, number, number, number];
+      expect(Math.hypot(x1 - x0, y1 - y0)).toBeLessThanOrEqual(0.5 + 1e-9);
+      for (const [x, y] of [[x0, y0], [x1, y1]] as const) {
+        const enBorde = Math.abs(x - 2.75) < 1e-9 || Math.abs(x - 5.25) < 1e-9 || Math.abs(y - 3.75) < 1e-9 || Math.abs(y - 8.25) < 1e-9;
+        expect(enBorde && x >= 2.75 - 1e-9 && x <= 5.25 + 1e-9 && y >= 3.75 - 1e-9 && y <= 8.25 + 1e-9, `${x}, ${y}`).toBe(true);
+      }
+    }
+  });
+
+  it("acostado (90°) las rayas siguen el cuerpo girado; el arreglo de rayas es el mismo entre cuadros (sin pedir memoria)", () => {
+    const def = SIMBOLOS.find((d) => d.tamano.ancho === 2 && d.tamano.alto === 4)!;
+    const c: ComponenteEscena = { def, x: 0, y: 0, rotacion: 90, espejado: false, conAviso: true };
+    const a = grabador();
+    new Escena([c]).dibujar(a.r, infoAviso(20));
+    const b = grabador();
+    new Escena([c]).dibujar(b.r, infoAviso(20));
+    const la = a.llamadas.find((l) => l[0] === "lineas")!;
+    const lb = b.llamadas.find((l) => l[0] === "lineas")!;
+    expect(la[1]).toBe(lb[1]);
+    const seg = la[1] as number[];
+    const xs = seg.slice(0, (la[2] as number) * 4).filter((_, k) => k % 2 === 0);
+    expect(Math.min(...xs)).toBeCloseTo(-2.25);
+    expect(Math.max(...xs)).toBeCloseTo(2.25);
+  });
+
+  it("sin avisos, ninguna raya ni estilo de aviso: un componente dibuja lo mismo que antes de T19", () => {
+    const lista = generarBanco(100);
+    const { r, llamadas } = grabador();
+    new Escena(lista).dibujar(r, infoAviso(20));
+    expect(llamadas.some((l) => l[0] === "lineas")).toBe(false);
+    expect(llamadas.some((l) => l[0] === "estilo" && (l[1] as { trazo?: string }).trazo === AVISO)).toBe(false);
+  });
+
+  it("cajaDibujo no cambia y cubre el contorno y los anillos de los bornes, en las 4 rotaciones y espejado", () => {
+    const grosor = 1 / ESCALA_MIN_TEXTOS; // el más grueso con los bornes visibles
+    for (const def of SIMBOLOS) {
+      for (const rotacion of [0, 90, 180, 270] as Rotacion[]) {
+        for (const espejado of [false, true]) {
+          const c = { x: 3, y: -7, rotacion, espejado };
+          const caja = cajaDibujo(def, c, "K12");
+          const s = cajaSimbolo(def, c);
+          const m = 0.25 + grosor;
+          const contorno = { x: s.x - m, y: s.y - m, ancho: s.ancho + 2 * m, alto: s.alto + 2 * m };
+          expect(contiene(caja, contorno.x, contorno.y) && contiene(caja, contorno.x + contorno.ancho, contorno.y + contorno.alto), `${def.tipo} ${rotacion}°`).toBe(true);
+          for (const b of bornesColocados(def.bornes, c.x, c.y, c)) {
+            const ra = 0.5 + grosor;
+            expect(contiene(caja, b.x - ra, b.y - ra) && contiene(caja, b.x + ra, b.y + ra), `${def.tipo} ${rotacion}° ${b.nombre}`).toBe(true);
+          }
+        }
+      }
+    }
+  });
+});
+
+const TODO_ESCENA: Caja = { x: -1e6, y: -1e6, ancho: 2e6, alto: 2e6 };

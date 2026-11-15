@@ -1,8 +1,14 @@
 <script lang="ts">
   // Barra de estado inferior: modo, coordenadas, zoom, la pista de la
   // herramienta (cable: qué haría el próximo clic) y avisos.
+  //
+  // Avisos (T19): un contador fijo de las validaciones, «1 error · 3 avisos»
+  // o «Sin avisos». El texto de 4 s de una acción que no se pudo hacer lo
+  // tapa y después vuelve el contador. En las escenas que no se editan, solo
+  // «Sin avisos».
   import type { Modo } from "./tipos";
   import type { Punto } from "../render/camara";
+  import { textoContador } from "./propiedades";
 
   let {
     modo,
@@ -10,7 +16,18 @@
     cursor,
     aviso = null,
     pista = null,
-  }: { modo: Modo; zoom: number; cursor: Punto | null; aviso?: string | null; pista?: string | null } = $props();
+    cuentaAvisos = null,
+  }: {
+    modo: Modo;
+    zoom: number;
+    cursor: Punto | null;
+    aviso?: string | null;
+    pista?: string | null;
+    cuentaAvisos?: { errores: number; avisos: number } | null;
+  } = $props();
+
+  const contador = $derived(textoContador(cuentaAvisos ?? { errores: 0, avisos: 0 }));
+  const conAvisos = $derived(cuentaAvisos !== null && cuentaAvisos.errores + cuentaAvisos.avisos > 0);
 </script>
 
 <footer class="estado">
@@ -26,7 +43,9 @@
   {:else}
     <span class="espacio"></span>
   {/if}
-  <span class="avisos" class:activo={aviso !== null} role="status" aria-live="polite">{aviso ?? "Sin avisos"}</span>
+  <span class="avisos" class:activo={aviso !== null} class:validaciones={aviso === null && conAvisos} role="status" aria-live="polite"
+    >{aviso ?? contador}</span
+  >
 </footer>
 
 <style>
@@ -77,5 +96,9 @@
   .avisos.activo {
     color: var(--texto);
     font-weight: 600;
+  }
+
+  .avisos.validaciones {
+    color: var(--aviso);
   }
 </style>

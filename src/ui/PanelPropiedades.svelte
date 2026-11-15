@@ -7,10 +7,12 @@
   // rotación comunes (o "Varias") y girar o espejar el grupo; la etiqueta, de
   // solo lectura. En Simular, todo de solo lectura.
   //
-  // Etiquetado (T17): bajo el campo, una nota (sin naranja) si otro titular
-  // ya tiene la misma etiqueta, y lo que hizo el último renombrado de una
-  // bobina con sus contactos. Mientras se escribe algo distinto, no se
-  // muestran: hablan de la etiqueta confirmada. Sin selección, el botón
+  // Etiquetado (T17) y validaciones (T19): bajo el campo, las notas de los
+  // avisos del componente (la etiqueta repetida de T17 es ahora la regla R4),
+  // con el rótulo «Error» delante de lo que impedirá simular, y lo que hizo
+  // el último renombrado de una bobina con sus contactos. Mientras se
+  // escribe algo distinto, no se muestran: hablan de la etiqueta confirmada.
+  // Con un cable, su extremo suelto (R8) bajo los extremos. Sin selección, el botón
   // "Etiquetar los vacíos" (deshabilitado en Simular; con el panel plegado no
   // se ve, ver docs/plan-T17.md).
   //
@@ -43,10 +45,11 @@
     textoEtiqueta,
     textoExtremo,
     textoRed,
+    notasAvisos,
     textoRenombre,
-    textoRepetida,
     textoRotacion,
   } from "./propiedades";
+  import type { Aviso } from "../core/model/validaciones";
 
   let {
     abierto = $bindable(false),
@@ -196,6 +199,19 @@
   }
 </script>
 
+{#snippet notasValidacion(avisos: readonly Aviso[])}
+  {#each notasAvisos(avisos) as n, i (i)}
+    {#if n.error}
+      <div class="validacion">
+        <span class="severidad">Error</span>
+        <p class="nota">{n.texto}</p>
+      </div>
+    {:else}
+      <p class="nota">{n.texto}</p>
+    {/if}
+  {/each}
+{/snippet}
+
 <aside class="panel" class:plegado={!abierto} aria-label="Propiedades">
   {#if abierto}
     <div class="cabecera">
@@ -222,6 +238,9 @@
         <div class="fila">
           <span class="rotulo">Hasta</span>
           <span class="valor">{textoExtremo(w.hasta)}</span>
+        </div>
+        <div class="notas">
+          {@render notasValidacion(w.avisos)}
         </div>
       </div>
     {:else if seleccion.unico}
@@ -256,10 +275,11 @@
               {redNueva ? textoCambioRed(red(edicion.base ?? c.etiqueta), redNueva) : textoRed(red(c.etiqueta), c.otrasEnRed)}
             </p>
             <p class="nota">{NOTA_RED}</p>
-          {:else if !escribiendoOtra}
-            {#if c.repetida}
-              <p class="nota">{textoRepetida(c.repetida, red(c.etiqueta))}</p>
+            {#if !redNueva}
+              {@render notasValidacion(c.avisos)}
             {/if}
+          {:else if !escribiendoOtra}
+            {@render notasValidacion(c.avisos)}
             {#if c.renombre}
               <p class="nota">{textoRenombre(c.renombre)}</p>
             {/if}
@@ -491,6 +511,25 @@
 
   .error {
     color: var(--error, #d33);
+  }
+
+  /* Una validación que impedirá simular (T19, D1): el rótulo va aparte, el texto de la nota no cambia. */
+  .validacion {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .validacion .nota {
+    margin: 0;
+  }
+
+  .severidad {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--aviso);
   }
 
   .fila {

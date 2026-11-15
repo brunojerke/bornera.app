@@ -112,6 +112,32 @@ export function dibujarSeleccion(
   return n + t;
 }
 
+/** Radio del anillo de un borne sin conectar o de un extremo suelto (T19), en unidades. */
+export const RADIO_ANILLO = 0.5;
+
+/**
+ * Anillos huecos de las validaciones R7 y R8 (T19, opción C): solo en la capa
+ * dinámica y solo para el único componente o cable seleccionado. `puntos`
+ * tiene x, y seguidos, ya resueltos por el editor. Devuelve cuántos dibujó.
+ */
+export function dibujarAnillos(r: Renderer, info: InfoDinamico, puntos: readonly number[]): number {
+  const v = info.visible;
+  const m = RADIO_ANILLO + 0.5;
+  let n = 0;
+  for (let i = 0; i + 1 < puntos.length; i += 2) {
+    const x = puntos[i]!;
+    const y = puntos[i + 1]!;
+    // Solo los que tocan la pantalla.
+    if (x + m < v.x || x - m > v.x + v.ancho || y + m < v.y || y - m > v.y + v.alto) continue;
+    if (n++ === 0) {
+      const color = info.colores.aviso ?? info.colores.borne;
+      r.estilo({ trazo: color, relleno: color, grosor: 1.5 * grosorLinea(info.escala) });
+    }
+    r.circulo(x, y, RADIO_ANILLO);
+  }
+  return n;
+}
+
 /**
  * Dibuja el rectángulo de selección: continuo si es "contiene", a rayas si es
  * "toca" (como en los programas de CAD). Las rayas se hacen con líneas, porque

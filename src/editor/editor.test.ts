@@ -395,7 +395,11 @@ describe("Editor: selección", () => {
         espejado: true,
         esFuente: false,
         otrasEnRed: 0,
-        repetida: null,
+        // Una bobina sin cables (T19): sus dos bornes sin conectar.
+        avisos: [
+          { regla: "R7", severidad: "aviso", id: a.id, borne: "A1" },
+          { regla: "R7", severidad: "aviso", id: a.id, borne: "A2" },
+        ],
         renombre: null,
       },
       varios: null,

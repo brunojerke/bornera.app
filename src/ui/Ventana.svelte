@@ -57,6 +57,8 @@
   let modificado = $state(false);
   /** `meta.titulo` del documento: va en el título de la ventana si no hay archivo actual. */
   let tituloDocumento = $state("");
+  /** Errores y avisos de las validaciones (T19) del editor a la vista; null en las escenas que no se editan. */
+  let cuentaAvisos = $state.raw<{ errores: number; avisos: number } | null>(null);
   /** Nombre del archivo actual; null en un documento que nunca se guardó. */
   let archivoActual = $state<string | null>(null);
   /** Diálogo de archivo abierto ("No se puede guardar"…); null si no hay. */
@@ -304,6 +306,7 @@
       bind:puedeRehacer
       bind:modificado
       bind:tituloDocumento
+      bind:cuentaAvisos
       bind:activo={editorActivo}
       {modo}
       {escena}
@@ -322,7 +325,7 @@
       onalternar={(abierto) => (propiedadesPlegadoPorUsuario = !abierto)}
     />
   </main>
-  <BarraEstado {modo} {zoom} {cursor} {aviso} {pista} />
+  <BarraEstado {modo} {zoom} {cursor} {aviso} {pista} {cuentaAvisos} />
 </div>
 
 {#if prueba}

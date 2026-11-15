@@ -10,6 +10,7 @@ export function abrirAlSeleccionar(antes: number, despues: number, plegadoPorUsu
 }
 
 import type { ExtremoResumen, NotaRenombre } from "../editor/editor";
+import { textoAviso, type Aviso } from "../core/model/validaciones";
 
 /** Cuánto dura un aviso en la barra de estado, en ms. */
 export const DURACION_AVISO_MS = 4000;
@@ -60,10 +61,63 @@ export function textoRed(red: string, otras: number): string {
 
 /**
  * Etiqueta repetida (T17, D-manuales B): "Otra bobina de contactor ya se
- * llama K1.". Desde T19 vive en el núcleo, porque es también el texto de la
- * regla R4 (src/core/model/validaciones.ts).
+ * llama K1.". Desde T19 vive en el núcleo, porque es el texto de la regla R4
+ * (src/core/model/validaciones.ts), y el panel la muestra como una nota más
+ * de `notasAvisos`.
  */
 export { textoRepetida } from "../core/model/validaciones";
+
+/**
+ * Contador fijo de la barra de estado (T19): "Sin avisos", "1 error",
+ * "3 avisos", "1 error · 3 avisos".
+ */
+export function textoContador(c: { errores: number; avisos: number }): string {
+  const partes: string[] = [];
+  if (c.errores > 0) partes.push(cuenta(c.errores, "error", "errores"));
+  if (c.avisos > 0) partes.push(cuenta(c.avisos, "aviso", "avisos"));
+  return partes.length === 0 ? "Sin avisos" : partes.join(" · ");
+}
+
+/** Una nota de validación del panel (T19). `error`: impedirá simular (lleva el rótulo «Error»). */
+export interface NotaAviso {
+  texto: string;
+  error: boolean;
+}
+
+/** "A1", "A1 y A2", "13, 14 y 21". */
+function enumerar(nombres: readonly string[]): string {
+  if (nombres.length <= 1) return nombres[0] ?? "";
+  return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
+
+/**
+ * Las notas del panel para los avisos de un componente o un cable, en su
+ * orden. Los bornes sin conectar (R7) van en una sola línea, donde estaba el
+ * primero (D2): "Bornes A1 y A2 sin conectar.". La alimentación sin nombre
+ * (R9) no se repite: la fuente ya muestra "Sin nombre de red" (D3).
+ */
+export function notasAvisos(avisos: readonly Aviso[]): NotaAviso[] {
+  const salida: NotaAviso[] = [];
+  const bornes: string[] = [];
+  let lugarBornes = -1;
+  for (const a of avisos) {
+    if (a.regla === "R9") continue;
+    if (a.regla === "R7") {
+      if (lugarBornes < 0) {
+        lugarBornes = salida.length;
+        salida.push({ texto: "", error: false });
+      }
+      bornes.push(a.borne);
+      continue;
+    }
+    salida.push({ texto: textoAviso(a), error: a.severidad === "error" });
+  }
+  if (lugarBornes >= 0) {
+    const texto = bornes.length === 1 ? `Borne ${bornes[0]} sin conectar.` : `Bornes ${enumerar(bornes)} sin conectar.`;
+    salida[lugarBornes] = { texto, error: false };
+  }
+  return salida;
+}
 
 /** Lo que hizo un renombrado de bobina con sus contactos (T17, D-manuales b). */
 export function textoRenombre(n: NotaRenombre): string {

@@ -41,8 +41,12 @@ export interface Colores extends ColoresGrilla, ColoresContenido {
   origen: string;
   /** Lo que se está editando en la capa dinámica (vista previa al colocar). */
   acento: string;
-  /** Lo que no se puede hacer (un cable en curso inválido). Opcional: sin él, el de los bornes. */
-  aviso?: string;
+  /**
+   * Lo que no se puede hacer (T19, D-color A): la previa de Colocar o de
+   * Pegar en conflicto, un cable en curso inválido y un arrastre con
+   * conflicto, siempre con su ✕. Opcional: sin él, el de los bornes.
+   */
+  conflicto?: string;
 }
 
 /**
@@ -164,6 +168,7 @@ export class Capas {
     borne: "#c00",
     acento: "#06f",
     aviso: "#c40",
+    conflicto: "#a12",
   };
 
   private _opciones: OpcionesCapas = { ...OPCIONES_OPTIMIZADAS };

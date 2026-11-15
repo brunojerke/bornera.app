@@ -16,7 +16,8 @@
 //     referencia (el último, en la caja de la lista). Ctrl+Z, lo mismo.
 //  7. Ctrl+D de la rama de K1: K2 con su lista, K1 con la suya, y ninguna
 //     lista toca un componente ni un cable (ajuste 1).
-//  8. Dos bobinas K1: las dos con la misma lista, sin avisos nuevos.
+//  8. Dos bobinas K1: las dos con la misma lista, sin aviso de rechazo; desde
+//     T19, con un error R4 en cada una.
 //  9. Guardar y reabrir: las mismas listas.
 // 10. Alejar con la rueda hasta apagar los textos: la lista se apaga con ellos.
 // 11. El indicador de zoom de la barra sigue a la rueda.
@@ -376,7 +377,15 @@ async function probar(p, comprobar, m, carpeta, archivos) {
     isDeepStrictEqual(listas8[k1Bobina], [fila1]) && isDeepStrictEqual(listas8[otra], [fila1]) && isDeepStrictEqual(listas8, await esperadas()),
     JSON.stringify(listas8),
   );
-  comprobar("8. la segunda K1 no da ningún aviso (la barra sigue con el de Abrir)", (await avisoBarra()) === avisoAntes, `${avisoAntes} → ${await avisoBarra()}`);
+  comprobar("8. la segunda K1 se acepta sin aviso de rechazo (la barra sigue con el de Abrir)", (await avisoBarra()) === avisoAntes, `${avisoAntes} → ${await avisoBarra()}`);
+  // T19 (etapa 2): dos bobinas K1 son ahora un error R4 en cada una (impedirá simular). Antes, este paso
+  // decía «no da ningún aviso»: T18 no tenía validaciones; el aviso que miraba era el de una acción rechazada.
+  const r4 = await p.evaluar(`(() => {
+    const a = bornera.editor.avisos;
+    const de = (id) => a.de(id).filter((x) => x.regla === "R4" && x.severidad === "error").length;
+    return { k1: de(${JSON.stringify(k1Bobina)}), otra: de(${JSON.stringify(otra)}), errores: a.cuenta.errores };
+  })()`);
+  comprobar("8. con las validaciones de T19, las dos K1 tienen un error R4 y la cuenta dice 2 errores", r4.k1 === 1 && r4.otra === 1 && r4.errores === 2, JSON.stringify(r4));
   await p.captura("dos-bobinas");
 
   // ── 9. Guardar y reabrir ──

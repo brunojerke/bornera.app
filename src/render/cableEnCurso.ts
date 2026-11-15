@@ -3,7 +3,7 @@
 // y los conflictos. Nada de esto toca la capa estática: los mosaicos se
 // invalidan recién cuando el cable se crea.
 //
-// Colores: acento para lo que vale; aviso, a rayas, para lo que no. Las
+// Colores: acento para lo que vale; conflicto, a rayas, para lo que no. Las
 // marcas van en un solo relleno por tipo (`Renderer.rectangulos`).
 
 import type { Caja } from "./camara";
@@ -115,8 +115,8 @@ function anotarRayas(p: readonly number[], v: Caja, raya: number, n: number): nu
 export function dibujarCableEnCurso(r: Renderer, info: InfoDinamico, d: DibujoCableEnCurso): void {
   const g = grosorLinea(info.escala);
   const acento = info.colores.acento;
-  const aviso = info.colores.aviso ?? info.colores.borne;
-  const color = d.valido ? acento : aviso;
+  const conflicto = info.colores.conflicto ?? info.colores.borne;
+  const color = d.valido ? acento : conflicto;
   const p = d.puntos;
   if (p && p.length >= 4) {
     let n = 0;
@@ -159,12 +159,12 @@ export function dibujarCableEnCurso(r: Renderer, info: InfoDinamico, d: DibujoCa
   dibujarCruces(r, info, d.conflictos);
 }
 
-/** Una ✕ en `--aviso` en cada conflicto. */
+/** Una ✕ en `--conflicto` en cada conflicto. */
 export function dibujarCruces(r: Renderer, info: InfoDinamico, conflictos: readonly { x: number; y: number }[]): void {
   if (conflictos.length === 0) return;
-  const aviso = info.colores.aviso ?? info.colores.borne;
+  const conflicto = info.colores.conflicto ?? info.colores.borne;
   const s = 0.35;
-  r.estilo({ trazo: aviso, relleno: aviso, grosor: 2 * grosorLinea(info.escala) });
+  r.estilo({ trazo: conflicto, relleno: conflicto, grosor: 2 * grosorLinea(info.escala) });
   for (const c of conflictos) {
     r.linea(c.x - s, c.y - s, c.x + s, c.y + s);
     r.linea(c.x - s, c.y + s, c.x + s, c.y - s);
@@ -176,7 +176,7 @@ export interface DibujoCablesArrastre {
   /** Tramos que valen, ya anotados (x0, y0, x1, y1 seguidos) y cuántos son. */
   tramos: readonly number[];
   cantidad: number;
-  /** Recorridos con un conflicto: a rayas en `--aviso`. */
+  /** Recorridos con un conflicto: a rayas en `--conflicto`. */
   invalidos: readonly (readonly number[])[];
   /** Modo reducido: gomas rectas de la parte fija al extremo movido (x0, y0, x1, y1 seguidos). */
   gomas: readonly number[];
@@ -222,8 +222,8 @@ export function dibujarCablesArrastre(r: Renderer, info: InfoDinamico, d: Dibujo
   n = 0;
   for (const p of d.invalidos) n = anotarRayas(p, v, raya, n);
   if (n > 0) {
-    const aviso = info.colores.aviso ?? info.colores.borne;
-    r.estilo({ trazo: aviso, relleno: aviso, grosor: 2 * g });
+    const conflicto = info.colores.conflicto ?? info.colores.borne;
+    r.estilo({ trazo: conflicto, relleno: conflicto, grosor: 2 * g });
     r.lineas(segmentos, n);
   }
   if (d.libres.length > 0) {

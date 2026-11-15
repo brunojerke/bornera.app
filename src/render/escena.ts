@@ -14,6 +14,8 @@ export interface ColoresContenido {
   simbolo: string;
   /** Marcas de los bornes. */
   borne: string;
+  /** Validaciones (T19): contorno de etiqueta y anillos. Opcional: sin él, el de los bornes. */
+  aviso?: string;
 }
 
 /** Lo que el contenido necesita saber del cuadro que se está dibujando. */
@@ -51,6 +53,11 @@ export interface ComponenteEscena extends Colocacion {
   etiqueta?: string;
   /** Lista de referencias cruzadas de una bobina (T18), ya armada; sin lista, undefined. */
   referencias?: readonly string[];
+  /**
+   * Lleva el contorno a rayas de una validación de etiqueta (T19: R1 a R6 y
+   * R9), ya resuelto por el editor: el dibujo no sabe de reglas.
+   */
+  conAviso?: true;
 }
 
 export interface OpcionesEscena {
@@ -138,11 +145,77 @@ export function dibujarComponentes(
     dibujarSimbolo(r, c.def, c, { etiqueta: c.etiqueta, textos: detalle.textos, referencias: c.referencias });
   }
 
-  if (marcarBornes && detalle.bornes) {
+  // El umbral antes que nada: debajo de él, marcas y contornos no cuestan ni una lectura (T19, agregado 1).
+  if (!detalle.bornes) return;
+  if (marcarBornes) {
     r.estilo({ trazo: colores.borne, relleno: colores.borne, grosor: g });
     for (let i = 0; i < n; i++) {
       const c = componentes[indices[i]!]!;
       dibujarMarcasBornes(r, c.def, c);
     }
   }
+  dibujarContornos(r, colores, g, componentes, indices, n);
+}
+
+/** Separación entre el cuerpo del símbolo y su contorno de aviso, en unidades. */
+export const MARGEN_CONTORNO = 0.25;
+/** Largo de cada raya del contorno de aviso, y de cada hueco, en unidades. */
+export const RAYA_CONTORNO = 0.5;
+
+/** Rayas de los contornos del cuadro en curso (x0, y0, x1, y1 seguidos): se reusa, sin pedir memoria por componente. */
+const rayasContorno: number[] = [];
+
+/**
+ * Contorno a rayas sobre el cuerpo de cada componente con `conAviso` (T19,
+ * opción P): todas las rayas en un solo trazo, en el color de aviso. Las
+ * cuentas van en línea (sin cajas ni objetos por componente). Lo llama
+ * `dibujarComponentes` solo con las marcas de bornes visibles. Devuelve
+ * cuántas rayas dibujó.
+ */
+function dibujarContornos(
+  r: Renderer,
+  colores: ColoresContenido,
+  g: number,
+  componentes: readonly (ComponenteEscena | null)[],
+  indices: ArrayLike<number>,
+  n: number,
+): number {
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    const c = componentes[indices[i]!]!;
+    if (c.conAviso !== true) continue;
+    const girado = c.rotacion === 90 || c.rotacion === 270;
+    const mx = (girado ? c.def.tamano.alto : c.def.tamano.ancho) / 2 + MARGEN_CONTORNO;
+    const my = (girado ? c.def.tamano.ancho : c.def.tamano.alto) / 2 + MARGEN_CONTORNO;
+    const x0 = c.x - mx;
+    const x1 = c.x + mx;
+    const y0 = c.y - my;
+    const y1 = c.y + my;
+    t = rayas(x0, y0, x1, y0, t);
+    t = rayas(x0, y1, x1, y1, t);
+    t = rayas(x0, y0, x0, y1, t);
+    t = rayas(x1, y0, x1, y1, t);
+  }
+  if (t === 0) return 0;
+  const color = colores.aviso ?? colores.borne;
+  r.estilo({ trazo: color, relleno: color, grosor: g });
+  r.lineas(rayasContorno, t);
+  return t;
+}
+
+/** Anota las rayas de un lado horizontal o vertical, desde su esquina. Devuelve la cuenta nueva. */
+function rayas(xa: number, ya: number, xb: number, yb: number, t: number): number {
+  const largo = xb - xa + (yb - ya);
+  const dx = xb > xa ? 1 : 0;
+  const dy = 1 - dx;
+  for (let s = 0; s < largo; s += 2 * RAYA_CONTORNO) {
+    const e = Math.min(s + RAYA_CONTORNO, largo);
+    const j = t * 4;
+    rayasContorno[j] = xa + dx * s;
+    rayasContorno[j + 1] = ya + dy * s;
+    rayasContorno[j + 2] = xa + dx * e;
+    rayasContorno[j + 3] = ya + dy * e;
+    t++;
+  }
+  return t;
 }

@@ -18,7 +18,7 @@
 //
 // Conexiones aparentes (T14a): la misma regla que al mover. Si el símbolo en
 // ese punto crea una (un borne sobre un cable, un cable por su cuerpo, un
-// borne sobre otro), la previa se ve en `--aviso` con una ✕ en cada
+// borne sobre otro), la previa se ve en `--conflicto` con una ✕ en cada
 // conflicto, la pista dice por qué y el clic no coloca. La revisión la da el
 // editor (`revisar`, con su consulta indexada) y se rehace al cambiar de punto,
 // de orientación o el documento (`revisarDeNuevo`).

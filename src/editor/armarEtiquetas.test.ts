@@ -11,6 +11,7 @@ import type { Componente, Documento, Hoja } from "../core/model/documento";
 import { esTitular, etiquetasDeTitulares } from "../core/model/etiquetado";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { recortar, type Recorte } from "../core/model/portapapeles";
+import { textoAviso } from "../core/model/validaciones";
 import { buscarSimbolo, esFuente, SIMBOLOS } from "../core/symbols";
 import { EtiquetasHoja } from "./armarEtiquetas";
 import { AVISO_SIN_VACIOS, documentoNuevo, Editor, type DestinoVista } from "./editor";
@@ -405,31 +406,38 @@ describe("Editor: renombrar una bobina desde el panel (T17, D-manuales b)", () =
 
 // ── Etiqueta repetida en el resumen ────────────────────────────────────────
 
-describe("Editor: etiqueta repetida para el panel (T17, D-manuales B)", () => {
+// Desde T19 la nota de T17 es el texto de R4 y sale del caché de avisos del editor.
+describe("Editor: etiqueta repetida para el panel (T17, D-manuales B; desde T19, regla R4)", () => {
+  /** El texto de R4 del único seleccionado, o null. */
+  const repetida = (editor: ReturnType<typeof armar>["editor"]): string | null => {
+    const a = editor.resumenSeleccion().unico!.avisos.find((x) => x.regla === "R4");
+    return a ? textoAviso(a) : null;
+  };
+
   it("un titular con la etiqueta de otro titular da el nombre del otro", () => {
     const { editor, poner } = armar();
     const k = poner(BOBINA, 0, 0, "K1");
     const h = poner(LAMPARA, 10, 0, "k1");
     editor.seleccionarIds([h]);
-    expect(editor.resumenSeleccion().unico!.repetida).toBe("Bobina de contactor");
+    expect(repetida(editor)).toBe("Otra bobina de contactor ya se llama K1.");
     editor.seleccionarIds([k]);
-    expect(editor.resumenSeleccion().unico!.repetida).toBe("Lámpara");
+    expect(repetida(editor)).toBe("Otra lámpara ya se llama K1.");
   });
 
   it("nunca en una fuente: dos Neutro N son la misma red", () => {
     const { doc, comp: m } = marchaParada({ dosNeutros: true });
     const { editor } = armar(doc);
     editor.seleccionarIds([m.neutro]);
-    expect(editor.resumenSeleccion().unico!.repetida).toBeNull();
+    expect(repetida(editor)).toBeNull();
   });
 
   it("ni en un contacto, ni por un contacto: el auxiliar K1 no repite a la bobina K1", () => {
     const { doc, comp: m } = marchaParada();
     const { editor } = armar(doc);
     editor.seleccionarIds([m.k1Auxiliar]);
-    expect(editor.resumenSeleccion().unico!.repetida).toBeNull();
+    expect(repetida(editor)).toBeNull();
     editor.seleccionarIds([m.k1Bobina]);
-    expect(editor.resumenSeleccion().unico!.repetida).toBeNull();
+    expect(repetida(editor)).toBeNull();
   });
 
   it("vacía no cuenta como repetida", () => {
@@ -437,7 +445,21 @@ describe("Editor: etiqueta repetida para el panel (T17, D-manuales B)", () => {
     poner(BOBINA, 0, 0, "");
     const b = poner(BOBINA, 10, 0, "");
     editor.seleccionarIds([b]);
-    expect(editor.resumenSeleccion().unico!.repetida).toBeNull();
+    expect(repetida(editor)).toBeNull();
+  });
+
+  it("un pulsador NA y uno NC con la misma etiqueta no dan nota (pulsador de doble contacto, cambio 6)", () => {
+    const { editor, poner } = armar();
+    const na = poner(PULSADOR_NA, 0, 0, "S1");
+    const nc = poner(PULSADOR_NC, 10, 0, "S1");
+    editor.seleccionarIds([na]);
+    expect(repetida(editor)).toBeNull();
+    editor.seleccionarIds([nc]);
+    expect(repetida(editor)).toBeNull();
+    // Dos NA sí: aviso.
+    const na2 = poner(PULSADOR_NA, 20, 0, "S1");
+    editor.seleccionarIds([na2]);
+    expect(repetida(editor)).toBe("Otro pulsador NA ya se llama S1.");
   });
 });
 

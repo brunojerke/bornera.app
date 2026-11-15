@@ -253,7 +253,7 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 |---|---|---|
 | 0 | Docs: este plan, `plan-fase3b.md` (T19 apunta acá y los opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-15.** | Sonnet |
 | 1 | Núcleo: `src/core/model/validaciones.ts` y sus tests (por regla, R6 con el enclavamiento bien y mal hecho, al azar contra el cálculo lento, reglas anuladas, `.brn`). Mediciones S1 y S2 y la corrida de control del anillo (ajuste 1). `npm test` y `npm run check`. **Hecha el 2026-11-15** (abajo). | Opus xhigh (lógica del núcleo) |
-| 2 | Dibujo y editor: `src/editor/avisosHoja.ts`, `reflejar`, contorno y anillo (según la etapa 1), `--conflicto`, contador de la barra y notas del panel, con sus tests. Prueba visual a 1024×600. | Opus alto |
+| 2 | Dibujo y editor: `src/editor/avisosHoja.ts`, `reflejar`, contorno y anillo (según la etapa 1), `--conflicto`, contador de la barra y notas del panel, con sus tests. Prueba visual a 1024×600. **Hecha el 2026-11-15** (abajo). | Opus alto |
 | 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. | Opus alto |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` (validaciones hechas y la definición de severidad) y Obsidian. `npm run humo` entero. | Sonnet |
 
@@ -284,6 +284,28 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 - **Queda para la etapa 2:**
   - La nota de T17 en el panel (`repetida`) hoy avisa también a un NA y un NC con la misma etiqueta. Se reemplaza por el texto de R4, que los permite.
   - Contorno y anillo según los cambios 8 y 9: el contorno, sin crear objetos por componente al dibujar.
+
+### Etapa 2 hecha (2026-11-15)
+Aprobada con D1 a D4 como se propusieron y tres ajustes de Bruno: (a) R1 a R5 y R9 se recalculan solo si el comando agrega, borra o cambia etiqueta o tipo; (b) dejar preparado el escenario de banco «dibujar 1 cable con 2000 y un par NC+bobina»; (c) ajustar t18 paso 8 en esta etapa y cerrar con el humo completo en verde. Más los agregados del arranque: el umbral de 6 px/u antes de calcular nada, con test, y las validaciones solo por comando.
+
+- **`src/editor/avisosHoja.ts`**, el caché. Se pone al día solo en `Editor.reflejar`. Cada parte, solo si el comando la puede mover:
+  - **R1 a R5 y R9:** una pasada (`validar` con esas reglas) solo si algún componente del cambio se agregó, se borró o cambió de tipo o de etiqueta (ajuste (a)). Mover, girar y espejar no la recorren.
+  - **R6:** `validar(h, ["R6"])` solo si hay un auxiliar NC con la etiqueta de una bobina (`hayCandidatosR6`, nueva en el núcleo, una pasada sin `redes()`) y cambió lo que une la hoja: los extremos de un cable (a qué borne, cable o nada llega; las coordenadas no cuentan) o las etiquetas.
+  - **R7 y R8, incremental:** los bornes de los componentes agregados, borrados o de otro tipo, los de los componentes a los que llegaban o llegan los cables cuyos extremos cambiaron, y esos cables. Sale de `BornesConCable`, que ahora se pone al día antes.
+  - Devuelve los contornos que cambiaron (la escena los rehace aunque el cambio no los nombre: R2 al aparecer la bobina), los ids cuyos avisos cambiaron (panel y anillo) y si cambió la cuenta (barra). Cuenta sus pasadas y los bornes revisados.
+- **Contorno (opción P):** `ComponenteEscena.conAviso`, resuelto por el editor. En `dibujarComponentes`, **lo primero es `detalle.bornes`**: debajo de 6 px/u no se lee ni un campo (agregado 1). Encima, la caja del cuerpo se calcula en línea y las rayas (0,5 y 0,5, con 0,25 de margen; 16 en un símbolo de 2×4) van a un arreglo del módulo que se reusa, en un solo `lineas`, en `--aviso`.
+- **Anillo (opción C):** `dibujarAnillos` en `resaltado.ts`, en la capa dinámica, con un único seleccionado, sin arrastre, a 6 px/u o más y solo los que tocan la pantalla. Los puntos salen del caché y se rearman solo con otro cambio o selección (`anillosSeleccion`).
+- **`--conflicto`:** `#881337` en claro y `#e11d48` en oscuro (D4). Elegidos por luminancia para que se distingan de `--aviso` también en grises: 1,85:1 y 2,08:1 contra el naranja, 9,3:1 y 4,0:1 contra el lienzo. Pasan a él la previa de Colocar y de Pegar, el cable en curso inválido, el arrastre con conflicto y las ✕. `Colores.aviso` queda para las validaciones (`ColoresContenido`).
+- **Barra:** `textoContador`, «Sin avisos», «1 error · 3 avisos». El texto de 4 s de una acción lo tapa. Con avisos, en `--aviso`. Llega por `Lienzo.cuentaAvisos` (`alCambiarAvisos`).
+- **Panel:** `ResumenSeleccion` lleva `avisos` del caché, en el componente y en el cable. Se sacó `repetida` y `titularRepetido` (una pasada por la hoja menos). `notasAvisos`: el rótulo «Error» va aparte, delante, y el texto de la nota no cambia (D1); los bornes sueltos van en una línea, «Bornes A1 y A2 sin conectar.» (D2); R9 no se repite en la fuente (D3). La nota de T17 es ahora el texto de R4: un pulsador NA y uno NC con la misma etiqueta ya no la dan. Si un comando cambia los avisos de lo seleccionado sin nombrarlo (cablear la bobina seleccionada), el panel se entera.
+- **Banco (ajuste (b)), al final de la lista, sin medir todavía:** *Rehacer al 31 % con avisos* y *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %*. El par se arma colocando un auxiliar NC con la etiqueta de la primera bobina, fuera de lo medido (en la escena del banco no hay auxiliares NC). No dependen de `editor.avisos`: se pueden copiar a `926915d` como base. Corrida de prueba (una sola, no es medición): los dos corren; R6 se calculó 42 veces en el segundo, unos 2,3 ms por paso en la PC.
+- **Humo t18, paso 8 (ajuste (c)):** decía «la segunda K1 no da ningún aviso». T18 no tenía validaciones: el aviso que miraba era el de una acción rechazada, y sigue igual. Se agregó que las dos K1 tienen un error R4 y la cuenta dice 2 errores.
+- **Dos bobinas K1 dan «2 errores»**, uno por componente, como marca el núcleo. La sección 5 dice «1 error»: el humo t19 de la etapa 3 espera 2.
+- **Tests:**
+  - `avisosHoja.test.ts`, 22. Mover, girar y espejar 2000 (y mover todo en la escena con cables): 0 pasadas de validar y 0 bornes revisados (ajuste (a)). Cablear no recorre los componentes: solo los 4 bornes del cable. Mover el mouse, arrastrar y dibujar cuadros no recalculan (agregado 2). Lo que devuelve. Sin restos, con su prueba a propósito. Panel, anillo, color de la previa en conflicto. Recorrido al azar de 400 pasos (semilla 20261115) por el editor contra `validar` desde cero: caché, cuenta y contornos de la escena, con las 9 reglas y todas las operaciones. A propósito: con la puesta al día anulada, con R7 sin los bornes de los cables y con R6 sin recalcular, el recorrido lo nota.
+  - `escena.test.ts`, 5. Debajo del umbral, 0 lecturas de `conAviso` y las mismas llamadas que sin avisos (agregado 1). Encima: un trazo, en el color de aviso, sobre el cuerpo más 0,25, girado, y el mismo arreglo entre cuadros. Sin avisos, nada nuevo. `cajaDibujo` cubre contorno y anillos en las 4 rotaciones y espejado.
+  - `propiedades.test.ts`, 3, y los de `repetida` pasados a R4 (más el pulsador de doble contacto).
+- **Prueba visual a 1024×600**, claro y oscuro, con capturas en grises: el contorno y la previa de Pegar en conflicto juntos se distinguen por color y por forma. En oscuro y en grises, el conflicto queda más apagado que en claro, pero conserva sus ✕. Al 31 % se ven los contornos; al 25 % se apagan y el contador sigue.
 
 ## 7. Riesgos y límites
 

@@ -110,7 +110,7 @@ import {
   type Extremo,
 } from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
-import { esTitular, type MotivoSinArrastre } from "../core/model/etiquetado";
+import type { MotivoSinArrastre } from "../core/model/etiquetado";
 import { Historial, type MarcaGuardado } from "../core/model/historial";
 import { problemasPegado, recortar, recorteVacio, type Recorte } from "../core/model/portapapeles";
 import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
@@ -121,7 +121,7 @@ import { grosorLinea, type ComponenteEscena } from "../render/escena";
 import { anotarTramos, EscenaEditable, type CableEscena } from "../render/escenaEditable";
 import type { Renderer } from "../render/renderer";
 import { dibujarCablesArrastre, dibujarCableEnCurso, dibujarCruces, dibujarMarcasCable, type DibujoCableEnCurso } from "../render/cableEnCurso";
-import { dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
+import { dibujarAnillos, dibujarRectangulo, dibujarSeleccion } from "../render/resaltado";
 import { dibujarMarcasBornes, dibujarSimbolo } from "../render/simbolo";
 import { esDePortapapeles, type Accion, type AccionPortapapeles } from "./atajos";
 import { armarDibujoPegado, dibujarPegado, type DibujoPegado } from "./dibujoPegar";
@@ -130,6 +130,8 @@ import { HerramientaPegar } from "./herramientas/pegar";
 import { EtiquetasHoja } from "./armarEtiquetas";
 import { ReferenciasHoja } from "./referenciasHoja";
 import { BornesConCable } from "./bornesConCable";
+import { AvisosHoja } from "./avisosHoja";
+import type { Aviso } from "../core/model/validaciones";
 import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
 import { HerramientaCable } from "./herramientas/cable";
@@ -178,7 +180,13 @@ export interface ResumenSeleccion {
   componentes: number;
   cables: number;
   /** Con un solo cable seleccionado (y nada más), sus extremos; si no, null. */
-  cable: { id: string; desde: ExtremoResumen; hasta: ExtremoResumen } | null;
+  cable: {
+    id: string;
+    desde: ExtremoResumen;
+    hasta: ExtremoResumen;
+    /** Sus validaciones (T19: R8), del caché del editor. */
+    avisos: readonly Aviso[];
+  } | null;
   /** Con un solo componente seleccionado (y nada más), sus datos; si no, null. */
   unico: {
     id: string;
@@ -192,11 +200,11 @@ export interface ResumenSeleccion {
     /** En una fuente: cuántas otras alimentaciones del documento están en su misma red; si no, 0. */
     otrasEnRed: number;
     /**
-     * En un titular con etiqueta: el nombre del símbolo de otro titular de la
-     * hoja con la misma etiqueta ("Bobina de contactor"); si no hay, null.
-     * Nunca en una fuente: dos fuentes con el mismo nombre son la misma red.
+     * Sus validaciones (T19), del caché del editor, en el orden de `validar`.
+     * La etiqueta repetida de T17 es ahora R4: un pulsador NA y uno NC con la
+     * misma etiqueta no la dan, y dos fuentes con el mismo nombre tampoco.
      */
-    repetida: string | null;
+    avisos: readonly Aviso[];
     /** Lo que hizo el último renombrado de este componente desde el panel; null si no hay. */
     renombre: NotaRenombre | null;
   } | null;
@@ -443,6 +451,12 @@ export class Editor {
   readonly etiquetas: EtiquetasHoja;
   /** Listas de referencias cruzadas de las bobinas de la hoja, al día con cada cambio (T18). */
   readonly referencias: ReferenciasHoja;
+  /** Validaciones de la hoja (T19), al día con cada comando; nunca por cuadro. */
+  readonly avisos: AvisosHoja;
+  /** Se avisa cuando cambia la cuenta de errores y avisos (para la barra de estado). */
+  alCambiarAvisos: (() => void) | null = null;
+  /** Anillos de la selección única (R7 y R8): x, y seguidos, y de qué cambio y selección son. */
+  private anillos: { clave: string; puntos: number[] } = { clave: "", puntos: [] };
   /** La nota del último renombrado, con el id del componente; se borra con el próximo cambio o selección. */
   private notaRenombre: { id: string; nota: NotaRenombre } | null = null;
   /** La nota del renombrado que se está ejecutando: pasa a `notaRenombre` al reflejar su cambio. */
@@ -456,11 +470,13 @@ export class Editor {
     this.historial = new Historial(documento);
     this.etiquetas = new EtiquetasHoja(documento, hoja);
     this.referencias = new ReferenciasHoja(documento, hoja);
-    for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
     const h = documento.hojas[hoja];
+    this.bornesConCable = new BornesConCable(h?.cables ?? []);
+    // Antes de la escena: `aEscena` toma de acá qué componentes llevan contorno.
+    this.avisos = new AvisosHoja(documento, hoja, this.bornesConCable);
+    for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
     const indice = h ? indexarHoja(h) : { componentes: new Map<string, Componente>(), cables: new Map<string, Cable>() };
     this.indiceHoja = { componentes: new Map(indice.componentes), cables: new Map(indice.cables) };
-    this.bornesConCable = new BornesConCable(h?.cables ?? []);
     this.uniones = new Uniones(this.indiceHoja, h?.cables ?? []);
     this.consulta = new ConsultaEscena(this.escena, () => this.indiceHoja.cables);
     if (h && h.cables.length > 0) {
@@ -607,7 +623,10 @@ export class Editor {
     if (cantidad > 1) return { ...base, varios: { etiqueta, rot } };
     if (unicoCable) {
       const w = unicoCable;
-      return { ...base, cable: { id: w.id, desde: this.extremoResumen(w.desde), hasta: this.extremoResumen(w.hasta) } };
+      return {
+        ...base,
+        cable: { id: w.id, desde: this.extremoResumen(w.desde), hasta: this.extremoResumen(w.hasta), avisos: this.avisos.de(w.id) },
+      };
     }
     if (!unico) return base;
     const c = unico;
@@ -624,26 +643,10 @@ export class Editor {
         espejado: c.espejado,
         esFuente,
         otrasEnRed: esFuente ? this.otrasEnRed(c) : 0,
-        repetida: this.titularRepetido(c),
+        avisos: this.avisos.de(c.id),
         renombre: nota && nota.id === c.id ? nota.nota : null,
       },
     };
-  }
-
-  /**
-   * Si `t` es un titular con etiqueta, el nombre del símbolo de otro titular
-   * de la hoja con la misma etiqueta; si no, null. Una pasada por la hoja,
-   * solo con un componente seleccionado. Las fuentes y los seguidores nunca.
-   */
-  private titularRepetido(t: Componente): string | null {
-    const e = normalizarEtiqueta(t.etiqueta);
-    if (e === "" || !esTitular(buscarSimbolo(t.tipo))) return null;
-    for (const c of this.componentesHoja()) {
-      if (c.id === t.id || normalizarEtiqueta(c.etiqueta) !== e) continue;
-      const def = buscarSimbolo(c.tipo);
-      if (esTitular(def)) return (def ?? SIMBOLO_DESCONOCIDO).nombre;
-    }
-    return null;
   }
 
   /** Un extremo para el panel: en un borne, la etiqueta del componente (o su id, si no tiene). */
@@ -1573,6 +1576,8 @@ export class Editor {
       });
     } else if (this._seleccion.size > 0) {
       dibujarSeleccion(r, info, this.escena, this._seleccion);
+      // Anillos (T19, opción C): solo con un único seleccionado y con los bornes visibles.
+      if (this._seleccion.size === 1 && nivelDetalle(info.escala).bornes) dibujarAnillos(r, info, this.anillosSeleccion());
     }
     if (this.crucesRechazo.length > 0) dibujarCruces(r, info, this.crucesRechazo);
     const rect = this.seleccionar.rectangulo;
@@ -1596,9 +1601,9 @@ export class Editor {
     if (!p) return;
     // Con la orientación de la herramienta (R, M): la misma que va a tener al colocarse.
     const c = { x: p.x, y: p.y, rotacion: p.rotacion, espejado: p.espejado };
-    // Si crearía una conexión aparente, en aviso y con la ✕ (el clic no coloca).
+    // Si crearía una conexión aparente, en conflicto y con la ✕ (el clic no coloca).
     const valida = p.conflictos.length === 0;
-    const color = valida ? info.colores.acento : (info.colores.aviso ?? info.colores.borne);
+    const color = valida ? info.colores.acento : (info.colores.conflicto ?? info.colores.borne);
     r.estilo({ trazo: color, relleno: color, grosor: grosorLinea(info.escala) });
     const detalle = nivelDetalle(info.escala);
     dibujarSimbolo(r, p.def, c, { textos: detalle.textos, etiqueta: p.etiqueta });
@@ -1625,6 +1630,32 @@ export class Editor {
     }
     this.marcas = { clave, libres, ocupados };
     return this.marcas;
+  }
+
+  /**
+   * Dónde van los anillos del único seleccionado (x, y seguidos): sus bornes
+   * sin cable (R7) o los extremos libres del cable (R8). Salen del caché de
+   * avisos y se rehacen solo si cambió el documento o la selección, no por
+   * cuadro.
+   */
+  private anillosSeleccion(): readonly number[] {
+    const [id] = this._seleccion;
+    if (id === undefined) return [];
+    const clave = `${this._cambios}|${id}`;
+    if (this.anillos.clave === clave) return this.anillos.puntos;
+    const puntos: number[] = [];
+    const cable = this.escena.obtenerCable(id);
+    if (cable) {
+      puntos.push(...cable.libres);
+    } else {
+      const c = this.escena.obtener(id);
+      const sueltos = this.avisos.bornesSueltos(id);
+      if (c && sueltos.length > 0) {
+        for (const b of bornesColocados(c.def.bornes, c.x, c.y, c)) if (sueltos.includes(b.nombre)) puntos.push(b.x, b.y);
+      }
+    }
+    this.anillos = { clave, puntos };
+    return puntos;
   }
 
   private componentesHoja(): readonly Componente[] {
@@ -1665,6 +1696,7 @@ export class Editor {
     const e: ComponenteEscena = { def, x: c.x, y: c.y, rotacion: c.rot, espejado: c.espejado, etiqueta: c.etiqueta || undefined };
     const referencias = this.referencias.lineas(c.id);
     if (referencias) e.referencias = referencias;
+    if (this.avisos.conContorno(c.id)) e.conAviso = true;
     return e;
   }
 
@@ -1699,9 +1731,36 @@ export class Editor {
       if (c) this.indiceHoja.componentes.set(id, c);
       else this.indiceHoja.componentes.delete(id);
     }
-    // Antes de la escena: `aEscena` toma las listas ya al día.
+    // Los cables del cambio, en el índice y en `bornesConCable` antes de las validaciones (R7).
+    const idsCables = new Set(cambio.cables);
+    const actualesCables = new Map<string, Cable>();
+    if (idsCables.size > 0) {
+      for (const w of this.cablesHoja()) if (idsCables.has(w.id) && !actualesCables.has(w.id)) actualesCables.set(w.id, w);
+      for (const id of idsCables) {
+        const w = actualesCables.get(id);
+        if (w) this.indiceHoja.cables.set(id, w);
+        else this.indiceHoja.cables.delete(id);
+        this.bornesConCable.poner(id, w);
+      }
+    }
+    // Antes de la escena: `aEscena` toma las listas y los contornos ya al día.
+    const avisos = this.avisos.reflejar({
+      componentes: ids,
+      actuales,
+      cables: idsCables,
+      actualesCables,
+      componente: (id) => this.indiceHoja.componentes.get(id),
+    });
+    const rehechos = new Set<string>();
     for (const id of this.referencias.reflejar(ids, actuales)) {
       if (ids.has(id)) continue;
+      const c = this.indiceHoja.componentes.get(id);
+      if (c) for (const k of this.escena.actualizar(id, this.aEscena(c))) this.vista?.invalidarRegion(k);
+      rehechos.add(id);
+    }
+    // Los componentes cuyo contorno de aviso cambió sin que el cambio los nombre (R2 al borrar la bobina).
+    for (const id of avisos.contornos) {
+      if (ids.has(id) || rehechos.has(id)) continue;
       const c = this.indiceHoja.componentes.get(id);
       if (c) for (const k of this.escena.actualizar(id, this.aEscena(c))) this.vista?.invalidarRegion(k);
     }
@@ -1721,16 +1780,7 @@ export class Editor {
         if (!c) (quitados ??= []).push(id);
       }
     }
-    if (cambio.cables.length > 0) {
-      const idsCables = new Set(cambio.cables);
-      const actualesCables = new Map<string, Cable>();
-      for (const w of this.cablesHoja()) if (idsCables.has(w.id) && !actualesCables.has(w.id)) actualesCables.set(w.id, w);
-      for (const id of idsCables) {
-        const w = actualesCables.get(id);
-        if (w) this.indiceHoja.cables.set(id, w);
-        else this.indiceHoja.cables.delete(id);
-        this.bornesConCable.poner(id, w);
-      }
+    if (idsCables.size > 0) {
       const indice = this.indiceHoja;
       // Con el índice al día con todo el cambio (los anfitriones de las T también).
       if (cambio.hojaEntera) {
@@ -1762,11 +1812,15 @@ export class Editor {
       for (const id of quitados) nueva.delete(id);
       this._seleccion = nueva;
     }
+    // Los avisos de algo seleccionado cambiaron sin que el cambio lo nombre (cablear la bobina seleccionada):
+    // el panel muestra las notas nuevas y el anillo se rehace.
+    if (!tocaSeleccion) for (const id of avisos.ids) if (this._seleccion.has(id)) tocaSeleccion = true;
     if (tocaSeleccion) {
       this.alCambiarSeleccion?.();
       // El resaltado se mueve con el componente, aunque su región no esté en pantalla.
       this.vista?.invalidar();
     }
+    if (avisos.cuenta) this.alCambiarAvisos?.();
     return this.trasReflejar(cambio);
   }
 

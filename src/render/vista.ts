@@ -242,6 +242,7 @@ export class Vista {
       borne: leer("--borne", antes.borne),
       acento: leer("--acento", antes.acento),
       aviso: leer("--aviso", antes.aviso ?? antes.borne),
+      conflicto: leer("--conflicto", antes.conflicto ?? antes.borne),
     };
   }
 }

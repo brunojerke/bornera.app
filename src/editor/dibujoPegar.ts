@@ -5,7 +5,7 @@
 // cables y extremos libres del recorte) se arma una vez por recorte
 // (`armarDibujoPegado`) y cada cuadro lo dibuja trasladado. Con más de
 // `limite` componentes a la vista, solo los contornos, como el arrastre.
-// Color de acento si vale; `--aviso` con una ✕ en cada conflicto si no.
+// Color de acento si vale; `--conflicto` con una ✕ en cada conflicto si no.
 
 import { indexarHoja, recorridoCable } from "../core/model/cables";
 import type { Recorte } from "../core/model/portapapeles";
@@ -73,7 +73,7 @@ export function dibujarPegado(
   limite: number,
 ): number {
   const valida = conflictos.length === 0;
-  const color = valida ? info.colores.acento : (info.colores.aviso ?? info.colores.borne);
+  const color = valida ? info.colores.acento : (info.colores.conflicto ?? info.colores.borne);
   const g = grosorLinea(info.escala);
   const detalle = nivelDetalle(info.escala);
   const v = info.visible;

@@ -20,7 +20,10 @@
   --grilla-origen: #7a8395;
   --simbolo: #1d2330;
   --borne: #d9480f;
+  /* Validaciones (T19): contorno, anillos y contador. */
   --aviso: #c2410c;
+  /* Lo que no se puede hacer: previas en conflicto, con su ✕. Más oscuro que --aviso: se distingue también en grises. */
+  --conflicto: #881337;
   --simular: #15803d;
 
   --alto-barra: 40px;
@@ -53,6 +56,7 @@
     --simbolo: #e3e6eb;
     --borne: #ff8a4c;
     --aviso: #fb923c;
+    --conflicto: #e11d48;
     --simular: #4ade80;
   }
 }

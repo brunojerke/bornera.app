@@ -13,7 +13,7 @@
 //
 // Conflictos (D5): la previa se revisa con `problemasPegado` (lo da el
 // editor, con su consulta indexada y los contadores del documento). Con
-// conflictos se ve en `--aviso` con una ✕ en cada uno, la pista dice por qué
+// conflictos se ve en `--conflicto` con una ✕ en cada uno, la pista dice por qué
 // y el clic no suelta. Con más de `TOPE_PREVIA_PEGAR` elementos no se revisa
 // en cada punto: la pista lo dice y se revisa al soltar.
 //

@@ -254,6 +254,29 @@ function ncEnSuRama(hoja: Hoja, datos: readonly Datos[], etiquetasBobina: Readon
   return marcados;
 }
 
+/**
+ * True si hay algún auxiliar NC con la etiqueta de una bobina de la hoja: la
+ * única forma de que R6 dé algo. Una pasada por los componentes, sin
+ * `redes()`. El editor la usa para saber si un cambio de cables puede mover
+ * R6 (T19, etapa 2).
+ */
+export function hayCandidatosR6(hoja: Hoja): boolean {
+  const bobinas = new Set<string>();
+  const nc = new Set<string>();
+  for (const c of hoja.componentes) {
+    const def = buscarSimbolo(c.tipo);
+    const bobina = esBobina(def);
+    const auxiliarNC = esAuxiliarNC(def);
+    if (!bobina && !auxiliarNC) continue;
+    const e = normalizarEtiqueta(c.etiqueta);
+    if (e === "") continue;
+    if (bobina) bobinas.add(e);
+    else nc.add(e);
+  }
+  for (const e of nc) if (bobinas.has(e)) return true;
+  return false;
+}
+
 // ── Textos y cuentas ───────────────────────────────────────────────────────
 
 /**
