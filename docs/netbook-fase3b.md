@@ -34,7 +34,7 @@ Seguir la hoja 2. Cronometrar desde Abrir.
 | A9 | Con el mouse en el centro de cada uno de los 4 contactos, la barra muestra las coordenadas de su fila | iguales | Bruno | ☐ |
 | A10 | Ninguna lista toca un símbolo, una etiqueta, un nombre de borne ni un cable, de ninguna rama | nada tapado | Bruno | ☐ |
 | A11 | F: el circuito entero entra con los textos legibles | entra | T15 | ☐ |
-| A12 | Ctrl+S como `inversion.brn`, cerrar con la X, abrir la app y Abrir el archivo | mismo dibujo, título sin «•», Deshacer desactivado | T15 | ☐ |
+| A12 | Ctrl+Mayús+S (Guardar como) `inversion.brn` (Ctrl+S pisaría `marcha-parada.brn`), cerrar con la X, abrir la app y Abrir el archivo | mismo dibujo, título sin «•», Deshacer desactivado | T15 | ☐ |
 | A13 | Guardar y abrir | ≤ 1 s | D20 | ☐ |
 
 Se anota, no es criterio: tiempo total ______ min · ¿Desplazaste o alejaste el zoom? ______ · Trabas o sorpresas: ____________________________
@@ -88,20 +88,24 @@ $env:BORNERA_BRN = "C:\Users\jerke\Downloads\inversion.brn"; $env:BORNERA_BASE =
 
 # Hoja 2 — Pasos para armar la inversión
 
-> **Borrador:** lo confirma el humo de la etapa 2 (orden, dónde hacer lugar y cómo reconectar H1). Los pasos 3, 4, 8 y 9 ya los corrigió la etapa 1 con el test del procedimiento (`src/editor/inversionProcedimiento.test.ts`). Si algo no sale como dice, anotarlo como hallazgo y seguir de la forma más razonable.
+> **Confirmada** por el humo `tests/humo/cierre3b-inversion.mjs` (2026-11-16): estos pasos, con el mouse y el teclado a 1024×600, dan las redes de la referencia y «Sin avisos». Si algo no sale como dice, anotarlo como hallazgo y seguir de la forma más razonable. Las coordenadas entre paréntesis son las de la barra de estado (X · Y) con el mouse encima; sirven para ubicarse, no hace falta acertarlas.
 
-Partimos de la marcha-parada: L, S0 (parada, NC), S1 (marcha, NA) con el NA de K1 en paralelo (retención), bobina K1 con H1 en paralelo y N. Hay que intercalar el NC de K2 antes de la bobina K1 y después duplicar la rama para K2.
+Partimos de la marcha-parada: L, S0 (parada, NC), S1 (marcha, NA) con el NA de K1 en paralelo (retención), bobina K1 con H1 en paralelo y N. Hay que intercalar el NC de K2 antes de la bobina K1 y después duplicar la rama para K2. Al zoom inicial no entra todo: desplazar la vista con el botón del medio cuando haga falta (el humo lo hizo 4 veces).
 
 1. **Abrir** `marcha-parada.brn`. La barra dice «Sin avisos».
-2. **Hacer lugar para el NC:** seleccionar con un rectángulo la bobina K1, la lámpara H1 y el Neutro N, y bajarlos unas 6 unidades. Los cables los siguen.
-3. **Borrar** el cable que va de S1·14 a K1·A1 **y** el de la T de H1 (de ese cable a H1·X1). Si se borra solo el primero, el de H1 queda con una punta suelta justo donde va el NC.
-4. **Colocar un contacto auxiliar NC** en el lugar libre entre S1 y la bobina (en (0, 17)), con la etiqueta **K2** (panel y Enter). La barra cuenta 5 avisos: el NC sin bobina K2 y 4 bornes sueltos (K1·A1, H1·X1 y los dos del NC).
-5. **Cablear con W:** S1·14 → NC·21 y NC·22 → K1·A1.
-6. **Volver a poner H1 en paralelo con la bobina:** con W, de H1·X1 al cable NC·22–A1 (una T) o al borne A1.
-7. **Seleccionar la rama de K1:** S1, el NA K1, el NC K2, la bobina K1, H1 y los cables entre ellos. No van L, S0 ni N.
-8. **Ctrl+D.** La copia aparece al lado con S2, K2 (NA), K2 (bobina) y H2. Su NC dice «K2» y la barra cuenta 5 avisos: R6 por ese NC y 4 bornes de la copia todavía sueltos. Ver el punto A5.
-9. **En la copia, cambiar la etiqueta del NC a K1** (panel y Enter). El aviso de R6 se va; quedan los 4 bornes sueltos hasta los pasos 10 y 11.
-10. **Cablear la copia arriba:** S2·13 y K2·13 a la red común (la de S0·12, S1·13 y K1·13).
-11. **Cablear la copia abajo:** K2·A2 y H2·X2 al Neutro, con una T sobre el cable que baja al N o al borne N.
+2. **Hacer lugar para el NC:** rectángulo **de izquierda a derecha** (toma solo lo que queda entero adentro) desde la izquierda de la bobina K1, un poco debajo de A1, hasta la derecha de H1, debajo del Neutro N. Toma la bobina, H1, N y sus 2 cables de abajo; los 2 que cruzan el borde de arriba no. Arrastrar la bobina 6 unidades hacia abajo (de Y 22 a Y 28): los cables que cruzan el borde se estiran y siguen conectados. Sigue «Sin avisos».
+3. **Borrar dos cables:** clic en el cable que baja de S1·14 a K1·A1 (entre la T y A1), **Mayús+clic** en el de la T de H1 (en su tramo horizontal) y **Supr**. Si se borra solo el primero, el de H1 queda con una punta suelta justo donde va el NC.
+4. **Colocar el NC:** arrastrar «Contacto auxiliar NC» desde la paleta al lugar libre entre S1 y la bobina, en (0, 17). Clic en el NC, etiqueta **K2** en el panel y Enter. La barra cuenta **5 avisos**: el NC sin bobina K2 (R2) y 4 bornes sueltos (K1·A1, H1·X1 y los dos del NC).
+5. **Cablear con W:** S1·14 → NC·21 y NC·22 → K1·A1 (un clic en cada borne).
+6. **Volver a poner H1 en paralelo con la bobina:** con W, clic sobre el cable NC·22–A1 (una T), clic a la altura de esa T sobre H1 (codo) y clic en H1·X1. Esc. La barra queda en **1 aviso**: R2 del NC, hasta que exista la bobina K2.
+7. **Seleccionar la rama de K1:** rectángulo **de izquierda a derecha** desde la izquierda de S1 (entre S0 y S1) hasta la derecha de H1 (entre H1 y N). Toma S1, el NA K1, el NC K2, la bobina K1, H1 y los 4 cables de adentro; no toma L, S0, N ni los cables que cruzan el borde.
+8. **Ctrl+D.** La copia aparece a la derecha (21 unidades) con S2, K2 (NA), K2 (bobina) y H2. Su NC dice «K2» y la barra cuenta **5 avisos**: R6 por ese NC y 4 bornes de la copia todavía sueltos (S2·13, K2·13, K2·A2 y H2·X2). Ver el punto A5. Es un solo paso: Ctrl+Z la quita entera.
+9. **En la copia, cambiar la etiqueta del NC a K1** (clic, panel y Enter). R6 se va; quedan **4 avisos** hasta los pasos 10 y 11.
+10. **Cablear la copia arriba,** con W:
+    - S2·13 → arriba (21, 7) → a la derecha (31, 7) → K2·13;
+    - después una T: clic sobre el tramo vertical del cable S0·12–K1·13 (justo encima de K1·13, en (10, 8)) y clic sobre el cable recién hecho, justo encima de S2·13 (en (21, 8)).
+11. **Cablear la copia abajo,** con W:
+    - H2·X2 → abajo (37, 36) → clic sobre el cable que baja al N (una T en (0, 36));
+    - K2·A2 → clic sobre ese cable nuevo, debajo de K2 (una T en (21, 36)). Esc.
 12. **Revisar** A6 a A11: «Sin avisos», las listas y F.
-13. **Ctrl+S** como `inversion.brn` y seguir con A12.
+13. **Ctrl+Mayús+S (Guardar como)** con el nombre `inversion.brn` y seguir con A12. **No usar Ctrl+S:** pisaría `marcha-parada.brn`, que es el archivo abierto.

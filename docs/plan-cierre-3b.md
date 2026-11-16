@@ -126,7 +126,7 @@ A partir de la marcha-parada (`docs/archivo/plan-T15.md`, sección 3): se interc
 - Sigue la lista de pasos de `docs/netbook-fase3b.md` (hoja 2) con mouse y teclado, desde abrir `marcha-parada.brn`. Ctrl+D se hace con la tecla, sobre la rama seleccionada.
 - **Comprueba:**
   - La copia sale con S2, K2 y H2 y el NC con "K2", y la barra cuenta el aviso de R6. Después del renombrado, la barra dice «Sin avisos».
-  - El `.brn` de Ctrl+S, en Node: `compararRedes` contra `inversion()` da 0 diferencias.
+  - El `.brn` guardado (con Ctrl+Mayús+S: ver «Etapa 2 hecha»), en Node: `compararRedes` contra `inversion()` da 0 diferencias.
   - Listas de K1 y K2: dos filas cada una. Con el mouse sobre el centro de cada contacto, la barra muestra las mismas coordenadas que la fila. Ninguna caja de lista toca nada de las ramas.
   - F a 1024×600 y a 1024×530, con el panel plegado y abierto: entra entero.
   - Un paso de deshacer por gesto.
@@ -238,6 +238,31 @@ Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador d
 - `tests/circuitos/inversion.mjs` e `inversion.brn` (704 bytes), y su test: abre igual, 0 diferencias, «nada naranja» y las listas. `marcha-parada.brn` regenerado sale idéntico.
 - `npm run circuito` con `BORNERA_BASE`, probado: con las dos bases pasa, con la marcha-parada contra la inversión falla, y con `otra` dice cuáles hay. `documentosDePrueba()` suma «inversión».
 - `npm test`: 1775 tests (1 salteado, el de `npm run circuito`). `npm run check` limpio. Sin humo ni banco: no cambia nada visible.
+
+### Etapa 2 hecha (2026-11-16)
+- **`tests/humo/cierre3b-inversion.mjs`** (32 comprobaciones). Parte del archivo congelado `tests/circuitos/marcha-parada.brn` (ajuste de Bruno al aprobar), y sigue la hoja 2 con el mouse y el teclado a 1024×600:
+  - rectángulo y arrastre para hacer lugar, clic, Mayús+clic y Supr;
+  - el NC desde la paleta y las etiquetas en el panel;
+  - los cables con W y la tecla Ctrl+D.
+- **Pasos 3, 4, 8 y 9 de la hoja 2, confirmados:**
+  - 3: los dos cables, en un paso, sin extremos sueltos;
+  - 4: «5 avisos» (R2 y 4 R7);
+  - 8: la copia con S2, K2, K2 y H2 en el lugar de `inversion()`, el NC con «K2» y «5 avisos» (R6 y 4 R7), en un solo paso;
+  - 9: «4 avisos».
+- **Resto:**
+  - «Sin avisos» al final y un paso por gesto (13 en total);
+  - `compararRedes` da 0 contra `inversion()`, en la página y en el `.brn` guardado;
+  - las listas tienen 2 filas cada una y la barra da las coordenadas en los 4 contactos;
+  - ninguna lista toca nada (holgura de 1,40);
+  - F entra a 1024×600 (10,4 px por unidad) y a 1024×530 (8,8), con el panel plegado y abierto y los textos dibujados (desde 6).
+- **Hallazgos, pasados a la hoja 2:**
+  - **Paso 13: Ctrl+S pisaba `marcha-parada.brn`**, el archivo abierto (`src/ui/archivo.ts`, paso 5 de Guardar). Ahora dice Ctrl+Mayús+S (Guardar como); A12 también. En el navegador, la descarga sugiere «Marcha-parada.brn».
+  - El paso 6 deja «1 aviso» (R2 del NC hasta que exista la bobina K2).
+  - Los dos rectángulos van de izquierda a derecha (contiene): toman lo de adentro y no los cables que cruzan el borde, que se estiran al mover.
+  - Las T de los pasos 10 y 11 salen en (10, 8), (21, 8), (0, 36) y (21, 36).
+  - Al zoom inicial, el humo desplazó la vista 4 veces.
+- **Pendiente de UI** (en `docs/plan-fase3b.md`): borrar un cable con una T colgando deja la T suelta.
+- La hoja 2 ya no es un borrador. `npm test`: 1775 (1 salteado). `npm run check` limpio. `npm run humo`: 727 de 727.
 
 ## 10. Necesita autorización de Bruno
 - Push de `main` (6 commits adelante al planear, más los del cierre).

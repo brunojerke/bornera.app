@@ -97,3 +97,6 @@ Las mismas de la fase 3:
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/archivo/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/archivo/plan-fase3.md`, T14b). Está en los riesgos de `docs/archivo/plan-T16.md`.
+
+## Pendientes de UI
+- **Borrar un cable con una T colgando deja la T suelta.** El cable que salía en T queda con un extremo libre donde estaba el punto. Hoy hay que borrarlo aparte (hoja 2 de `docs/netbook-fase3b.md`, paso 3). Opciones a decidir: borrar también los cables en T, reconectarlos, o avisar al borrar. Encontrado en el cierre 3b, etapa 1.
