@@ -27,7 +27,7 @@ Seguir la hoja 2. Cronometrar desde Abrir.
 | A2 | W: cada cable sale en un gesto. Un rechazo es traba solo si el mensaje no explica por qué o no queda otra forma razonable | ninguna traba | T15 | ☐ |
 | A3 | Paleta, panel, barra y diálogos (Guardar, Abrir, «¿Guardar los cambios?») se ven enteros | todo a la vista | T15 | ☐ |
 | A4 | F3 al soltar cada cable y después de Ctrl+D, leído antes de 1 s | máx. del último segundo < 50 ms; lentos (> 16 ms) en 5 s: 0 o 1 | T15 | peor: ____ ms / ____ lentos |
-| A5 | Después de Ctrl+D, la copia tiene S2, K2 (NA), K2 (bobina) y H2, y su NC dice «K2». La barra cuenta un aviso (R6) | exacto | T17/T19 | ☐ |
+| A5 | Después de Ctrl+D, la copia tiene S2, K2 (NA), K2 (bobina) y H2, y su NC dice «K2». La barra cuenta 5 avisos: el NC de la copia (R6) y sus 4 bornes sueltos (S2·13, K2·13, K2·A2 y H2·X2) | exacto | T17/T19 | ☐ |
 | A6 | Al terminar, la barra dice «Sin avisos» | 0 avisos | Bruno | ☐ |
 | A7 | Hay una sola bobina K1 y una sola bobina K2 | sin repetidas | Bruno | ☐ |
 | A8 | Bajo K1, 2 filas: NA 13-14 (rama de K1) y NC 21-22 (rama de K2). Bajo K2, 2 filas: NA 13-14 (rama de K2) y NC 21-22 (rama de K1) | exacto | Bruno | ☐ |
@@ -88,19 +88,19 @@ $env:BORNERA_BRN = "C:\Users\jerke\Downloads\inversion.brn"; $env:BORNERA_BASE =
 
 # Hoja 2 — Pasos para armar la inversión
 
-> **Borrador:** lo confirma el humo de la etapa 2 (orden, dónde hacer lugar y cómo reconectar H1). Si algo no sale como dice, anotarlo como hallazgo y seguir de la forma más razonable.
+> **Borrador:** lo confirma el humo de la etapa 2 (orden, dónde hacer lugar y cómo reconectar H1). Los pasos 3, 4, 8 y 9 ya los corrigió la etapa 1 con el test del procedimiento (`src/editor/inversionProcedimiento.test.ts`). Si algo no sale como dice, anotarlo como hallazgo y seguir de la forma más razonable.
 
 Partimos de la marcha-parada: L, S0 (parada, NC), S1 (marcha, NA) con el NA de K1 en paralelo (retención), bobina K1 con H1 en paralelo y N. Hay que intercalar el NC de K2 antes de la bobina K1 y después duplicar la rama para K2.
 
 1. **Abrir** `marcha-parada.brn`. La barra dice «Sin avisos».
 2. **Hacer lugar para el NC:** seleccionar con un rectángulo la bobina K1, la lámpara H1 y el Neutro N, y bajarlos unas 6 unidades. Los cables los siguen.
-3. **Borrar** el cable que va de S1·14 a K1·A1, el que lleva la T de H1.
-4. **Colocar un contacto auxiliar NC** en el lugar libre entre S1 y la bobina, con la etiqueta **K2** (panel y Enter). La barra cuenta un aviso: todavía no hay bobina K2.
+3. **Borrar** el cable que va de S1·14 a K1·A1 **y** el de la T de H1 (de ese cable a H1·X1). Si se borra solo el primero, el de H1 queda con una punta suelta justo donde va el NC.
+4. **Colocar un contacto auxiliar NC** en el lugar libre entre S1 y la bobina (en (0, 17)), con la etiqueta **K2** (panel y Enter). La barra cuenta 5 avisos: el NC sin bobina K2 y 4 bornes sueltos (K1·A1, H1·X1 y los dos del NC).
 5. **Cablear con W:** S1·14 → NC·21 y NC·22 → K1·A1.
 6. **Volver a poner H1 en paralelo con la bobina:** con W, de H1·X1 al cable NC·22–A1 (una T) o al borne A1.
 7. **Seleccionar la rama de K1:** S1, el NA K1, el NC K2, la bobina K1, H1 y los cables entre ellos. No van L, S0 ni N.
-8. **Ctrl+D.** La copia aparece al lado con S2, K2 (NA), K2 (bobina) y H2. Su NC dice «K2» y la barra avisa (R6). Ver el punto A5.
-9. **En la copia, cambiar la etiqueta del NC a K1** (panel y Enter). El aviso se va.
+8. **Ctrl+D.** La copia aparece al lado con S2, K2 (NA), K2 (bobina) y H2. Su NC dice «K2» y la barra cuenta 5 avisos: R6 por ese NC y 4 bornes de la copia todavía sueltos. Ver el punto A5.
+9. **En la copia, cambiar la etiqueta del NC a K1** (panel y Enter). El aviso de R6 se va; quedan los 4 bornes sueltos hasta los pasos 10 y 11.
 10. **Cablear la copia arriba:** S2·13 y K2·13 a la red común (la de S0·12, S1·13 y K1·13).
 11. **Cablear la copia abajo:** K2·A2 y H2·X2 al Neutro, con una T sobre el cable que baja al N o al borne N.
 12. **Revisar** A6 a A11: «Sin avisos», las listas y F.

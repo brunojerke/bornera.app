@@ -72,7 +72,33 @@ A partir de la marcha-parada (`docs/plan-T15.md`, sección 3): se intercala el N
 - No hay bobinas repetidas. Cada contactor tiene un NA y un NC, así que `compararRedes` no tiene contactos repetidos que identificar (el límite de T17b no aplica).
 - Listas esperadas: K1 tiene NA 13-14 (rama de K1) y NC 21-22 (rama de K2); K2, NA 13-14 (rama de K2) y NC 21-22 (rama de K1).
 - `validar` da cero (R1 a R9).
-- **Coordenadas, codos y uniones:** las fija la etapa 1, con `prepararCable` como en W (D3-B de T15). La rama de K1 conserva las posiciones de la marcha-parada donde se pueda, y la de K2 queda donde la dejaría Ctrl+D. Al cerrar la etapa 1 se copian aquí.
+- **Coordenadas, codos y uniones (fijadas en la etapa 1, `src/core/circuitos/inversion.ts`):** la rama de K1 es la marcha-parada con la bobina, H1 y N 6 unidades más abajo y el NC entre S1 y la bobina. La de K2 está donde la deja Ctrl+D: dx = 21, la misma que en T18.
+
+| Componente | Lugar | Componente | Lugar |
+|---|---|---|---|
+| L | (0, 0) | S2 | (21, 11) |
+| S0 | (0, 5) | K2 (NA) | (31, 11) |
+| S1 | (0, 11) | K1 (NC) | (21, 17) |
+| K1 (NA) | (10, 11) | K2 (bobina) | (21, 28) |
+| K2 (NC) | (0, 17) | H2 | (37, 28) |
+| K1 (bobina) | (0, 28) | N (rot. 180) | (0, 39) |
+| H1 | (16, 28) | | |
+
+| Cable | De → a | Codos |
+|---|---|---|
+| w1 a w3, w5 | como en la marcha-parada (L–S0·11, S0·12–S1·13, S0·12–K1·13 por (10, 7), K1·14–S1·14) | |
+| w4 | S1·14 → K2·21 (NC) | |
+| w6 | K2·22 (NC) → K1·A1 | |
+| w7 | K1·A2 → N | |
+| w8 | T sobre w6 en (0, 22) → H1·X1 | (16, 22) |
+| w9 | T sobre w7 en (0, 34) → H1·X2 | (16, 34) |
+| w10 a w13 | los de la copia: S2·14 → K1·21, K2·14 → S2·14, K1·22 → K2·A1, T en (21, 22) → H2·X1 por (37, 22) | |
+| w14 | S2·13 → K2·13 | (21, 7), (31, 7) |
+| w15 | T sobre w3 en (10, 8) → T sobre w14 en (21, 8) | |
+| w16 | H2·X2 → T sobre w7 en (0, 36) | (37, 36) |
+| w17 | K2·A2 → T sobre w16 en (21, 36) | |
+
+  10 uniones: S0·12 y S1·14 (bornes con dos cables), S2·14, y las T en (10, 8), (21, 8), (0, 22), (21, 22), (0, 34), (0, 36) y (21, 36). Las listas tienen 1,4 de holgura mínima, contra los cables de su propia bobina, como la rama NC de T18 (mínimo: 1).
 
 ## 3. Núcleo y tests (etapa 1)
 - **`src/core/circuitos/inversion.ts`**, con la misma forma que `marchaParada.ts`:
@@ -198,6 +224,20 @@ Cada etapa cierra con `npm test`, `npm run check` y commit local. Si toca algo v
 
 ### Etapa 0 hecha (2026-11-16)
 Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador de los pasos), `docs/ideas.md` y el puntero en `docs/plan-fase3b.md`. Sin código.
+
+### Etapa 1 hecha (2026-11-16)
+- **Commit aparte:** `testTimeout` de 20 s en `vite.config.js` y los topes B7, B10, B12 y B13 confirmados (B2 ya tenía origen propio). Causa probable del fallo intermitente de la etapa 0: el tope por defecto de Vitest (5 s) dejaba ×1,07 al recorrido de 1000 operaciones de `referencias.test.ts` (4,7 s). Otros 11 tests sin tope propio tenían menos de ×3. Los topes que se sospechaban tenían margen: `TOPE_COMPARAR_MS`, ×12, y `LIMITE_MS`, ×6,5.
+- `src/core/circuitos/inversion.ts` y `inversion.test.ts`: tablas, 7 redes, 10 uniones, `validar` y `validarHoja` vacíos, listas con clase, bornes y centro, deshacer y rehacer, y guardar y abrir.
+- **Cambio de lugar:** las cajas de las listas no están en `inversion.test.ts`, porque `src/core` no puede importar `render/`. Están en `src/editor/inversionProcedimiento.test.ts`, con las de `referenciasDuplicar.test.ts` pasadas a `src/editor/prueba-cajas.ts`, y se comprueban en la referencia y en lo que da el procedimiento.
+- **Test del procedimiento** (`src/editor/inversionProcedimiento.test.ts`): Ctrl+D es `editor.accion("duplicar")`, la misma función que la tecla (pedido de Bruno al aprobar). Lo demás va por Mover, borrar, Colocar (con su revisión de lugar), `cambiarEtiqueta` del editor y W (`prepararCable`). La copia sale en el mismo lugar que la rama de K2 de `inversion()`.
+- **Mutantes:** con `etiquetarLote` reemplazado (sin renumerar; el NA de la copia que no sigue a su bobina; la etiqueta del NC contada como usada, que da K3), las comprobaciones de la copia y `compararRedes` fallan, y lo anterior a Ctrl+D pasa igual. Probado además a mano con la copia sin renumerar en `ArmarEtiquetas.pegado`: fallan 3 tests. Se revirtió.
+- **Hallazgos para la hoja 2** (ya corregidos ahí; la etapa 2 los confirma con el humo):
+  - Borrar solo S1·14–A1 deja el cable de la T de H1 con un extremo suelto en (0, 16), donde va el NC: hay que borrar los dos.
+  - Al colocar el NC, la barra cuenta 5 avisos, no 1: R2 del NC y R7 de A1, H1·X1, NC·21 y NC·22.
+  - Después de Ctrl+D también son 5: R6 del NC de la copia y R7 de S2·13, K2·13, K2·A2 y H2·X2. Al renombrar el NC, R6 se va y quedan los 4 R7 hasta cablear.
+- `tests/circuitos/inversion.mjs` e `inversion.brn` (704 bytes), y su test: abre igual, 0 diferencias, «nada naranja» y las listas. `marcha-parada.brn` regenerado sale idéntico.
+- `npm run circuito` con `BORNERA_BASE`, probado: con las dos bases pasa, con la marcha-parada contra la inversión falla, y con `otra` dice cuáles hay. `documentosDePrueba()` suma «inversión».
+- `npm test`: 1775 tests (1 salteado, el de `npm run circuito`). `npm run check` limpio. Sin humo ni banco: no cambia nada visible.
 
 ## 10. Necesita autorización de Bruno
 - Push de `main` (6 commits adelante al planear, más los del cierre).
