@@ -149,7 +149,7 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
   - Por el banco, los bornes sin conectar y los extremos sueltos van en la barra y en el panel, y en el lienzo solo se marcan con un anillo en el componente o cable seleccionado. Los avisos de etiqueta se marcan con un contorno a rayas.
   - Plan en `docs/plan-T19.md`.
 
-> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`). T16 (copiar y pegar) está hecha desde el 2026-11-13 y T17 (etiquetado automático), T17b (contacto auxiliar NC) y T18 (referencias cruzadas) desde el 2026-11-14. T19 (validaciones en vivo) está hecha desde el 2026-11-16 (nota del 2026-11-16). Sigue el cierre de la fase 3b.
+> Nota (2026-11-12; ubicación decidida por Bruno el 2026-11-13): copiar/pegar, etiquetado automático, referencias cruzadas y validaciones en vivo quedaron fuera del criterio de la fase 3. Forman la **fase 3b**, como T16–T19, después de la fase 3 y antes de la 4: ver `docs/plan-fase3b.md` (T16 en `docs/plan-T16.md`). T16 (copiar y pegar) está hecha desde el 2026-11-13 y T17 (etiquetado automático), T17b (contacto auxiliar NC) y T18 (referencias cruzadas) desde el 2026-11-14. T19 (validaciones en vivo) está hecha desde el 2026-11-16 (nota del 2026-11-16). Sigue el cierre de la fase 3b, con plan en `docs/plan-cierre-3b.md` (aprobado el 2026-11-16).
 
 **Atajos principales:** F5 alterna editar/simular, Ctrl+N nuevo, Ctrl+O abre, Ctrl+S guarda, Ctrl+Mayús+S guarda como, Ctrl+P exporta PDF (con la exportación, fase 7), Esc cancela la herramienta actual. Tema claro y oscuro.
 
@@ -225,6 +225,8 @@ Carpetas separadas por responsabilidad, para que Claude Code trabaje en un módu
 ├── docs/
 │   ├── arquitectura.md    este plan, resumido
 │   ├── plan-*.md          plan de cada fase y de las tareas grandes
+│   ├── netbook-*.md       checklist para imprimir de la prueba en la netbook
+│   ├── ideas.md           ideas para más adelante, sin plan
 │   └── bench.md           resultados del banco de dibujado
 ├── src/
 │   ├── core/              sin dependencias del navegador
@@ -273,6 +275,8 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
    - Pasa cuando: se instala y corre en la netbook y en una PC con Windows.
 
 **Después del MVP:** temporizadores, relés auxiliares, finales de carrera, varias hojas, más símbolos, advertencias de tensión, importador `.cad` y, a largo plazo, PLC en escalera.
+
+> Nota (2026-11-16): Bruno eligió el PLC simulado con ladder básico como fase propia, después de la fase 5. El PLC genérico como símbolo iría después de la fase 4. Esas ideas, el rótulo del plano y el hardware real por USB están en `docs/ideas.md`. La hoja de ruta se actualiza cuando se planeen.
 
 ## Prompts de arranque: fase 1
 
@@ -367,6 +371,7 @@ La simulación tiene que dar resultados que coincidan con lo que pasaría en el 
 - **Rendimiento:** el banco de pruebas no puede empeorar más de un 10 % entre fases.
   > Nota (2026-11-12): excepción aceptada en T14b. *Soltar con todo* subió 7 ms en la PC y se mide con un criterio absoluto: ≤ 200 ms en la netbook. La línea base 0.1.2 se midió en Mint con WebKitGTK; hay que rehacerla en la netbook con Windows.
   > Nota (2026-11-14, decisión de Bruno en T17): los topes de los escenarios que la versión anterior no tiene se fijan contra el commit anterior a la tarea, medido en la misma sesión con ABBA, no contra números de otro día. La netbook, al cierre de cada fase, sigue decidiendo (`docs/plan-fase3b.md`, Reglas).
+  > Nota (2026-11-16, ajuste de Bruno al cierre de la fase 3b): en la comparación entre fases, los costos ya aceptados en las tareas de la fase (con su tope y su commit) se juzgan por su tope absoluto, no por el 10 %. Frena solo una suba que no esté en esa lista (`docs/plan-cierre-3b.md`, sección 6).
   > Nota (2026-11-13): en el cierre de la fase 3 (T15, etapa 4), *Encuadrar (F)* con 2000 no pasa contra 0.1.2: +20 % de trabajo por gesto, por T14n más lo acumulado desde T2. Queda anotado como "no pasa"; optimizarlo es una tarea aparte, después de T15, y la netbook decide la urgencia. Las comparaciones contra 0.1.2 se hacen con `npm run bench -- --escena-012`, para que las dos versiones dibujen la misma escena (`docs/bench.md`).
 - **Prueba humana:** armar en el programa los circuitos de los trabajos de la escuela y comparar con lo que da CADe\_SIMU y con el funcionamiento real.
 

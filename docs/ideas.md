@@ -1,0 +1,21 @@
+# Ideas para más adelante
+
+Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una fase, se planea ahí (`docs/plan-...`). El orden de las fases está en `docs/arquitectura.md`, «Hoja de ruta por fases».
+
+## Rótulo o cajetín del plano
+- **Qué:** el cuadro de datos del plano dibujado en la hoja, con título, autor, fecha, revisión y hoja.
+- **Relación:** la fase 7 (Exportación) ya pide el PDF «con rótulo y marco». El `.brn` ya guarda título, autor y fecha.
+- **Cuándo:** sin fecha; a más tardar, con la fase 7.
+
+## PLC genérico como símbolo
+- **Qué:** un PLC como componente de la hoja, con sus bornes de entradas y salidas, que se dibuja y se cablea como cualquier símbolo. Sin programa ni simulación.
+- **Cuándo:** después de la fase 4.
+
+## PLC simulado con ladder básico (fase propia)
+- **Qué:** programar el PLC en escalera y simularlo junto con el circuito. Contactos NA y NC, bobina, set/reset, temporizador TON, contador y ciclo de scan.
+- **Cuándo:** una fase propia después de la fase 5 (simulación de mando). Lo eligió Bruno el 2026-11-16.
+- **Relación:** `docs/arquitectura.md` lo tiene en «Después del MVP» («a largo plazo, PLC en escalera»). La hoja de ruta se actualiza cuando se planee la fase.
+
+## ESP32 o hardware real por USB
+- **Qué:** conectar un ESP32 u otro hardware por USB para leer entradas y mover salidas reales desde la simulación.
+- **Cuándo:** al final, después de lo demás.

@@ -2,7 +2,7 @@
 
 Decidida el 2026-11-13 (Bruno): las cuatro funciones del editor que quedaron fuera del criterio de la fase 3 forman la fase 3b. Va después de la fase 3, cerrada con la versión 0.1.3, y antes de la fase 4.
 
-Orden: T16 → T17 → T17b → T18 → T19. Hechas T16, T17, T17b y T18 (2026-11-14) y T19 (2026-11-16, `docs/plan-T19.md`). Sigue el cierre de la fase (armado de la inversión, `inversion.brn` y netbook). El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
+Orden: T16 → T17 → T17b → T18 → T19. Hechas T16, T17, T17b y T18 (2026-11-14) y T19 (2026-11-16, `docs/plan-T19.md`). Sigue el cierre de la fase (armado de la inversión, `inversion.brn` y netbook): plan en `docs/plan-cierre-3b.md`, aprobado el 2026-11-16 (sección "Cierre de la fase 3b", abajo). El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
 
 ## Contexto
 La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`). Su sección "Fuera del criterio de pasaje" dejó para después cuatro funciones de la lista "Funciones del editor" de `docs/arquitectura.md`:
@@ -106,6 +106,19 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
 - **Opcional para después (Bruno, 2026-11-15, no va en T19):** lista desplegable de avisos desde el contador de la barra y clic para ir al componente. Va junto con el clic para ir de T18: usan la misma función.
 - **R4 partida (Bruno, 2026-11-15, al arrancar la etapa 1):** error solo para lo que no es pulsador (bobinas y lámparas). Un pulsador NA y uno NC con la misma etiqueta se permiten (doble contacto); dos del mismo tipo dan aviso (`docs/plan-T19.md`, cambios 6 y 7).
 - **Pendiente (de T19, no va en T19):** `compararRedes` trata hoy un pulsador repetido en la base como error (tira: "ningún componente repetido"), aunque con R4 partida un NA y un NC "S1" son válidos y dos NA "S1" son solo aviso. Revisarlo cuando haga falta comparar un circuito con pulsadores de doble contacto (por ejemplo, la inversión al cierre de la fase).
+  - **Revisado al planear el cierre (2026-11-16):** un NA y un NC "S1" en la base no tiran y dan 0 diferencias, porque `compararRedes` agrupa por etiqueta y tipo. Solo tiran dos del mismo tipo, que R4 ya avisa. Con D1-A (enclavamiento solo por los NC de K1 y K2) no hace falta tocarlo. Queda como límite conocido (`docs/plan-cierre-3b.md`, sección 1).
+
+### Cierre de la fase 3b
+- **Qué:** el criterio de "Pasa cuando" (arriba): inversión de giro a mano con Ctrl+D, `tests/circuitos/inversion.brn`, `npm run circuito`, banco contra `v0.1.3` y la netbook con Windows.
+- **Plan:** `docs/plan-cierre-3b.md`, aprobado el 2026-11-16, con D1-A, D2-A, D3-A y D4-B y los ajustes 1 a 4 de Bruno:
+  - D1-A: enclavamiento solo por los NC de K1 y K2.
+  - D2-A: referencia por código, congelada.
+  - D3-A: `0.1.4-alpha.1` para la netbook y después `0.1.4`.
+  - D4-B: «Probar la fase 3b» en el menú de desarrollo.
+- **Checklist de la netbook:** `docs/netbook-fase3b.md`, con el tope de netbook de cada criterio y la hoja de pasos.
+- **Ideas para más adelante:** `docs/ideas.md`.
+- **Etapa 0 (docs):** hecha el 2026-11-16.
+- **Etapas 1 a 7:** núcleo y tests, humo, banco, «Probar la fase 3b», alpha, netbook y cierre (`docs/plan-cierre-3b.md`, sección 9).
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/plan-fase3.md`, T14b). Está en los riesgos de `docs/plan-T16.md`.
