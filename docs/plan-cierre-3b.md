@@ -180,7 +180,7 @@ Solo HEAD. Cada uno con el tope absoluto que fijó su tarea.
 - Checklist completa, con el tope de netbook de cada criterio: `docs/netbook-fase3b.md`.
 - La hoja 2 (los pasos) se confirma en la etapa 2.
 - Se imprime después de la etapa 4, cuando está la tabla de «Probar la fase 3b».
-- Los topes que no fijó Bruno salen del factor 2,5 de T16. Están marcados ahí como «propuesto» y se confirman antes de medir.
+- Los topes que no fijó Bruno salen del factor 2,5 de T16. Los que estaban como «propuesto» (B7, B10, B12 y B13) los confirmó Bruno el 2026-11-16 y están como «confirmado».
 
 ## 9. Etapas
 Cada etapa cierra con `npm test`, `npm run check` y commit local. Si toca algo visible, también con `npm run humo`. Sin push.

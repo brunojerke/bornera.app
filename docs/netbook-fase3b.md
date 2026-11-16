@@ -7,7 +7,7 @@ Para imprimir. Plan: `docs/plan-cierre-3b.md`. Cada criterio lleva su **tope de 
 - **T15:** el criterio «sin trabas» de `docs/plan-T15.md`, sección 5.
 - **0.1.2:** la meta de 0.1.2, ningún cuadro de más de 50 ms y menos de 1 % de más de 16,7 ms.
 - **×2,5:** el tope absoluto de la PC por el factor de la netbook de T16 (`docs/plan-T16.md`, sección 4).
-- **Propuesto:** sale de ×2,5 y lo confirma Bruno antes de medir.
+- **Confirmado:** sale de ×2,5 sobre un tope que no fijó otra tarea; Bruno lo confirmó el 2026-11-16 (cierre 3b, etapa 1).
 
 Versión: `0.1.4-alpha.1` · Fecha: ________ · Hora de inicio: ________
 
@@ -52,13 +52,13 @@ Se anota, no es criterio: tiempo total ______ min · ¿Desplazaste o alejaste el
 | B4 | Pegar 500 | paso: mediana / máx. | ≤ 100 / ≤ 200 ms | ×2,5 (T16: 40/80) | 5,8 / 8,8 | |
 | B5 | ″ | deshacer: mediana / máx. | ≤ 100 / ≤ 200 ms | ×2,5 (T16: 40/80) | 1,7 / 3,6 | |
 | B6 | ″ | cuadros después del gesto | ≤ 1 lento por gesto y ninguno > 100 ms | Bruno | 0 lentos | |
-| B7 | Previa de pegar 160 | revisión por punto: p95 | ≤ 12,5 ms | propuesto (5 ms) | 0,9 | |
+| B7 | Previa de pegar 160 | revisión por punto: p95 | ≤ 12,5 ms | confirmado (×2,5 de 5 ms) | 0,9 | |
 | B8 | Previa de pegar, 40 a 500 | cuadros | ninguno > 50 ms y < 1 % > 16,7 ms | 0.1.2 | 0 lentos | |
 | B9 | Previa de pegar, la serie | mayor N con revisión p95 ≤ 12,5 ms | se anota. Si da menos de 160, se baja `TOPE_PREVIA_PEGAR`; si da 320 o más, se puede subir (con Bruno) | T16 | 500 | N = ____ |
-| B10 | Rehacer al 31 % con referencias | por gesto | ≤ 62,5 ms | propuesto (25 ms) | 22,6 | |
+| B10 | Rehacer al 31 % con referencias | por gesto | ≤ 62,5 ms | confirmado (×2,5 de 25 ms) | 22,6 | |
 | B11 | ″ | cuadros | ninguno > 50 ms y < 1 % > 16,7 ms | 0.1.2 | 0 lentos | |
-| B12 | Mover 1 contacto con referencias al 31 % | paso: mediana | ≤ 4,5 ms | propuesto (1,8 ms) | 1,1 | |
-| B13 | Dibujar 1 cable con 2000 y un par NC+bobina al 31 % | R6: p95 / máx. | ≤ 7,5 / ≤ 20 ms | propuesto (3/8 ms) | 0,1 / 0,1 | |
+| B12 | Mover 1 contacto con referencias al 31 % | paso: mediana | ≤ 4,5 ms | confirmado (×2,5 de 1,8 ms) | 1,1 | |
+| B13 | Dibujar 1 cable con 2000 y un par NC+bobina al 31 % | R6: p95 / máx. | ≤ 7,5 / ≤ 20 ms | confirmado (×2,5 de 3/8 ms) | 0,1 / 0,1 | |
 | B14 | ″ | cuadros | ninguno > 50 ms y < 1 % > 16,7 ms | 0.1.2 | 0 lentos | |
 | B15 | Encuadrar (F) con 500 | cuadros | 0 lentos (> 16 ms) | Bruno (T19, cambio 9) | 0 lentos | |
 

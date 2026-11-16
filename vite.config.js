@@ -13,6 +13,11 @@ export default defineConfig(() => ({
   test: {
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     environment: "node",
+    // Tope por test (cierre 3b, etapa 1). El por defecto de Vitest es 5 s, y
+    // los recorridos al azar sin tope propio tardan hasta 4,7 s en la PC
+    // (referencias.test.ts, 1000 operaciones): con carga en paralelo se pasaban
+    // a veces. 20 s les deja ×4. Los topes explícitos de cada test siguen valiendo.
+    testTimeout: 20_000,
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
