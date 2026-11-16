@@ -29,8 +29,10 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
 4. **Actualizar el plan**
    - Registrar en el plan vigente de `docs/` lo hecho, los resultados, las decisiones y lo pendiente.
    - Si falta una medición de aceptación, como la de la netbook, dejar la tarea abierta y decir exactamente qué falta.
+   - Un .md de más de 20 KB no se lee entero: grep + leer solo el rango.
 
 5. **Revisar docs/arquitectura.md**
+   - No leerlo entero (pasa los 20 KB): buscar con grep las secciones que la tarea pudo tocar (por ejemplo `grep -n "^#" docs/arquitectura.md` y luego términos como "formato .brn", "comandos", "fases") y leer solo esos rangos.
    - Si la tarea cambió algo que arquitectura.md describe (modelo de datos, formato .brn, comandos, fases o criterios de pasaje, plataforma o equipo de referencia, metas de rendimiento o RAM, estructura del repo), corregirlo en el mismo commit.
    - Donde describe cómo es hoy, corregir el texto. Donde es plan o historia, agregar una nota corta con fecha, sin borrar.
    - Si un cambio contradice una decisión de Bruno o mueve una fase, no editarlo: frenar y preguntar.

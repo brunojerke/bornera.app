@@ -4,9 +4,9 @@ Para imprimir. Plan: `docs/plan-cierre-3b.md`. Cada criterio lleva su **tope de 
 
 **Origen de los topes:**
 - **Bruno:** fijado por Bruno para la netbook.
-- **T15:** el criterio «sin trabas» de `docs/plan-T15.md`, sección 5.
+- **T15:** el criterio «sin trabas» de `docs/archivo/plan-T15.md`, sección 5.
 - **0.1.2:** la meta de 0.1.2, ningún cuadro de más de 50 ms y menos de 1 % de más de 16,7 ms.
-- **×2,5:** el tope absoluto de la PC por el factor de la netbook de T16 (`docs/plan-T16.md`, sección 4).
+- **×2,5:** el tope absoluto de la PC por el factor de la netbook de T16 (`docs/archivo/plan-T16.md`, sección 4).
 - **Confirmado:** sale de ×2,5 sobre un tope que no fijó otra tarea; Bruno lo confirmó el 2026-11-16 (cierre 3b, etapa 1).
 
 Versión: `0.1.4-alpha.1` · Fecha: ________ · Hora de inicio: ________

@@ -27,19 +27,19 @@ Descartadas:
 - **El pendiente de `compararRedes` (de T19) no frena el cierre.** Probado con un test temporal, ya borrado:
   - un pulsador NA y uno NC "S1" en la base no tiran y dan 0 diferencias contra sí mismos: `compararRedes` agrupa por etiqueta **y tipo** (`compararRedes.ts:49`);
   - dos NA "S1" sí tiran («la base tiene 2…»), pero R4 ya los marca como aviso: no pueden estar en una base «Sin avisos».
-- Ctrl+D sobre la rama de K1 con el NC "K2", por las reglas 4 y 5 de T17 (`docs/plan-T17.md`, "Regla al pegar y duplicar"): la copia sale S2, K2 (NA), K2 (bobina) y H2, y el NC conserva "K2". R6 lo avisa hasta que se renombra a "K1" (`docs/plan-fase3b.md`, T19).
+- Ctrl+D sobre la rama de K1 con el NC "K2", por las reglas 4 y 5 de T17 (`docs/archivo/plan-T17.md`, "Regla al pegar y duplicar"): la copia sale S2, K2 (NA), K2 (bobina) y H2, y el NC conserva "K2". R6 lo avisa hasta que se renombra a "K1" (`docs/plan-fase3b.md`, T19).
 - Los escenarios de la lista de la netbook existen solo en el banco headless (`tests/bench/pagina.ts`). Ese archivo es un script: al importarlo corre `correr()`, que manda los resultados por `fetch`. El menú de desarrollo aparece en desarrollo y en las prereleases (`BarraSuperior.svelte:120`, `ES_PRERELEASE` de `src/ui/version.ts`) y hoy trae solo el diagnóstico de arrastre. Ctrl+Shift+B cicla las escenas del banco en cualquier build.
-- Factor de la netbook con Windows: 2,5 respecto de la PC (`docs/plan-T16.md`, sección 4: «40 ms en la PC son unos 100 ms allá»).
+- Factor de la netbook con Windows: 2,5 respecto de la PC (`docs/archivo/plan-T16.md`, sección 4: «40 ms en la PC son unos 100 ms allá»).
 
 ### Supuestos (a verificar)
-- Las listas de K1 y K2 no tapan la otra rama. T18 midió, sin el NC, holguras de 6,58 (lista de K1 contra la copia) y 4,0 (lista de K2 contra la rama de K1) con Ctrl+D a dx = 21 (`docs/plan-T18.md`, sección 4). El NC suma alto, no ancho. Lo verifican la etapa 1 (cajas) y la 2 (humo).
+- Las listas de K1 y K2 no tapan la otra rama. T18 midió, sin el NC, holguras de 6,58 (lista de K1 contra la copia) y 4,0 (lista de K2 contra la rama de K1) con Ctrl+D a dx = 21 (`docs/archivo/plan-T18.md`, sección 4). El NC suma alto, no ancho. Lo verifican la etapa 1 (cajas) y la 2 (humo).
 - La inversión entra con F a 1024×600 y a 1024×530 con los textos legibles.
 - `svelte/server` puede renderizar `BarraSuperior` en Vitest con `vi.stubEnv` para el test de la sección 7. Si no, ver la alternativa ahí.
 - `0.1.4` se instala encima de `0.1.4-alpha.1` sin desinstalar, como 0.1.3 sobre alpha.11.
 
 ## 2. El circuito de referencia (D1-A)
 
-A partir de la marcha-parada (`docs/plan-T15.md`, sección 3): se intercala el NC "K2" entre S1/K1·14 y la bobina K1, con H1 en paralelo con la bobina, y la rama se duplica para K2, con el NC "K1".
+A partir de la marcha-parada (`docs/archivo/plan-T15.md`, sección 3): se intercala el NC "K2" entre S1/K1·14 y la bobina K1, con H1 en paralelo con la bobina, y la rama se duplica para K2, con el NC "K1".
 
 | Rol | Tipo | Etiqueta | Bornes |
 |---|---|---|---|
@@ -108,15 +108,15 @@ A partir de la marcha-parada (`docs/plan-T15.md`, sección 3): se intercala el N
   - Las tablas de la sección 2, las 7 redes (por id y como "etiqueta·borne") y las uniones.
   - `validar` vacío y `validarHoja` vacío.
   - Las listas de K1 y K2 (`referencias`), con clase, bornes y coordenadas.
-  - La caja de cada lista no toca nada de la otra rama ni de la propia (condición 4 de `docs/plan-T18.md`, sección 3), con las cajas de `referenciasDuplicar.test.ts`.
+  - La caja de cada lista no toca nada de la otra rama ni de la propia (condición 4 de `docs/archivo/plan-T18.md`, sección 3), con las cajas de `referenciasDuplicar.test.ts`.
   - Deshacer y rehacer todo, y guardar y abrir.
 - **Test del procedimiento** (D2-A): desde `marchaParada()`, con los comandos del procedimiento: hacer lugar, intercalar el NC "K2", `recortar` y `pegar` con el etiquetado de Ctrl+D, `CambiarEtiqueta` del NC de la copia a "K1" y los cables de la copia.
   - Comprueba que la copia sale con S2, K2, K2 y H2, y el NC con "K2".
   - Antes de renombrar, R6 avisa ese NC.
   - Al final: `compararRedes` contra `inversion()` da 0 diferencias y `validar` da cero.
-- **Archivo congelado:** `tests/circuitos/inversion.mjs` genera `inversion.brn`, igual que `marcha-parada.mjs`, y `inversion.test.ts` lo abre y lo compara con `inversion()`. También fija «nada naranja» (`docs/plan-T19.md`, sección 3) y las listas (`docs/plan-T18.md`, sección 9) con el archivo.
+- **Archivo congelado:** `tests/circuitos/inversion.mjs` genera `inversion.brn`, igual que `marcha-parada.mjs`, y `inversion.test.ts` lo abre y lo compara con `inversion()`. También fija «nada naranja» (`docs/archivo/plan-T19.md`, sección 3) y las listas (`docs/archivo/plan-T18.md`, sección 9) con el archivo.
 - **`npm run circuito`:**
-  - Nueva variable opcional `BORNERA_BASE` (`marcha-parada` o `inversion`). Sin ella compara contra la marcha-parada, como hasta ahora (`docs/plan-T15.md`, sección 5, sigue valiendo).
+  - Nueva variable opcional `BORNERA_BASE` (`marcha-parada` o `inversion`). Sin ella compara contra la marcha-parada, como hasta ahora (`docs/archivo/plan-T15.md`, sección 5, sigue valiendo).
   - Con un valor desconocido, falla y dice cuáles hay.
   - El mensaje de «pasa» dice contra qué base comparó.
 - `documentosDePrueba()` suma «inversión».
@@ -252,7 +252,7 @@ Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador d
 - **Olvidarse de renombrar el NC de la copia.** Lo marcan dos cosas: R6 en la barra y `compararRedes` («Falta "K1" (contactor.auxiliar_nc)…» y «Hay 2 "K2"…»).
 - **Ruido del banco.** Las celdas aceptadas tienen tope absoluto. Una suba nueva que se repita frena y se diagnostica como en T18 y T19 (ABBA ×5, reglas fijadas antes de medir).
 - **El banco partido en dos (etapa 4)** podría cambiar lo que mide. Por eso la etapa 3 mide antes de partirlo, y la etapa 4 comprueba que salgan los mismos escenarios y nombres.
-- **El tope 160 de la previa en la netbook.** Si la revisión por punto pasa su tope, `TOPE_PREVIA_PEGAR` se revisa con Bruno. La primera salida está en `docs/plan-T16.md`, sección 7.
+- **El tope 160 de la previa en la netbook.** Si la revisión por punto pasa su tope, `TOPE_PREVIA_PEGAR` se revisa con Bruno. La primera salida está en `docs/archivo/plan-T16.md`, sección 7.
 - **WebKitGTK (Mint):** secundario, no bloquea.
 
 ## 12. Fuera de este cierre

@@ -19,6 +19,8 @@ Si se recibe un argumento, es la tarea o etapa a retomar. Si no, se toma la tare
 2. **Ubicar la tarea**
    - Buscar el plan vigente en `docs/` (hoy `docs/plan-fase3b.md`) y localizar la tarea con búsqueda de texto.
    - Leer solo la sección de esa tarea y lo que ella referencie.
+   - Un .md de más de 20 KB no se lee entero: buscar con grep el encabezado o el término y leer solo ese rango de líneas.
+   - Los planes de tareas cerradas y el historial del banco están en `docs/archivo/`: no abrirlos salvo que la tarea los cite.
 
 3. **Reconstruir lo hecho**
    - Usar `git show --stat` en los commits de la tarea.
