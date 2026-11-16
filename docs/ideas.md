@@ -16,6 +16,11 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 - **Cuándo:** una fase propia después de la fase 5 (simulación de mando). Lo eligió Bruno el 2026-11-16.
 - **Relación:** `docs/arquitectura.md` lo tiene en «Después del MVP» («a largo plazo, PLC en escalera»). La hoja de ruta se actualiza cuando se planee la fase.
 
+## Abaratar `ReferenciasHoja.reflejar` al borrar y deshacer
+- **Qué:** en *Borrar y deshacer uno con cables al 31 %* (escena con cables de 2000), `referencias.reflejar` suma unos 0,34 ms a cada paso. Es el 87 % de lo que sube el paso contra `v0.1.3`: de 0,5 a 0,8 ms de mediana en el banco.
+- **Relación:** salió del desglose del cierre de la fase 3b, etapa 3 (`docs/bench.md`). El paso se informa y no juzga: lo que juzga es el por gesto, que sube por los contornos de aviso.
+- **Cuándo:** sin fecha. Si en la netbook un paso de borrar o deshacer se nota, antes.
+
 ## ESP32 o hardware real por USB
 - **Qué:** conectar un ESP32 u otro hardware por USB para leer entradas y mover salidas reales desde la simulación.
 - **Cuándo:** al final, después de lo demás.

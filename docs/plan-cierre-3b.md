@@ -167,6 +167,7 @@ El tope de las celdas aceptadas como ruido es lo que Bruno aceptó: el valor má
 | 2000 con cables · Desplazar al 100 % | T19 · `edd2c03` | p95 de HEAD 0,35 (diagnóstico: ruido) | p95 ≤ 0,45; 0 lentos |
 | 2000 con cables · Arrastrar 40 cableados al 58 % | T19 · `edd2c03` | un lento de 39,1 ms en una corrida (diagnóstico: ruido) | lentos en como mucho 1 de las 6 corridas de cada tanda y ninguno de más de 50 ms |
 | 2000 con cables · Girar todo al 31 % | T19 · `edd2c03` | un lento de 16,4 ms en una corrida; la base también los tiene | ídem |
+| 2000 con cables · Borrar y deshacer uno con cables al 31 % | cierre 3b, etapa 3 (sumada después de medir, opción A de Bruno) | real (diagnóstico: 8 de 10): el contorno de aviso de T19 en cada mosaico repintado; HEAD hasta 10,08 por gesto | por gesto ≤ 11,10; 0 lentos |
 
 ### 6.2 Escenarios nuevos (no existen en `v0.1.3`)
 Solo HEAD. Cada uno con el tope absoluto que fijó su tarea.
@@ -192,7 +193,7 @@ Solo HEAD. Cada uno con el tope absoluto que fijó su tarea.
   - El banco sigue midiendo lo mismo: los mismos escenarios, en el mismo orden y con los mismos nombres. Lo comprueba una corrida antes y después del cambio.
 - **`src/ui/probarFase3b.ts`:**
   - Importa ese módulo con `import()` dinámico, así no se carga si no se usa.
-  - Corre, en un lienzo fuera de pantalla de 1366×768, la lista de la netbook: Pegar 500, Duplicar todo (2000), la serie de la previa de pegar con su revisión por punto, Rehacer y Mover 1 contacto con referencias, Dibujar 1 cable con el par NC+bobina y Encuadrar (F) con 500.
+  - Corre, en un lienzo fuera de pantalla de 1366×768, la lista de la netbook: Pegar 500, Duplicar todo (2000), la serie de la previa de pegar con su revisión por punto, Rehacer y Mover 1 contacto con referencias, Dibujar 1 cable con el par NC+bobina, Encuadrar (F) con 500 y Borrar y deshacer uno con cables (B16, sumado en la etapa 3).
   - Arma una tabla para copiar, con el tope de netbook de cada fila y «pasa» o «no pasa».
   - Para el criterio de los cuadros que siguen a pegar y duplicar, `medir` informa además el máximo de lentos por gesto: es un campo nuevo, que también ve el banco.
 - **Menú de desarrollo:** botón «Probar la fase 3b», junto a «Probar arrastre». Aparece donde aparece el menú, en desarrollo y en las prereleases, y nunca en una versión final.
@@ -263,6 +264,19 @@ Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador d
   - Al zoom inicial, el humo desplazó la vista 4 veces.
 - **Pendiente de UI** (en `docs/plan-fase3b.md`): borrar un cable con una T colgando deja la T suelta.
 - La hoja 2 ya no es un borrador. `npm test`: 1775 (1 salteado). `npm run check` limpio. `npm run humo`: 727 de 727.
+
+### Etapa 3 hecha (2026-11-16)
+- **Banco contra `v0.1.3`**, con los criterios escritos en `docs/bench.md` antes de medir y con los ajustes de Bruno al aprobar:
+  - mediana por tanda;
+  - por gesto para el criterio y el p95 informado;
+  - freno duro si la PC no está enchufada o no está en «Mejor rendimiento»;
+  - un lento nuevo frena solo si aparece en las dos tandas.
+- **Resultado:** pasan las 12 filas con tope y los 13 escenarios nuevos, y no hay lentos nuevos.
+- **No pasaba *Borrar y deshacer uno con cables al 31 %*** (por gesto, +13,7 % y +15,9 %).
+  - El diagnóstico ×10 dio que es real (8 de 10 pares).
+  - El desglose en Node lo atribuye en ~91 % al contorno de aviso de T19, que se rasteriza en cada mosaico repintado. Ese contorno se dibuja solo con los componentes que tocan el mosaico.
+  - Opción A de Bruno: se acepta con tope (por gesto ≤ 11,10 ms; 0 lentos), se suma a la tabla 6.1 y a la checklist de la netbook (B16), y `referencias.reflejar` (+0,34 ms por paso) queda en `docs/ideas.md`.
+- Los scripts del ABBA, del diagnóstico y del desglose fueron temporales (fuera del repo). Se borró el worktree base.
 
 ## 10. Necesita autorización de Bruno
 - Push de `main` (6 commits adelante al planear, más los del cierre).

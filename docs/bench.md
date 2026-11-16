@@ -18,6 +18,128 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 
+## Cierre de la fase 3b, contra `v0.1.3` — 2026-11-16
+
+**Criterios escritos antes de la primera corrida (15:29)**: plan de cierre, sección 6, con los ajustes de Bruno al aprobar la etapa 3. No se cambian después de ver los números.
+
+- **Versiones:** HEAD es `ef28cfd`. La base es `v0.1.3` (`c29886d`), en el worktree `..\bornera-base-v0.1.3` con su propio `npm ci` y **su propio** `tests/bench/pagina.ts`. Se comparan las 62 celdas con el mismo nombre en las dos; los 13 escenarios nuevos se corren solo en HEAD.
+- **Corridas:** ABBA ×3 en dos tandas (A = HEAD), o sea 12 corridas por tanda, 6 por versión.
+- **Agregado por tanda:** cada tanda tiene sus propias 6 corridas de cada versión, sin juntar las dos tandas. Para cada celda:
+  - mediana, p95 y por gesto: la mediana de las 6, sin redondear;
+  - lentos: la suma de las 6, con el número de corrida de cada uno;
+  - «máx.» de los topes: el máximo de las 6;
+  - R6: p95 y máximo de las 180 pasadas juntas (como en T19).
+  - Se compara con una tolerancia de 0,000001 ms, solo por cómo se guardan los decimales del reloj.
+- **Freno duro:** antes de cada corrida, el script anota en el JSON de esa corrida estos valores:
+  - enchufada o no;
+  - batería;
+  - modo de energía, leído del registro;
+  - procesos con ventana;
+  - Opera o Gemini abiertos.
+  
+  Si la PC no está enchufada o el modo no es «Mejor rendimiento», no mide y la tanda se corta.
+- **Celdas comunes, regla de siempre** (como en T15–T19):
+  - No pasa si el **por gesto** de HEAD supera al de la base en más de 10 % en las dos tandas.
+  - No pasa si aparece un **lento nuevo** en las dos tandas: HEAD con lentos y la base con 0 en esa misma tanda. Si aparece en una sola, se informa con la celda y la corrida.
+  - La mediana y el p95 por cuadro se informan; no juzgan.
+- **Celdas con tope absoluto** (sección 6.1): se juzgan por estos topes.
+  - Una fila no pasa si supera su tope en las dos tandas. Si lo supera en una sola, se informa.
+  - Para estas filas, los lentos se juzgan por el tope y no por la regla de siempre. El por gesto sigue la regla de siempre, salvo en *500 · Encuadrar (F)*, que tiene tope de por gesto.
+
+| Celda | Tope (mediana / p95 por cuadro, en ms) | Lentos |
+|---|---|---|
+| 100 · Seleccionar al 31 % (T16, ruido) | ≤ 0,70 / ≤ 1,16 | 0 |
+| 100 · Mover 1 al 31 % (T16, ruido) | ≤ 0,45 / ≤ 1,16 | 0 |
+| 100 · Mover todo al 31 % (T17) | ≤ 0,90 / ≤ 2,15 | 0 |
+| 100 · Arrastrar 40 completos al 58 % (T17) | ≤ 1,65 / ≤ 4,07 | 0 |
+| 500 · Arrastrar 40 en contornos al 58 % (T17) | ≤ 0,70 / ≤ 2,97 | 0 |
+| 500 · Mover todo al 31 % (T18, ruido de p95) | ≤ 1,71 / ≤ 4,24 | 0 |
+| 2000 · Editar al 100 % (T18, ruido) | ≤ 0,55 / ≤ 0,95 | 0 |
+| 500 · Encuadrar (F) (T17 y T19) | ≤ 6,66 / ≤ 10,23; por gesto ≤ 8,74 | 0 |
+| 2000 · Editar al 31 % (T19) | p95 ≤ 1,21 | 0 |
+| 2000 con cables · Desplazar al 100 % (T19) | p95 ≤ 0,45 | 0 |
+| 2000 con cables · Arrastrar 40 cableados al 58 % (T19) | – | como mucho 1 corrida con lentos por tanda; ninguno de más de 50 ms |
+| 2000 con cables · Girar todo al 31 % (T19) | – | ídem |
+
+- **Escenarios nuevos** (sección 6.2, solo HEAD, escena con cables al 31 %): no pasan si superan el tope en las dos tandas.
+
+| Escenario | Tope (ms) |
+|---|---|
+| Pegar 500 y deshacer | paso y deshacer: mediana ≤ 40, máx. ≤ 80; 0 lentos |
+| Duplicar todo (2000) y deshacer | paso: mediana ≤ 150, máx. ≤ 300; deshacer: mediana ≤ 40, máx. ≤ 80; 0 lentos |
+| Previa de pegar 40, 80, 160, 320 y 500 | cuadro: mediana ≤ 4, p95 ≤ 8; 0 lentos; revisión por punto: p95 ≤ 5 (40, 80 y 160) |
+| Copiar 2000 | se informa |
+| Etiquetar los vacíos (2000) y deshacer | paso y deshacer: mediana ≤ 40, máx. ≤ 80; 0 lentos |
+| Rehacer al 31 % con referencias | por gesto ≤ 25,01; 0 lentos |
+| Mover 1 contacto con referencias | paso: mediana ≤ 1,80; 0 lentos |
+| Rehacer al 31 % con avisos | por gesto ≤ 26,11; 0 lentos |
+| Dibujar 1 cable con 2000 y un par NC+bobina | R6: p95 ≤ 3, máx. ≤ 8; 0 lentos |
+
+- **Si algo no pasa:** se frena, se dan opciones y el worktree base no se borra hasta que Bruno elija. Una de las opciones es el diagnóstico ×10: ABBA ×5 contra la misma base, solo en las filas que no pasaron, con estas reglas:
+  - **Celda común:** la suba es real si HEAD supera a la base en más de 10 % en esa métrica en al menos **7 de los 10 pares**. Los pares son, en cada bloque ABBA, (1.ª A, 1.ª B) y (2.ª B, 2.ª A).
+  - **Fila con tope:** el exceso es real si HEAD supera el tope en al menos 7 de sus 10 corridas.
+  - **Lento:** es real si HEAD tiene lentos en 2 o más de sus 10 corridas y la base en ninguna (la regla de T19).
+- **Antes de fijar los criterios** se corrió un par de prueba, una corrida de cada versión, para ver el formato del JSON. Se descartó: HEAD corrió primero, justo después del `npm ci` de la base, y con Bornera y el Administrador de tareas abiertos.
+
+### Resultado: pasa, con un costo aceptado (opción A de Bruno)
+
+**Corridas:**
+- ABBA ×3 en dos tandas, de 15:29:56 a 15:37:33, unos 15 a 26 s por corrida. Ninguna frenó.
+- Edge 157 headless. PC enchufada (79 %), modo «Mejor rendimiento» en las 24.
+- Con ventana, solo Claude y Configuración (más el NVIDIA Overlay y la entrada de texto de Windows).
+- En las corridas 6 a 9 de T1 había una ventana de `fontview` (el visor de fuentes de Windows). T1 salió más ruidosa que T2 en casi todas las celdas.
+
+**Veredicto con los criterios de arriba:**
+- Las 12 filas con tope pasan: ninguna lo supera en las dos tandas.
+- Los 13 escenarios nuevos pasan, lejos de sus topes. Por ejemplo, *Duplicar todo* da un paso de 54,95 / 49,55 ms contra 150, y R6 da p95 0 contra 3.
+- Ningún lento nuevo, ni en una tanda ni en las dos.
+- **No pasaba una celda común:** *2000 con cables · Borrar y deshacer uno con cables al 31 %*. Por gesto, de 8,87 a 10,08 ms en T1 (+13,7 %) y de 6,80 a 7,88 ms en T2 (+15,9 %).
+
+**Informado** (no juzga):
+- Topes superados en una sola tanda, todos en T1:
+  - 100 · Mover 1: mediana y p95;
+  - 100 · Mover todo: mediana;
+  - 500 · Mover todo: mediana y p95;
+  - 500 · Arrastrar 40 en contornos: mediana y p95;
+  - 2000 · Editar al 31 %: p95;
+  - 2000 con cables · Desplazar al 100 %: p95;
+  - *Rehacer al 31 % con referencias*: 26,40 contra 25,01 (en T2, 22,66).
+- *2000 · Mover 1 al 31 %* sube la mediana por cuadro en las dos tandas: de 0,45 a 0,50 y de 0,40 a 0,50.
+- Lentos: solo uno de la base, en *Girar todo al 31 %* (T1, corrida 3, 17,9 ms).
+
+**Diagnóstico ×10 de *Borrar y deshacer uno con cables*** (reglas de arriba):
+- ABBA ×5, de 15:39 a 15:47, en las mismas condiciones.
+- La corrida 7 se cortó porque se abrió el Administrador de tareas, y se repitió. El script repite cualquier corrida con una ventana de más antes o después de medir.
+- Resultado: **HEAD supera a la base en más de 10 % en 8 de los 10 pares: es real.** Por gesto, mediana de 10: base 7,10 ms y HEAD 8,25 ms (+1,15 ms). 0 lentos en las dos.
+
+**Desglose en Node** (HEAD contra `v0.1.3`, ×10 alternado, 40 gestos de 10 pasos por proceso, el mismo componente `c916`; un test temporal, borrado):
+- Los dos repintan los mismos 10 mosaicos por gesto, con 110 invalidaciones. HEAD da **+1480 órdenes de dibujo por gesto (+30 %)**: una poligonal de 72 rayas más por mosaico repintado. Sin contornos ni listas, HEAD da las mismas órdenes que la base: todas son del contorno de aviso de T19, ninguna de las listas.
+- La poligonal de cada mosaico es **solo la de los componentes que lo tocan**:
+  - toda la hoja tiene 277 componentes con contorno y 4432 rayas;
+  - por mosaico de 41,3 unidades al 31 %, hay como mucho 192;
+  - en los mosaicos sin avisos propios, hay 0 o hasta 32 (un vecino cuyo dibujo toca el borde).
+
+| Suba del por gesto (1,15 ms en el navegador) | ms | % |
+|---|---:|---:|
+| Comando, Uniones, referencias y validaciones | 0 (son del paso, fuera del cuadro) | 0 |
+| Dibujo en JS: contornos de aviso | +0,14 | 12 |
+| Dibujo en JS: el resto | +0,11 | 9 |
+| Rasterizado (navegador menos Node, estimado: Node no rasteriza) | ≈ +0,91 | ≈ 79 |
+
+| Suba del paso (se informa; 3,92 ms por gesto, 0,39 por paso) | ms por gesto | % |
+|---|---:|---:|
+| Referencias (`ReferenciasHoja.reflejar`) | +3,43 | 87 |
+| Validaciones (`AvisosHoja.reflejar`) | +0,21 | 5 |
+| Comando | +0,05 | 1 |
+| Uniones | +0,02 | 0 |
+| Resto de reflejar | +0,23 | 6 |
+
+**Decisión de Bruno (opción A):**
+- Se acepta como costo de los contornos de aviso, con tope absoluto: el valor más alto de HEAD (10,08, en T1) más 10 %, o sea **por gesto ≤ 11,10 ms; 0 lentos**.
+- Se suma a la lista 6.1 del plan de cierre y a la checklist de la netbook (B16).
+- `referencias.reflejar` queda en `docs/ideas.md`.
+- La escena del banco es el peor caso, porque casi todos los mosaicos tienen contornos. Un circuito «Sin avisos» no paga nada de esto.
+
 ## Validaciones en vivo (fase 3b, T19 etapa 3b) — 2026-11-16
 
 **Resultado: pasa** contra `926915d` (sin validaciones), medido en la misma sesión con los criterios de `docs/archivo/plan-T19.md`, sección 5, fijados antes de medir.

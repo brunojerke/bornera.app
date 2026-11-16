@@ -61,6 +61,7 @@ Se anota, no es criterio: tiempo total ______ min · ¿Desplazaste o alejaste el
 | B13 | Dibujar 1 cable con 2000 y un par NC+bobina al 31 % | R6: p95 / máx. | ≤ 7,5 / ≤ 20 ms | confirmado (×2,5 de 3/8 ms) | 0,1 / 0,1 | |
 | B14 | ″ | cuadros | ninguno > 50 ms y < 1 % > 16,7 ms | 0.1.2 | 0 lentos | |
 | B15 | Encuadrar (F) con 500 | cuadros | 0 lentos (> 16 ms) | Bruno (T19, cambio 9) | 0 lentos | |
+| B16 | Borrar y deshacer uno con cables al 31 % (escena con cables) | cuadros; por gesto | 0 lentos; por gesto se informa | Bruno (cierre 3b, etapa 3: contornos de aviso, tope PC 11,10 ms) | 0 lentos; 8,25 | |
 
 ## C. Línea base de Windows (informativo, sin tope)
 Para comparar con la alpha.11 (nota «Medición 0.1.3-alpha.11 - netbook Windows»). No es criterio de pasaje.
