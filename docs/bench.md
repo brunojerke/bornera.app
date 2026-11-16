@@ -29,7 +29,7 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 
 **Cómo se midió:**
 - **Versiones:**
-  - HEAD es la etapa 3b sobre `5f4e1d1`, sin commit al medir.
+  - HEAD es la etapa 3b sobre `c676f69` (`5f4e1d1` más un cambio solo en el README), sin commit al medir. Después, commit `edd2c03`.
   - La base es `926915d`, en un worktree con su propio `npm ci` y el `tests/bench/pagina.ts` de HEAD copiado sin commit. El `pagina.ts` era idéntico en los dos árboles (mismo sha256).
 - **Corridas:** ABBA ×3 en dos tandas, 6 corridas por versión en cada tanda; por celda, la mediana de las 6. Fue de 12:11:02 a 12:19:05 (hora de Argentina), unos 20 s por corrida.
 - **Condiciones**, anotadas por el script antes de cada una de las 24 corridas:
