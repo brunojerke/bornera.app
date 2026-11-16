@@ -34,9 +34,7 @@ Los instaladores los compila GitHub Actions desde este repositorio al publicar u
 
 ## Privacidad
 
-This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
-
-Bornera no envía datos por red: no tiene telemetría, cuentas ni actualizaciones automáticas.
+Bornera no envía datos por red: no tiene telemetría, cuentas ni actualizaciones automáticas. Los circuitos se guardan solo en los archivos .brn que elegís en tu computadora.
 
 ## Licencia
 
