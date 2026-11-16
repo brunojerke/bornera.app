@@ -40,8 +40,15 @@ Seguir la hoja 2. Cronometrar desde Abrir.
 Se anota, no es criterio: tiempo total ______ min · ¿Desplazaste o alejaste el zoom? ______ · Trabas o sorpresas: ____________________________
 
 ## B. «Probar la fase 3b» (menú de desarrollo)
+El botón en la app instalada (la app de escritorio no se prueba en la PC: el humo corre en el navegador):
+
+| # | Qué mirar | Tope netbook | Origen | ✓ |
+|---|---|---|---|---|
+| P1 | Menú de desarrollo (la llave) › «Cierre de fase» › «Probar la fase 3b…». Con la hoja sin cambios corre sin preguntar; arriba se lee qué mide; al final, el diálogo «Probar la fase 3b» con la tabla B1 a B16 y «Copiar» | anda | cierre 3b, etapa 4 | ☐ |
+| P2 | Con un cambio sin guardar, antes pregunta («Probar igual» / «Cancelar») y Cancelar no corre nada. Después de «Probar igual», la hoja queda igual: mismo dibujo, título con «•», Deshacer como estaba | anda | cierre 3b, etapa 4 | ☐ |
+
 - Menú de desarrollo › «Probar la fase 3b», 3 corridas seguidas.
-- Después de cada una, copiar la tabla a un `.txt` en el pendrive.
+- Después de cada una, «Copiar» y pegar la tabla en un `.txt` en el pendrive. La tabla trae, por fila, escenario, medida y tope de esta hoja, lo medido en la netbook y «pasa», «no pasa» o «se anota».
 - Por fila cuenta la mediana de las 3 corridas; los lentos se suman en las 3.
 
 | # | Escenario | Medida | Tope netbook | Origen | PC | Netbook |

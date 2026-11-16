@@ -18,7 +18,7 @@
   import type { OpcionesCapas } from "../render/capas";
   import type { DiagnosticoArrastre } from "../editor/editor";
   import type { EscenaDesarrollo, Modo } from "./tipos";
-  import { ES_PRERELEASE } from "./version";
+  import { mostrarMenuDesarrollo, VERSION } from "./version";
 
   let {
     modo = $bindable("editar"),
@@ -41,6 +41,7 @@
     opciones = $bindable(),
     diagnostico = $bindable(),
     onprobararrastre,
+    onprobarfase3b,
   }: {
     modo?: Modo;
     /** Zoom actual (1 = 100 %). */
@@ -67,6 +68,8 @@
     opciones: OpcionesCapas;
     diagnostico: DiagnosticoArrastre;
     onprobararrastre?: () => void;
+    /** «Probar la fase 3b» (cierre 3b, etapa 4). */
+    onprobarfase3b?: () => void;
   } = $props();
 
   const TAM = 18;
@@ -117,9 +120,9 @@
 
   <div class="espacio"></div>
 
-  {#if import.meta.env.DEV || ES_PRERELEASE}
+  {#if mostrarMenuDesarrollo(VERSION, import.meta.env.DEV)}
     <div class="grupo-final">
-      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} />
+      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} />
     </div>
   {/if}
 

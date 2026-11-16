@@ -1,12 +1,15 @@
 <script lang="ts">
-  // Prueba automática del arrastre (alpha.2). Mientras corre: un aviso chico
-  // arriba, que no tapa el lienzo (taparlo cambiaría lo que se mide). Al
-  // terminar: la tabla en Markdown para copiar.
+  // Prueba automática del arrastre (alpha.2) y «Probar la fase 3b» (cierre 3b,
+  // etapa 4). Mientras corre: un aviso chico arriba, que no tapa el lienzo
+  // (taparlo cambiaría lo que se mide). Al terminar: la tabla en Markdown para
+  // copiar.
   let {
+    titulo = "Diagnóstico del arrastre",
     corriendo,
     texto,
     oncerrar,
   }: {
+    titulo?: string;
     corriendo: boolean;
     texto: string;
     oncerrar: () => void;
@@ -37,8 +40,8 @@
   <div class="aviso" role="status">{texto} No toques el mouse.</div>
 {:else}
   <div class="fondo">
-    <div class="dialogo" role="dialog" aria-modal="true" aria-label="Diagnóstico del arrastre">
-      <h2>Diagnóstico del arrastre</h2>
+    <div class="dialogo" role="dialog" aria-modal="true" aria-label={titulo}>
+      <h2>{titulo}</h2>
       <textarea bind:this={area} readonly value={texto} aria-label="Resultado"></textarea>
       <div class="acciones">
         <button onclick={copiar}>{copiado ? "Copiado" : "Copiar"}</button>

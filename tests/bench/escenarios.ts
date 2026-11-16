@@ -79,6 +79,18 @@ export interface Medicion {
   maximo: number;
   /** Cuadros que tardaron más de LIMITE_MS. */
   lentos: number;
+  /**
+   * Cuadros que tardaron más de un cuadro de 60 Hz (CUADRO, 16,7 ms): la meta
+   * de 0.1.2. Lo usa «Probar la fase 3b» (src/ui/fase3b.ts); el banco juzga
+   * con `lentos`, que no cambia.
+   */
+  sobreCuadro: number;
+  /**
+   * Lentos (> LIMITE_MS) después de un paso, como máximo: el paso, su cuadro
+   * y los que siguen hasta el próximo paso (con la cola, si es el último).
+   * Para «≤ 1 lento por gesto» después de pegar, duplicar y deshacer (B3, B6).
+   */
+  lentosPorPasoMax: number;
   /** ms de dibujo por gesto, sumando todos sus cuadros (hasta quedar nítido). */
   porGesto: number;
   /** Bytes máximos de caché durante el escenario. */
@@ -483,6 +495,18 @@ export function abrirEditorCables(t12: boolean): Editor {
   ed.alAvisar = (t) => (ultimoAviso = t);
   editorCables = ed;
   return ed;
+}
+
+/**
+ * Suelta el editor de la escena con cables (2000 + 3000 cables), para que
+ * «Probar la fase 3b» no lo deje en memoria al terminar. El banco no lo usa:
+ * corre una vez y se cierra la página.
+ */
+export function cerrarEditorCables(): void {
+  editorCables = null;
+  capasActivas = null;
+  pegarBanco.recorte = null;
+  pegarBanco.todos = [];
 }
 
 /** Pasos del historial del editor de cables. */
@@ -1768,6 +1792,9 @@ export function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCa
   const pasos: number[] = [];
   const pasosImpares: number[] = [];
   let total = 0;
+  /** Lentos desde el último paso (el paso y los cuadros hasta el siguiente) y el máximo de eso. */
+  let lentosPaso = 0;
+  let lentosPorPasoMax = 0;
   const usoPrimero = { aciertos: 0, fallos: 0 };
   const usoResto = { aciertos: 0, fallos: 0 };
   /** Suma a `uso` lo que pidió la capa dinámica desde `antes`. */
@@ -1781,6 +1808,7 @@ export function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCa
       if (!medido) return;
       tiempos.push(ms);
       total += ms;
+      if (ms > LIMITE_MS) lentosPorPasoMax = Math.max(lentosPorPasoMax, ++lentosPaso);
     };
     midiendo = false;
     if (escenario.reiniciar) {
@@ -1799,6 +1827,7 @@ export function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCa
     for (let i = 0; i < escenario.cuadros; i++) {
       fase = i === 0 ? "inicio" : i === escenario.cuadros - 1 ? "soltar" : "intermedios";
       escenario.antes?.(i, medido);
+      lentosPaso = 0;
       const p0 = performance.now();
       const inv0 = invalidaciones;
       escenario.paso(camara, capas, escena, i);
@@ -1829,6 +1858,8 @@ export function medir(escena: Escena, escenario: Escenario, opciones: OpcionesCa
     p95: percentil(tiempos, 0.95),
     maximo: tiempos.at(-1) ?? 0,
     lentos: tiempos.filter((x) => x > LIMITE_MS).length,
+    sobreCuadro: tiempos.filter((x) => x > CUADRO).length,
+    lentosPorPasoMax,
     porGesto: total / escenario.repeticiones,
     cache,
     mosaicosMax,

@@ -1,8 +1,8 @@
 <script lang="ts">
   // Menú de desarrollo (en `npm run dev` / `tauri dev` y en las prereleases):
   // elegir la escena de prueba, ver el contador de rendimiento (F3), apagar
-  // optimizaciones para comparar cuánto aporta cada una y diagnosticar el
-  // arrastre (alpha.2).
+  // optimizaciones para comparar cuánto aporta cada una, diagnosticar el
+  // arrastre (alpha.2) y «Probar la fase 3b» (cierre 3b, etapa 4).
   import Wrench from "@lucide/svelte/icons/wrench";
   import Check from "@lucide/svelte/icons/check";
   import { CANTIDADES_BANCO } from "../render/banco";
@@ -16,6 +16,7 @@
     opciones = $bindable(),
     diagnostico = $bindable(),
     onprobararrastre,
+    onprobarfase3b,
   }: {
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
@@ -23,6 +24,8 @@
     diagnostico: DiagnosticoArrastre;
     /** Prueba automática del arrastre (abre la escena de 2000). */
     onprobararrastre?: () => void;
+    /** Escenarios del banco de la checklist de la netbook, sin tocar la hoja (cierre 3b, etapa 4). */
+    onprobarfase3b?: () => void;
   } = $props();
 
   const MODOS_ARRASTRE: { valor: ModoArrastreDiagnostico; texto: string }[] = [
@@ -37,6 +40,11 @@
   function probar() {
     abierto = false;
     onprobararrastre?.();
+  }
+
+  function probarFase3b() {
+    abierto = false;
+    onprobarfase3b?.();
   }
 
   let abierto = $state(false);
@@ -148,6 +156,13 @@
       <button role="menuitem" onclick={probar}>
         <span class="marca"></span>
         Prueba automática…
+      </button>
+
+      <div class="separador"></div>
+      <div class="titulo">Cierre de fase</div>
+      <button role="menuitem" onclick={probarFase3b}>
+        <span class="marca"></span>
+        Probar la fase 3b…
       </button>
     </div>
   {/if}

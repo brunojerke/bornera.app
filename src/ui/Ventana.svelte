@@ -21,11 +21,14 @@
   import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
   import DialogoArchivo from "./DialogoArchivo.svelte";
   import DialogoSinGuardar from "./DialogoSinGuardar.svelte";
+  import DialogoProbar from "./DialogoProbar.svelte";
+  import { probarFase3b as correrFase3b } from "./probarFase3b";
   import type { ProblemaArchivo } from "../core/io";
   import {
     atajoArchivo,
     atajoArchivoActua,
     esTeclaRecarga,
+    nombreDocumento,
     OperacionesArchivo,
     tituloVentana,
     type AccionArchivo,
@@ -164,12 +167,13 @@
   let opciones = $state<OpcionesCapas>({ ...OPCIONES_OPTIMIZADAS });
   let diagnostico = $state<DiagnosticoArrastre>({ modo: "auto", sonda: false });
 
-  /** Prueba automática del arrastre: estado del diálogo (null: cerrado). */
-  let prueba = $state<{ corriendo: boolean; texto: string } | null>(null);
+  /** Prueba automática del arrastre o «Probar la fase 3b»: estado del diálogo (null: cerrado). */
+  let prueba = $state<{ titulo: string; corriendo: boolean; texto: string } | null>(null);
 
   async function probarArrastre() {
     if (prueba?.corriendo) return;
-    prueba = { corriendo: true, texto: "Abriendo la escena de 2000 con cables…" };
+    const titulo = "Diagnóstico del arrastre";
+    prueba = { titulo, corriendo: true, texto: "Abriendo la escena de 2000 con cables…" };
     try {
       // Desde T14a, la prueba de aceptación es con 40 cableados.
       escena = "cables";
@@ -181,9 +185,43 @@
           if (prueba) prueba.texto = `Midiendo: ${t}…`;
         },
       });
-      prueba = { corriendo: false, texto: tabla };
+      prueba = { titulo, corriendo: false, texto: tabla };
     } catch (e) {
-      prueba = { corriendo: false, texto: `La prueba falló: ${e instanceof Error ? e.message : String(e)}` };
+      prueba = { titulo, corriendo: false, texto: `La prueba falló: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
+  /** Aviso de cambios sin guardar antes de «Probar la fase 3b» (D3-A); null si no hay. */
+  let avisoProbar = $state.raw<{ nombre: string; responder: (probar: boolean) => void } | null>(null);
+
+  function responderProbar(probar: boolean) {
+    const a = avisoProbar;
+    avisoProbar = null;
+    a?.responder(probar);
+  }
+
+  /**
+   * «Probar la fase 3b» (cierre 3b, etapa 4): los escenarios del banco de la
+   * checklist de la netbook, en un editor y un lienzo aparte. No toca la hoja
+   * ni la escena a la vista; con cambios sin guardar, avisa antes.
+   */
+  async function probarFase3b() {
+    if (prueba?.corriendo || avisoProbar) return;
+    if (modificado) {
+      const nombre = nombreDocumento(archivoActual, tituloDocumento);
+      const probar = await new Promise<boolean>((responder) => (avisoProbar = { nombre, responder }));
+      if (!probar) return;
+    }
+    panel?.confirmar();
+    const titulo = "Probar la fase 3b";
+    prueba = { titulo, corriendo: true, texto: "Preparando las escenas…" };
+    try {
+      const tabla = await correrFase3b((t) => {
+        if (prueba) prueba.texto = `Probar la fase 3b: ${t}…`;
+      });
+      prueba = { titulo, corriendo: false, texto: tabla };
+    } catch (e) {
+      prueba = { titulo, corriendo: false, texto: `La prueba falló: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
 
@@ -284,6 +322,7 @@
     bind:opciones
     bind:diagnostico
     onprobararrastre={probarArrastre}
+    onprobarfase3b={probarFase3b}
   />
   <main class="centro">
     <Paleta
@@ -329,7 +368,7 @@
 </div>
 
 {#if prueba}
-  <DialogoDiagnostico corriendo={prueba.corriendo} texto={prueba.texto} oncerrar={() => (prueba = null)} />
+  <DialogoDiagnostico titulo={prueba.titulo} corriendo={prueba.corriendo} texto={prueba.texto} oncerrar={() => (prueba = null)} />
 {/if}
 
 {#if dialogoArchivo}
@@ -338,6 +377,10 @@
 
 {#if sinGuardar}
   <DialogoSinGuardar nombre={sinGuardar.nombre} onresponder={responderSinGuardar} />
+{/if}
+
+{#if avisoProbar}
+  <DialogoProbar nombre={avisoProbar.nombre} onresponder={responderProbar} />
 {/if}
 
 <style>

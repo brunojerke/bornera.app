@@ -188,6 +188,18 @@ Solo HEAD. Cada uno con el tope absoluto que fijó su tarea.
 - Resultado en `docs/bench.md` («Cierre de la fase 3b, contra `v0.1.3`») y en la nota de Obsidian «Medición 0.1.3-dev (cierre 3b) - PC Ryzen 7».
 
 ## 7. «Probar la fase 3b» (etapa 4, D4-B y ajuste 2)
+**Decisiones de Bruno al aprobar la etapa 4 (2026-11-16):**
+- **D1-A:** corre solo las filas B1 a B16 de `docs/netbook-fase3b.md`, con los topes de netbook. Las filas de 6.1 que importan en la netbook ya están: B15 y B16. Descartada D1-B (las otras 11 de 6.1, informativas con ×2,5): más memoria y tiempo en la netbook y topes sin confirmar.
+- **D2-A:** los topes viven en `src/ui/fase3b.ts`, y en ningún otro lugar del código; los ×2,5 se guardan como el tope de la PC por `FACTOR_NETBOOK`. Un test compara cada fila (escenario, medida y tope, como texto) con la tabla B de la checklist. Descartada D2-B (leer el .md con `?raw` y sacar los topes del texto): frágil, y el doc viajaría en el instalador.
+- **D3-A:** con cambios sin guardar, un aviso propio (`DialogoProbar.svelte`: «Probar igual» / «Cancelar», con el foco en Cancelar). Descartadas D3-B (no correr hasta guardar) y D3-C (`DialogoSinGuardar`: «No guardar» sonaría a descartar).
+- **D4-A:** la condición del menú es una función pura, `mostrarMenuDesarrollo(version, dev)`, con su test, y el humo prueba el botón en desarrollo. Descartada D4-B (`svelte/server` con `vi.stubEnv`).
+- **Ajustes:**
+  - `lentos` (más de 16 ms) del banco no cambia; los campos nuevos los usa solo «Probar».
+  - Confirmar con el build que el banco queda en un chunk aparte, y sumar la prueba a mano del botón en la alpha (P1 y P2 de la checklist).
+  - Si «Probar» difiere más de 10 % del banco completo, frenar antes del commit, sin ajustar topes.
+  - El refactor de `pagina.ts` va en un commit aparte.
+
+**Lo que se planeó:**
 - **Los escenarios se importan, no se copian:**
   - `tests/bench/pagina.ts` se parte en dos. Un módulo sin efectos al cargarse, `tests/bench/escenarios.ts`, con `medir`, la escena con cables en un `Editor` y las listas de escenarios. Y el arranque del banco (`correr()` y el envío por `fetch`), que se queda en `pagina.ts` y la importa.
   - El banco sigue midiendo lo mismo: los mismos escenarios, en el mismo orden y con los mismos nombres. Lo comprueba una corrida antes y después del cambio.
@@ -277,6 +289,59 @@ Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador d
   - El desglose en Node lo atribuye en ~91 % al contorno de aviso de T19, que se rasteriza en cada mosaico repintado. Ese contorno se dibuja solo con los componentes que tocan el mosaico.
   - Opción A de Bruno: se acepta con tope (por gesto ≤ 11,10 ms; 0 lentos), se suma a la tabla 6.1 y a la checklist de la netbook (B16), y `referencias.reflejar` (+0,34 ms por paso) queda en `docs/ideas.md`.
 - Los scripts del ABBA, del diagnóstico y del desglose fueron temporales (fuera del repo). Se borró el worktree base.
+
+### Etapa 4 hecha (2026-11-16)
+- **Commit aparte (`4ce3e00`): el banco partido.**
+  - `tests/bench/escenarios.ts` tiene los escenarios, la escena con cables en un `Editor` y `medir`, sin efectos al cargarse.
+  - `pagina.ts` queda con `correr()` y el envío.
+  - El cuerpo se movió sin cambios: solo `export` y el tipo `Resultado`, que pasa a `pagina.ts`.
+  - Banco igual: 75 mediciones con los mismos nombres, en el mismo orden y sin campos nuevos; el sha256 de `ESCENA_ACTUAL` sin cambios. Valores: ABBA de HEAD contra el refactor, mediana de refactor/HEAD por gesto 1,06 (HEAD contra sí mismo varió ×1,21 entre corridas).
+- **`medir`** suma dos campos que usa solo «Probar»: `sobreCuadro` (más de 16,7 ms, la meta de 0.1.2) y `lentosPorPasoMax` (lentos después de un paso, para B3 y B6). `lentos` sigue con más de 16 ms. Además, `cerrarEditorCables()` suelta la escena con cables al terminar.
+- **`src/ui/fase3b.ts`** (puro): las filas B1 a B16 con sus topes, `evaluar` y el texto para copiar.
+  - El texto lleva un encabezado (versión, fecha, motor, lienzo y segundos) y una línea por fila. Cada fila tiene #, escenario, medida y tope de la checklist, lo medido y «pasa», «no pasa» o «se anota» (B9).
+  - B7 y B9 usan `TOPE_PREVIA_PEGAR`, y los lentos usan `LIMITE_LENTO_MS`.
+- **`src/ui/probarFase3b.ts`:** carga el banco con `import()`.
+  - Corre *Encuadrar (F)* con 500 y después la escena con cables en un `Editor` propio, en el orden del banco.
+  - `medirFase3b` da lo medido y `probarFase3b`, la tabla.
+- **Menú:**
+  - «Cierre de fase › Probar la fase 3b…», debajo de «Prueba automática…».
+  - El resultado sale en `DialogoDiagnostico`, que ahora tiene título.
+  - No cambia la escena a la vista ni toca la hoja.
+- **Build:** el banco queda en `_app/immutable/chunks/AgqbQxz5.js`, de 25 163 bytes (8 068 con gzip).
+  - Lo nombra solo `nodes/2` en un `import()`. El otro chunk de ese import, `DkX7d58M.js`, es código compartido que la app ya carga.
+  - `index.html` no lo precarga.
+- **Tests:** `src/ui/fase3b.test.ts` y `src/ui/version.test.ts`.
+  - Las filas y los topes son los de la checklist, y cada tope se prueba en su borde.
+  - El texto para copiar repite las columnas de la checklist.
+  - `elegir` da los mismos objetos del banco (identidad) y en su orden.
+  - La serie de la previa del banco es la de B8 e incluye 160.
+  - `src/` importa el banco solo desde `probarFase3b.ts` y con `import()`.
+  - Ningún archivo de `src/` define una función del banco. Hay 6 nombres que ya existían con otro código y quedan listados como preexistentes: `contexto`, `evento` (dos veces), `medir`, `hechos` y `soltarTodo`.
+  - `mostrarMenuDesarrollo`: `0.1.4` no lo muestra; `0.1.4-alpha.1` sí; en desarrollo, siempre.
+- **Humo `tests/humo/cierre3b-probar.mjs`** (16 comprobaciones):
+  - el botón está en el menú;
+  - con cambios, avisa antes, con el foco en Cancelar y entero a 1024×600, y Esc y Cancelar no corren nada;
+  - «Probar igual» corre y da B1 a B16 iguales a la checklist;
+  - la hoja queda igual: documento, historial, título con «•» y la hoja a la vista;
+  - sin cambios, corre sin preguntar.
+  - Una corrida tarda unos 6 s en headless.
+- **Comparación contra el banco completo** (15 corridas de «Probar» y 2 del banco, intercaladas, con las banderas del banco):
+  - 21 de 28 métricas quedan dentro del 10 %, con todas las medianas de paso y deshacer y todos los lentos.
+  - Estas 7 difieren más (ms; el banco, como mediana de b1 y b2):
+
+  | Métrica | Probar | Banco (b1 / b2) | Dif. |
+  |---|---:|---:|---:|
+  | B1 paso máx. | 57,0 | 64,9 (78,0 / 51,8) | −12 % |
+  | B2 deshacer máx. | 12,3 | 11,05 (11,5 / 10,6) | +11 % |
+  | B4 paso máx. | 8,6 | 7,75 (8,0 / 7,5) | +11 % |
+  | B8 cuadro máx. de la serie | 4,4 | 5,0 (5,4 / 4,6) | −12 % |
+  | B9 revisión p95 con 500 | 3,1 | 3,45 (3,7 / 3,2) | −10 % |
+  | B14 cuadro máx. | 0,6 | 0,7 (0,8 / 0,6) | −14 % |
+  | B15 por gesto (informativo) | 8,2 | 14,4 (21,4 / 7,5) | −43 % |
+
+  - **Bruno lo aceptó como ruido:** la regla comparaba máximos contra la mediana de 2 corridas. Las medianas y los lentos coinciden, y los signos son mixtos, sin sesgo.
+  - **Regla corregida para el futuro:** «Probar» se compara con el banco solo en medianas y lentos; los máximos y los p95 son informativos.
+- `npm test`: 1812 (1 salteado). `npm run check` limpio. `npm run humo`: 743 de 743. Los scripts de comparación fueron temporales (fuera del repo).
 
 ## 10. Necesita autorización de Bruno
 - Push de `main` (6 commits adelante al planear, más los del cierre).
