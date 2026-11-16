@@ -5,8 +5,8 @@
 // formato se rompieron. Ver inversion.mjs.
 //
 // También fija con el archivo los dos criterios de la fase 3b que dependen de
-// la inversión: «nada naranja» (docs/plan-T19.md, sección 3) y las listas de
-// referencias (docs/plan-T18.md, secciones 3 y 9).
+// la inversión: «nada naranja» (docs/archivo/plan-T19.md, sección 3) y las listas de
+// referencias (docs/archivo/plan-T18.md, secciones 3 y 9).
 // @ts-expect-error sin el paquete @types/node (como vite.config.js)
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

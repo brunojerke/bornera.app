@@ -79,7 +79,7 @@
 // que no vale, Esc, el botón derecho o un cambio del documento: vuelve como
 // estaba, sin paso. Las uniones nuevas aparecen al soltar.
 //
-// Portapapeles (T16, docs/plan-T16.md): copiar guarda un `Recorte` de la
+// Portapapeles (T16, docs/archivo/plan-T16.md): copiar guarda un `Recorte` de la
 // selección en el portapapeles del módulo (portapapeles.ts); cortar es
 // copiar más un `Borrar`, en un paso. Pegar abre la `HerramientaPegar`, una
 // previa flotante que se suelta con un clic en un solo `Pegar`. Duplicar

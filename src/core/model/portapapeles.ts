@@ -8,7 +8,7 @@
 // - `problemasPegado` revisa la previa con la misma regla que Colocar y W
 //   (`problemasComponente`, `problemasTrazado`), contra lo que ya está.
 //
-// Qué entra en un recorte (D2a-A y D2b-A de docs/plan-T16.md):
+// Qué entra en un recorte (D2a-A y D2b-A de docs/archivo/plan-T16.md):
 // - los componentes elegidos;
 // - los cables elegidos con los dos extremos "adentro": un borne de un
 //   componente copiado, una T sobre un cable copiado, o libre;

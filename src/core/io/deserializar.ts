@@ -1,4 +1,4 @@
-// Deserializar: texto .brn a Documento (T15a, ver docs/plan-T15a.md §2). Sin
+// Deserializar: texto .brn a Documento (T15a, ver docs/archivo/plan-T15a.md §2). Sin
 // dependencias del navegador.
 //
 // - Nunca tira. El único try/catch envuelve a `JSON.parse`; el resto son

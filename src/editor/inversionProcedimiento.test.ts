@@ -10,7 +10,7 @@
 // comprobaciones fallan: si el test pasara igual, no estaría probando Ctrl+D.
 //
 // También las cajas de las listas de K1 y K2, en la referencia y en lo que da
-// el procedimiento: ninguna toca nada (condición 4 de docs/plan-T18.md).
+// el procedimiento: ninguna toca nada (condición 4 de docs/archivo/plan-T18.md).
 
 import { describe, expect, it, vi } from "vitest";
 import { compararRedes } from "../core/circuitos/compararRedes";

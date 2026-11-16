@@ -136,7 +136,7 @@ export type DefinicionSimbolo = Comportamiento & {
 };
 
 // ── Clases para el etiquetado (T17) ────────────────────────────────────────
-// Fuente, seguidor o titular (docs/plan-T17.md, sección 2). El titular, lo
+// Fuente, seguidor o titular (docs/archivo/plan-T17.md, sección 2). El titular, lo
 // que se numera, se define en src/core/model/etiquetado.ts.
 
 /** Accionamientos a mano: el contacto es un pulsador o un selector, que se numera solo (S1, S2). */

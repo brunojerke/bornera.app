@@ -1,5 +1,5 @@
 // T15 etapa 3: la marcha-parada dibujada con el mouse, a 1024×600, como en la
-// netbook (docs/plan-T15.md, sección 4, "Humo").
+// netbook (docs/archivo/plan-T15.md, sección 4, "Humo").
 //
 // Nuevo; los 7 símbolos desde la paleta (6 arrastrados y el Neutro con clic,
 // R, R y clic); las etiquetas en el panel; los 8 cables con W y clics (las

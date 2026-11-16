@@ -7,7 +7,7 @@
 //   sobre un borne o sobre un cable.
 // - La geometría no cuenta: dos tramos que se cruzan o se enciman no se unen.
 //   Avisar de esas conexiones aparentes es de la fase 4 ("Verificación de
-//   conexiones aparentes" en docs/plan-fase3.md).
+//   conexiones aparentes" en docs/archivo/plan-fase3.md).
 // - Cada borne de un componente está en una red, aunque no tenga cables.
 // - Lo que no existe no conecta: un extremo hacia un componente, un borne o
 //   un cable que no está (un documento roto) no une nada y no tira excepción.

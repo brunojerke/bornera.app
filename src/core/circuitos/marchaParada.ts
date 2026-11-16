@@ -6,7 +6,7 @@
 //
 // Fase "L" arriba, S0 (NC) y S1 (NA) en serie, el contacto auxiliar K1 13-14
 // en paralelo con S1, la bobina K1 con la lámpara H1 en paralelo y el Neutro
-// "N" abajo. Coordenadas, codos y redes esperadas: docs/plan-T15.md, sección 3.
+// "N" abajo. Coordenadas, codos y redes esperadas: docs/archivo/plan-T15.md, sección 3.
 //
 // - Cada componente se coloca con la etiqueta inicial de su símbolo ("L" y
 //   "N", como el editor) y las demás se ponen con `CambiarEtiqueta`, como el

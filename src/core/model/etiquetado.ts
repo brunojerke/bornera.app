@@ -1,6 +1,6 @@
 // Etiquetado automático (T17): las reglas, puras y sin DOM. No tocan el
 // documento: devuelven qué etiqueta va en cada id, y el editor arma con eso
-// el comando (src/editor/armarEtiquetas.ts). Detalle en docs/plan-T17.md,
+// el comando (src/editor/armarEtiquetas.ts). Detalle en docs/archivo/plan-T17.md,
 // sección 2.
 //
 // Palabras:

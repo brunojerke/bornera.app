@@ -2,7 +2,7 @@
 // un circuito base, por la partición de sus bornes en "etiqueta·borne"
 // (`compararRedes`). No mira ids, orden ni geometría. La ruta va en la
 // variable de entorno BORNERA_BRN; sin ella, el test se saltea (así corre en
-// `npm test` sin hacer nada). En Windows (PowerShell), docs/plan-T15.md
+// `npm test` sin hacer nada). En Windows (PowerShell), docs/archivo/plan-T15.md
 // sección 5:
 //   $env:BORNERA_BRN = "C:\ruta\marcha-parada.brn"; npm run circuito; Remove-Item Env:BORNERA_BRN
 // La base va en BORNERA_BASE (cierre 3b): "marcha-parada" (sin la variable,

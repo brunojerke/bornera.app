@@ -1,7 +1,7 @@
 // Referencias cruzadas (T18): debajo de cada bobina, la lista de sus
 // contactos. Puro y sin DOM: devuelve las filas de cada bobina y el editor
 // las guarda (src/editor/referenciasHoja.ts, etapa 2). No se guarda en el
-// .brn: se deriva de la hoja. Detalle en docs/plan-T18.md, sección 2.
+// .brn: se deriva de la hoja. Detalle en docs/archivo/plan-T18.md, sección 2.
 //
 // Palabras:
 // - Bobina: símbolo con `elemento: "bobina"` (`esBobina`).

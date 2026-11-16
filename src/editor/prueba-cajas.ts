@@ -1,6 +1,6 @@
 // Apoyo de tests (T18 y cierre 3b): la caja real de la lista de referencias
 // de una bobina y todo lo dibujado de la hoja como obstáculos, para comprobar
-// que una lista no tapa nada (condición 4 de docs/plan-T18.md, sección 3).
+// que una lista no tapa nada (condición 4 de docs/archivo/plan-T18.md, sección 3).
 // Solo lo importan tests; vive en `editor/` porque usa las cajas de `render/`,
 // que `src/core` no puede importar.
 //

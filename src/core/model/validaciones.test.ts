@@ -1,4 +1,4 @@
-// Validaciones en vivo (T19, etapa 1): docs/plan-T19.md, sección 4.
+// Validaciones en vivo (T19, etapa 1): docs/archivo/plan-T19.md, sección 4.
 
 import { describe, expect, it, vi } from "vitest";
 import { marchaParada } from "../circuitos/marchaParada";

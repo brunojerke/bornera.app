@@ -1,7 +1,7 @@
 // Validaciones en vivo (T19): lo que le falta o le sobra al circuito. Puro y
 // sin DOM: devuelve los avisos de una hoja, y el editor los guarda y los
 // muestra (src/editor/avisosHoja.ts, etapa 2). No se guarda en el .brn: se
-// deriva de la hoja. Detalle en docs/plan-T19.md, sección 2.
+// deriva de la hoja. Detalle en docs/archivo/plan-T19.md, sección 2.
 //
 // Severidad: *error* es lo que impedirá simular en la fase 5; *aviso*, lo que
 // no (el circuito está incompleto o raro, pero se podrá simular).

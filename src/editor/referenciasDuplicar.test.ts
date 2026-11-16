@@ -8,7 +8,7 @@
 // promedio por exceso) y las líneas son las del caché del editor, las mismas
 // que van a la escena. Al final, el peor caso de ancho: una fila con
 // coordenadas largas y negativas, que no se garantiza (límite conocido,
-// docs/plan-T18.md).
+// docs/archivo/plan-T18.md).
 //
 // Las cajas y los obstáculos son los de `prueba-cajas.ts`.
 

@@ -1,5 +1,5 @@
 // Serializar: el Documento a texto .brn, en forma canónica (T15a, ver
-// docs/plan-T15a.md §1). Sin dependencias del navegador.
+// docs/archivo/plan-T15a.md §1). Sin dependencias del navegador.
 //
 // Forma canónica: un solo texto por documento.
 // - Todos los campos se escriben siempre (también `espejado: false`,

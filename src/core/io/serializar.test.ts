@@ -8,7 +8,7 @@ import { invariantes } from "./prueba-invariantes";
 // ── Forma canónica ─────────────────────────────────────────────────────────
 
 describe("serializar: forma canónica", () => {
-  /** El ejemplo de docs/plan-T15a.md §1, tal cual. */
+  /** El ejemplo de docs/archivo/plan-T15a.md §1, tal cual. */
   const EJEMPLO =
     '{"formato":"bornera","version":1,"meta":{"titulo":"Marcha-parada","autor":"","fecha":"2026-11-12"},"contadores":{"c":3,"w":3},"hojas":[{"nombre":"Hoja 1","componentes":[{"id":"c1","tipo":"pulsador.na","x":10,"y":8,"rot":90,"espejado":true,"etiqueta":"S1","params":{}}],"cables":[{"id":"w1","desde":{"tipo":"borne","comp":"c1","borne":"13"},"hasta":{"tipo":"cable","cable":"w2","x":10,"y":4},"codos":[[10,5]]}]}]}';
 

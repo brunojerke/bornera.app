@@ -1,6 +1,6 @@
 // Comparar redes (T15, D8-B): si un documento tiene el mismo circuito que
 // otro, sin mirar ids, orden ni geometría. Sirve para la marcha-parada
-// dibujada a mano en la netbook (`npm run circuito`, docs/plan-T15.md
+// dibujada a mano en la netbook (`npm run circuito`, docs/archivo/plan-T15.md
 // sección 5) y, en la fase 4, para otros circuitos de referencia. Es apoyo de
 // los tests: el código de la app no lo usa.
 //

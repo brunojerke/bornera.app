@@ -1,4 +1,4 @@
-// Referencias cruzadas (T18, etapa 1): el núcleo. Plan en docs/plan-T18.md,
+// Referencias cruzadas (T18, etapa 1): el núcleo. Plan en docs/archivo/plan-T18.md,
 // secciones 2 y 4.
 import { describe, expect, it, vi } from "vitest";
 import { marchaParada } from "../circuitos/marchaParada";

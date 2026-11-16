@@ -6,7 +6,7 @@
 //   con "k1" o un carácter que hoy no se permite se carga y se conserva tal cual.
 // - En fase y neutro la etiqueta es el nombre de la red. Los nombres se
 //   comparan normalizados (sin espacios a los lados y en mayúsculas): "l1 " y
-//   "L1" son la misma red (ver "Etiquetas de red" en docs/plan-fase3.md).
+//   "L1" son la misma red (ver "Etiquetas de red" en docs/archivo/plan-fase3.md).
 
 /** Largo máximo de una etiqueta, en caracteres. */
 export const LARGO_MAXIMO_ETIQUETA = 12;

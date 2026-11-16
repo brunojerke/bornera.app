@@ -14,7 +14,7 @@
   // escribe algo distinto, no se muestran: hablan de la etiqueta confirmada.
   // Con un cable, su extremo suelto (R8) bajo los extremos. Sin selección, el botón
   // "Etiquetar los vacíos" (deshabilitado en Simular; con el panel plegado no
-  // se ve, ver docs/plan-T17.md).
+  // se ve, ver docs/archivo/plan-T17.md).
   //
   // Con un cable: "Cable" y sus extremos, sin etiqueta ni giro. Con varios
   // que incluyen cables: la cantidad de cada cosa; la etiqueta y la rotación

@@ -1,5 +1,5 @@
 // Etiquetado automático (T17): reglas del núcleo y `CambiarEtiquetas`.
-// Casos de docs/plan-T17.md, sección 3. El test al azar se mudó a
+// Casos de docs/archivo/plan-T17.md, sección 3. El test al azar se mudó a
 // src/editor/armarEtiquetas.test.ts (etapa 2): pasa por el armado del editor.
 
 import { describe, expect, it } from "vitest";
