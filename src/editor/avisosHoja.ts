@@ -6,12 +6,16 @@
 // el editor llama a `reflejar` con los ids del cambio), nunca al mover el
 // mouse, durante un arrastre ni al dibujar un cuadro. Cada parte se recalcula
 // solo si el cambio la puede mover:
-// - R1 a R5 y R9 (etiquetas), una pasada por la hoja, solo si el cambio
-//   agrega o borra un componente, o le cambia la etiqueta o el tipo. Mover,
-//   girar o espejar no la recorren (ajuste (a) de Bruno en la etapa 2).
-// - R6, con `redes()`, solo si hay un auxiliar NC con la etiqueta de una
-//   bobina y cambió lo que une la hoja: algún extremo de cable (a qué borne,
-//   cable o nada llega) o las etiquetas.
+// - R1 a R5 y R9 (etiquetas), solo si el cambio agrega o borra un
+//   componente, o le cambia la etiqueta o el tipo. Mover, girar o espejar no
+//   las tocan (ajuste (a) de Bruno en la etapa 2). Se recalculan los
+//   componentes del cambio y los grupos de etiqueta normalizada que tocan
+//   (etapa 3b, arreglo 3); si eso es más de tres cuartos de la hoja, la hoja.
+// - R6, solo si hay un auxiliar NC con la etiqueta de una bobina y cambió lo
+//   que une la hoja: algún extremo de cable (a qué borne, cable o nada llega)
+//   o las etiquetas. Con un cambio de etiquetas, o al deshacer o rehacer un
+//   Grupo, en toda la hoja con `redes()`; si solo cambiaron cables, en las
+//   redes que tocan (etapa 3b, arreglo 2).
 // - R7 y R8, incremental: los bornes de los componentes agregados, borrados o
 //   de otro tipo, los de los cables cuyos extremos cambiaron y esos cables.
 //   Sale de `BornesConCable`, que el editor pone al día antes.
@@ -24,8 +28,10 @@
 // propio caché.
 
 import type { Cable, Componente, Documento, Extremo, Hoja } from "../core/model/documento";
-import { contarAvisos, hayCandidatosR6, textoAviso, validar, type Aviso, type Regla } from "../core/model/validaciones";
-import { buscarSimbolo } from "../core/symbols";
+import { normalizarEtiqueta } from "../core/model/etiquetas";
+import { nombreDeFuente } from "../core/model/redes";
+import { contarAvisos, esAuxiliarNC, validar, type Aviso, type Regla } from "../core/model/validaciones";
+import { buscarSimbolo, esBobina, type DefinicionSimbolo } from "../core/symbols";
 import type { BornesConCable } from "./bornesConCable";
 
 /** Las reglas de etiqueta: una pasada por los componentes. */
@@ -46,37 +52,160 @@ export interface CambioAvisos {
 
 const SIN_CAMBIOS: CambioAvisos = { contornos: new Set(), ids: new Set(), cuenta: false };
 
-/** Lo que cuenta de un componente para las reglas de etiqueta: tipo y etiqueta. */
-function firmaComponente(c: Componente): string {
-  return `${c.tipo}\u0000${c.etiqueta}`;
+// Lo guardado del último cálculo se compara campo por campo, sin armar un
+// texto por componente o por cable (etapa 3b, arreglo 1): mover, girar o
+// espejar 2000 no crea nada. El registro se reescribe en el lugar.
+
+/**
+ * Lo que cuenta de un componente para las reglas de etiqueta: tipo y
+ * etiqueta. Con lo que sale de ellos (el símbolo y la etiqueta normalizada),
+ * que se calcula solo cuando cambian.
+ */
+interface DatosComp {
+  tipo: string;
+  etiqueta: string;
+  def: DefinicionSimbolo | undefined;
+  /** Etiqueta normalizada. */
+  e: string;
 }
 
-/** Lo que une un extremo: el borne, el cable de la T o nada. Las coordenadas no cuentan. */
-function firmaExtremo(e: Extremo): string {
-  return e.tipo === "borne" ? `b\u0000${e.comp}\u0000${e.borne}` : e.tipo === "cable" ? `c\u0000${e.cable}` : "l";
+function datosComp(c: Componente): DatosComp {
+  return { tipo: c.tipo, etiqueta: c.etiqueta, def: buscarSimbolo(c.tipo), e: normalizarEtiqueta(c.etiqueta) };
 }
 
-/** Lo que cuenta de un cable para R6, R7 y R8: a qué llegan sus extremos. */
+/**
+ * Los componentes con una misma etiqueta normalizada, no vacía (etapa 3b,
+ * arreglo 3). R2, R4 y R5 de un componente dependen solo de su grupo: al
+ * tocarlo, se recalcula el grupo. Las cuentas de bobinas y auxiliares NC dicen
+ * si hay candidatos de R6 sin recorrer la hoja.
+ */
+interface GrupoEtiqueta {
+  /** Sin orden (casi siempre uno o pocos: un arreglo es más barato que un Set). */
+  ids: string[];
+  bobinas: number;
+  nc: number;
+}
+
+const esPar = (g: GrupoEtiqueta): boolean => g.bobinas > 0 && g.nc > 0;
+
+/**
+ * Lo que une un cable, para R6, R7 y R8: a qué llega cada extremo. Las
+ * coordenadas no cuentan. En un borne, `a` es el componente y `b` el borne;
+ * en una T, `a` es el cable anfitrión; libre, los dos vacíos.
+ */
 interface DatosCable {
-  firma: string;
-  /** Componentes a cuyos bornes llega. */
-  comps: readonly string[];
+  dTipo: Extremo["tipo"];
+  dA: string;
+  dB: string;
+  hTipo: Extremo["tipo"];
+  hA: string;
+  hB: string;
 }
+
+const extremoA = (e: Extremo): string => (e.tipo === "borne" ? e.comp : e.tipo === "cable" ? e.cable : "");
+const extremoB = (e: Extremo): string => (e.tipo === "borne" ? e.borne : "");
 
 function datosCable(w: Cable): DatosCable {
-  const comps: string[] = [];
-  if (w.desde.tipo === "borne") comps.push(w.desde.comp);
-  if (w.hasta.tipo === "borne" && w.hasta.comp !== comps[0]) comps.push(w.hasta.comp);
-  return { firma: `${firmaExtremo(w.desde)}\u0001${firmaExtremo(w.hasta)}`, comps };
+  return { dTipo: w.desde.tipo, dA: extremoA(w.desde), dB: extremoB(w.desde), hTipo: w.hasta.tipo, hA: extremoA(w.hasta), hB: extremoB(w.hasta) };
+}
+
+function escribirCable(g: DatosCable, w: Cable): void {
+  g.dTipo = w.desde.tipo;
+  g.dA = extremoA(w.desde);
+  g.dB = extremoB(w.desde);
+  g.hTipo = w.hasta.tipo;
+  g.hA = extremoA(w.hasta);
+  g.hB = extremoB(w.hasta);
+}
+
+function mismoExtremo(tipo: Extremo["tipo"], a: string, b: string, e: Extremo): boolean {
+  if (e.tipo !== tipo) return false;
+  return e.tipo === "borne" ? e.comp === a && e.borne === b : e.tipo === "cable" ? e.cable === a : true;
+}
+
+/** Los componentes a cuyos bornes llega el cable. */
+function sumarComps(g: DatosCable, salida: Set<string>): void {
+  if (g.dTipo === "borne") salida.add(g.dA);
+  if (g.hTipo === "borne") salida.add(g.hA);
+}
+
+/**
+ * Quién toca a quién, para recorrer una red sin `redes()` (R6 en las redes
+ * tocadas). Se arma cuando aparece un par NC y bobina y se mantiene con cada
+ * cable que cambia mientras lo haya.
+ */
+interface Vecinos {
+  /** Cables con algún extremo en un borne del componente. */
+  porComp: Map<string, Set<string>>;
+  /** Cables con un extremo en T sobre el cable. */
+  colgados: Map<string, Set<string>>;
+}
+
+function sumarA(m: Map<string, Set<string>>, clave: string, id: string): void {
+  let s = m.get(clave);
+  if (!s) m.set(clave, (s = new Set()));
+  s.add(id);
+}
+
+function sacarDe(m: Map<string, Set<string>>, clave: string, id: string): void {
+  const s = m.get(clave);
+  if (!s) return;
+  s.delete(id);
+  if (s.size === 0) m.delete(clave);
+}
+
+function ponerVecinos(v: Vecinos, id: string, g: DatosCable): void {
+  if (g.dTipo === "borne") sumarA(v.porComp, g.dA, id);
+  else if (g.dTipo === "cable") sumarA(v.colgados, g.dA, id);
+  if (g.hTipo === "borne") sumarA(v.porComp, g.hA, id);
+  else if (g.hTipo === "cable") sumarA(v.colgados, g.hA, id);
+}
+
+function sacarVecinos(v: Vecinos, id: string, g: DatosCable): void {
+  if (g.dTipo === "borne") sacarDe(v.porComp, g.dA, id);
+  else if (g.dTipo === "cable") sacarDe(v.colgados, g.dA, id);
+  if (g.hTipo === "borne") sacarDe(v.porComp, g.hA, id);
+  else if (g.hTipo === "cable") sacarDe(v.colgados, g.hA, id);
+}
+
+/** Dos avisos iguales, campo por campo (sin armar su texto). */
+function mismoAviso(x: Aviso, y: Aviso): boolean {
+  if (x.regla !== y.regla || x.severidad !== y.severidad || x.id !== y.id) return false;
+  switch (x.regla) {
+    case "R2":
+    case "R6":
+      return x.etiqueta === (y as typeof x).etiqueta;
+    case "R3":
+      return x.nombre === (y as typeof x).nombre;
+    case "R4": {
+      const z = y as typeof x;
+      return x.etiqueta === z.etiqueta && x.otro === z.otro;
+    }
+    case "R5": {
+      const z = y as typeof x;
+      return x.etiqueta === z.etiqueta && x.nombre === z.nombre && x.de === z.de;
+    }
+    case "R7":
+      return x.borne === (y as typeof x).borne;
+    default:
+      return true;
+  }
+}
+
+/** Los avisos agrupados por id, en el orden en que llegan. */
+function porId(avisos: readonly Aviso[]): Map<string, Aviso[]> {
+  const m = new Map<string, Aviso[]>();
+  for (const a of avisos) {
+    let l = m.get(a.id);
+    if (!l) m.set(a.id, (l = []));
+    l.push(a);
+  }
+  return m;
 }
 
 function mismos(a: readonly Aviso[], b: readonly Aviso[]): boolean {
   if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i]!;
-    const y = b[i]!;
-    if (x.regla !== y.regla || x.severidad !== y.severidad || textoAviso(x) !== textoAviso(y)) return false;
-  }
+  for (let i = 0; i < a.length; i++) if (!mismoAviso(a[i]!, b[i]!)) return false;
   return true;
 }
 
@@ -90,31 +219,43 @@ export interface CambioHoja {
   actualesCables: ReadonlyMap<string, Cable>;
   /** Un componente de la hoja por id (para R7 de los bornes que toca un cable). */
   componente: (id: string) => Componente | undefined;
+  /** R6 en toda la hoja aunque solo cambien cables: deshacer o rehacer un Grupo (etapa 3b, D1). */
+  r6Hoja?: boolean;
 }
 
 export class AvisosHoja {
   /** R1 a R5 y R9 por componente, en el orden de las reglas. */
-  private etiqueta = new Map<string, Aviso[]>();
+  private readonly etiqueta = new Map<string, readonly Aviso[]>();
+  /** Grupos por etiqueta normalizada no vacía. */
+  private readonly grupos = new Map<string, GrupoEtiqueta>();
+  /** Cuántos grupos tienen una bobina y un auxiliar NC (candidatos de R6). */
+  private paresR6 = 0;
   /** R6 por componente. */
-  private r6 = new Map<string, Aviso>();
+  private readonly r6 = new Map<string, Aviso>();
   /** R7 por componente: un aviso por borne sin cable, en el orden de su definición. */
   private readonly r7 = new Map<string, Aviso[]>();
   /** R8 por cable. */
   private readonly r8 = new Map<string, Aviso>();
   /** Tipo y etiqueta de cada componente en el último cálculo. */
-  private readonly firmas = new Map<string, string>();
+  private readonly comps = new Map<string, DatosComp>();
   /** A qué llega cada cable en el último cálculo. */
   private readonly cables = new Map<string, DatosCable>();
   /** Contorno de cada id antes de recalcular etiquetas o R6, solo de los que cambian. */
   private readonly conContornoAntes = new Map<string, boolean>();
-  /** Si hay un auxiliar NC con la etiqueta de una bobina (R6 puede dar algo). */
-  private candidatosR6 = false;
+  /** Quién toca a quién, solo mientras hay candidatos de R6 (si no, null). */
+  private vecinos: Vecinos | null = null;
+  /** Semillas de R6 en las redes tocadas, del cambio en curso: bornes (componente y borne, de a pares) y cables. */
+  private readonly semillasBornes: string[] = [];
+  private readonly semillasCables: string[] = [];
   private _errores = 0;
   private _avisos = 0;
   private _pasadasEtiqueta = 0;
+  private _componentesEtiqueta = 0;
   private _pasadasR6 = 0;
+  private _pasadasR6Hoja = 0;
   private _msUltimaR6 = 0;
   private _bornesRevisados = 0;
+  private _bornesR6 = 0;
 
   constructor(
     private readonly doc: Documento,
@@ -124,7 +265,9 @@ export class AvisosHoja {
     const h = this.hojaActual();
     if (!h) return;
     for (const c of h.componentes) {
-      this.firmas.set(c.id, firmaComponente(c));
+      const g = datosComp(c);
+      this.comps.set(c.id, g);
+      this.ponerEnGrupo(c.id, g);
       this.ponerR7(c.id, c);
     }
     for (const w of h.cables) {
@@ -132,8 +275,60 @@ export class AvisosHoja {
       if (w.desde.tipo === "libre" || w.hasta.tipo === "libre") this.ponerR8(w.id, true);
     }
     this.calcularEtiquetas(h);
+    this.ajustarVecinos();
     this.calcularR6(h);
     this.conContornoAntes.clear();
+  }
+
+  /** Si hay un auxiliar NC con la etiqueta de una bobina (R6 puede dar algo). */
+  private get candidatosR6(): boolean {
+    return this.paresR6 > 0;
+  }
+
+  private ponerEnGrupo(id: string, g: DatosComp): void {
+    if (g.e === "") return;
+    const bobina = esBobina(g.def);
+    const nc = !bobina && esAuxiliarNC(g.def);
+    const grupo = this.grupos.get(g.e);
+    if (!grupo) {
+      this.grupos.set(g.e, { ids: [id], bobinas: bobina ? 1 : 0, nc: nc ? 1 : 0 });
+      return;
+    }
+    const par = esPar(grupo);
+    grupo.ids.push(id);
+    if (bobina) grupo.bobinas++;
+    else if (nc) grupo.nc++;
+    if (!par && esPar(grupo)) this.paresR6++;
+  }
+
+  private sacarDeGrupo(id: string, g: DatosComp): void {
+    const grupo = g.e === "" ? undefined : this.grupos.get(g.e);
+    if (!grupo) return;
+    if (grupo.ids.length === 1) {
+      if (grupo.ids[0] === id) this.grupos.delete(g.e);
+      return;
+    }
+    const i = grupo.ids.indexOf(id);
+    if (i < 0) return;
+    grupo.ids[i] = grupo.ids[grupo.ids.length - 1]!;
+    grupo.ids.pop();
+    const par = esPar(grupo);
+    if (esBobina(g.def)) grupo.bobinas--;
+    else if (esAuxiliarNC(g.def)) grupo.nc--;
+    if (par && !esPar(grupo)) this.paresR6--;
+  }
+
+  /** Arma el índice de vecinos con los cables guardados (al aparecer un par NC y bobina). */
+  private armarVecinos(): Vecinos {
+    const v: Vecinos = { porComp: new Map(), colgados: new Map() };
+    for (const [id, g] of this.cables) ponerVecinos(v, id, g);
+    return v;
+  }
+
+  /** El índice de vecinos existe solo mientras hay candidatos de R6. */
+  private ajustarVecinos(): void {
+    if (this.candidatosR6) this.vecinos ??= this.armarVecinos();
+    else this.vecinos = null;
   }
 
   // ── Consultas ──────────────────────────────────────────────────────────
@@ -143,18 +338,33 @@ export class AvisosHoja {
     return { errores: this._errores, avisos: this._avisos };
   }
 
-  /** Pasadas por la hoja de las reglas de etiqueta (para los tests de que no recalcula de más). */
+  /** Veces que se recalcularon las reglas de etiqueta (para los tests de que no recalcula de más). */
   get pasadasEtiqueta(): number {
     return this._pasadasEtiqueta;
   }
 
-  /** Veces que se calculó R6 (con `redes()`). */
+  /** Componentes evaluados por las reglas de etiqueta (renombrar uno en 2000 evalúa su grupo, no la hoja). */
+  get componentesEtiqueta(): number {
+    return this._componentesEtiqueta;
+  }
+
+  /** Veces que se calculó R6: en toda la hoja (con `redes()`) o en las redes tocadas. */
   get pasadasR6(): number {
     return this._pasadasR6;
   }
 
+  /** De esas, las de toda la hoja. */
+  get pasadasR6Hoja(): number {
+    return this._pasadasR6Hoja;
+  }
+
+  /** Bornes visitados por R6 en las redes tocadas (para el test de que no recorre la hoja). */
+  get bornesR6(): number {
+    return this._bornesR6;
+  }
+
   /**
-   * ms de la última pasada de R6 (`validar` con R6, que llama a `redes()`), 0
+   * ms de la última pasada de R6 (en toda la hoja o en las redes tocadas), 0
    * si nunca corrió. Lo lee el banco (plan T19, sección 5, D1-A); un solo
    * número, así no crece con la sesión.
    */
@@ -224,35 +434,88 @@ export class AvisosHoja {
     const ids = new Set<string>();
     const contornos = new Set<string>();
 
-    // Componentes: agregados, borrados o con otro tipo o etiqueta.
+    // Componentes: agregados, borrados o con otro tipo o etiqueta. Cada uno
+    // sale de su grupo de etiqueta y entra al nuevo; los dos quedan tocados.
     let etiquetas = false;
     const r7 = new Set<string>();
+    const recalcular = new Set<string>();
+    const tocadas = new Set<string>();
+    const quitados: string[] = [];
     for (const id of cambio.componentes) {
       const c = cambio.actuales.get(id);
-      const vieja = this.firmas.get(id);
-      const nueva = c ? firmaComponente(c) : undefined;
-      if (vieja === nueva) continue;
+      const g = this.comps.get(id);
+      if (c && g ? this.mismoComponente(g, c) : !c && !g) continue;
       etiquetas = true;
-      if (nueva === undefined) this.firmas.delete(id);
-      else this.firmas.set(id, nueva);
-      // El borne de otro tipo, o de un componente que ya no está.
-      if (!c || vieja === undefined || vieja.split("\u0000")[0] !== c.tipo) r7.add(id);
+      if (g) {
+        this.sacarDeGrupo(id, g);
+        if (g.e !== "") tocadas.add(g.e);
+      }
+      // Los bornes de otro tipo, o de un componente que llega o se va.
+      if (!c) {
+        this.comps.delete(id);
+        r7.add(id);
+        quitados.push(id);
+        continue;
+      }
+      let n = g;
+      if (!n) {
+        this.comps.set(id, (n = datosComp(c)));
+        r7.add(id);
+      } else {
+        if (n.tipo !== c.tipo) {
+          r7.add(id);
+          n.tipo = c.tipo;
+          n.def = buscarSimbolo(c.tipo);
+        }
+        if (n.etiqueta !== c.etiqueta) {
+          n.etiqueta = c.etiqueta;
+          n.e = normalizarEtiqueta(c.etiqueta);
+        }
+      }
+      this.ponerEnGrupo(id, n);
+      if (n.e !== "") tocadas.add(n.e);
+      recalcular.add(id);
     }
 
-    // Cables: agregados, borrados o con otros extremos.
+    // Cables: agregados, borrados o con otros extremos. Con candidatos de R6,
+    // el índice de vecinos sigue a cada cable y se juntan las semillas.
     let une = false;
+    const v = this.vecinos;
+    this.semillasBornes.length = 0;
+    this.semillasCables.length = 0;
     for (const id of cambio.cables) {
       const w = cambio.actualesCables.get(id);
-      const viejos = this.cables.get(id);
-      const nuevos = w ? datosCable(w) : undefined;
-      if (viejos?.firma === nuevos?.firma) continue;
+      const g = this.cables.get(id);
+      if (w && g ? this.mismoCable(g, w) : !w && !g) continue;
       une = true;
-      for (const comp of viejos?.comps ?? []) r7.add(comp);
-      for (const comp of nuevos?.comps ?? []) r7.add(comp);
-      if (nuevos) this.cables.set(id, nuevos);
-      else this.cables.delete(id);
+      if (g) {
+        sumarComps(g, r7);
+        if (v) {
+          sacarVecinos(v, id, g);
+          this.sembrarViejos(g);
+        }
+      }
+      if (!w) this.cables.delete(id);
+      else if (g) escribirCable(g, w);
+      else this.cables.set(id, datosCable(w));
+      if (w) {
+        const n = this.cables.get(id)!;
+        sumarComps(n, r7);
+        if (v) {
+          ponerVecinos(v, id, n);
+          this.sembrarNuevos(n);
+        }
+      }
+      if (v) this.semillasCables.push(id);
       const libre = w !== undefined && (w.desde.tipo === "libre" || w.hasta.tipo === "libre");
       if (this.ponerR8(id, libre)) ids.add(id);
+    }
+    // Los que cuelgan en T de un cable del cambio, cada uno por su lado (si el anfitrión ya no está, no los une).
+    if (v) {
+      for (let i = 0, n = this.semillasCables.length; i < n; i++) {
+        const hijos = v.colgados.get(this.semillasCables[i]!);
+        if (hijos) for (const k of hijos) this.semillasCables.push(k);
+      }
     }
 
     for (const id of r7) {
@@ -260,13 +523,16 @@ export class AvisosHoja {
     }
 
     if (etiquetas) {
-      for (const id of this.calcularEtiquetas(h)) {
+      for (const id of this.etiquetasDe(h, recalcular, tocadas, quitados, cambio.componente)) {
         ids.add(id);
         contornos.add(id);
       }
+      this.ajustarVecinos();
     }
     if (etiquetas || une) {
-      for (const id of this.calcularR6(h)) {
+      // Solo cables, con candidatos y sin un Grupo deshecho o rehecho: las redes tocadas.
+      const local = !etiquetas && cambio.r6Hoja !== true && this.candidatosR6 && this.vecinos !== null;
+      for (const id of local ? this.r6Local() : this.calcularR6(h)) {
         ids.add(id);
         contornos.add(id);
       }
@@ -282,6 +548,16 @@ export class AvisosHoja {
 
   private hojaActual(): Hoja | undefined {
     return this.doc.hojas[this.hoja];
+  }
+
+  /** Mismo tipo y misma etiqueta que en el último cálculo. */
+  private mismoComponente(g: DatosComp, c: Componente): boolean {
+    return g.tipo === c.tipo && g.etiqueta === c.etiqueta;
+  }
+
+  /** Los dos extremos llegan a lo mismo que en el último cálculo. */
+  private mismoCable(g: DatosCable, w: Cable): boolean {
+    return mismoExtremo(g.dTipo, g.dA, g.dB, w.desde) && mismoExtremo(g.hTipo, g.hA, g.hB, w.hasta);
   }
 
   /** Suma o resta los avisos a la cuenta. */
@@ -323,55 +599,239 @@ export class AvisosHoja {
     return true;
   }
 
-  /** R1 a R5 y R9: una pasada por la hoja. Devuelve los ids cuyos avisos cambiaron. */
+  /** R1 a R5 y R9 de un componente (NINGUNO: ninguno, o ya no está). Devuelve true si cambiaron. */
+  private ponerEtiqueta(id: string, actuales: readonly Aviso[]): boolean {
+    const viejos = this.etiqueta.get(id) ?? NINGUNO;
+    if (mismos(viejos, actuales)) return false;
+    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, viejos.length > 0 || this.r6.has(id));
+    this.contar(viejos, -1);
+    this.contar(actuales, 1);
+    if (actuales.length > 0) this.etiqueta.set(id, actuales);
+    else this.etiqueta.delete(id);
+    return true;
+  }
+
+  /** R1 a R5 y R9: una pasada por la hoja entera. Devuelve los ids cuyos avisos cambiaron. */
   private calcularEtiquetas(h: Hoja): Set<string> {
     this._pasadasEtiqueta++;
-    const nuevos = new Map<string, Aviso[]>();
-    for (const a of validar(h, ETIQUETA)) {
-      let l = nuevos.get(a.id);
-      if (!l) nuevos.set(a.id, (l = []));
-      l.push(a);
-    }
-    this.candidatosR6 = hayCandidatosR6(h);
+    this._componentesEtiqueta += h.componentes.length;
+    const nuevos = porId(validar(h, ETIQUETA));
     const cambiados = new Set<string>();
-    const revisar = (id: string) => {
-      const viejos = this.etiqueta.get(id) ?? NINGUNO;
-      const actuales = nuevos.get(id) ?? NINGUNO;
-      if (mismos(viejos, actuales)) return;
-      cambiados.add(id);
-      if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, viejos.length > 0 || this.r6.has(id));
-      this.contar(viejos, -1);
-      this.contar(actuales, 1);
-    };
-    for (const id of this.etiqueta.keys()) revisar(id);
-    for (const id of nuevos.keys()) if (!this.etiqueta.has(id)) revisar(id);
-    this.etiqueta = nuevos;
+    for (const id of [...this.etiqueta.keys()]) if (!nuevos.has(id) && this.ponerEtiqueta(id, NINGUNO)) cambiados.add(id);
+    for (const [id, l] of nuevos) if (this.ponerEtiqueta(id, l)) cambiados.add(id);
     return cambiados;
   }
 
-  /** R6, con `redes()`, solo si hay candidatos. Devuelve los ids cuyo R6 cambió. */
+  /**
+   * Suma a `recalcular` los miembros de los grupos de etiqueta tocados. True si
+   * alguno tiene dos o más: entonces importa el orden de la hoja (R4 nombra al
+   * primero del grupo).
+   */
+  private sumarGrupos(tocadas: ReadonlySet<string>, recalcular: Set<string>): boolean {
+    let ordenar = false;
+    for (const e of tocadas) {
+      const grupo = this.grupos.get(e);
+      if (!grupo) continue;
+      if (grupo.ids.length >= 2) ordenar = true;
+      for (const id of grupo.ids) recalcular.add(id);
+    }
+    return ordenar;
+  }
+
+  /**
+   * R1 a R5 y R9 solo de lo que el cambio puede mover (etapa 3b, arreglo 3):
+   * los componentes del cambio (R1, R3 y R9 son de cada uno) y todos los de
+   * los grupos de etiqueta tocados (R2, R4 y R5 dependen del grupo). Se
+   * calculan con `validar` sobre una hoja con solo esos componentes, en el
+   * orden de la hoja si hace falta: da lo mismo que en la hoja entera, porque
+   * cada grupo entra completo. Si son más de tres cuartos, la hoja entera.
+   * Devuelve los ids cuyos avisos cambiaron.
+   */
+  private etiquetasDe(
+    h: Hoja,
+    recalcular: Set<string>,
+    tocadas: ReadonlySet<string>,
+    quitados: readonly string[],
+    componente: (id: string) => Componente | undefined,
+  ): Set<string> {
+    const ordenar = this.sumarGrupos(tocadas, recalcular);
+    if (recalcular.size * 4 > h.componentes.length * 3) return this.calcularEtiquetas(h);
+    this._pasadasEtiqueta++;
+    const cambiados = new Set<string>();
+    for (const id of quitados) if (this.ponerEtiqueta(id, NINGUNO)) cambiados.add(id);
+    if (recalcular.size === 0) return cambiados;
+    let lista: Componente[];
+    if (ordenar) {
+      lista = h.componentes.filter((c) => recalcular.has(c.id));
+    } else {
+      lista = [];
+      for (const id of recalcular) {
+        const c = componente(id);
+        if (c) lista.push(c);
+      }
+    }
+    this._componentesEtiqueta += lista.length;
+    const nuevos = porId(validar({ ...h, componentes: lista, cables: [] }, ETIQUETA));
+    for (const c of lista) if (this.ponerEtiqueta(c.id, nuevos.get(c.id) ?? NINGUNO)) cambiados.add(c.id);
+    return cambiados;
+  }
+
+  /** R6 de un NC (undefined: no lo marca). Devuelve true si cambió. */
+  private ponerR6(id: string, actual: Aviso | undefined): boolean {
+    const viejo = this.r6.get(id);
+    if (viejo === undefined ? actual === undefined : actual !== undefined && mismoAviso(viejo, actual)) return false;
+    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, viejo !== undefined || this.etiqueta.has(id));
+    if (viejo) this.contar([viejo], -1);
+    if (actual) {
+      this.contar([actual], 1);
+      this.r6.set(id, actual);
+    } else {
+      this.r6.delete(id);
+    }
+    return true;
+  }
+
+  /** R6 en toda la hoja, con `redes()`, solo si hay candidatos. Devuelve los ids cuyo R6 cambió. */
   private calcularR6(h: Hoja): Set<string> {
     const nuevos = new Map<string, Aviso>();
     if (this.candidatosR6) {
       this._pasadasR6++;
+      this._pasadasR6Hoja++;
       const t0 = performance.now();
       for (const a of validar(h, SOLO_R6)) nuevos.set(a.id, a);
       this._msUltimaR6 = performance.now() - t0;
     }
     const cambiados = new Set<string>();
-    const revisar = (id: string) => {
-      const viejo = this.r6.get(id);
-      const actual = nuevos.get(id);
-      if (viejo === undefined && actual === undefined) return;
-      if (viejo && actual && mismos([viejo], [actual])) return;
-      cambiados.add(id);
-      if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, viejo !== undefined || this.etiqueta.has(id));
-      if (viejo) this.contar([viejo], -1);
-      if (actual) this.contar([actual], 1);
+    for (const id of [...this.r6.keys()]) if (!nuevos.has(id) && this.ponerR6(id, undefined)) cambiados.add(id);
+    for (const [id, a] of nuevos) if (this.ponerR6(id, a)) cambiados.add(id);
+    return cambiados;
+  }
+
+  /** Semillas de R6 en las redes tocadas: a qué llegaban los extremos de un cable que cambió. */
+  private sembrarViejos(g: DatosCable): void {
+    this.sembrarExtremos(g);
+  }
+
+  /** Semillas de R6 en las redes tocadas: a qué llegan ahora los extremos de un cable que cambió. */
+  private sembrarNuevos(g: DatosCable): void {
+    this.sembrarExtremos(g);
+  }
+
+  private sembrarExtremos(g: DatosCable): void {
+    if (g.dTipo === "borne") this.semillasBornes.push(g.dA, g.dB);
+    else if (g.dTipo === "cable") this.semillasCables.push(g.dA);
+    if (g.hTipo === "borne") this.semillasBornes.push(g.hA, g.hB);
+    else if (g.hTipo === "cable") this.semillasCables.push(g.hA);
+  }
+
+  /**
+   * R6 solo en las redes tocadas (etapa 3b, arreglo 2), cuando el cambio es
+   * solo de cables. Las semillas son los extremos viejos y nuevos de los
+   * cables que cambiaron, esos cables y los que cuelgan de ellos en T: toda red
+   * que cambió contiene alguna. Las demás son las de antes y, sin cambios de
+   * etiqueta, marcan lo mismo. Se recorren como `redes()` (un extremo libre o
+   * hacia algo que no está no une; la geometría no cuenta) y se recalculan los
+   * NC con algún borne en ellas, mirando todas sus redes. El costo depende del
+   * tamaño de esas redes, no de la hoja. Devuelve los ids cuyo R6 cambió.
+   */
+  private r6Local(): Set<string> {
+    this._pasadasR6++;
+    const t0 = performance.now();
+    const v = this.vecinos!;
+    /** Componente → borne → número de red. */
+    const redDe = new Map<string, Map<string, number>>();
+    const cablesVistos = new Set<string>();
+    /** Por red: las etiquetas de sus bobinas, o null si tiene nombre de alimentación o ninguna bobina. */
+    const bobinasRed: (Set<string> | null)[] = [];
+    const colaA: string[] = [];
+    /** null: el nodo es un cable; si no, el borne de `colaA`. */
+    const colaB: (string | null)[] = [];
+
+    /** Recorre la red del nodo, si existe y no se vio. Los auxiliares NC que encuentra van a `ncs`. */
+    const recorrer = (a: string, b: string | null, ncs: Set<string> | null): void => {
+      const red = bobinasRed.length;
+      let nombrada = false;
+      let bobinas: Set<string> | null = null;
+      let alguno = false;
+      colaA.push(a);
+      colaB.push(b);
+      while (colaA.length > 0) {
+        const x = colaA.pop()!;
+        const y = colaB.pop()!;
+        if (y === null) {
+          if (cablesVistos.has(x)) continue;
+          const g = this.cables.get(x);
+          if (!g) continue;
+          cablesVistos.add(x);
+          alguno = true;
+          if (g.dTipo !== "libre") {
+            colaA.push(g.dA);
+            colaB.push(g.dTipo === "borne" ? g.dB : null);
+          }
+          if (g.hTipo !== "libre") {
+            colaA.push(g.hA);
+            colaB.push(g.hTipo === "borne" ? g.hB : null);
+          }
+          const hijos = v.colgados.get(x);
+          if (hijos) {
+            for (const k of hijos) {
+              colaA.push(k);
+              colaB.push(null);
+            }
+          }
+          continue;
+        }
+        let delComp = redDe.get(x);
+        if (delComp?.has(y)) continue;
+        const info = this.comps.get(x);
+        const def = info?.def;
+        if (!info || !def || !def.bornes.some((k) => k.nombre === y)) continue;
+        if (!delComp) redDe.set(x, (delComp = new Map()));
+        delComp.set(y, red);
+        alguno = true;
+        this._bornesR6++;
+        if (def.elemento === "fuente" && nombreDeFuente(info)) nombrada = true;
+        const e = info.e;
+        if (e !== "") {
+          if (esBobina(def)) (bobinas ??= new Set()).add(e);
+          else if (ncs && esAuxiliarNC(def)) ncs.add(x);
+        }
+        const cables = v.porComp.get(x);
+        if (cables) {
+          for (const k of cables) {
+            const g = this.cables.get(k)!;
+            if ((g.dTipo === "borne" && g.dA === x && g.dB === y) || (g.hTipo === "borne" && g.hA === x && g.hB === y)) {
+              colaA.push(k);
+              colaB.push(null);
+            }
+          }
+        }
+      }
+      if (alguno) bobinasRed.push(nombrada ? null : bobinas);
     };
-    for (const id of this.r6.keys()) revisar(id);
-    for (const id of nuevos.keys()) if (!this.r6.has(id)) revisar(id);
-    this.r6 = nuevos;
+
+    const tocados = new Set<string>();
+    const sb = this.semillasBornes;
+    for (let i = 0; i < sb.length; i += 2) recorrer(sb[i]!, sb[i + 1]!, tocados);
+    for (const id of this.semillasCables) recorrer(id, null, tocados);
+
+    // Los NC tocados, con todas sus redes (las que faltan se recorren ahora).
+    const cambiados = new Set<string>();
+    for (const id of tocados) {
+      const info = this.comps.get(id)!;
+      const def = info.def!;
+      const e = info.e;
+      let marcado = false;
+      for (const k of def.bornes) {
+        if (!redDe.get(id)?.has(k.nombre)) recorrer(id, k.nombre, null);
+        if (bobinasRed[redDe.get(id)!.get(k.nombre)!]?.has(e)) {
+          marcado = true;
+          break;
+        }
+      }
+      if (this.ponerR6(id, marcado ? { regla: "R6", severidad: "aviso", id, etiqueta: e } : undefined)) cambiados.add(id);
+    }
+    this._msUltimaR6 = performance.now() - t0;
     return cambiados;
   }
 }

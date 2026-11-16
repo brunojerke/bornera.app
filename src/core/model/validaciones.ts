@@ -73,8 +73,8 @@ function esContactoManual(def: DefinicionSimbolo | undefined): boolean {
   return def !== undefined && def.accionamiento !== undefined && esTitular(def);
 }
 
-/** Auxiliar NC: el contacto de R6. */
-function esAuxiliarNC(def: DefinicionSimbolo | undefined): boolean {
+/** Auxiliar NC: el contacto de R6. El editor lo usa para R6 en las redes tocadas (T19, etapa 3b). */
+export function esAuxiliarNC(def: DefinicionSimbolo | undefined): boolean {
   return def?.elemento === "contacto_nc" && sigueABobina(def);
 }
 

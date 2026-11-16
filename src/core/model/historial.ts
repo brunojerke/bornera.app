@@ -39,6 +39,16 @@ export class Historial {
     return this.deshechos.length > 0;
   }
 
+  /** El comando que desharía `deshacer`, o undefined. Solo para mirar (el editor pregunta si es un Grupo). */
+  get siguienteDeshacer(): Comando | undefined {
+    return this.hechos.at(-1);
+  }
+
+  /** El comando que rehace `rehacer`, o undefined. Solo para mirar. */
+  get siguienteRehacer(): Comando | undefined {
+    return this.deshechos.at(-1);
+  }
+
   /** El documento difiere de lo último guardado o abierto. */
   get modificado(): boolean {
     return (this.hechos.at(-1) ?? null) !== this.marca;

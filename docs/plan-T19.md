@@ -139,6 +139,7 @@ Detalle de cada una:
 - Cuenta sus cálculos, para el test de que mover el mouse no recalcula.
 - Un documento nuevo es un editor nuevo, con su propio caché.
 - **Descartado:** todo incremental (un contador por etiqueta). Ahorra una pasada pero complica deshacer; queda como salida si el banco no pasa.
+- **Nota (2026-11-16, etapa 3b):** el banco de la 3a no pasó y se tomó esa salida. R1 a R5 y R9 van por componente y por grupo de etiqueta tocado, con un índice por etiqueta. R6 va solo en las redes tocadas cuando el comando cambia solo cables. Detalle en "Etapa 3b hecha".
 
 ### Lienzo (`src/render`)
 - **Capa estática**, como la lista de T18: `ComponenteEscena` suma lo que hay que marcar, ya resuelto. El dibujo no sabe de reglas.
@@ -232,6 +233,13 @@ Obligatorio: T19 toca el dibujo y el editor.
   - aparece un cuadro lento donde la base tiene 0.
 - **Pegar 500:** mediana del paso ≤ base + max(10 %, 1 ms), en las dos tandas.
 - **Duplicar todo (2000):** mediana del paso ≤ base × 1,10, en las dos tandas. Siguen los topes absolutos (150/300 ms y 40/80 ms en deshacer).
+- ***Etiquetar los vacíos (2000)* (ajuste (a) de Bruno al aprobar la etapa 3b, fijado antes de medir):** si sube más de 10 % en las dos tandas pero queda debajo de su tope de lote de T17 (cada paso con mediana ≤ 40 ms y máximo ≤ 80 ms, 0 lentos; `docs/plan-T17.md`, sección 4), pasa. Cambia las etiquetas de 1128 titulares: el arreglo 3 de la etapa 3b casi no lo achica.
+- ***Duplicar todo (2000)*, tolerancia de la etapa 3b (Bruno, anotada el 2026-11-16 a las 11:30 de Argentina, 14:30 UTC, antes de abrir el análisis del ABBA):** si es lo único que no pasa y en cada tanda queda a menos de 2 ms sobre su tope (base × 1,10), se acepta: los topes absolutos (150/300 ms) quedan lejos y va a la lista de la netbook. Si lo supera, o falla otra cosa, se frena y se presentan opciones.
+- **Diagnóstico del ABBA de la etapa 3b (opción 1 de Bruno; reglas fijadas el 2026-11-16 a las 12:57 de Argentina, 15:57 UTC, antes de medir):** ABBA ×5 contra `926915d` con 10 veces más repeticiones en cuatro filas: *2000 · Editar al 31 %* y *2000 con cables · Desplazar al 100 %* (p95 arriba en las dos tandas), *Arrastrar 40 cableados al 58 %* y *Girar todo al 31 %* (un lento cada una en HEAD, en la misma corrida). Son 10 pares; en cada bloque ABBA, (1.ª A, 1.ª B) y (2.ª B, 2.ª A).
+  - **Celdas de p95:** son reales si HEAD supera a la base en más de 0,05 ms de mediana o en más de 10 % de p95 en al menos 7 de los 10 pares.
+  - **Lentos:** son reales si HEAD tiene algún lento en 2 o más de sus 10 corridas y la base en ninguna.
+  - Si las cuatro filas dan ruido, se cierra la etapa 3b. Si alguna da real, se frena y se presentan opciones.
+- **Cuadros después de *Pegar 500* y de *Duplicar todo* (Bruno, 2026-11-16), para la netbook al cierre de la fase 3b:** después del paso, el editor repinta además los componentes cuyo contorno cambia sin que el comando los nombre (77 al pegar 500 y 277 al duplicar todo, los mismos desde la etapa 2). En la PC, la mediana por cuadro sube de 0,7 a 6,45 ms y de 1,5 a 8,7 ms, sin lentos. **Pasa si hay como máximo 1 cuadro lento después del gesto y ninguno de más de 100 ms.**
 - **Escenario nuevo**, en la escena con cables de 2000 al 31 %, con auxiliares NC renombrados para que haya pares de NC y bobina (el peor caso de R6). El renombrado va fuera de lo medido y la nota dice cuántos avisos hay de cada regla.
 
 | Escenario nuevo | Pasa si |
@@ -258,7 +266,7 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | 0 | Docs: este plan, `plan-fase3b.md` (T19 apunta acá y los opcionales) y Obsidian. Commit solo de docs. **Hecha el 2026-11-15.** | Sonnet |
 | 1 | Núcleo: `src/core/model/validaciones.ts` y sus tests (por regla, R6 con el enclavamiento bien y mal hecho, al azar contra el cálculo lento, reglas anuladas, `.brn`). Mediciones S1 y S2 y la corrida de control del anillo (ajuste 1). `npm test` y `npm run check`. **Hecha el 2026-11-15** (abajo). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor: `src/editor/avisosHoja.ts`, `reflejar`, contorno y anillo (según la etapa 1), `--conflicto`, contador de la barra y notas del panel, con sus tests. Prueba visual a 1024×600. **Hecha el 2026-11-15** (abajo). | Opus alto |
-| 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. **3a hecha el 2026-11-15** (humo y primera medición, frenada); **3b pendiente**: `AvisosHoja` más incremental, nuevo ABBA y `docs/bench.md` (abajo). | Opus alto (3b: Opus xhigh) |
+| 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. **3a hecha el 2026-11-15** (humo y primera medición, frenada); **3b hecha el 2026-11-16**: `AvisosHoja` más incremental, nuevo ABBA (pasa) y `docs/bench.md` (abajo). | Opus alto (3b: Opus xhigh) |
 | 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` (validaciones hechas y la definición de severidad) y Obsidian. `npm run humo` entero. | Sonnet |
 
 ### Etapa 1 hecha (2026-11-15)
@@ -355,15 +363,86 @@ Aprobada con D1-A (costo de R6 medido dentro del paso) y dos agregados de Bruno:
 
 - **Verificación del commit:** `npm test` 1743 en verde (1 saltado), `npm run check` 0 errores, `npm run humo` 695 de 695. El worktree base `..\bornera-base-926915d` queda armado (con su `npm ci` y este `pagina.ts`) para repetir el ABBA.
 
-### Etapa 3b (pendiente): `AvisosHoja` más incremental
+### Etapa 3b hecha (2026-11-16): `AvisosHoja` más incremental
 Decisión de Bruno (2026-11-15): los tres arreglos, en este orden, midiendo en Node después de cada uno (paso con y sin avisos y desglose de `reflejar`, como el diagnóstico de la etapa 3a), y al final el ABBA completo contra `926915d` con los criterios de la sección 5 tal como están. Los pasos de la tabla de arriba que suben (*Girar todo*, *Soltar con todo seleccionado*, *Borrar y deshacer uno con cables*, *Etiquetar los vacíos*) entran en la regla de siempre: no pasan si suben más de 10 % en las dos tandas.
-1. **Firmas sin textos:** comparar tipo, etiqueta y extremos de cada componente y cable del cambio contra lo guardado, sin armar un texto por elemento. Cubre *Girar todo*, *Soltar todo* y parte de *Duplicar*.
-2. **R6 solo en las redes tocadas:** recorrer las redes de los extremos viejos y nuevos de los cables que cambiaron y recalcular solo los pares NC y bobina con bornes en ellas. Con cambios de etiqueta, como hoy. El costo pasa a depender del tamaño de esas redes, no de la hoja.
-3. **Etiquetas incrementales:** R1 a R3 y R9 solo para los componentes del cambio; R4 y R5 solo para los grupos de etiqueta normalizada tocados (índice por etiqueta). *Etiquetar los vacíos* sigue cambiando 2000 etiquetas.
 
-Cada arreglo, con el recorrido al azar de `avisosHoja.test.ts` contra `validar` y una prueba a propósito que lo rompa.
+Aprobada con D1 a D4 como se propusieron y dos ajustes de Bruno:
+- (a) *Etiquetar los vacíos* pasa si sube pero queda debajo de su tope de lote de T17. Anotado en la sección 5 antes de medir.
+- (b) Medir una vez cuánto tarda armar el índice de vecinos de R6.
 
-## 7. Riesgos y límites
+Las decisiones:
+- **D1:** «No se sabe qué cables tocó» es deshacer o rehacer un `Grupo`. `Historial` suma dos getters de solo lectura, `siguienteDeshacer` y `siguienteRehacer`, y el editor pasa `r6Hoja`.
+- **D2:** R2 también por grupo.
+- **D3:** las etiquetas se calculan con `validar` sobre una sub-hoja.
+- **D4:** los avisos se comparan por campos.
+
+**Los tres arreglos, en `src/editor/avisosHoja.ts`:**
+1. **Firmas sin textos.** Por componente se guarda tipo y etiqueta, más el símbolo y la etiqueta normalizada, que se recalculan solo cuando cambian. Por cable, a qué llega cada extremo: tipo, componente o cable, y borne. Se compara campo por campo y se reescribe en el lugar, así que mover, girar o espejar 2000 no crean nada. Los avisos también se comparan por campos, sin `textoAviso` (D4).
+2. **R6 solo en las redes tocadas.**
+   - **Cuándo:** si el comando cambia solo cables, hay candidatos de R6 y no es deshacer o rehacer un `Grupo` (D1).
+   - **Semillas:** los extremos viejos y nuevos de los cables que cambiaron, esos cables y los que cuelgan de ellos en T. Cada semilla es una red aparte: si el cable anfitrión ya no está, sus T no quedan unidas.
+   - **Cómo recorre:** como `redes()`. Un extremo libre, o que apunta a algo que no existe, no une; la geometría no cuenta.
+   - **Qué recalcula:** los NC con algún borne en esas redes, mirando todas sus redes.
+   - **Índice de vecinos** (componente → cables; cable → cables en T): se arma al aparecer un par NC y bobina y se tira cuando se va.
+   - Con un cambio de etiquetas, o con un `Grupo`, R6 se calcula en toda la hoja, como antes.
+   - `pasadasR6` y `msUltimaR6` cuentan también la pasada local, así el banco no cambia. Se suman `pasadasR6Hoja` y `bornesR6`.
+   - El núcleo exporta `esAuxiliarNC`.
+3. **Etiquetas incrementales.**
+   - **Índice:** etiqueta normalizada → ids, cuántas bobinas y cuántos auxiliares NC. De ahí sale si hay candidatos de R6; ya no hace falta la pasada de `hayCandidatosR6`.
+   - **Qué se recalcula:** los componentes del cambio (R1, R3 y R9) y todos los de los grupos de etiqueta tocados, el viejo y el nuevo de cada uno (R2, R4 y R5, D2).
+   - **Cómo:** con `validar` del núcleo sobre una sub-hoja con solo esos componentes (D3). Va en el orden de la hoja si algún grupo tocado tiene dos o más, porque R4 nombra al primero. Cada grupo entra completo, así que da lo mismo que en la hoja entera.
+   - Si lo tocado pasa de tres cuartos de la hoja, se calcula la hoja entera.
+   - Se suma `componentesEtiqueta`.
+
+**Tests (`avisosHoja.test.ts`, 30; `historial.test.ts`, 1 más):**
+- **El recorrido al azar de la etapa 2** sigue igual paso por paso. Ahora exige más de 20 pasos con etiquetas recalculadas solo por grupos.
+- **Recorrido nuevo para R6** (semilla 20261116, 400 operaciones): cargado de NC, bobinas y fuentes con nombre, con borrar solo cables, reconectar un extremo suelto (`CambiarExtremo`) y dos cables en un `Grupo`, deshecho y rehecho. Con esa semilla dio 112 pasadas locales, 11 que prenden o apagan un R6, 7 deshacer y 7 rehacer de `Grupo`, y R6 a la vista en 112 pasos. El caché, la cuenta y la escena dan lo mismo que `validar` en cada paso.
+- **En `documentoBancoCables(2000)`:**
+  - Con un par NC y bobina, cablear el NC y deshacer visitan como máximo 4 bornes y no van a la hoja entera.
+  - Un `Grupo` deshecho y rehecho va a la hoja entera.
+  - Renombrar, borrar y deshacer uno evalúan su grupo de etiqueta: el grupo viejo, 0, 1 y el grupo viejo.
+- **El índice de vecinos** se arma una vez al aparecer el par y se va con él.
+- **A propósito, uno por arreglo, y el recorrido lo nota:**
+  - una comparación que mira el tipo y no la etiqueta;
+  - R6 sin sembrar los extremos viejos;
+  - etiquetas sin el resto del grupo.
+  - La prueba de «R6 no se recalcula» anula también el camino local.
+
+**Medición en Node** (el diagnóstico de la etapa 3a, con un test temporal que se borró):
+- **Cómo:** `documentoBancoCables(2000)`, paso más deshacer, mediana de 20 vueltas, en ms.
+- **Pegar 500 al lado:** son los 500 más cercanos al centro, pegados fuera de la escena. Es el «Duplicar 500» de la 3a.
+- **`reflejar` con las partes envueltas en un reloj:** la tabla. Sin envolver, `reflejar` da para la base y la 3b: *Pegar 500*, de 2,9–3,1 a 1,9–2,3; *Girar todo*, de 2,7–3,2 a 0,6; *Duplicar todo*, de 6,0–6,2 a 6,0–6,6.
+
+| | Base `5f4e1d1` | Arreglo 1 | Arreglo 2 | Arreglo 3 |
+|---|---:|---:|---:|---:|
+| `reflejar`, Pegar 500 al lado | 3,3–3,4 | 3,2 | 3,1–3,7 | 2,4–2,6 |
+| ″, de eso, etiquetas | 2,1 | 2,0 | 2,0–2,4 | 0,8–0,9 |
+| `reflejar`, Girar todo (2000) | 2,5 | 0,7 | 0,7 | 0,6 |
+| `reflejar`, Duplicar todo (2000) | 7,0–7,3 | 6,7–6,9 | 7,0–7,2 | 7,2–7,8 |
+| ″, de eso, etiquetas | 2,7 | 2,8–2,9 | 2,8–3,1 | 1,8–1,9 |
+| R6 en Dibujar 1 cable: mediana / p95 / máx. | 2,0–3,0 / 2,9–6,0 / 3,2–10,3 | igual | 0,01 / 0,01 / 0,02 | 0,01 / 0,01–0,02 / 0,02 |
+| Cablear y deshacer con el par | 4,5–6,5 | 4,4–5,0 | 0,4–0,6 | 0,5–0,8 |
+
+- **En *Duplicar todo*, el arreglo 3 no ahorra:** la sub-hoja evita la mitad de la pasada de etiquetas, pero mantener el índice para 2000 componentes nuevos (y sacarlos al deshacer) cuesta lo mismo. Con 2000 cambios de 4000, cada componente cuesta unos 0,35 µs indexado o validado.
+- **(b) Índice de vecinos de R6**, con 3030 cables, 1903 componentes con cables y 30 anfitriones de T: 0,53–0,71 ms la primera vez y 0,25–0,38 ms de mediana de 20. Se arma una vez, al colocar el par, fuera de lo medido en el banco.
+- **Paso con avisos menos sin avisos:** al principio se midió con un editor nuevo para cada versión y daba hasta +11 ms de ruido. Ahora se alternan con y sin avisos en el mismo editor. En la base: *Pegar 500* +3,5/+4,4, *Girar todo* +2,7/+3,1, *Duplicar todo* +6,4/+3,5. Con la 3b: *Pegar 500* +0,5 a +1,5, *Girar todo* entre −0,7 y +0,8, *Duplicar todo* +3,3 a +7,5 (ruido de ±3 ms).
+
+**Banco** (`docs/bench.md`, "Validaciones en vivo"):
+- **ABBA ×3 en dos tandas contra `926915d`, el 2026-11-16 de 12:11 a 12:19.** El del 2026-11-15 se cortó en 15 de 24 corridas y se descartó sin analizarlo.
+- **Criterios propios: todo pasa.**
+  - R6: p95 0,0 y 0,1 ms, máximo 0,1 ms.
+  - *Pegar 500*: 5,75 y 5,60 contra topes de 6,00 y 5,90.
+  - *Duplicar todo*: 49,05 y 50,45 contra 53,40 y 52,25, sin usar la tolerancia de 2 ms.
+  - *Rehacer con avisos*: 22,74 y 22,47 contra 26,11 y 25,33.
+  - *Etiquetar los vacíos*: sube y pasa por el ajuste (a).
+- **Celdas comunes:**
+  - Celdas de p95: *Editar al 31 %* con 2000 y *Desplazar al 100 %* con cables suben en las dos tandas.
+  - Lentos: dos de HEAD en la misma corrida (*Arrastrar 40 cableados* 39,1 ms y *Girar todo* 16,4 ms).
+  - **Diagnóstico** (opción 1 de Bruno, reglas fijadas antes): las cuatro filas dan ruido (2, 2, 0 y 1 de 10).
+- ***Encuadrar (F)* con 500:** base 1 de 6 corridas en cada tanda con un cuadro de 8,5 ms o más; HEAD 0 de 6.
+- **Aparte, a la netbook:** los cuadros que siguen a *Pegar 500* y a *Duplicar todo* suben de 0,7 a 6,45 ms y de 1,5 a 8,7 ms de mediana, sin lentos. Es el repintado de los 77 y 277 contornos que cambian sin estar en el comando, igual desde la etapa 2 (comprobado en Node contra `5f4e1d1`). Criterio de Bruno en la sección 5 y en `docs/plan-fase3b.md`.
+
+**Verificación:** `npm test` 1751 en verde (1 saltado), `npm run check` 0 errores, `npm run humo` 695 de 695. Sin humo nuevo: el cambio es interno y lo cubren los tests de Vitest. El worktree base `..\bornera-base-926915d` sigue armado. Sigue la etapa 4 (cierre).
 
 ## 7. Riesgos y límites
 

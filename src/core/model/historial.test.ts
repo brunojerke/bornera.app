@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Borrar, CambiarEtiqueta, Mover, Rotar, colocar, type Cambio, type Comando } from "./comandos";
+import { Borrar, CambiarEtiqueta, Grupo, Mover, Rotar, colocar, type Cambio, type Comando } from "./comandos";
 import { buscarComponente, crearDocumento, type Componente, type Documento } from "./documento";
 import { Historial } from "./historial";
 
@@ -94,6 +94,24 @@ describe("Historial", () => {
     expect(h.puedeDeshacer).toBe(true); // queda el primer Colocar
     h.rehacer();
     expect(doc).toEqual(despues);
+  });
+
+  it("siguienteDeshacer y siguienteRehacer muestran el comando de arriba (un Grupo con agrupar) sin tocar nada", () => {
+    const { doc, h } = nuevo();
+    expect(h.siguienteDeshacer).toBeUndefined();
+    expect(h.siguienteRehacer).toBeUndefined();
+    const c = colocar(doc, lampara(0, 0));
+    h.ejecutar(c);
+    expect(h.siguienteDeshacer).toBe(c);
+    h.agrupar([new Mover([c.id], 1, 0)]);
+    const grupo = h.siguienteDeshacer;
+    expect(grupo).toBeInstanceOf(Grupo);
+    const antes = copia(doc);
+    expect(h.siguienteDeshacer).toBe(grupo);
+    expect(doc).toEqual(antes);
+    h.deshacer();
+    expect(h.siguienteRehacer).toBe(grupo);
+    expect(h.siguienteDeshacer).toBe(c);
   });
 
   it("agrupar sin comandos no agrega un paso", () => {

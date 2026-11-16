@@ -88,7 +88,7 @@
 // la capa dinámica y no invalida mosaicos.
 
 import { hayCablesEn, indexarHoja, puntoSobreRecorrido, recorridoCable, type IndiceHoja } from "../core/model/cables";
-import { Borrar, CambiarExtremo, Espejar, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
+import { Borrar, CambiarExtremo, Espejar, Grupo, Mover, Rotar, type Cambio, type Comando } from "../core/model/comandos";
 import { planearReconexion, type DestinoExtremo, type LadoCable, type ResultadoReconexion } from "../core/model/reconectar";
 import {
   enMinuscula,
@@ -777,14 +777,17 @@ export class Editor {
    * de un gesto.
    */
   deshacer(): Cambio | null {
+    // Deshacer un Grupo: R6 en toda la hoja (T19, etapa 3b, D1).
+    const grupo = this.historial.siguienteDeshacer instanceof Grupo;
     const cambio = this.historial.deshacer();
-    return cambio && this.trasHistorial(this.reflejar(cambio));
+    return cambio && this.trasHistorial(this.reflejar(cambio, grupo));
   }
 
   /** Rehace el último paso deshecho. Igual que `deshacer` con la selección. */
   rehacer(): Cambio | null {
+    const grupo = this.historial.siguienteRehacer instanceof Grupo;
     const cambio = this.historial.rehacer();
-    return cambio && this.trasHistorial(this.reflejar(cambio));
+    return cambio && this.trasHistorial(this.reflejar(cambio, grupo));
   }
 
   /**
@@ -1710,8 +1713,11 @@ export class Editor {
    * Las bobinas cuya lista de referencias cambió (T18) pasan por lo mismo
    * aunque el cambio no las nombre (borrar su último contacto): la escena
    * invalida su caja vieja, con la lista anterior, y la nueva.
+   *
+   * `r6Hoja`: el cambio es deshacer o rehacer un Grupo, y las validaciones
+   * calculan R6 en toda la hoja (T19, etapa 3b, D1).
    */
-  private reflejar(cambio: Cambio): Cambio {
+  private reflejar(cambio: Cambio, r6Hoja = false): Cambio {
     // Las etiquetas en memoria ya no valen (T17); la nota del renombrado dura hasta el próximo cambio.
     this.etiquetas.invalidar();
     this.notaRenombre = this.notaPendiente;
@@ -1750,6 +1756,7 @@ export class Editor {
       cables: idsCables,
       actualesCables,
       componente: (id) => this.indiceHoja.componentes.get(id),
+      r6Hoja,
     });
     const rehechos = new Set<string>();
     for (const id of this.referencias.reflejar(ids, actuales)) {

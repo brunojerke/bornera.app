@@ -26,7 +26,8 @@ El armado de referencia, el `inversion.brn` y la comparación se hacen al cerrar
 - **Desde T17** (`docs/plan-T17.md`, "Vigente para el cierre de la fase 3b"): *Duplicar todo (2000)* pasó justo en la PC contra `d969019` (59,35 y 59,79 ms) y *Pegar 500* suma de 0,55 a 0,9 ms. Medir las dos en la netbook, junto con el tope 160.
 - **Desde T18** (`docs/plan-T18.md`, "Vigente para el cierre de la fase 3b"): también *Rehacer al 31 % con referencias* y *Mover 1 contacto con referencias al 31 %*. En la PC pasaron sus topes con margen (por gesto, base × 1,04; paso, base + 0,3 ms).
 - **Desde T19** (`docs/plan-T19.md`, sección 9): *Encuadrar (F)* con 500 y los contornos de etiqueta. **Pasa si no hay cuadros lentos.** En la PC, el p95 del cuadro sube de 1,6 a 2,9 ms y el gesto de 0,6 a 0,8 ms, porque la cola del gesto suma un cuadro de unos 9,5 ms en 4 de 6 corridas. La causa no está identificada: a ese zoom los contornos no se dibujan. Costo aceptado por Bruno (2026-11-15); se vuelve a medir en la etapa 3 de T19.
-- **Desde T19, etapa 3** (`docs/plan-T19.md`, sección 5): *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %*, con el costo de cada pasada de R6 (`redes()` sobre la hoja entera). Va a la netbook aunque pase en la PC (decisión de Bruno, 2026-11-15).
+- **Desde T19, etapa 3** (`docs/plan-T19.md`, sección 5): *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %*, con el costo de cada pasada de R6 (`redes()` sobre la hoja entera). Va a la netbook aunque pase en la PC (decisión de Bruno, 2026-11-15). Desde la etapa 3b, R6 recorre solo las redes que toca el cable: en la PC, p95 0,1 ms y máximo 0,1 ms.
+- **Desde T19, etapa 3b** (`docs/plan-T19.md`, sección 5): los cuadros que siguen a *Pegar 500* y a *Duplicar todo*. El editor repinta además los componentes cuyo contorno de aviso cambia sin que el comando los nombre (77 y 277). En la PC, la mediana por cuadro sube de 0,7 a 6,45 ms y de 1,5 a 8,7 ms, sin lentos. **Pasa si hay como máximo 1 cuadro lento después del gesto y ninguno de más de 100 ms** (decisión de Bruno, 2026-11-16).
 
 ## Reglas
 Las mismas de la fase 3:
@@ -95,6 +96,7 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
   - Medido: `redes()` con 2000 tarda de 1,1 a 1,6 ms, así que R10 sigue en la fase 5.
   - Del banco salieron dos decisiones: el anillo de R7 y R8 solo para el único seleccionado (cambio 8) y el contorno de etiqueta como se diseñó (cambio 9).
   - Detalle en `docs/plan-T19.md`, secciones 6 y 9.
+- **Etapas 2 (dibujo y editor), 3a (humo y primera medición, frenada) y 3b (`AvisosHoja` más incremental):** hechas el 2026-11-15 y el 2026-11-16. Con la 3b, el banco pasa contra `926915d` (`docs/bench.md`, "Validaciones en vivo"). Sigue la etapa 4, de cierre (`docs/plan-T19.md`, sección 6).
 - **"Nada naranja" del criterio de la fase:** las reglas R1 a R9 dan cero en la inversión y la barra dice «Sin avisos» (`docs/plan-T19.md`, sección 3).
 - **Condicionado a la etapa 1:** el anillo en los bornes sin conectar se dibuja solo si no sube más de 10 % ningún escenario común del banco. Fase y Neutro en la misma red (R10) va en la fase 5, salvo que `redes()` con 2000 mida menos de 1 ms en la PC. **Resuelto en la etapa 1:** el anillo subió más de 10 % y va solo para el único seleccionado; `redes()` midió de 1,1 a 1,6 ms y R10 sigue en la fase 5.
 - **Pendiente (de T16), resuelto en el plan:** la previa en conflicto pasa a `--conflicto` y las validaciones quedan en `--aviso`, con formas distintas.

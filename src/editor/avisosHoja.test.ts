@@ -7,8 +7,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { marchaParada } from "../core/circuitos/marchaParada";
 import { indexarHoja, puntoExtremo, recorridoCable } from "../core/model/cables";
-import { Borrar, CambiarEtiqueta, cablear, colocar, Espejar, Mover, Rotar, type Comando } from "../core/model/comandos";
+import { Borrar, CambiarEtiqueta, CambiarExtremo, cablear, colocar, Espejar, Grupo, Mover, Rotar, type Comando } from "../core/model/comandos";
 import type { Componente, Documento, Extremo, Hoja } from "../core/model/documento";
+import type { Historial } from "../core/model/historial";
 import { recortar } from "../core/model/portapapeles";
 import { contarAvisos, validar, type Aviso } from "../core/model/validaciones";
 import { buscarSimbolo } from "../core/symbols";
@@ -29,6 +30,7 @@ const PULSADOR_NA = "pulsador.na";
 const PULSADOR_NC = "pulsador.nc";
 const LAMPARA = "senalizacion.lampara";
 const FASE = "fuente.fase";
+const NEUTRO = "fuente.neutro";
 
 class VistaFalsa implements DestinoVista {
   regiones: Caja[] = [];
@@ -231,6 +233,30 @@ describe("cuándo recalcula: solo por comando, y solo lo que el comando puede mo
     expect(editor.avisos.pasadasEtiqueta).toBe(++n);
   });
 
+  it("(3b, arreglo 3) renombrar, borrar y deshacer uno en 2000 evalúan su grupo de etiqueta, no la hoja", () => {
+    const { editor, h } = armar(documentoBancoCables(2000));
+    const k = h.componentes.find((c) => c.tipo === BOBINA && c.etiqueta !== "")!;
+    const grupo = (e: string) => h.componentes.filter((c) => c.etiqueta.trim().toUpperCase() === e.trim().toUpperCase()).length;
+    const evaluados = () => editor.avisos.componentesEtiqueta;
+    let n = evaluados();
+    const viejo = grupo(k.etiqueta);
+    editor.ejecutar(new CambiarEtiqueta(k.id, "K999"));
+    // El grupo viejo (con la bobina) y el nuevo (solo ella).
+    expect(evaluados() - n).toBe(viejo);
+    expect(diferencias(editor, h)).toEqual([]);
+    n = evaluados();
+    editor.ejecutar(new Borrar([k.id]));
+    expect(evaluados() - n).toBe(0);
+    n = evaluados();
+    editor.deshacer();
+    expect(evaluados() - n).toBe(1);
+    n = evaluados();
+    editor.deshacer();
+    expect(evaluados() - n).toBe(viejo);
+    expect(diferencias(editor, h)).toEqual([]);
+    expect(viejo).toBeLessThan(20);
+  });
+
   it("cablear no recorre los componentes: 0 pasadas de etiqueta y solo los bornes de los dos componentes del cable", () => {
     const { editor, poner, tender } = armar();
     const s1 = poner(PULSADOR_NA, 0, 0, "S1");
@@ -267,6 +293,51 @@ describe("cuándo recalcula: solo por comando, y solo lo que el comando puede mo
     expect(editor.avisos.de(nc).map((a) => a.regla)).toContain("R6");
     editor.ejecutar(new Mover([k, nc], 0, 4));
     expect(editor.avisos.pasadasR6).toBe(r6 + 1);
+  });
+
+  it("R6 en las redes tocadas (3b, arreglo 2): con 2000 y un par NC y bobina, cablear el NC y deshacer visitan sus redes, no la hoja; un Grupo deshecho o rehecho va a la hoja entera", () => {
+    const { editor, h, poner } = armar(documentoBancoCables(2000));
+    const bobina = h.componentes.find((c) => c.tipo === BOBINA && c.etiqueta !== "")!;
+    const x = Math.max(...h.componentes.map((c) => c.x)) + 8;
+    const nc = poner(AUXILIAR_NC, x, 0, bobina.etiqueta);
+    const p = puntoExtremo(indexarHoja(h), b(nc, "21"))!;
+    const cable = () => cablear(editor.documento, { desde: b(nc, "21"), hasta: libre(p.x, p.y - 3), codos: [] });
+    const a = editor.avisos;
+    const antes = { r6: a.pasadasR6, hoja: a.pasadasR6Hoja, bornes: a.bornesR6 };
+    editor.ejecutar(cable());
+    editor.deshacer();
+    expect(a.pasadasR6).toBe(antes.r6 + 2);
+    expect(a.pasadasR6Hoja).toBe(antes.hoja);
+    // El borne del cable y el otro borne del NC, en cada pasada.
+    expect(a.bornesR6 - antes.bornes).toBeLessThanOrEqual(4);
+    expect(diferencias(editor, h)).toEqual([]);
+    // El mismo cable dentro de un Grupo: ejecutarlo va por las redes tocadas; deshacerlo y rehacerlo, por la hoja entera (D1).
+    editor.agrupar([cable()]);
+    expect(a.pasadasR6Hoja).toBe(antes.hoja);
+    editor.deshacer();
+    expect(a.pasadasR6Hoja).toBe(antes.hoja + 1);
+    editor.rehacer();
+    expect(a.pasadasR6Hoja).toBe(antes.hoja + 2);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("el índice de vecinos de R6 se arma una vez al aparecer el par NC y bobina y se va con él", () => {
+    const proto = AvisosHoja.prototype as unknown as { armarVecinos: () => unknown };
+    const armado = vi.spyOn(proto, "armarVecinos");
+    const { editor, poner, tender } = armar();
+    const k = poner(BOBINA, 0, 0, "K1");
+    tender(b(k, "A1"), libre(0, -6));
+    expect(armado).not.toHaveBeenCalled();
+    const nc = poner(AUXILIAR_NC, 10, 0, "K1");
+    expect(armado).toHaveBeenCalledTimes(1);
+    tender(b(nc, "22"), b(k, "A1"), [[10, -2]]);
+    expect(armado).toHaveBeenCalledTimes(1);
+    const vecinos = () => (editor.avisos as unknown as { vecinos: unknown }).vecinos;
+    expect(vecinos()).not.toBeNull();
+    editor.ejecutar(new CambiarEtiqueta(nc, "K2"));
+    expect(vecinos()).toBeNull();
+    editor.deshacer();
+    expect(armado).toHaveBeenCalledTimes(2);
   });
 
   it("msUltimaR6 (para el banco): 0 sin pasadas; mide solo la pasada de R6 y no cambia si R6 no corre", () => {
@@ -436,6 +507,7 @@ describe("panel y anillo", () => {
 // ── Al azar, a través del editor ───────────────────────────────────────────
 
 const SEMILLA = 20261115;
+const SEMILLA_R6 = 20261116;
 const OPERACIONES = 400;
 
 function generador(semilla: number): () => number {
@@ -456,14 +528,30 @@ function generador(semilla: number): () => number {
  * después de cada uno, llama a `revisar`. La secuencia depende solo de la
  * semilla.
  */
-function recorrer(editor: Editor, revisar: (paso: number) => void): Record<string, number> {
-  const azar = generador(SEMILLA);
+/**
+ * Con `r6` (etapa 3b, arreglo 2), otra semilla y un recorrido cargado de NC,
+ * bobinas y fuentes con nombre, que suma operaciones solo de cables: borrar
+ * cables, reconectar un extremo suelto y dos cables en un Grupo (cuyo
+ * deshacer y rehacer van a la hoja entera). Sin `r6`, el recorrido es el de
+ * la etapa 2, paso por paso.
+ */
+interface OpcionesRecorrido {
+  semilla?: number;
+  r6?: boolean;
+}
+
+function recorrer(editor: Editor, revisar: (paso: number) => void, opciones: OpcionesRecorrido = {}): Record<string, number> {
+  const r6 = opciones.r6 === true;
+  const azar = generador(opciones.semilla ?? SEMILLA);
   const entero = (min: number, max: number) => min + Math.floor(azar() * (max - min + 1));
   const elegir = <T>(lista: readonly T[]): T => lista[Math.floor(azar() * lista.length)]!;
   const doc = editor.documento;
   const h = doc.hojas[0]!;
-  const ETIQUETAS = ["K1", "K2", "k1 ", "", "S1", "K7", "H1", "L"];
-  const TIPOS = [BOBINA, BOBINA, AUXILIAR, AUXILIAR_NC, AUXILIAR_NC, PULSADOR_NA, PULSADOR_NC, LAMPARA, FASE];
+  const historial = (editor as unknown as { historial: Historial }).historial;
+  const ETIQUETAS = r6 ? ["K1", "K2", "k1 ", "K1", "", "L", "N"] : ["K1", "K2", "k1 ", "", "S1", "K7", "H1", "L"];
+  const TIPOS = r6
+    ? [BOBINA, BOBINA, AUXILIAR, AUXILIAR_NC, AUXILIAR_NC, AUXILIAR_NC, FASE, NEUTRO]
+    : [BOBINA, BOBINA, AUXILIAR, AUXILIAR_NC, AUXILIAR_NC, PULSADOR_NA, PULSADOR_NC, LAMPARA, FASE];
   const hechas: Record<string, number> = {
     colocar: 0,
     mover: 0,
@@ -479,6 +567,7 @@ function recorrer(editor: Editor, revisar: (paso: number) => void): Record<strin
     pegar: 0,
     deshacer: 0,
     rehacer: 0,
+    ...(r6 ? { borrarCables: 0, reconectar: 0, agruparCables: 0, deshacerGrupo: 0, rehacerGrupo: 0 } : {}),
   };
   const algunos = (): string[] => {
     const ids = new Set<string>();
@@ -506,18 +595,27 @@ function recorrer(editor: Editor, revisar: (paso: number) => void): Record<strin
     for (const c of h.componentes) for (const x of buscarSimbolo(c.tipo)?.bornes ?? []) lista.push(b(c.id, x.nombre));
     return lista;
   };
-  const tender = (hasta: () => Extremo | null, desdeDado?: Extremo): boolean => {
+  /** Arma un cable (sin ejecutarlo); null si no se puede. */
+  const armarCable = (hasta: () => Extremo | null, desdeDado?: Extremo): Comando | null => {
     const lista = bornes();
-    if (lista.length === 0) return false;
+    if (lista.length === 0) return null;
     const desde = desdeDado ?? elegir(lista);
     const destino = hasta();
-    if (!destino) return false;
+    if (!destino) return null;
     const indice = indexarHoja(h);
     const p = puntoExtremo(indice, desde);
     const q = puntoExtremo(indice, destino);
-    if (!p || !q || (p.x === q.x && p.y === q.y)) return false;
+    if (!p || !q || (p.x === q.x && p.y === q.y)) return null;
     const codos: [number, number][] = p.x === q.x || p.y === q.y ? [] : azar() < 0.5 ? [[q.x, p.y]] : [[p.x, q.y]];
-    return intentar(() => cablear(doc, { desde, hasta: destino, codos }));
+    try {
+      return cablear(doc, { desde, hasta: destino, codos });
+    } catch {
+      return null;
+    }
+  };
+  const tender = (hasta: () => Extremo | null, desdeDado?: Extremo): boolean => {
+    const c = armarCable(hasta, desdeDado);
+    return c !== null && intentar(() => c);
   };
   const puntoEnCable = (): Extremo | null => {
     if (h.cables.length === 0) return null;
@@ -531,10 +629,79 @@ function recorrer(editor: Editor, revisar: (paso: number) => void): Record<strin
     return { tipo: "cable", cable: w.id, x, y };
   };
 
+  /** Solo con `r6`: el paso siguiente rehace el Grupo recién deshecho. */
+  let rehacerGrupo = false;
+
+  /** Un cable de un NC a un borne de su bobina (o de otra, si no hay). */
+  const ncABobina = (): boolean => {
+    const ncs = h.componentes.filter((c) => c.tipo === AUXILIAR_NC);
+    const bobinas = h.componentes.filter((c) => c.tipo === BOBINA);
+    if (ncs.length === 0 || bobinas.length === 0) return false;
+    const nc = elegir(ncs);
+    const k = bobinas.find((x) => x.etiqueta.trim().toUpperCase() === nc.etiqueta.trim().toUpperCase()) ?? elegir(bobinas);
+    return tender(() => b(k.id, elegir(["A1", "A2"])), b(nc.id, elegir(["21", "22"])));
+  };
+
+  /** Solo con `r6`: operaciones que tocan solo cables. Devuelve la hecha, o null. */
+  const soloCables = (r: number): string | null => {
+    if (r < 0.06) return ncABobina() ? "cablearNCaBobina" : null;
+    if (r < 0.11) {
+      if (h.cables.length === 0) return null;
+      const ids = new Set([elegir(h.cables).id]);
+      if (azar() < 0.4) ids.add(elegir(h.cables).id);
+      return intentar(() => new Borrar([...ids])) ? "borrarCables" : null;
+    }
+    if (r < 0.16) {
+      const sueltos = h.cables.filter((w) => w.desde.tipo === "libre" || w.hasta.tipo === "libre");
+      if (sueltos.length === 0) return null;
+      const w = elegir(sueltos);
+      const lado = w.desde.tipo === "libre" ? "desde" : "hasta";
+      const destino = azar() < 0.7 ? (bornes().length > 0 ? elegir(bornes()) : null) : puntoEnCable();
+      if (!destino || destino.tipo === "libre") return null;
+      return intentar(() => new CambiarExtremo(w.id, lado, destino)) ? "reconectar" : null;
+    }
+    if (r >= 0.21) {
+      // Deshacer un Grupo, si está arriba; el paso siguiente lo rehace.
+      if (historial.siguienteDeshacer instanceof Grupo && editor.deshacer()) {
+        hechas.deshacer!++;
+        rehacerGrupo = true;
+        return "deshacerGrupo";
+      }
+      return null;
+    }
+    const a = armarCable(() => elegir(bornes()));
+    const c = armarCable(() => (azar() < 0.5 ? libre(entero(-34, 34), entero(-34, 34)) : puntoEnCable()));
+    if (!a || !c) return null;
+    try {
+      editor.agrupar([a, c]);
+      return "agruparCables";
+    } catch {
+      return null;
+    }
+  };
+
   for (let paso = 0; paso < OPERACIONES; paso++) {
-    const r = azar();
+    if (rehacerGrupo) {
+      rehacerGrupo = false;
+      if (historial.siguienteRehacer instanceof Grupo && editor.rehacer()) {
+        hechas.rehacer!++;
+        hechas.rehacerGrupo!++;
+        revisar(paso);
+        continue;
+      }
+    }
+    let r = azar();
     const vacia = h.componentes.length === 0;
     let hecha: string | null = null;
+    if (r6 && r < 0.25) {
+      hecha = soloCables(r);
+      if (hecha !== null) {
+        hechas[hecha]!++;
+        revisar(paso);
+      }
+      continue;
+    }
+    if (r6) r = (r - 0.25) / 0.75;
     if (r < 0.15) {
       const datos = { tipo: elegir(TIPOS), x: entero(-30, 30), y: entero(-30, 30), rot: 0 as const, espejado: false, etiqueta: elegir(ETIQUETAS), params: {} };
       if (intentar(() => colocar(doc, datos))) hecha = "colocar";
@@ -559,13 +726,7 @@ function recorrer(editor: Editor, revisar: (paso: number) => void): Record<strin
     } else if (r < 0.48) {
       if (tender(() => elegir(bornes()))) hecha = "cablear";
     } else if (r < 0.54) {
-      const ncs = h.componentes.filter((c) => c.tipo === AUXILIAR_NC);
-      const bobinas = h.componentes.filter((c) => c.tipo === BOBINA);
-      if (ncs.length > 0 && bobinas.length > 0) {
-        const nc = elegir(ncs);
-        const k = bobinas.find((x) => x.etiqueta.trim().toUpperCase() === nc.etiqueta.trim().toUpperCase()) ?? elegir(bobinas);
-        if (tender(() => b(k.id, elegir(["A1", "A2"])), b(nc.id, elegir(["21", "22"])))) hecha = "cablearNCaBobina";
-      }
+      if (ncABobina()) hecha = "cablearNCaBobina";
     } else if (r < 0.58) {
       if (tender(() => libre(entero(-34, 34), entero(-34, 34)))) hecha = "cablearSuelto";
     } else if (r < 0.63) {
@@ -573,9 +734,26 @@ function recorrer(editor: Editor, revisar: (paso: number) => void): Record<strin
     } else if (r < 0.7) {
       if (!vacia && intentar(() => editor.etiquetas.pegado(recortar(h, algunos()), entero(-20, 20), entero(-20, 20)).comando)) hecha = "pegar";
     } else if (r < 0.85) {
-      if (editor.deshacer()) hecha = "deshacer";
-    } else if (editor.rehacer()) {
-      hecha = "rehacer";
+      const grupo = historial.siguienteDeshacer instanceof Grupo;
+      if (editor.deshacer()) {
+        hecha = "deshacer";
+        if (r6 && grupo) {
+          hechas.deshacerGrupo!++;
+          rehacerGrupo = true;
+        }
+      }
+    } else {
+      const grupo = historial.siguienteRehacer instanceof Grupo;
+      let rehecho = false;
+      try {
+        rehecho = editor.rehacer() !== null;
+      } catch {
+        // Rehacer una reconexión que ya no vale: el historial queda como estaba.
+      }
+      if (rehecho) {
+        hecha = "rehacer";
+        if (r6 && grupo) hechas.rehacerGrupo!++;
+      }
     }
     if (hecha === null) continue;
     hechas[hecha]!++;
@@ -591,19 +769,87 @@ describe("al azar, con semilla fija, a través del editor (T19)", { timeout: 30_
     const malos: string[] = [];
     const reglas = new Set<string>();
     let sinPasada = 0;
+    let parciales = 0;
     let ultima = editor.avisos.pasadasEtiqueta;
+    let evaluados = editor.avisos.componentesEtiqueta;
     const hechas = recorrer(editor, (paso) => {
       const d = diferencias(editor, h);
       if (d.length > 0 && malos.length < 3) malos.push(`paso ${paso}: ${d.join(", ")}`);
       for (const a of validar(h)) reglas.add(a.regla);
       if (editor.avisos.pasadasEtiqueta === ultima) sinPasada++;
+      else if (editor.avisos.componentesEtiqueta - evaluados < h.componentes.length) parciales++;
       ultima = editor.avisos.pasadasEtiqueta;
+      evaluados = editor.avisos.componentesEtiqueta;
     });
     expect(malos).toEqual([]);
     for (const [operacion, n] of Object.entries(hechas)) expect(n, operacion).toBeGreaterThan(0);
-    // Salieron todas las reglas, y hubo pasos sin pasada de etiquetas (mover, cablear).
+    // Salieron todas las reglas, hubo pasos sin pasada de etiquetas (mover, cablear) y pasadas solo por grupos (3b, arreglo 3).
     expect([...reglas].sort()).toEqual(["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"]);
     expect(sinPasada).toBeGreaterThan(0);
+    expect(parciales).toBeGreaterThan(20);
+  });
+
+  it(`R6 en las redes tocadas (3b, arreglo 2): ${OPERACIONES} operaciones cargadas de NC y bobinas (semilla ${SEMILLA_R6}), con borrar cables, reconectar y grupos, dicen lo mismo que validar`, () => {
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    const a = editor.avisos;
+    const malos: string[] = [];
+    let locales = 0;
+    let localesQueCambian = 0;
+    let conR6 = 0;
+    let previo = JSON.stringify(validar(h, ["R6"]));
+    let pasadas = { r6: a.pasadasR6, hoja: a.pasadasR6Hoja };
+    const hechas = recorrer(
+      editor,
+      (paso) => {
+        const d = diferencias(editor, h);
+        if (d.length > 0 && malos.length < 3) malos.push(`paso ${paso}: ${d.join(", ")}`);
+        const ahora = JSON.stringify(validar(h, ["R6"]));
+        const local = a.pasadasR6 > pasadas.r6 && a.pasadasR6Hoja === pasadas.hoja;
+        if (local) locales++;
+        if (local && ahora !== previo) localesQueCambian++;
+        if (ahora !== "[]") conR6++;
+        previo = ahora;
+        pasadas = { r6: a.pasadasR6, hoja: a.pasadasR6Hoja };
+      },
+      { semilla: SEMILLA_R6, r6: true },
+    );
+    expect(malos).toEqual([]);
+    const deCables = ["cablear", "cablearNCaBobina", "cablearSuelto", "cablearEnT", "borrarCables", "reconectar", "agruparCables", "deshacerGrupo", "rehacerGrupo"];
+    for (const operacion of [...deCables, "colocar", "renombrarSinArrastre", "deshacer", "rehacer"]) expect(hechas[operacion], operacion).toBeGreaterThan(0);
+    // Pasadas en las redes tocadas, algunas que prenden o apagan un R6, y pasos con R6 a la vista.
+    // Con la semilla de hoy: 112 pasadas locales, 11 que cambian R6 y 112 pasos con R6.
+    expect(locales).toBeGreaterThan(50);
+    expect(localesQueCambian).toBeGreaterThan(5);
+    expect(conR6).toBeGreaterThan(50);
+  });
+
+  it("a propósito (3b, arreglo 2): si R6 en las redes tocadas no siembra los extremos viejos, el recorrido lo nota", () => {
+    const proto = AvisosHoja.prototype as unknown as { sembrarViejos: () => void };
+    vi.spyOn(proto, "sembrarViejos").mockImplementation(() => {});
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let malos = 0;
+    recorrer(
+      editor,
+      () => {
+        if (diferencias(editor, h).length > 0) malos++;
+      },
+      { semilla: SEMILLA_R6, r6: true },
+    );
+    expect(malos).toBeGreaterThan(0);
+  });
+
+  it("a propósito (3b, arreglo 3): si las etiquetas se recalculan solo para los componentes del cambio, sin el resto de su grupo, el recorrido lo nota", () => {
+    const proto = AvisosHoja.prototype as unknown as { sumarGrupos: () => boolean };
+    vi.spyOn(proto, "sumarGrupos").mockReturnValue(false);
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let malos = 0;
+    recorrer(editor, () => {
+      if (diferencias(editor, h).length > 0) malos++;
+    });
+    expect(malos).toBeGreaterThan(0);
   });
 
   it("a propósito: con la puesta al día anulada, el recorrido encuentra diferencias", () => {
@@ -635,9 +881,22 @@ describe("al azar, con semilla fija, a través del editor (T19)", { timeout: 30_
     expect(malos).toBeGreaterThan(0);
   });
 
+  it("a propósito (3b, arreglo 1): si la comparación con lo guardado mira solo el tipo y no la etiqueta, el recorrido lo nota", () => {
+    const proto = AvisosHoja.prototype as unknown as { mismoComponente: (g: { tipo: string }, c: Componente) => boolean };
+    vi.spyOn(proto, "mismoComponente").mockImplementation((g, c) => g.tipo === c.tipo);
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let malos = 0;
+    recorrer(editor, () => {
+      if (diferencias(editor, h).length > 0) malos++;
+    });
+    expect(malos).toBeGreaterThan(0);
+  });
+
   it("a propósito: si R6 no se recalcula al cablear, el recorrido lo nota", () => {
-    const proto = AvisosHoja.prototype as unknown as { calcularR6: (h: Hoja) => Set<string> };
+    const proto = AvisosHoja.prototype as unknown as { calcularR6: (h: Hoja) => Set<string>; r6Local: () => Set<string> };
     vi.spyOn(proto, "calcularR6").mockReturnValue(new Set());
+    vi.spyOn(proto, "r6Local").mockReturnValue(new Set());
     const mp = marchaParada({ ramaNC: true });
     const { editor, h } = armar(mp.doc);
     let malos = 0;
