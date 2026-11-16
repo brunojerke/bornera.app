@@ -2,7 +2,7 @@
 
 Decidida el 2026-11-13 (Bruno): las cuatro funciones del editor que quedaron fuera del criterio de la fase 3 forman la fase 3b. Va después de la fase 3, cerrada con la versión 0.1.3, y antes de la fase 4.
 
-Orden: T16 → T17 → T17b → T18 → T19. Hechas T16, T17, T17b y T18 (2026-11-14); sigue T19, con el plan aprobado el 2026-11-15 (`docs/plan-T19.md`). El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
+Orden: T16 → T17 → T17b → T18 → T19. Hechas T16, T17, T17b y T18 (2026-11-14) y T19 (2026-11-16, `docs/plan-T19.md`). Sigue el cierre de la fase (armado de la inversión, `inversion.brn` y netbook). El número de orden de los contactos auxiliares es una tarea aparte: se revisó al planear T18 y no hace falta para T18 (D0-A de `docs/plan-T18.md`).
 
 ## Contexto
 La fase 3 pasó con la marcha-parada dibujada a mano (T15, `docs/plan-fase3.md`). Su sección "Fuera del criterio de pasaje" dejó para después cuatro funciones de la lista "Funciones del editor" de `docs/arquitectura.md`:
@@ -96,7 +96,8 @@ Tarea corta, después de T17 y antes de T18 (decisión de Bruno, 2026-11-14). Sa
   - Medido: `redes()` con 2000 tarda de 1,1 a 1,6 ms, así que R10 sigue en la fase 5.
   - Del banco salieron dos decisiones: el anillo de R7 y R8 solo para el único seleccionado (cambio 8) y el contorno de etiqueta como se diseñó (cambio 9).
   - Detalle en `docs/plan-T19.md`, secciones 6 y 9.
-- **Etapas 2 (dibujo y editor), 3a (humo y primera medición, frenada) y 3b (`AvisosHoja` más incremental):** hechas el 2026-11-15 y el 2026-11-16. Con la 3b, el banco pasa contra `926915d` (`docs/bench.md`, "Validaciones en vivo"). Sigue la etapa 4, de cierre (`docs/plan-T19.md`, sección 6).
+- **Etapas 2 (dibujo y editor), 3a (humo y primera medición, frenada) y 3b (`AvisosHoja` más incremental):** hechas el 2026-11-15 y el 2026-11-16. Con la 3b, el banco pasa contra `926915d` (`docs/bench.md`, "Validaciones en vivo"). Etapa 4 (cierre, solo docs) hecha el 2026-11-16 (`docs/plan-T19.md`, sección 6).
+- **T19 hecha el 2026-11-16.** Sigue el cierre de la fase. Para la netbook, la lista de arriba ("al cerrar la fase"), completa.
 - **"Nada naranja" del criterio de la fase:** las reglas R1 a R9 dan cero en la inversión y la barra dice «Sin avisos» (`docs/plan-T19.md`, sección 3).
 - **Condicionado a la etapa 1:** el anillo en los bornes sin conectar se dibuja solo si no sube más de 10 % ningún escenario común del banco. Fase y Neutro en la misma red (R10) va en la fase 5, salvo que `redes()` con 2000 mida menos de 1 ms en la PC. **Resuelto en la etapa 1:** el anillo subió más de 10 % y va solo para el único seleccionado; `redes()` midió de 1,1 a 1,6 ms y R10 sigue en la fase 5.
 - **Pendiente (de T16), resuelto en el plan:** la previa en conflicto pasa a `--conflicto` y las validaciones quedan en `--aviso`, con formas distintas.

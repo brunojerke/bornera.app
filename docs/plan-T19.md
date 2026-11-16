@@ -1,6 +1,6 @@
 # Plan T19 — Validaciones en vivo
 
-**Aprobado el 2026-11-15** con las decisiones de la tabla de abajo. Quinta y última tarea de la fase 3b (`docs/plan-fase3b.md`), después de T18. Después viene el cierre de la fase.
+**Aprobado el 2026-11-15** con las decisiones de la tabla de abajo. Quinta y última tarea de la fase 3b (`docs/plan-fase3b.md`), después de T18. **Hecha el 2026-11-16** (etapa 4, abajo). Después viene el cierre de la fase.
 
 **Estado de git al planear (verificado):** `main` en `926915d` (cierre de T18), árbol limpio, 19 commits por delante de `origin/main`, sin push.
 
@@ -267,7 +267,7 @@ Cada una en una sesión, con commit local y `/bornera-cierre`. Sin push ni versi
 | 1 | Núcleo: `src/core/model/validaciones.ts` y sus tests (por regla, R6 con el enclavamiento bien y mal hecho, al azar contra el cálculo lento, reglas anuladas, `.brn`). Mediciones S1 y S2 y la corrida de control del anillo (ajuste 1). `npm test` y `npm run check`. **Hecha el 2026-11-15** (abajo). | Opus xhigh (lógica del núcleo) |
 | 2 | Dibujo y editor: `src/editor/avisosHoja.ts`, `reflejar`, contorno y anillo (según la etapa 1), `--conflicto`, contador de la barra y notas del panel, con sus tests. Prueba visual a 1024×600. **Hecha el 2026-11-15** (abajo). | Opus alto |
 | 3 | Humo t19, ajuste de t16 y t18 si hace falta, y banco: el escenario nuevo, la comparación contra `926915d` y `docs/bench.md`. **3a hecha el 2026-11-15** (humo y primera medición, frenada); **3b hecha el 2026-11-16**: `AvisosHoja` más incremental, nuevo ABBA (pasa) y `docs/bench.md` (abajo). | Opus alto (3b: Opus xhigh) |
-| 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` (validaciones hechas y la definición de severidad) y Obsidian. `npm run humo` entero. | Sonnet |
+| 4 | Cierre: este plan, `plan-fase3b.md`, `arquitectura.md` (validaciones hechas y la definición de severidad) y Obsidian. `npm run humo` entero. **Hecha el 2026-11-16** (abajo; solo docs, sin humo nuevo). | Sonnet |
 
 ### Etapa 1 hecha (2026-11-15)
 - **`src/core/model/validaciones.ts`**, puro y sin DOM:
@@ -443,6 +443,14 @@ Las decisiones:
 - **Aparte, a la netbook:** los cuadros que siguen a *Pegar 500* y a *Duplicar todo* suben de 0,7 a 6,45 ms y de 1,5 a 8,7 ms de mediana, sin lentos. Es el repintado de los 77 y 277 contornos que cambian sin estar en el comando, igual desde la etapa 2 (comprobado en Node contra `5f4e1d1`). Criterio de Bruno en la sección 5 y en `docs/plan-fase3b.md`.
 
 **Verificación:** `npm test` 1751 en verde (1 saltado), `npm run check` 0 errores, `npm run humo` 695 de 695. Sin humo nuevo: el cambio es interno y lo cubren los tests de Vitest. El worktree base `..\bornera-base-926915d` sigue armado. Sigue la etapa 4 (cierre).
+
+### Etapa 4 hecha (2026-11-16): cierre
+Solo docs. **T19 queda hecha.** No se corrió el humo de nuevo: el último, 695 de 695, pasó en `edd2c03` y después solo cambiaron docs (`4595abc` y este commit).
+- **Docs:** este plan, `docs/plan-fase3b.md` (T19 cerrada y lo vigente para la netbook) y `docs/arquitectura.md` (validaciones hechas y la definición de severidad).
+- **Severidad (ajuste 3):** *error* es lo que impedirá simular en la fase 5; *aviso*, lo que no (sección 2). Hoy son errores R4 en bobinas y lámparas repetidas; el resto son avisos.
+- **Worktree base** `..\bornera-base-926915d`: borrado con `git worktree remove` y `git worktree prune`. Para repetir el ABBA habrá que armarlo de nuevo (`git worktree add` sobre `926915d`, `npm ci` y el mismo `pagina.ts`).
+- **A la netbook, al cierre de la fase 3b** (lista completa en `docs/plan-fase3b.md`): *Duplicar todo (2000)*, *Pegar 500*, el tope 160 de la previa, *Rehacer al 31 % con referencias*, *Mover 1 contacto con referencias al 31 %*, *Encuadrar (F)* con 500 y los contornos de etiqueta, *Dibujar 1 cable con 2000 y un par NC+bobina al 31 %*, y los cuadros que siguen a *Pegar 500* y a *Duplicar todo* (pasa con como máximo 1 cuadro lento y ninguno de más de 100 ms).
+- **Sigue:** el cierre de la fase 3b: armar la inversión de giro con Ctrl+D, `tests/circuitos/inversion.brn`, `npm run circuito` y la netbook.
 
 ## 7. Riesgos y límites
 
