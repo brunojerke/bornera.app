@@ -10,7 +10,7 @@
 |---|---|---|
 | D1 | **A** | El enclavamiento es solo eléctrico, con los NC de K1 y K2: es lo que piden el criterio de la fase, T18 (sección 3: cada lista tiene un NA de retención y un NC de enclavamiento) y T19 (`inversion()` de `validaciones.test.ts`). |
 | D2 | **A** | La referencia se arma por código, como `marchaParada.ts`, y se congela en `tests/circuitos/inversion.brn`. Un test aparte repite el procedimiento a mano (marcha-parada, NC, Ctrl+D, renombrar, cablear) y lo compara con la referencia. Bruno arma la suya siguiendo la lista de pasos de `docs/netbook-fase3b.md`, ensayada antes por el humo. |
-| D3 | **A** | `0.1.4-alpha.1` para la netbook (las prereleases traen F3 y el menú de desarrollo; la 0.1.3 final no) y, si pasa, `0.1.4` al cerrar. Como T15 (alpha.11 → 0.1.3). Tag, push y release, con autorización de Bruno. |
+| D3 | **A, cambiada el 2026-11-17: ver «Cambio de D3» abajo** | `0.1.4-alpha.1` para la netbook (las prereleases traen F3 y el menú de desarrollo; la 0.1.3 final no) y, si pasa, `0.1.4` al cerrar. Como T15 (alpha.11 → 0.1.3). Tag, push y release, con autorización de Bruno. |
 | D4 | **B** | «Probar la fase 3b» en el menú de desarrollo: corre en la app real de la netbook los escenarios del banco de la lista de la fase y da una tabla para copiar. |
 
 Descartadas:
@@ -353,13 +353,19 @@ Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador d
 - **Causa de las corridas frías:** `getImageData` con el lienzo en GPU. Se verificó en la PC. Las corridas 1 y 4 son la primera tras abrir la app: B15 dio 31 y 32 lentos y B16, 30 lentos.
 - **Corridas sueltas que fallan, informadas:** B8 en la 2 (máx. 75,3 ms; 4,0 %), B11 en la 2 (139,6 ms; 4,7 %) y en la 6 (49,4 ms; 1,4 %).
 - **B10 por gesto** dio 124,5 ms de mediana contra los 62,5 del tope. El tope de B10 salía de ×2,5 sobre la PC (25 ms) y la netbook real anda más cerca de ×5; ver `docs/ideas.md`.
-- **Fase 3b cerrada** (`docs/plan-fase3b.md` y `docs/arquitectura.md`). Quedan fuera de este cierre, con autorización de Bruno: push, tag `v0.1.4` y release. No se hicieron.
+- **Fase 3b cerrada** (`docs/plan-fase3b.md` y `docs/arquitectura.md`). El cierre no hace release ni cambia la versión (cambio de D3, abajo).
 - **Pendientes nuevos** (`docs/ideas.md`): banco con `willReadFrequently`, factor real de la netbook para los topes por gesto, `referencias.reflejar` y simplificar la hoja 2 y la checklist.
+
+### Cambio de D3 (Bruno, 2026-11-17)
+- D3 pasa de A a «`0.1.4` estable recién al cerrar la fase 4». El cierre de la 3b **no hace release ni sube la versión**.
+- La etapa 7 queda en: `docs/plan-fase3b.md`, `docs/arquitectura.md` (fase 3b cerrada) y Obsidian. Sin `0.1.4`, sin tag y sin push.
+- La versión queda en `0.1.4-alpha.1`. Las prereleases de la fase 4 siguen como `0.1.4-alpha.2`, `.3`…
+- El criterio «`0.1.4` se instala encima de la alpha sin desinstalar» (sección 1, supuestos) pasa a la fase 4: `docs/ideas.md`.
 
 ## 10. Necesita autorización de Bruno
 - Push de `main` (6 commits adelante al planear, más los del cierre).
 - Tag `v0.1.4-alpha.1` y su push (el workflow crea la prerelease).
-- Tag `v0.1.4`, su push y la release.
+- ~~Tag `v0.1.4`, su push y la release.~~ Ya no es de este cierre (cambio de D3, 2026-11-17).
 - Dar la fase 3b por cerrada: depende de la prueba en la netbook.
 - Cualquier dependencia nueva. No espero ninguna.
 

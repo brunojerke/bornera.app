@@ -88,13 +88,13 @@ Las mismas de la fase 3:
 - **Plan:** `docs/plan-cierre-3b.md`, aprobado el 2026-11-16, con D1-A, D2-A, D3-A y D4-B y los ajustes 1 a 4 de Bruno:
   - D1-A: enclavamiento solo por los NC de K1 y K2.
   - D2-A: referencia por código, congelada.
-  - D3-A: `0.1.4-alpha.1` para la netbook y después `0.1.4`.
+  - D3-A: `0.1.4-alpha.1` para la netbook y después `0.1.4`. **Cambiada el 2026-11-17:** `0.1.4` estable recién al cerrar la fase 4; el cierre de la 3b no hace release ni sube la versión, y las prereleases de la fase 4 siguen como `0.1.4-alpha.2`, `.3`…
   - D4-B: «Probar la fase 3b» en el menú de desarrollo.
 - **Checklist de la netbook:** `docs/netbook-fase3b.md`, con el tope de netbook de cada criterio y la hoja de pasos.
 - **Ideas para más adelante:** `docs/ideas.md`.
 - **Etapa 0 (docs):** hecha el 2026-11-16.
 - **Etapas 1 a 7:** núcleo y tests, humo, banco, «Probar la fase 3b», alpha, netbook y cierre (`docs/plan-cierre-3b.md`, sección 9).
-- **Fase 3b cerrada el 2026-11-17** (criterio A + D1 de Bruno, con la netbook en `0.1.4-alpha.1`). Resultados por fila en `docs/netbook-fase3b.md`; decisión y causa en `docs/plan-cierre-3b.md`. Falta, con autorización de Bruno: push, tag `v0.1.4` y release.
+- **Fase 3b cerrada el 2026-11-17** (criterio A + D1 de Bruno, con la netbook en `0.1.4-alpha.1`). Resultados por fila en `docs/netbook-fase3b.md`; decisión y causa en `docs/plan-cierre-3b.md`. Sin release ni cambio de versión (D3 cambiada, 2026-11-17): la versión queda en `0.1.4-alpha.1` y `0.1.4` sale al cerrar la fase 4.
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/archivo/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/archivo/plan-fase3.md`, T14b). Está en los riesgos de `docs/archivo/plan-T16.md`.

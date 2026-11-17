@@ -35,6 +35,11 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 - **Qué:** en el paso 7 de la hoja 2, la primera selección tomó la N (el neutro) en vez de lo que se quería. Aclarar ese paso y simplificar la checklist (menos filas, menos hojas).
 - **Cuándo:** antes de la próxima checklist de netbook.
 
+## Criterio de la fase 4: `0.1.4` se instala encima de la alpha
+- **Qué:** al cerrar la fase 4, `0.1.4` estable se instala encima de `0.1.4-alpha.N` sin desinstalar, como 0.1.3 sobre alpha.11. Hay que probarlo en la netbook.
+- **Relación:** Bruno movió `0.1.4` al cierre de la fase 4 (2026-11-17, cambio de D3 en `docs/plan-cierre-3b.md`). La versión sigue en `0.1.4-alpha.1`; las prereleases de la fase 4 son `0.1.4-alpha.2`, `.3`…
+- **Cuándo:** al cerrar la fase 4.
+
 ## ESP32 o hardware real por USB
 - **Qué:** conectar un ESP32 u otro hardware por USB para leer entradas y mover salidas reales desde la simulación.
 - **Cuándo:** al final, después de lo demás.
