@@ -92,6 +92,55 @@ $env:BORNERA_BRN = "C:\Users\jerke\Downloads\inversion.brn"; $env:BORNERA_BASE =
 - [ ] **Pasa:** «misma partición que la base (7 redes, 24 bornes)», comparado contra «inversion».
 - Si falla, la lista de diferencias dice qué falta, qué sobra o qué red se partió o se unió. Anotarla tal cual.
 
+## Resultados en la netbook (2026-11-16 y 2026-11-17) — criterio A + D1
+
+Versión `0.1.4-alpha.1`, Edge 157, lienzo 1366×768 fuera de pantalla. Seis corridas de «Probar la fase 3b» (`prueba1` a `prueba6`). La 1 y la 4 son las primeras tras abrir la app (frías). La 2, 3, 5 y 6 son calientes.
+
+**Criterio fijado por Bruno al cierre (A + D1), sin topes nuevos:**
+- **B8, B15 y B16** se juzgan con las corridas calientes 2, 3, 5 y 6. La fría se informa. Causa: `getImageData` con el lienzo en GPU (verificado en la PC).
+- **B10 por gesto** pasa a informativo. Decide **B11** (cuadros), con las 6 corridas.
+- Para B8 y B11 cuenta la mediana de las corridas de máx. y de % de cuadros lentos (decisión de Bruno, 2026-11-17). Las corridas sueltas que fallan se informan.
+- Los demás valores usan la mediana de las 6 corridas.
+
+**A a E**
+- A1 a A13: pasan (guardar / abrir `inversion.brn`: 53 / 36 ms).
+- C: F con 2000 = 9,1 ms.
+- D: escena de 2000, guardar / abrir 71 / 54 ms.
+- E: pasa (7 redes, 24 bornes).
+- P1 y P2: OK.
+
+**B1 a B16** (ms; «mediana» sobre las corridas que cuentan):
+
+| # | Medida | Tope | Mediana | Peor corrida | Corridas que cuentan | Resultado |
+|---|---|---|---|---|---|---|
+| B1 | paso: mediana / máx. | ≤ 375 / ≤ 750 | 143,0 / 153,6 | 216,9 / 243,5 | 1 a 6 | pasa |
+| B2 | deshacer: mediana / máx. | ≤ 100 / ≤ 200 | 24,8 / 34,5 | 31,8 / 37,4 | 1 a 6 | pasa |
+| B3 | cuadros tras el gesto | ≤ 1 lento por gesto, ninguno > 100 | 0,5 por gesto; máx. 16,1 | 1 por gesto; máx. 41,2 | 1 a 6 | pasa |
+| B4 | paso: mediana / máx. | ≤ 100 / ≤ 200 | 15,8 / 24,4 | 18,4 / 39,5 | 1 a 6 | pasa |
+| B5 | deshacer: mediana / máx. | ≤ 100 / ≤ 200 | 3,8 / 7,0 | 4,4 / 45,3 | 1 a 6 | pasa |
+| B6 | cuadros tras el gesto | ≤ 1 lento por gesto, ninguno > 100 | 0 por gesto; máx. 12,3 | 1 por gesto; máx. 43,7 | 1 a 6 | pasa |
+| B7 | revisión por punto p95 | ≤ 12,5 | 3,1 | 4,2 | 1 a 6 | pasa |
+| B8 | cuadros de la previa | ninguno > 50 y < 1 % > 16,7 | máx. 18,9; 0,3 % | corrida 2: máx. 75,3; 4,0 % | 2, 3, 5, 6 (calientes) | pasa por mediana |
+| B9 | mayor N con p95 ≤ 12,5 | se anota | 500 | 320 (corrida 2) | 1 a 6 | se anota |
+| B10 | rehacer por gesto | ≤ 62,5 | 124,5 | 227,5 | 1 a 6 | informativo |
+| B11 | cuadros del rehacer | ninguno > 50 y < 1 % > 16,7 | máx. 15,6; 0,3 % | corrida 2: máx. 139,6; 4,7 % | 1 a 6 | pasa por mediana |
+| B12 | mover 1 contacto: mediana | ≤ 4,5 | 3,4 | 3,7 | 1 a 6 | pasa |
+| B13 | R6 p95 / máx. | ≤ 7,5 / ≤ 20 | 0,1 / 0,1 | 0,1 / 0,2 | 1 a 6 | pasa |
+| B14 | cuadros | ninguno > 50 y < 1 % > 16,7 | máx. 3,5; 0 % | máx. 3,6 | 1 a 6 | pasa |
+| B15 | Encuadrar (F) con 500 | 0 lentos | 0 lentos; máx. 12,2 | 0 lentos; máx. 12,3 | 2, 3, 5, 6 (calientes) | pasa |
+| B16 | borrar y deshacer con cables | 0 lentos | 0 lentos; 45,8 por gesto | 0 lentos; 46,2 | 2, 3, 5, 6 (calientes) | pasa |
+
+**Corridas frías (informadas, no cuentan):** B15 dio 31 y 32 lentos (máx. 49,2 y 54,4 ms) y B16 dio 30 lentos (320,7 y 337,6 ms por gesto), solo en las corridas 1 y 4. B8 en frío: máx. 376,4 y 225,7 ms. Causa: `getImageData` con el lienzo en GPU.
+
+**Corridas sueltas que fallan** (informadas, no cambian el resultado):
+- B8 corrida 2: máx. 75,3 ms; 4,0 % (24 de 600).
+- B11 corrida 2: máx. 139,6 ms; 4,7 % (11 de 235).
+- B11 corrida 6: máx. 49,4 ms; 1,4 % (2 de 145).
+
+**Si se sumaran los cuadros lentos de las corridas** en vez de usar la mediana, B8 daría 1,25 % (30 de 2400) y B11 1,4 % (14 de 984), y no pasarían. Bruno eligió la mediana.
+
+**Resultado:** pasan todas las filas con tope menos B10, que es informativa. Se anota B9 (N = 500; se podría subir `TOPE_PREVIA_PEGAR`, pero no se toca sin Bruno).
+
 ---
 
 # Hoja 2 — Pasos para armar la inversión

@@ -343,6 +343,19 @@ Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador d
   - **Regla corregida para el futuro:** «Probar» se compara con el banco solo en medianas y lentos; los máximos y los p95 son informativos.
 - `npm test`: 1812 (1 salteado). `npm run check` limpio. `npm run humo`: 743 de 743. Los scripts de comparación fueron temporales (fuera del repo).
 
+### Etapas 5 y 6 hechas; cierre (etapa 7) el 2026-11-17
+- **Netbook** con `0.1.4-alpha.1`: seis corridas de «Probar la fase 3b». Tabla por fila, con medianas y qué corridas cuentan, en `docs/netbook-fase3b.md`, sección «Resultados en la netbook».
+- **Pasan:** A1 a A13 (guardar / abrir `inversion.brn`: 53 / 36 ms), E (7 redes, 24 bornes), P1 y P2, C (F con 2000: 9,1 ms), D (2000: guardar / abrir 71 / 54 ms) y todas las filas con tope de B1 a B16, salvo B10 (informativa). B9 se anota: N = 500.
+- **Decisión de Bruno (criterio A + D1, tras el diagnóstico), sin topes nuevos:**
+  - B8, B15 y B16 se juzgan con las corridas calientes 2, 3, 5 y 6. La fría (corridas 1 y 4) se informa.
+  - B10 por gesto pasa a informativo y decide B11, con las 6 corridas.
+  - Para B8 y B11 cuenta la mediana de las corridas (máx. y % de cuadros lentos), no la suma de lentos. Con la suma darían 1,25 % y 1,4 %, y no pasarían.
+- **Causa de las corridas frías:** `getImageData` con el lienzo en GPU. Se verificó en la PC. Las corridas 1 y 4 son la primera tras abrir la app: B15 dio 31 y 32 lentos y B16, 30 lentos.
+- **Corridas sueltas que fallan, informadas:** B8 en la 2 (máx. 75,3 ms; 4,0 %), B11 en la 2 (139,6 ms; 4,7 %) y en la 6 (49,4 ms; 1,4 %).
+- **B10 por gesto** dio 124,5 ms de mediana contra los 62,5 del tope. El tope de B10 salía de ×2,5 sobre la PC (25 ms) y la netbook real anda más cerca de ×5; ver `docs/ideas.md`.
+- **Fase 3b cerrada** (`docs/plan-fase3b.md` y `docs/arquitectura.md`). Quedan fuera de este cierre, con autorización de Bruno: push, tag `v0.1.4` y release. No se hicieron.
+- **Pendientes nuevos** (`docs/ideas.md`): banco con `willReadFrequently`, factor real de la netbook para los topes por gesto, `referencias.reflejar` y simplificar la hoja 2 y la checklist.
+
 ## 10. Necesita autorización de Bruno
 - Push de `main` (6 commits adelante al planear, más los del cierre).
 - Tag `v0.1.4-alpha.1` y su push (el workflow crea la prerelease).

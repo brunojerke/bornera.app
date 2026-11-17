@@ -94,6 +94,7 @@ Las mismas de la fase 3:
 - **Ideas para más adelante:** `docs/ideas.md`.
 - **Etapa 0 (docs):** hecha el 2026-11-16.
 - **Etapas 1 a 7:** núcleo y tests, humo, banco, «Probar la fase 3b», alpha, netbook y cierre (`docs/plan-cierre-3b.md`, sección 9).
+- **Fase 3b cerrada el 2026-11-17** (criterio A + D1 de Bruno, con la netbook en `0.1.4-alpha.1`). Resultados por fila en `docs/netbook-fase3b.md`; decisión y causa en `docs/plan-cierre-3b.md`. Falta, con autorización de Bruno: push, tag `v0.1.4` y release.
 
 ## Pendientes que vienen de la fase 3
 Siguen en `docs/archivo/plan-fase3.md`: los "Pendiente aparte" del principio y "UI y símbolos (después de T15)". Uno toca a T16: acelerar `Uniones` cuando llegue pegar (`docs/archivo/plan-fase3.md`, T14b). Está en los riesgos de `docs/archivo/plan-T16.md`.
