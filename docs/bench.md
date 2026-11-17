@@ -17,6 +17,31 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
   - *Arrastre al 31 %*: 100 cuadros de 16 px (960 px/s), saliendo una y otra vez de lo dibujado.
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
+- Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
+
+## Autoguardado y costo de editar (fase 4, T23 etapa 5, D1) — 2026-11-17
+
+En Node, escena 2000 + 3030 cables, `Editor` real. Cada vuelta hace Mover 1, deshacer, rehacer y Mover de vuelta, con el autoguardado conectado (relojes reales, almacén en memoria) o sin él, alternando. Son 3 procesos y 300 vueltas por modo (más 40 de calentamiento). Script temporal, no commiteado. En ms:
+
+| Proceso | Comando | Mediana sin | Mediana con | Extra (mediana) | Máx. sin | Máx. con | Extra (máx.) |
+|---|---|---|---|---|---|---|---|
+| 1 | mover | 13,363 | 13,699 | 0,336 | 45,499 | 34,766 | −10,733 |
+| 1 | deshacer | 0,416 | 0,429 | 0,012 | 3,208 | 2,452 | −0,756 |
+| 1 | rehacer | 0,462 | 0,475 | 0,013 | 3,263 | 2,462 | −0,801 |
+| 1 | volver | 10,920 | 10,941 | 0,021 | 34,945 | 25,001 | −9,944 |
+| 2 | mover | 12,952 | 12,998 | 0,047 | 31,562 | 32,442 | 0,881 |
+| 2 | deshacer | 0,431 | 0,437 | 0,006 | 3,707 | 2,947 | −0,759 |
+| 2 | rehacer | 0,469 | 0,475 | 0,006 | 25,339 | 2,102 | −23,236 |
+| 2 | volver | 10,412 | 10,469 | 0,057 | 55,657 | 51,702 | −3,956 |
+| 3 | mover | 12,304 | 12,368 | 0,065 | 28,733 | 38,415 | 9,682 |
+| 3 | deshacer | 0,435 | 0,443 | 0,008 | 5,518 | 2,764 | −2,754 |
+| 3 | rehacer | 0,479 | 0,485 | 0,005 | 2,771 | 3,258 | 0,487 |
+| 3 | volver | 9,972 | 10,047 | 0,075 | 28,673 | 27,308 | −1,365 |
+
+- **`alCambiar` sola** (20 000 llamadas, rearma el reloj cada vez): mediana 0,001 ms, p99 0,002–0,003 ms y máx. 0,16–0,19 ms en los 3 procesos. Es lo único que el autoguardado suma a cada comando.
+- **La resta con − sin no resuelve:** los máximos de Mover saltan de 25 a 55 ms en los dos modos, y la resta da de −23 a +9,7 ms.
+- **Juicio (opción A de Bruno):** D1 se juzga con `alCambiar` sola, contra los topes fijados de 0,1 ms (mediana) y 1 ms (máx.): **pasa**. Detalle en `docs/plan-T23.md`, etapa 5.
+- **Banco en Chrome** (`npm run bench`, informativo): F1 = 2,8 ms, mediana 2,5 ms, 10 pasos por copia; salida de emergencia (3 de una vez), máx. 16,9 ms.
 
 ## Línea base PC de «Probar la fase 3b» (fase 4, T20) — 2026-11-17
 

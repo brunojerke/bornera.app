@@ -210,6 +210,12 @@ function informe(r, sinGpu) {
   lineas.push(`Heap JS con la escena armada: ${heap}`);
   const cache = Math.max(...r.mediciones.filter((m) => m.modo === modos[0]).map((m) => m.cache ?? 0));
   lineas.push(`Caché (capa estática y textos), máximo: ${mb.format(cache / 2 ** 20)} MB`);
+  if (r.copia) {
+    // T23: la misma medición que «Medir la copia (F1)», sin el encabezado.
+    lineas.push("");
+    lineas.push("Copia de recuperación con 2000 + 3030 cables (F1 de T23; informativo en Chrome, F1 se juzga en WebView2):");
+    lineas.push(r.copia.split("\n").slice(1).join("\n"));
+  }
   return lineas.join("\n");
 }
 

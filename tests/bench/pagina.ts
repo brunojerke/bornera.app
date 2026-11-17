@@ -3,11 +3,14 @@
 // Editor, corre los escenarios de escenarios.ts en orden y manda los tiempos
 // al script por POST. Con `?escena-t12`, la de cables es la de T12; con
 // `?escena-012`, las de 100, 500 y 2000 con los símbolos de 0.1.2; con
-// `?comparar`, también sin caché de textos y sin optimizar.
+// `?comparar`, también sin caché de textos y sin optimizar. Al final, la copia
+// de recuperación con 2000 + 3030 cables (F1 de T23), en el IndexedDB del
+// perfil temporal: informativa, F1 se juzga en WebView2.
 
 import { CANTIDADES_BANCO, crearEscenaBanco, simbolosEscena012 } from "../../src/render/banco";
 import { medirTope, type MedidaTope } from "../../src/editor/medicionTope";
 import { SIMBOLOS_BANCO_CABLES } from "../../src/ui/escenas";
+import { medirCopia } from "../../src/ui/medirCopia";
 import {
   ALTO,
   ANCHO,
@@ -35,6 +38,8 @@ export interface Resultado {
   escenaCables: "T14a" | "T12";
   /** Las escenas de 100, 500 y 2000 con los símbolos de 0.1.2 (`--escena-012`). */
   escena012: boolean;
+  /** El texto de «Medir la copia (F1)» con la escena de 2000 + 3030 cables (T23). */
+  copia: string;
 }
 
 /** Heap JS en MB, después de recolectar basura si el navegador lo permite. */
@@ -68,6 +73,7 @@ async function correr(): Promise<void> {
     tope: [],
     escenaCables: t12 ? "T12" : "T14a",
     escena012,
+    copia: "",
   };
 
   for (const n of CANTIDADES_BANCO) {
@@ -104,6 +110,10 @@ async function correr(): Promise<void> {
   estado.textContent = `${nombre} · paso de la previa por cables acomodados`;
   await respirar();
   resultado.tope = medirTope();
+
+  // La copia de recuperación (F1 de T23): la misma medición que el menú de
+  // desarrollo y que «Probar la fase 4» (C1).
+  resultado.copia = await medirCopia((t) => (estado.textContent = `Copia de recuperación: ${t}`));
 
   await enviar(resultado);
   estado.textContent = "Listo.";

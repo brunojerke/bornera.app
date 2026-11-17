@@ -440,6 +440,10 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
 - **D1-A, costo de editar con el autoguardado** (desglose en Node, siempre; script temporal que se borra, resultado en `docs/bench.md`):
   - `Editor` real con la escena de 2000 + 3030 cables, comandos (Mover 1, deshacer, rehacer) con el autoguardado conectado (relojes reales y almacén en memoria) y sin él, alternados.
   - **Criterio (ajuste de Bruno, fijado antes de medir):** conectado suma **≤ 0,1 ms por comando (mediana)** y **ningún comando > 1 ms extra (máx.)**. Si no pasa, se frena y se le muestra el desglose a Bruno.
+  - **Resultado (2026-11-17): con la regla tal como estaba escrita, no pasa; Bruno eligió la opción A después de ver el desglose.**
+    - Con y sin autoguardado (3 procesos, 300 vueltas por modo alternadas): Mover 1 tarda 10–13 ms y sus máximos saltan de 25 a 55 ms en los dos modos. La resta de máximos da de −23 a +9,7 ms; si el autoguardado fuera la causa, no saldría negativa. La mediana extra da 0,005–0,075 ms en 11 de 12 filas, y 0,336 ms en una (mover, proceso 1). El método no resuelve por debajo del ruido.
+    - **Opción A (Bruno):** D1 se juzga con el costo de `alCambiar` sola, que es lo único que T23 suma a cada comando (20 000 llamadas, rearmando el reloj cada vez): **mediana 0,001 ms (tope 0,1), p99 0,002–0,003 ms y máx. 0,16–0,19 ms (tope 1). Pasa.**
+    - La tabla con y sin autoguardado queda en `docs/bench.md` como información. El script (`tests/bench/tmp-d1.mjs`) era temporal y no se commitea.
 - **D2-A, ABBA automático:** `tests/bench/probar-webview2.mjs` abre cada exe de release con el puerto de depuración, toca «Probar la fase 3b» dos veces (fría y caliente), lee «Copiar» y corta el proceso. Lo común con `f1-webview2.mjs` va a `tests/bench/webview2.mjs`.
   - A = HEAD y B = `32c32b4` (antes de T23), ABBA ×3 en la misma sesión: 6 aperturas por exe.
   - **Criterio (fijado antes de medir, regla D6b-C de la fase):** en cada fila B1–B16, la mediana de las 6 calientes de HEAD contra la de la base. Igual si queda a ±10 % o a ≤ 1 ms; los lentos ±1; B9 en el mismo escalón. Las frías se informan y no deciden.

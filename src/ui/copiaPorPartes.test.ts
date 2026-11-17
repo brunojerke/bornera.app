@@ -164,6 +164,18 @@ describe("copiarPorPartes (T23, 1b)", () => {
     expect(r.trozos).toBeGreaterThan(5);
   });
 
+  it("con reiniciosDeUnaVez en 0 (las forzadas de «Medir la copia», D3-A), sale de una vez en el primer ocio largo", async () => {
+    const e = entorno(BANCO);
+    const r = await copiarPorPartes(e.opciones({ reiniciosDeUnaVez: 0 }));
+    if (!r.ok) throw new Error("no copió");
+    expect(r.reinicios).toBe(0);
+    expect(r.deUnaVez).toBe(true);
+    expect(r.deUnaVezMs).toBeGreaterThan(0);
+    expect(e.ocios).toBe(1);
+    expect(r.trozos).toBeGreaterThan(5);
+    expect(await textoCopiado(e.almacen)).toBe(serializar(BANCO));
+  });
+
   it("con ocios cortos, la copia de una vez espera un ocio largo", async () => {
     const doc = structuredClone(BANCO);
     const e = entorno(doc, { ocioMs: 10 });

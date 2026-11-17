@@ -48,7 +48,10 @@ describe("resumirF1 (1b: por partes)", () => {
     expect(r.pasoMasLargo.mediana).toBe(2.7);
     expect(r.reinicios).toBe(10);
     const t = textoF1([muestra([2.5]), muestra([2.4], 0.3, 40, 5, 16.2)], datos);
-    expect(t).toContain("Salida de emergencia (de una vez, tras 5 reinicios; aparte, no decide): 1 veces, máx. 16,2 ms");
+    expect(t).toContain("Salida de emergencia (la copia de una vez; aparte, no decide): 1 veces, máx. 16,2 ms");
+    expect(t).toContain("una tras otra; la primera (en frío) cuenta; después, 1 de una vez");
+    // La última línea (la que lee f1-webview2.mjs) no lleva las de una vez.
+    expect(t.split("\n").at(-1)).toBe("Paso más largo por copia (ms): 2,5");
   });
 
   it("la duración total y los reinicios se informan, pero no deciden", () => {

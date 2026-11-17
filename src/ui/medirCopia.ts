@@ -7,7 +7,10 @@
 // duración total, los pasos por copia y los reinicios se informan, pero no
 // deciden. La salida de emergencia (la copia de una vez, tras 5 reinicios)
 // va aparte: su máximo y cuántas veces ocurrió, fuera de la mediana y sin
-// decidir. Límite conocido: en la netbook puede pasar de 50 ms.
+// decidir. Límite conocido: en la netbook puede pasar de 50 ms. Como acá el
+// documento no cambia, la emergencia no sale sola: después de las 20 por
+// partes se hacen 3 copias forzadas de una vez (etapa 5, D3-A), para tener su
+// máximo real.
 //
 // Se mide con la escena del banco de 2000 + 3030 cables, armada aparte: no
 // toca el documento ni su copia. Son 20 copias seguidas, a la clave
@@ -28,6 +31,8 @@ import { VERSION } from "./version";
 
 /** Copias que hace la medición. */
 export const COPIAS_F1 = 20;
+/** Copias forzadas de una vez (la salida de emergencia), aparte. */
+export const COPIAS_DE_UNA_VEZ = 3;
 /** Tope de F1 en la PC con WebView2 (ms). */
 export const TOPE_F1_PC_MS = 9;
 /** Objetivo de F1 en la PC (ms): no decide. */
@@ -122,7 +127,8 @@ export interface DatosF1 {
 
 /**
  * El resultado para copiar. La última línea lleva el paso más largo de cada
- * copia, en orden, para que `tests/bench/f1-webview2.mjs` la lea.
+ * copia por partes (sin las de una vez), en orden, para que
+ * `tests/bench/f1-webview2.mjs` la lea.
  */
 export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): string {
   const r = resumirF1(muestras);
@@ -130,7 +136,8 @@ export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): stri
   return [
     `Medir la copia (F1) · Bornera ${datos.version} · ${datos.fecha} · ${datos.motor}`,
     `Escena: ${datos.simbolos} símbolos + ${datos.cables} cables · texto de ${entero.format(datos.caracteres)} caracteres · ` +
-      `${r.copias} copias por partes (${PRESUPUESTO_PASO_MS} ms de serializar por paso), una tras otra; la primera (en frío) cuenta`,
+      `${r.copias} copias por partes (${PRESUPUESTO_PASO_MS} ms de serializar por paso), una tras otra; la primera (en frío) cuenta` +
+      (r.emergencia.veces > 0 ? `; después, ${r.emergencia.veces} de una vez` : ""),
     "",
     "| Paso síncrono | Mediana | Máx. | Primera copia |",
     "|---|---|---|---|",
@@ -142,10 +149,13 @@ export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): stri
       `(tope en la PC con WebView2: ≤ ${TOPE_F1_PC_MS} ms; objetivo ~${OBJETIVO_F1_PC_MS} ms)`,
     `Se informa, no decide: ${r.pasosPorCopia} pasos por copia (mediana) · duración total: mediana ${ms(r.duracion.mediana)} ms, ` +
       `máx. ${ms(r.duracion.maximo)} ms · reinicios: ${r.reinicios}`,
-    `Salida de emergencia (de una vez, tras 5 reinicios; aparte, no decide): ${r.emergencia.veces} veces` +
+    `Salida de emergencia (la copia de una vez; aparte, no decide): ${r.emergencia.veces} veces` +
       (r.emergencia.veces > 0 ? `, máx. ${ms(r.emergencia.maximo)} ms` : ""),
     `Lectura: la última copia, releída, ${datos.igual ? "es igual a serializar" : "NO es igual a serializar (MAL)"}`,
-    `Paso más largo por copia (ms): ${muestras.map((m) => ms(pasoMasLargo(m))).join(" · ")}`,
+    `Paso más largo por copia (ms): ${muestras
+      .filter((m) => m.deUnaVezMs <= 0)
+      .map((m) => ms(pasoMasLargo(m)))
+      .join(" · ")}`,
   ].join("\n");
 }
 
@@ -162,14 +172,16 @@ export async function medirCopias(
   doc: Documento,
   copias = COPIAS_F1,
   progreso: (texto: string) => void = () => {},
+  deUnaVez = 0,
 ): Promise<{ muestras: MuestraCopia[]; igual: boolean }> {
   const almacen = almacenIndexedDB(await abrirBase());
   const id = `${PREFIJO_MEDICION}${Math.random().toString(36).slice(2)}`;
   let generacion = 0;
   const muestras: MuestraCopia[] = [];
   try {
-    for (let i = 0; i < copias; i++) {
-      progreso(`copia ${i + 1} de ${copias}`);
+    for (let i = 0; i < copias + deUnaVez; i++) {
+      const forzada = i >= copias;
+      progreso(forzada ? `copia de una vez ${i - copias + 1} de ${deUnaVez}` : `copia ${i + 1} de ${copias}`);
       const r = await copiarPorPartes({
         id,
         almacen,
@@ -177,6 +189,8 @@ export async function medirCopias(
         generacion: () => ++generacion,
         datos: () => ({ archivo: null, version: VERSION }),
         ahora: () => performance.now(),
+        // Las forzadas salen de una vez sin esperar los reinicios.
+        ...(forzada ? { reiniciosDeUnaVez: 0 } : {}),
       });
       if (!r.ok) throw r.cancelada ? new Error("La copia se canceló") : r.error;
       muestras.push({
@@ -204,7 +218,7 @@ export async function medirCopia(progreso: (texto: string) => void = () => {}): 
   // Que se vea el aviso antes de armar la escena (tarda).
   await new Promise((r) => setTimeout(r, 0));
   const doc = documentoBancoCables(SIMBOLOS_BANCO_CABLES);
-  const { muestras, igual } = await medirCopias(doc, COPIAS_F1, progreso);
+  const { muestras, igual } = await medirCopias(doc, COPIAS_F1, progreso, COPIAS_DE_UNA_VEZ);
   let cables = 0;
   for (const h of doc.hojas) cables += h.cables.length;
   return textoF1(muestras, {
