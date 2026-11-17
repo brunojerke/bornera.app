@@ -64,7 +64,26 @@ export class Pagina {
         this.selectoresAbiertos++;
         void this.#responderSelector(d.params.backendNodeId);
       }
+      if (d.method === "Inspector.targetCrashed") this.#alCortarse?.();
     });
+  }
+
+  /** Quien espera el evento de página cortada (`cortar`). */
+  #alCortarse = null;
+
+  /**
+   * Corta la página como «Finalizar tarea» (T23, S4): mata su proceso, sin
+   * `beforeunload` ni `pagehide`. `Page.crash` nunca responde (el proceso que
+   * respondería muere), así que no se espera su respuesta sino el evento
+   * `Inspector.targetCrashed` (hasta 5 s). Después, `abrir` vuelve a cargar
+   * la pestaña con el mismo perfil.
+   */
+  async cortar() {
+    const cortada = new Promise((r) => (this.#alCortarse = r));
+    this.#ws.send(JSON.stringify({ id: ++this.#n, method: "Page.crash", params: {} }));
+    const ok = await Promise.race([cortada.then(() => true), esperar(5000).then(() => false)]);
+    this.#alCortarse = null;
+    if (!ok) throw new Error("La página no se cortó (no llegó Inspector.targetCrashed).");
   }
 
   /**
@@ -126,6 +145,8 @@ export class Pagina {
     const p = new Pagina(ws, capturas);
     await p.cdp("Page.enable");
     await p.cdp("Runtime.enable");
+    // Para el evento de página cortada (`cortar`, T23).
+    await p.cdp("Inspector.enable");
     return p;
   }
 

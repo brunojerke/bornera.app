@@ -392,6 +392,38 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
   7. **Varias copias:** dos cortadas, el diálogo lista dos. Una copia rota da «No se pudo recuperar».
   8. **Banco:** editar en una escena del banco y `copiarYa` no escribe nada.
 - Cerrar la ventana solo existe en el escritorio: va en las unitarias y a mano (etapa 5).
+- **Etapa 3: cerrada sin código propio.** Todo quedó hecho por adelantado:
+  - En la etapa 1: los borrados de D2e (guardar, deshacer hasta lo guardado, Nuevo, Abrir y cerrar bien).
+  - En la etapa 2: retener los candados mientras se decide y la limpieza de trozos sueltos.
+  - El latido no hizo falta, porque S2 pasó.
+- **Hecho (2026-11-17), con E1-A y E2-A, y los 2 ajustes de Bruno.**
+  - **S4, verificado al planear** con una prueba temporal, ya borrada: `Page.crash` corta la página sin `beforeunload`, nunca responde, y la misma pestaña vuelve a cargar con el mismo perfil.
+  - **Infraestructura del humo:**
+    - `Pagina.cortar()` en `cdp.mjs`: manda `Page.crash` sin esperar respuesta y espera `Inspector.targetCrashed` (hasta 5 s). `conectar` hace `Inspector.enable`.
+    - `nuevaPestana()` en `correr.mjs`: `Target.createTarget` y la conexión por el puerto que ya tiene el corredor. Carga la app sin borrar IndexedDB. Al terminar cada prueba, comprueba que la pestaña no tuvo errores y la cierra.
+    - Señal `bornera.recuperacionLista` (solo en desarrollo): la app ya decidió si hay diálogo. El humo la espera en vez de un tiempo fijo.
+  - **`t23-cortar.mjs` (nuevo, 28 comprobaciones):**
+    1. **Criterio D5-A** con relojes reales:
+       - La copia sale sola a los ~10 s sin comandos.
+       - Se corta sin `beforeunload`.
+       - Al volver sale «Sin título (nunca se guardó)», y Recuperar da el documento igual campo por campo (`isDeepStrictEqual`) y con el mismo `serializar`.
+       - Título «• » y Deshacer desactivado.
+    2. **Corte sin esperar** (ajuste 1): se guarda el documento **exacto** de la copia anterior antes del último cambio, y lo recuperado es igual a él, sin el último cambio.
+    3. **Dos pestañas:**
+       - B abre sin diálogo y ve el candado de A.
+       - Cortar A no corta B, y B ve que el candado se soltó.
+       - A, al volver, ofrece su copia y es su documento.
+    4. **Varias por cortes reales:** «Quedaron 2 copias» y Descartar las dos.
+  - **`t23-autoguardado.mjs`** suma lo que no necesita cortar:
+    - No copia colocando en modo clic ni con un tramo de cable, y sale con Esc.
+    - Ctrl+S de verdad (descarga) y Nuevo › «No guardar» borran la copia.
+    - Editar en el banco no cambia la copia del documento.
+    - En total, 46 comprobaciones.
+  - **Esperas** (ajuste 2): ninguna fija, salvo los «no sale», que esperan 1,5 s para cubrir el reintento de 1 s.
+    - Se corrigieron dos que faltaban y habrían dado fallas al azar: Descartar dos veces seguidas (el diálogo ignora clics mientras borra) y los clics del diálogo en `t23-autoguardado`, que esperaban 150 ms fijos.
+    - **`npm run humo -- t23` tres veces seguidas: 74/74 las tres** (64 s cada una).
+  - **Humo entero:** la primera corrida dio 844/845. Falló `cierre3b-probar` («Probar igual» corre: el aviso de arriba…) por una espera que ya faltaba de antes: leía el aviso enseguida del clic, y el texto que busca aparece recién con el primer progreso. Ahora espera esa señal; pasó 2 veces sola y **el humo entero da 845/845**.
+  - 2060 tests y check limpio.
 
 ### Etapa 5 — Banco y prueba a mano (Opus alto)
 - **Banco:** el escenario «Copia de recuperación con 2000 + 3030 cables» en `tests/bench`. En Chrome es informativo; F1 se juzga en WebView2. No hay filas B que cambien: T23 no toca el dibujo.

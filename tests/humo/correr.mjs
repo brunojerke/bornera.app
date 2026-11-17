@@ -11,6 +11,10 @@
 // (T15). Después de cada prueba se comprueba también que la página no haya
 // tenido errores (excepciones ni console.error).
 //
+// T23 suma `url` (para recargar la app) y `nuevaPestana()`: otra pestaña del
+// mismo navegador y el mismo perfil, ya con la app cargada (sin borrar
+// IndexedDB). Las pestañas de más se cierran al terminar cada prueba.
+//
 // Cada tarea suma sus comprobaciones acá: lo que se probó a mano en el
 // navegador, queda.
 //
@@ -49,6 +53,9 @@ function pruebas() {
     .sort();
 }
 
+/** Puerto de depuración del navegador (lo anota `pestana`). */
+let puertoNavegador = null;
+
 /** Espera a que el navegador anote su puerto de depuración y devuelve la pestaña. */
 async function pestana(perfil) {
   const archivo = join(perfil, "DevToolsActivePort");
@@ -58,6 +65,7 @@ async function pestana(perfil) {
       try {
         const lista = await (await fetch(`http://127.0.0.1:${puerto}/json`)).json();
         const p = lista.find((t) => t.type === "page");
+        puertoNavegador = puerto;
         if (p) return p.webSocketDebuggerUrl;
       } catch {
         // todavía no atiende
@@ -146,14 +154,38 @@ async function main() {
         if (!ok) fallas++;
         console.log(`  ${ok ? "OK " : "MAL"} ${descripcion}${!ok && detalle !== "" ? ` (${detalle})` : ""}`);
       };
+      /** Las pestañas que abrió esta prueba (T23), para cerrarlas al final. */
+      const extras = [];
+      /**
+       * Otra pestaña del mismo navegador y perfil, con la app cargada y sin
+       * borrar IndexedDB (las copias de la otra pestaña siguen ahí).
+       */
+      const nuevaPestana = async () => {
+        const { targetId } = await pagina.cdp("Target.createTarget", { url: "about:blank" });
+        const lista = await (await fetch(`http://127.0.0.1:${puertoNavegador}/json`)).json();
+        const destino = lista.find((t) => t.id === targetId);
+        if (!destino) throw new Error("La pestaña nueva no aparece en /json.");
+        const q = await Pagina.conectar(destino.webSocketDebuggerUrl, capturas);
+        extras.push({ q, targetId });
+        await q.abrir(url, 1024, 600, { conservarCopias: true });
+        return q;
+      };
       try {
         await pagina.abrir(url);
         // `url`: para volver a cargar la app (T23 la recarga conservando las copias).
-        await conLimite(prueba.default(pagina, comprobar, { cargar, url }), LIMITE_PRUEBA_MS, "La prueba no terminó a tiempo.");
+        await conLimite(prueba.default(pagina, comprobar, { cargar, url, nuevaPestana }), LIMITE_PRUEBA_MS, "La prueba no terminó a tiempo.");
       } catch (e) {
         comprobar("la prueba terminó sin errores", false, e instanceof Error ? e.message : String(e));
       }
       comprobar("sin errores en la página", pagina.errores.length === 0, pagina.errores.join(" | "));
+      for (const { q, targetId } of extras) {
+        comprobar("sin errores en la pestaña de más", q.errores.length === 0, q.errores.join(" | "));
+        // Primero a about:blank (si tiene cambios, `beforeunload` lo acepta la página), después se cierra.
+        await q.cdp("Page.navigate", { url: "about:blank" }).catch(() => undefined);
+        await esperar(100);
+        q.cerrar();
+        await pagina.cdp("Target.closeTarget", { targetId }).catch(() => undefined);
+      }
     }
   } finally {
     pagina?.cerrar();

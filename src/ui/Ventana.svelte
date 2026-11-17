@@ -202,7 +202,12 @@
             if (montado) recuperables = ofrecidas;
             else for (const o of ofrecidas) o.soltar();
           })
-          .catch((e) => console.warn("No se pudieron leer las copias de recuperación", e));
+          .catch((e) => console.warn("No se pudieron leer las copias de recuperación", e))
+          .finally(() => {
+            // Desarrollo (humo): ya se decidió si hay diálogo, sin esperar un tiempo fijo.
+            const global = (globalThis as Record<string, unknown>).bornera as Record<string, unknown> | undefined;
+            if (import.meta.env.DEV && global) global.recuperacionLista = true;
+          });
         if (import.meta.env.DEV) {
           const global = (globalThis as Record<string, unknown>).bornera as Record<string, unknown> | undefined;
           if (global) Object.assign(global, { autoguardado: ag, respaldo: almacen, idInstancia: idPropio });

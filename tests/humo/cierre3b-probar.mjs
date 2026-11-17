@@ -112,6 +112,10 @@ export default async function (p, comprobar) {
 
   await probar();
   await clicEn(boton(`${MODAL} button`, "Probar igual"), "Probar igual");
+  // El aviso arranca con «Preparando las escenas…» y dice «Probar la fase 3b: …»
+  // recién con el primer progreso: se espera esa señal (leerlo enseguida
+  // dependía de que llegara en unos milisegundos; falló 1 vez en T23).
+  await p.esperarA(`[...document.querySelectorAll('[role="status"]')].some((e) => e.textContent.trim().startsWith("Probar la fase 3b"))`, 10000).catch(() => undefined);
   const aviso = await corriendo();
   comprobar("«Probar igual» corre: el aviso de arriba dice qué mide", aviso !== null && aviso.startsWith("Probar la fase 3b"), String(aviso));
   const { texto, ms } = await esperarTabla();

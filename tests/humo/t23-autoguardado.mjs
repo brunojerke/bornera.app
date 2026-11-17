@@ -16,23 +16,42 @@
 // guardó)», Descartar no vuelve, Esc pregunta otra vez, varias copias, y una
 // copia que no abre (problemas, Exportar tal cual, Descartar).
 //
-// La etapa 4 suma cortar la página con CDP y recuperar.
+// Etapa 4, sin cortar: tampoco sale colocando en modo clic ni con un tramo de
+// cable (D1); Ctrl+S de verdad (una descarga) y Nuevo › «No guardar» borran
+// la copia (D2e); editar en una escena del banco no cambia la copia del
+// documento. Cortar y recuperar está en t23-cortar.mjs.
+//
+// Las esperas son por señal (la copia hecha, `bornera.recuperacionLista`, el
+// diálogo), nunca un tiempo fijo; la única excepción son los «no sale»
+// (1,5 s: cubren el reintento de 1 s de «ocupado»).
 
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CTRL, esperar } from "./cdp.mjs";
+import { CTRL, esperar, MAYUS } from "./cdp.mjs";
 
 export const nombre = "Autoguardado y recuperación (T23)";
 
 const C = ["c", "KeyC", 67];
 const V = ["v", "KeyV", 86];
+const W = ["w", "KeyW", 87];
+const S = ["s", "KeyS", 83];
+const N = ["n", "KeyN", 78];
+const B = ["B", "KeyB", 66];
 const RESULTADO = 'textarea[aria-label="Resultado"]';
 
 export default async function (p, comprobar, { cargar, url }) {
   const { serializar } = await cargar("/src/core/io/index.ts");
   await p.esperarA("!!bornera.autoguardado", 10000);
 
+  const cumple = async (expresion, ms = 5000) => {
+    try {
+      await p.esperarA(expresion, ms);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const copia = () => p.evaluar("bornera.respaldo.leer(bornera.idInstancia).then((l) => (l.ok ? l.texto : null))");
   const documento = async () => JSON.parse(await p.evaluar("JSON.stringify(bornera.editor.documento)"));
   const hechas = () => p.evaluar("bornera.autoguardado.estado.hechas");
@@ -111,6 +130,68 @@ export default async function (p, comprobar, { cargar, url }) {
   await p.esperarA("bornera.respaldo.leer(bornera.idInstancia).then((l) => !l.ok)", 5000);
   comprobar("guardar borra la copia propia", (await copia()) === null && !(await p.evaluar("bornera.autoguardado.estado.hayCopia")));
 
+  // ── Etapa 4: lo que no necesita cortar ──
+  const colocar = (x, etiqueta) =>
+    p.evaluar(`(() => { const { editor, comandos: c } = bornera;
+      editor.ejecutar(c.colocar(editor.documento, { tipo: "contactor.bobina", x: ${x}, y: 0, rot: 0, espejado: false, etiqueta: ${JSON.stringify(etiqueta)}, params: {} })); })()`);
+  /** Pide la copia y comprueba que no sale mientras `ocupado`; después de `soltar`, que sale igual al documento. */
+  const esperaHasta = async (que, soltar) => {
+    const n = await hechas();
+    await p.evaluar("void bornera.autoguardado.copiarYa()");
+    // Negativo: «no sale» necesita un rato; 1,5 s cubre el reintento de 1 s.
+    await esperar(1500);
+    comprobar(`${que}: no sale la copia`, (await hechas()) === n, `hechas ${await hechas()}`);
+    await soltar();
+    comprobar(`${que}: al terminar, sale igual al documento`, (await cumple(`bornera.autoguardado.estado.hechas > ${n} && !bornera.autoguardado.copiando`)) && (await igualAlDocumento()));
+  };
+
+  // D1, colocando en modo clic (la previa sigue al mouse).
+  await colocar(20, "K5");
+  const lampara = await p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === "Lámpara");
+    const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await p.clic(lampara);
+  comprobar("clic en la paleta: colocando en modo clic", (await p.evaluar("bornera.editor.colocar?.modo")) === "clic");
+  await esperaHasta("colocando en modo clic", () => p.esc());
+
+  // D1, un tramo de cable en curso (W y un clic en vacío).
+  await p.tecla(...W);
+  await p.clic(await p.punto(-8, 8));
+  comprobar("W y un clic: tramo de cable en curso", await p.evaluar("bornera.editor.enTramo"));
+  // Esc cancela el tramo; la herramienta cable sigue, pero sin tramo no está ocupada.
+  await esperaHasta("con un tramo de cable", () => p.esc());
+  await p.esc();
+
+  // Ctrl+S de verdad (en el navegador, una descarga) borra la copia.
+  const carpeta = mkdtempSync(join(tmpdir(), "bornera-t23-"));
+  try {
+    await p.descargasEn(carpeta);
+    comprobar("antes de guardar hay copia propia", (await copia()) !== null);
+    await p.tecla(...S, CTRL);
+    comprobar("Ctrl+S borra la copia propia", await cumple("bornera.respaldo.leer(bornera.idInstancia).then((l) => !l.ok)"));
+    let descargado = false;
+    for (let i = 0; i < 50 && !descargado; i++) {
+      descargado = readdirSync(carpeta).some((f) => f.endsWith(".brn"));
+      if (!descargado) await esperar(100);
+    }
+    comprobar("y el archivo se descargó", descargado);
+  } finally {
+    await p.descargasEn(null);
+    rmSync(carpeta, { recursive: true, force: true });
+  }
+
+  // Nuevo › «No guardar» borra la copia.
+  await colocar(30, "K6");
+  await p.evaluar("bornera.autoguardado.copiarYa()");
+  comprobar("con otro cambio, la copia vuelve", (await copia()) !== null);
+  await p.tecla(...N, CTRL);
+  const SIN_GUARDAR = '[aria-labelledby="dialogo-sin-guardar-titulo"]';
+  await p.esperarA(`!!document.querySelector('${SIN_GUARDAR}')`, 3000);
+  await p.evaluar(`[...document.querySelectorAll('${SIN_GUARDAR} button')].find((b) => b.textContent.trim() === "No guardar").click()`);
+  comprobar(
+    "Nuevo › «No guardar» borra la copia",
+    await cumple(`bornera.editor.documento.hojas[0].componentes.length === 0 && bornera.respaldo.leer(bornera.idInstancia).then((l) => !l.ok)`),
+  );
+
   // «Medir la copia (F1)», con IndexedDB de verdad.
   await menu("Medir la copia (F1)");
   const f1 = await resultado("Paso más largo por copia");
@@ -130,6 +211,18 @@ export default async function (p, comprobar, { cargar, url }) {
     };
   })`);
   comprobar("la medición no deja registros ni trozos en la base", quedan === 0, `quedan ${quedan}`);
+
+  // Las escenas del banco no se copian: con la copia del documento hecha, editar en el banco no la cambia.
+  await colocar(0, "K1");
+  await p.evaluar("bornera.autoguardado.copiarYa()");
+  const delDocumento = serializar(await documento());
+  await p.tecla(...B, CTRL | MAYUS);
+  await p.esperarA("bornera.activo() !== bornera.editor && !!bornera.activo()?.vista", 10000);
+  await p.evaluar(`(() => { const ed = bornera.activo(), c = bornera.comandos;
+    ed.ejecutar(c.colocar(ed.documento, { tipo: "contactor.bobina", x: 500, y: 500, rot: 0, espejado: false, etiqueta: "KB", params: {} })); })()`);
+  comprobar("en el banco, el editor a la vista tiene cambios", await p.evaluar("bornera.activo().modificado"));
+  await p.evaluar("bornera.autoguardado.copiarYa()");
+  comprobar("la copia sigue siendo la del documento, no la del banco", (await copia()) === delDocumento);
 
   await dialogoRecuperar(p, comprobar, { cargar, url, serializar, documento });
 }
@@ -157,7 +250,7 @@ async function dialogoRecuperar(p, comprobar, { cargar, url, serializar, documen
         if (!b) return false; b.click(); return true; })()`,
     );
     if (!ok) throw new Error(`No está el botón «${texto}» en el diálogo`);
-    await esperar(150);
+    // Sin espera fija: cada caso espera la señal de lo que el botón hace (cumple).
   };
   /** Una copia completa de otra instancia (sin candado: sin dueño). */
   const sembrar = (id, texto, { nombre = null, fecha = Date.now(), componentes = 2 } = {}) =>
@@ -168,15 +261,15 @@ async function dialogoRecuperar(p, comprobar, { cargar, url, serializar, documen
         archivo: ${nombre ? JSON.stringify({ nombre, ruta: null }) : "null"}, titulo: "Sin título", componentes: ${componentes},
         fecha: ${fecha}, version: "humo" });
     })()`);
+  // `recuperacionLista`: la app ya decidió si hay diálogo (sin esperar un tiempo fijo).
   const limpio = async () => {
     await p.abrir(url);
-    await p.esperarA("!!bornera.autoguardado", 10000);
+    await p.esperarA("bornera.recuperacionLista === true && !!bornera.autoguardado", 10000);
   };
   const recargar = async () => {
     await p.abrir(url, 1024, 600, { conservarCopias: true });
-    await p.esperarA("!!bornera.autoguardado", 10000);
+    await p.esperarA("bornera.recuperacionLista === true && !!bornera.autoguardado", 10000);
   };
-  const barra = () => p.evaluar("document.body.innerText");
 
   const { documentosDePrueba } = await cargar("/src/core/io/prueba-documentos.ts");
   const [, ref] = documentosDePrueba().find(([n]) => n.startsWith("marcha-parada"));
@@ -213,9 +306,11 @@ async function dialogoRecuperar(p, comprobar, { cargar, url, serializar, documen
   const tb = await textoDialogo();
   comprobar("sin archivo: «Sin título (nunca se guardó)»", tb.includes("Sin título (nunca se guardó)"), tb);
   await boton("Descartar");
-  comprobar("Descartar cierra el diálogo y avisa «Copia descartada»", !(await hayDialogo()) && (await barra()).includes("Copia descartada"));
+  comprobar(
+    "Descartar cierra el diálogo y avisa «Copia descartada»",
+    await cumple(`!document.querySelector('${DIALOGO}') && document.body.innerText.includes("Copia descartada")`),
+  );
   await recargar();
-  await esperar(800);
   comprobar("descartada, no vuelve a preguntar", !(await hayDialogo()));
 
   // Esc: decide la próxima vez.
@@ -224,7 +319,7 @@ async function dialogoRecuperar(p, comprobar, { cargar, url, serializar, documen
   await recargar();
   await cumple(`!!document.querySelector('${DIALOGO}')`);
   await p.esc();
-  comprobar("Esc cierra el diálogo sin decidir", !(await hayDialogo()));
+  comprobar("Esc cierra el diálogo sin decidir", await cumple(`!document.querySelector('${DIALOGO}')`));
   await recargar();
   comprobar("y al volver a arrancar pregunta otra vez", await cumple(`!!document.querySelector('${DIALOGO}')`));
 
@@ -255,6 +350,8 @@ async function dialogoRecuperar(p, comprobar, { cargar, url, serializar, documen
   await recargar();
   await cumple(`!!document.querySelector('${DIALOGO}')`);
   await boton("Recuperar");
+  // Abrir la copia es asíncrono: se espera la vista de «No se pudo recuperar».
+  await cumple(`(document.querySelector('${DIALOGO}')?.textContent ?? "").includes("No se pudo recuperar")`);
   const te = await textoDialogo();
   comprobar("una copia que no abre: «No se pudo recuperar» con los problemas", te.includes("No se pudo recuperar") && te.includes("rota.brn") && te.includes("no abre:"), te);
   const carpeta = mkdtempSync(join(tmpdir(), "bornera-t23-"));
@@ -272,7 +369,9 @@ async function dialogoRecuperar(p, comprobar, { cargar, url, serializar, documen
     await p.descargasEn(null);
     rmSync(carpeta, { recursive: true, force: true });
   }
+  // Mientras exporta, el diálogo no atiende clics: se espera el aviso antes de Descartar.
+  await cumple(`document.body.innerText.includes("Copia exportada tal cual")`);
   await boton("Descartar");
-  comprobar("Descartar la copia rota cierra el diálogo", !(await hayDialogo()));
+  comprobar("Descartar la copia rota cierra el diálogo", await cumple(`!document.querySelector('${DIALOGO}')`));
   await limpio();
 }
