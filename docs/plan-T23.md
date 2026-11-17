@@ -433,6 +433,21 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
   - Cerrar con «No guardar» borra la copia.
   - Recuperar y Guardar sugiere la ruta original.
 
+#### Plan de la etapa 5 (aprobado por Bruno, 2026-11-17, con D1-A, D2-A y D3-A y un ajuste)
+
+**Hallazgo al planear:** B1–B16 no pasan por el autoguardado. `Lienzo.historial()` llama a `oncambiodocumento` solo con el editor del documento, «Probar» usa los editores de las escenas del banco y además cuenta como «ocupado». El ABBA mide si empeoraron los otros cambios de T23 (`Historial` de D7, `Lienzo` y `Ventana`); lo que cuesta el autoguardado al editar se mide aparte (D1).
+
+- **D1-A, costo de editar con el autoguardado** (desglose en Node, siempre; script temporal que se borra, resultado en `docs/bench.md`):
+  - `Editor` real con la escena de 2000 + 3030 cables, comandos (Mover 1, deshacer, rehacer) con el autoguardado conectado (relojes reales y almacén en memoria) y sin él, alternados.
+  - **Criterio (ajuste de Bruno, fijado antes de medir):** conectado suma **≤ 0,1 ms por comando (mediana)** y **ningún comando > 1 ms extra (máx.)**. Si no pasa, se frena y se le muestra el desglose a Bruno.
+- **D2-A, ABBA automático:** `tests/bench/probar-webview2.mjs` abre cada exe de release con el puerto de depuración, toca «Probar la fase 3b» dos veces (fría y caliente), lee «Copiar» y corta el proceso. Lo común con `f1-webview2.mjs` va a `tests/bench/webview2.mjs`.
+  - A = HEAD y B = `32c32b4` (antes de T23), ABBA ×3 en la misma sesión: 6 aperturas por exe.
+  - **Criterio (fijado antes de medir, regla D6b-C de la fase):** en cada fila B1–B16, la mediana de las 6 calientes de HEAD contra la de la base. Igual si queda a ±10 % o a ≤ 1 ms; los lentos ±1; B9 en el mismo escalón. Las frías se informan y no deciden.
+  - Si una fila sube: desglose en Node antes de concluir.
+- **D3-A, salida de emergencia en F1:** «Medir la copia (F1)» suma al final 3 copias forzadas de una vez (sin los reinicios), informadas aparte: veces y máximo. No entran en F1 ni deciden. `f1-webview2.mjs` las junta de todos los procesos.
+- **F1 final:** `f1-webview2.mjs --exe=<1b>,<HEAD>`, 3 + 3 procesos intercalados, con el código final. **Pasa si el paso más largo ≤ 9 ms** (sección 6).
+- **Escenario F1 en el banco:** «Copia de recuperación con 2000 + 3030 cables» en `npm run bench`, con `medirCopias` sobre el IndexedDB del Chrome headless. Informativo; F1 se juzga en WebView2. C1 reusa `medirCopia.ts`.
+
 **Cierre:** skill `bornera-cierre` (Sonnet), con el humo entero y las líneas «Hecho» en `plan-fase4.md`.
 
 ## 8. Tests unitarios (Vitest, sin DOM)
