@@ -27,3 +27,28 @@ describe("el banco abre (T15a)", () => {
     expect(serializar(r.documento)).toBe(texto);
   });
 });
+
+/**
+ * El texto .brn de cada escena, fijado en 5a51c2b (T21, antes de tocar
+ * serializar.ts): la forma por líneas de `.brn.json` no puede cambiar ni un
+ * byte del `.brn` normal. Si algún día cambia a propósito (una migración),
+ * se actualiza con el OK de Bruno.
+ */
+const BRN_FIJADO: Record<string, { largo: number; sha256: string }> = {
+  "banco de 100": { largo: 10708, sha256: "af948adae5529149c80d123c85c2347ef6775c764ceccc3dc331e00d53de2786" },
+  "banco de 500": { largo: 54473, sha256: "ea24854a7e00414fbd968b81db49c58bae824f01e9cb3fda24826de830c43044" },
+  "banco de 2000": { largo: 220999, sha256: "511788abe970d08e5b2223e2039b09c4e6b036d915113848f36eee3080b59ac3" },
+  "banco de 2000 con cables": { largo: 653364, sha256: "18e406b6ec286da57cfd5c16caec413a95be7553f69f809740a7470259e3e7b8" },
+};
+
+async function sha256(texto: string): Promise<string> {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+describe("el .brn del banco no cambia ni un byte (T21)", () => {
+  it.each(ESCENAS)("%s: mismo largo y mismo sha256 que en 5a51c2b", async (nombre, crear) => {
+    const texto = serializar(crear());
+    expect({ largo: texto.length, sha256: await sha256(texto) }).toEqual(BRN_FIJADO[nombre]);
+  });
+});
