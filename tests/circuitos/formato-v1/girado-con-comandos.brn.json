@@ -1,0 +1,17 @@
+{"formato":"bornera","version":1,
+"meta":{"titulo":"Prueba","autor":"Bruno Jerke","fecha":"2026-11-12"},
+"contadores":{"c":4,"w":5},
+"hojas":[
+{"nombre":"Hoja 1",
+"componentes":[
+{"id":"c1","tipo":"pulsador.na","x":14,"y":-4,"rot":180,"espejado":true,"etiqueta":"","params":{}},
+{"id":"c2","tipo":"pulsador.nc","x":-6,"y":-4,"rot":180,"espejado":false,"etiqueta":"","params":{}},
+{"id":"c3","tipo":"contactor.bobina","x":4,"y":-4,"rot":180,"espejado":true,"etiqueta":"","params":{}}
+],
+"cables":[
+{"id":"w1","desde":{"tipo":"borne","comp":"c3","borne":"A1"},"hasta":{"tipo":"libre","x":-2,"y":-4},"codos":[[4,-1],[-2,-1]]},
+{"id":"w2","desde":{"tipo":"borne","comp":"c3","borne":"A2"},"hasta":{"tipo":"libre","x":10,"y":-4},"codos":[[4,-7],[10,-7]]},
+{"id":"w3","desde":{"tipo":"cable","cable":"w2","x":10,"y":-5},"hasta":{"tipo":"libre","x":8,"y":0},"codos":[[8,-5]]},
+{"id":"w4","desde":{"tipo":"borne","comp":"c1","borne":"13"},"hasta":{"tipo":"borne","comp":"c2","borne":"11"},"codos":[[14,6],[-6,6]]}
+]}
+]}

@@ -1,0 +1,13 @@
+{"formato":"bornera","version":1,
+"meta":{"titulo":"Símbolo desconocido","autor":"Bruno Jerke","fecha":"2026-11-12"},
+"contadores":{"c":3,"w":2},
+"hojas":[
+{"nombre":"Hoja 1",
+"componentes":[
+{"id":"c1","tipo":"pulsador.na","x":0,"y":0,"rot":0,"espejado":false,"etiqueta":"S1","params":{}},
+{"id":"c2","tipo":"prueba.desconocido","x":10,"y":0,"rot":90,"espejado":true,"etiqueta":"X1","params":{"nota":"sin cables"}}
+],
+"cables":[
+{"id":"w1","desde":{"tipo":"borne","comp":"c1","borne":"14"},"hasta":{"tipo":"libre","x":0,"y":6},"codos":[]}
+]}
+]}

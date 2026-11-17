@@ -1,0 +1,25 @@
+{"formato":"bornera","version":1,
+"meta":{"titulo":"Marcha-parada","autor":"","fecha":"2026-11-12"},
+"contadores":{"c":8,"w":9},
+"hojas":[
+{"nombre":"Hoja 1",
+"componentes":[
+{"id":"c1","tipo":"fuente.fase","x":0,"y":0,"rot":0,"espejado":false,"etiqueta":"L","params":{}},
+{"id":"c2","tipo":"pulsador.nc","x":0,"y":5,"rot":0,"espejado":false,"etiqueta":"S0","params":{}},
+{"id":"c3","tipo":"pulsador.na","x":0,"y":11,"rot":0,"espejado":false,"etiqueta":"S1","params":{}},
+{"id":"c4","tipo":"contactor.auxiliar_na","x":10,"y":11,"rot":0,"espejado":false,"etiqueta":"K1","params":{}},
+{"id":"c5","tipo":"contactor.bobina","x":0,"y":22,"rot":0,"espejado":false,"etiqueta":"K1","params":{}},
+{"id":"c6","tipo":"senalizacion.lampara","x":16,"y":22,"rot":0,"espejado":false,"etiqueta":"H1","params":{}},
+{"id":"c7","tipo":"fuente.neutro","x":0,"y":33,"rot":180,"espejado":false,"etiqueta":"N","params":{}}
+],
+"cables":[
+{"id":"w1","desde":{"tipo":"borne","comp":"c1","borne":"L"},"hasta":{"tipo":"borne","comp":"c2","borne":"11"},"codos":[]},
+{"id":"w2","desde":{"tipo":"borne","comp":"c2","borne":"12"},"hasta":{"tipo":"borne","comp":"c3","borne":"13"},"codos":[]},
+{"id":"w3","desde":{"tipo":"borne","comp":"c2","borne":"12"},"hasta":{"tipo":"borne","comp":"c4","borne":"13"},"codos":[[10,7]]},
+{"id":"w4","desde":{"tipo":"borne","comp":"c3","borne":"14"},"hasta":{"tipo":"borne","comp":"c5","borne":"A1"},"codos":[]},
+{"id":"w5","desde":{"tipo":"borne","comp":"c4","borne":"14"},"hasta":{"tipo":"borne","comp":"c3","borne":"14"},"codos":[]},
+{"id":"w6","desde":{"tipo":"borne","comp":"c5","borne":"A2"},"hasta":{"tipo":"borne","comp":"c7","borne":"N"},"codos":[]},
+{"id":"w7","desde":{"tipo":"cable","cable":"w4","x":0,"y":16},"hasta":{"tipo":"borne","comp":"c6","borne":"X1"},"codos":[[16,16]]},
+{"id":"w8","desde":{"tipo":"cable","cable":"w6","x":0,"y":28},"hasta":{"tipo":"borne","comp":"c6","borne":"X2"},"codos":[[16,28]]}
+]}
+]}

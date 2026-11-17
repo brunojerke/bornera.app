@@ -1,0 +1,26 @@
+{"formato":"bornera","version":1,
+"meta":{"titulo":"Varias hojas","autor":"Bruno Jerke","fecha":"2026-11-12"},
+"contadores":{"c":5,"w":5},
+"hojas":[
+{"nombre":"Hoja 1",
+"componentes":[
+{"id":"c1","tipo":"pulsador.nc","x":0,"y":0,"rot":0,"espejado":false,"etiqueta":"S1","params":{}},
+{"id":"c2","tipo":"senalizacion.lampara","x":10,"y":8,"rot":0,"espejado":false,"etiqueta":"H1","params":{}}
+],
+"cables":[
+{"id":"w1","desde":{"tipo":"borne","comp":"c1","borne":"12"},"hasta":{"tipo":"borne","comp":"c2","borne":"X1"},"codos":[[0,6]]},
+{"id":"w2","desde":{"tipo":"borne","comp":"c2","borne":"X2"},"hasta":{"tipo":"libre","x":10,"y":14},"codos":[]}
+]},
+{"nombre":"Hoja 2",
+"componentes":[
+{"id":"c3","tipo":"pulsador.nc","x":20,"y":0,"rot":0,"espejado":false,"etiqueta":"S2","params":{}},
+{"id":"c4","tipo":"senalizacion.lampara","x":30,"y":8,"rot":0,"espejado":false,"etiqueta":"H2","params":{}}
+],
+"cables":[
+{"id":"w3","desde":{"tipo":"borne","comp":"c3","borne":"12"},"hasta":{"tipo":"borne","comp":"c4","borne":"X1"},"codos":[[20,6]]},
+{"id":"w4","desde":{"tipo":"borne","comp":"c4","borne":"X2"},"hasta":{"tipo":"libre","x":30,"y":14},"codos":[]}
+]},
+{"nombre":"Hoja 3",
+"componentes":[],
+"cables":[]}
+]}

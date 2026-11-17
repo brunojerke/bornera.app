@@ -1,0 +1,10 @@
+{"formato":"bornera","version":1,
+"meta":{"titulo":"Dijo \"hola\" \\ fin\nlínea\ttab ñandú é\u0001 🔌","autor":"Bruno Jerke — «autor»","fecha":"12/11/2026"},
+"contadores":{"c":2},
+"hojas":[
+{"nombre":"Hoja\nuno",
+"componentes":[
+{"id":"c1","tipo":"pulsador.na","x":0,"y":0,"rot":0,"espejado":false,"etiqueta":"Dijo \"hola\" \\ fin\nlínea\ttab ñandú é\u0001 🔌","params":{"nota":"Dijo \"hola\" \\ fin\nlínea\ttab ñandú é\u0001 🔌"}}
+],
+"cables":[]}
+]}
