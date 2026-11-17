@@ -2,7 +2,7 @@
 // paquete estricto de `deserializar`. Va acá y no en src/core/io porque el
 // banco es de src/editor y el núcleo no puede importarlo.
 import { describe, expect, it } from "vitest";
-import { deserializar, serializar } from "../core/io";
+import { deserializar, serializar, serializarPorLineas } from "../core/io";
 import type { Documento } from "../core/model/documento";
 import { documentoBanco, documentoBancoCables } from "./banco";
 
@@ -50,5 +50,16 @@ describe("el .brn del banco no cambia ni un byte (T21)", () => {
   it.each(ESCENAS)("%s: mismo largo y mismo sha256 que en 5a51c2b", async (nombre, crear) => {
     const texto = serializar(crear());
     expect({ largo: texto.length, sha256: await sha256(texto) }).toEqual(BRN_FIJADO[nombre]);
+  });
+});
+
+describe("el banco en .brn.json (T21)", () => {
+  it.each(ESCENAS)("%s: por líneas, sin los saltos de línea es el .brn, y abre igual", (_nombre, crear) => {
+    const doc = crear();
+    const lineas = serializarPorLineas(doc);
+    expect(lineas.replaceAll("\n", "")).toBe(serializar(doc));
+    const r = deserializar(lineas);
+    expect(r.ok ? [] : r.errores).toEqual([]);
+    if (r.ok) expect(r.documento).toEqual(doc);
   });
 });

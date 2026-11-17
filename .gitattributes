@@ -1,2 +1,5 @@
 # Los .brn son gzip (o JSON en una línea): Git no tiene que tocar los fines de línea.
 *.brn -text
+# Los .brn.json (T21) se escriben con \n y así quedan: sin conversión de fin de
+# línea, los bytes del repo son los del disco (el corpus de T22 está congelado).
+*.brn.json -text

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deserializar, serializar, type ProblemaArchivo } from "../core/io";
+import { deserializar, serializar, serializarPorLineas, type ProblemaArchivo } from "../core/io";
 import { datos, docCables, docRotados, meta } from "../core/io/prueba-documentos";
 import { CambiarEtiqueta, colocar } from "../core/model/comandos";
 import { crearDocumento, generarId, type Documento } from "../core/model/documento";
@@ -9,6 +9,7 @@ import {
   atajoArchivo,
   atajoArchivoActua,
   avisoAbierto,
+  avisoExportado,
   AVISO_CERRAR_EN_CURSO,
   avisoGuardado,
   AVISOS_ABRIR,
@@ -21,7 +22,7 @@ import {
   type Mostrado,
   type RespuestaSinGuardar,
 } from "./archivo";
-import { desempaquetar, empaquetar, MENSAJES, nombreArchivo, TOPE_BYTES } from "./brn";
+import { desempaquetar, empaquetar, MENSAJES, nombreArchivo, TOPE_BYTES, type FormatoArchivo } from "./brn";
 
 /** Un archivo en el disco de mentira, para Abrir. */
 interface Archivo {
@@ -93,8 +94,12 @@ class ArchivosFalsos implements Archivos {
     };
   }
 
-  async elegirDestino(sugerido: string): Promise<Destino | null> {
+  /** El formato pedido en cada diálogo de dónde guardar. */
+  formatos: FormatoArchivo[] = [];
+
+  async elegirDestino(sugerido: string, formato: FormatoArchivo): Promise<Destino | null> {
     this.llamadas.push(`elegir ${sugerido}`);
+    this.formatos.push(formato);
     this.alElegirDestino();
     if (this.eleccion === null) return null;
     return { nombre: this.eleccion ?? sugerido, ruta: null };
@@ -377,13 +382,17 @@ describe("Guardar", () => {
     const p = preparar();
     p.medir = true;
     p.reloj = 100;
+    // Lecturas del reloj: 1 al empezar, 2 antes del diálogo, 3 después, 4 al terminar de escribir.
+    let lecturas = 0;
+    p.alLeerReloj = () => {
+      // Serializar y validar: 20 ms.
+      if (++lecturas === 2) p.reloj += 20;
+    };
     p.archivos.alElegirDestino = () => (p.reloj += 5000);
     p.archivos.pausar();
     const guardando = p.ops.guardar();
-    // Serializar y comprimir: 20 ms.
-    p.reloj = 120;
     await vi.waitFor(() => expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn", "guardar Prueba.brn"]));
-    // Escribir: 30 ms.
+    // Comprimir y escribir: 30 ms.
     p.reloj += 30;
     p.archivos.soltar();
     expect(await guardando).toBe(true);
@@ -395,6 +404,150 @@ describe("Guardar", () => {
     expect(avisoGuardado(false, null)).toBe("Guardado sin comprimir");
     expect(avisoGuardado(true, 12)).toBe("Guardado en 12 ms");
     expect(avisoGuardado(false, 0)).toBe("Guardado sin comprimir en 0 ms");
+  });
+});
+
+/** Lo escrito es texto plano por líneas (`.brn.json`) del documento. */
+function esPorLineas(bytes: Uint8Array, doc: Documento): void {
+  expect([bytes[0], bytes[1]]).not.toEqual([0x1f, 0x8b]);
+  expect(new TextDecoder().decode(bytes)).toBe(serializarPorLineas(doc));
+}
+
+describe("Exportar sin comprimir (T21)", () => {
+  it("escribe una copia .brn.json por líneas; no cambia el archivo actual, la marca ni el historial", async () => {
+    const p = preparar();
+    await p.ops.guardar();
+    p.archivos.llamadas = [];
+    cambiar(p.editor);
+    const cambios = p.editor.cambios;
+    const actual = p.ops.archivoActual;
+    expect(await p.ops.exportar()).toBe(true);
+    expect(p.archivos.llamadas).toEqual(["elegir Prueba.brn.json", "guardar Prueba.brn.json"]);
+    expect(p.archivos.formatos.at(-1)).toBe("brnJson");
+    esPorLineas(p.archivos.escritos.at(-1)!.bytes, p.editor.documento);
+    expect(p.ops.archivoActual).toBe(actual);
+    expect(p.editor.modificado).toBe(true);
+    expect(p.editor.cambios).toBe(cambios);
+    expect(p.editor.puedeDeshacer).toBe(true);
+    expect(p.avisos.at(-1)).toBe("Exportado sin comprimir");
+    expect(p.confirmados).toBeGreaterThan(0);
+    expect(p.ops.enCurso).toBe(false);
+    // El Guardar siguiente sigue yendo al .brn, con gzip.
+    p.archivos.llamadas = [];
+    await p.ops.guardar();
+    expect(p.archivos.llamadas).toEqual(["guardar Prueba.brn"]);
+    expect(await abrirEscrito(p.archivos.escritos.at(-1)!.bytes)).toEqual(p.editor.documento);
+    expect(p.editor.modificado).toBe(false);
+  });
+
+  it("sin cambios, el documento sigue sin cambios; sin archivo actual, sigue sin archivo actual", async () => {
+    const p = preparar();
+    expect(await p.ops.exportar()).toBe(true);
+    expect(p.editor.modificado).toBe(false);
+    expect(p.ops.archivoActual).toBeNull();
+  });
+
+  it("Cancelar en el diálogo no escribe nada", async () => {
+    const p = preparar();
+    p.archivos.eleccion = null;
+    expect(await p.ops.exportar()).toBe(false);
+    expect(p.archivos.escritos).toEqual([]);
+    expect(p.avisos).toEqual([]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("D22-B: un documento que no abriría no se exporta", async () => {
+    const p = preparar();
+    cambiar(p.editor, 20_000);
+    expect(await p.ops.exportar()).toBe(false);
+    expect(p.archivos.llamadas).toEqual([]);
+    expect(p.problemas[0]!.titulo).toBe(TITULOS.noSePuedeGuardar);
+  });
+
+  it("una escena del banco se exporta; una escena sin editor, no; con otra operación en curso, nada", async () => {
+    const p = preparar();
+    const banco = new Editor(docRotados());
+    p.mostrado = { editor: banco, esDocumento: false };
+    expect(await p.ops.exportar()).toBe(true);
+    esPorLineas(p.archivos.escritos.at(-1)!.bytes, banco.documento);
+    p.mostrado = null;
+    expect(await p.ops.exportar()).toBe(false);
+    p.mostrado = { editor: p.editor, esDocumento: true };
+    p.archivos.pausar();
+    const guardando = p.ops.guardar();
+    expect(await p.ops.exportar()).toBe(false);
+    p.archivos.soltar();
+    await guardando;
+  });
+
+  it("D20: con medir, el aviso dice el tiempo", async () => {
+    const p = preparar();
+    p.medir = true;
+    await p.ops.exportar();
+    expect(p.avisos.at(-1)).toMatch(/^Exportado sin comprimir en \d+ ms$/);
+    expect(avisoExportado(null)).toBe("Exportado sin comprimir");
+    expect(avisoExportado(7)).toBe("Exportado sin comprimir en 7 ms");
+  });
+});
+
+describe("El formato lo da la extensión (D4-C)", () => {
+  it("Ctrl+S sobre un .brn.json abierto lo escribe por líneas y sin comprimir; queda guardado", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    p.archivos.aAbrir = { bytes: new TextEncoder().encode(serializarPorLineas(doc)), nombre: "Marcha.brn.json", ruta: null };
+    await p.ops.abrir();
+    expect(p.editor.documento).toEqual(doc);
+    cambiar(p.editor);
+    p.archivos.llamadas = [];
+    expect(await p.ops.guardar()).toBe(true);
+    expect(p.archivos.llamadas).toEqual(["guardar Marcha.brn.json"]);
+    esPorLineas(p.archivos.escritos.at(-1)!.bytes, p.editor.documento);
+    expect(p.editor.modificado).toBe(false);
+    expect(p.avisos.at(-1)).toBe("Guardado sin comprimir");
+  });
+
+  it("un .brn.json con CRLF abre igual, y Ctrl+S lo vuelve a escribir con \\n", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    const crlf = serializarPorLineas(doc).replaceAll("\n", "\r\n");
+    p.archivos.aAbrir = { bytes: new TextEncoder().encode(crlf), nombre: "Marcha.brn.json", ruta: null };
+    await p.ops.abrir();
+    expect(p.editor.documento).toEqual(doc);
+    await p.ops.guardar();
+    esPorLineas(p.archivos.escritos.at(-1)!.bytes, doc);
+  });
+
+  it("D3: en Guardar como se puede escribir .brn.json a mano; pasa a ser el archivo actual", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.archivos.eleccion = "Copia.brn.json";
+    expect(await p.ops.guardar(true)).toBe(true);
+    expect(p.archivos.formatos.at(-1)).toBe("brn");
+    esPorLineas(p.archivos.escritos.at(-1)!.bytes, p.editor.documento);
+    expect(p.ops.archivoActual?.nombre).toBe("Copia.brn.json");
+    expect(p.editor.modificado).toBe(false);
+  });
+
+  it("el formato cambiado en el diálogo usa el documento del momento de la marca", async () => {
+    const p = preparar();
+    const antes = structuredClone(p.editor.documento);
+    p.archivos.eleccion = "Copia.brn.json";
+    p.archivos.alElegirDestino = () => cambiar(p.editor);
+    await p.ops.guardar(true);
+    esPorLineas(p.archivos.escritos.at(-1)!.bytes, antes);
+    // Cambió durante el diálogo: sigue con cambios.
+    expect(p.editor.modificado).toBe(true);
+  });
+
+  it("Guardar como sobre un .brn.json vuelve a .brn (gzip) si se elige un .brn", async () => {
+    const p = preparar();
+    p.archivos.aAbrir = { bytes: new TextEncoder().encode(serializarPorLineas(docRotados())), nombre: "Marcha.brn.json", ruta: null };
+    await p.ops.abrir();
+    p.archivos.eleccion = "Marcha.brn";
+    await p.ops.guardar(true);
+    const bytes = p.archivos.escritos.at(-1)!.bytes;
+    expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b]);
+    expect(await abrirEscrito(bytes)).toEqual(p.editor.documento);
   });
 });
 
@@ -633,7 +786,8 @@ describe("Abrir", () => {
     p.archivos.pausar();
     const guardando = p.ops.guardar();
     await p.ops.abrir();
-    expect(p.archivos.llamadas).toEqual([]);
+    // Guardar ya pidió dónde (y está escribiendo); Abrir no llegó al selector.
+    expect(p.archivos.llamadas).not.toContain("abrir");
     p.archivos.soltar();
     await guardando;
     // Con el selector abierto todavía no hay operación: Guardar anda, y al

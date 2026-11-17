@@ -10,14 +10,15 @@
 //   nativos (plugin dialog) y escritura segura (plugin fs): se escribe un
 //   temporal `<ruta>.tmp` en la misma carpeta y se renombra sobre la ruta. La
 //   ruta que da el diálogo entra sola al alcance de fs (dura la sesión); el
-//   temporal entra por la entrada `**/*.brn.tmp` de la capability.
+//   temporal entra por la entrada `**/*.brn.tmp` de la capability. Los
+//   `.brn.json` (T21) entran por `**/*.brn.json` y `**/*.brn.json.tmp`.
 // - Navegador (`archivosNavegador`): solo para `npm run dev` y el humo. Abrir
 //   con un <input type="file">; Guardar y Guardar como, con una descarga. No
 //   hay ruta, y se da por guardado al disparar la descarga.
 
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile, remove, rename, stat, writeFile } from "@tauri-apps/plugin-fs";
-import { TOPE_BYTES } from "./brn";
+import { TOPE_BYTES, type FormatoArchivo } from "./brn";
 
 /** Un archivo elegido para abrir, todavía sin leer. */
 export interface ArchivoElegido {
@@ -40,16 +41,29 @@ export interface Destino {
 export interface Archivos {
   /** Pide un archivo para abrir (diálogo o selector). Null si se canceló. No lo lee. */
   elegirParaAbrir(): Promise<ArchivoElegido | null>;
-  /** Pide dónde guardar (diálogo). Null si se canceló. No escribe. */
-  elegirDestino(sugerido: string): Promise<Destino | null>;
+  /**
+   * Pide dónde guardar (diálogo), con el filtro del formato: `.brn` para
+   * Guardar y Guardar como, `.brn.json` para Exportar. Null si se canceló. No
+   * escribe.
+   */
+  elegirDestino(sugerido: string, formato: FormatoArchivo): Promise<Destino | null>;
   /** Escribe en ese destino, sin preguntar. */
   guardar(destino: Destino, bytes: Uint8Array): Promise<void>;
 }
 
 // ── Escritorio ─────────────────────────────────────────────────────────────
 
-/** Filtro de los diálogos nativos. */
-const FILTROS = [{ name: "Circuito de Bornera", extensions: ["brn"] }];
+/** Filtro del diálogo de Abrir: los dos formatos (T21). */
+const FILTROS_ABRIR = [{ name: "Circuito de Bornera", extensions: ["brn", "brn.json"] }];
+
+/**
+ * Filtro del diálogo de dónde guardar, por formato. En Windows, la primera
+ * extensión también es la que el diálogo agrega si no se escribe ninguna.
+ */
+const FILTROS_GUARDAR: Readonly<Record<FormatoArchivo, { name: string; extensions: string[] }[]>> = {
+  brn: [{ name: "Circuito de Bornera", extensions: ["brn"] }],
+  brnJson: [{ name: "Circuito de Bornera sin comprimir", extensions: ["brn.json"] }],
+};
 
 /** Lo que la escritura segura usa del plugin fs (inyectable, para probarla). */
 export interface FsEscritura {
@@ -88,9 +102,19 @@ export function nombreDeRuta(ruta: string): string {
   return ruta.split(/[\\/]/).pop() || ruta;
 }
 
-/** Agrega `.brn` si el nombre elegido no lo trae (sin mirar mayúsculas: en Windows, "A.BRN" ya lo trae). */
-export function conExtensionBrn(ruta: string): string {
-  return /\.brn$/i.test(ruta) ? ruta : `${ruta}.brn`;
+/**
+ * La ruta elegida con la extensión del formato, sin mirar mayúsculas (en
+ * Windows, "A.BRN" ya la trae):
+ * - `brn` (Guardar, Guardar como): deja `.brn` y también `.brn.json` escrito a
+ *   mano (el formato lo da la extensión, D4-C); si no, agrega `.brn`.
+ * - `brnJson` (Exportar): deja `.brn.json`; un `.brn` o un `.json` solo pasan
+ *   a `.brn.json` (`x.brn` y `x.json` dan `x.brn.json`); si no, agrega
+ *   `.brn.json`.
+ */
+export function conExtension(ruta: string, formato: FormatoArchivo): string {
+  if (/\.brn\.json$/i.test(ruta)) return ruta;
+  if (formato === "brn") return /\.brn$/i.test(ruta) ? ruta : `${ruta}.brn`;
+  return `${ruta.replace(/\.(brn|json)$/i, "")}.brn.json`;
 }
 
 /**
@@ -100,7 +124,9 @@ export function conExtensionBrn(ruta: string): string {
  */
 export function mensajeErrorFs(e: unknown): string {
   const t = e instanceof Error ? e.message : String(e);
-  return /forbidden path/i.test(t) ? "Bornera no tiene permiso para usar ese archivo. Elegí un nombre que termine en .brn" : t;
+  return /forbidden path/i.test(t)
+    ? "Bornera no tiene permiso para usar ese archivo. Elegí un nombre que termine en .brn o .brn.json"
+    : t;
 }
 
 /** Corre una llamada al plugin fs y traduce su error. */
@@ -114,17 +140,19 @@ async function conMensaje<T>(f: () => Promise<T>): Promise<T> {
 
 export const archivosTauri: Archivos = {
   async elegirParaAbrir() {
-    const ruta = await open({ multiple: false, directory: false, filters: FILTROS });
+    const ruta = await open({ multiple: false, directory: false, filters: FILTROS_ABRIR });
     if (ruta === null) return null;
     // El tamaño antes de leer: un archivo enorme no se carga entero en memoria.
     const { size } = await conMensaje(() => stat(ruta));
     return { nombre: nombreDeRuta(ruta), ruta, tamano: size, leer: () => conMensaje(() => readFile(ruta)) };
   },
 
-  async elegirDestino(sugerido) {
-    const elegida = await save({ defaultPath: sugerido, filters: FILTROS });
+  async elegirDestino(sugerido, formato) {
+    const elegida = await save({ defaultPath: sugerido, filters: FILTROS_GUARDAR[formato] });
     if (elegida === null) return null;
-    const ruta = conExtensionBrn(elegida);
+    // Si se corrige el nombre, la ruta nueva no la dio el diálogo: entra al
+    // alcance por `**/*.brn.json` (y `**/*.brn` desde T24) de la capability.
+    const ruta = conExtension(elegida, formato);
     return { nombre: nombreDeRuta(ruta), ruta };
   },
 
@@ -160,7 +188,8 @@ export const archivosNavegador: Archivos = {
     entradaPendiente?.remove();
     const entrada = document.createElement("input");
     entrada.type = "file";
-    entrada.accept = ".brn";
+    // `.json` y no `.brn.json`: el selector mira solo la última extensión.
+    entrada.accept = ".brn,.json";
     entrada.hidden = true;
     document.body.append(entrada);
     entradaPendiente = entrada;

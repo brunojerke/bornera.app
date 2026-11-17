@@ -10,9 +10,10 @@
 // 2. Se serializa y se toma la marca, en el mismo instante.
 // 3. El texto pasa por `deserializar` (D22-B): si no abriría, se muestran los
 //    problemas y no se escribe ni se marca. Los avisos solos no frenan.
-// 4. Se empaqueta (gzip).
-// 5. Con archivo actual, se pisa; si no (o en Guardar como, o en una escena
+// 4. Con archivo actual, se pisa; si no (o en Guardar como, o en una escena
 //    del banco), se pide dónde. Cancelar termina sin cambios.
+// 5. Se empaqueta según el nombre del destino (D4-C, T21): `.brn` con gzip,
+//    `.brn.json` por líneas y sin comprimir.
 // 6. Si se escribió: queda como archivo actual, se aplica la marca y sale el
 //    aviso. Si falló: el error en un diálogo, y nada cambia.
 // 7. La operación termina siempre, también ante un error.
@@ -22,6 +23,10 @@
 //
 // En una escena del banco (D17), Guardar guarda esa escena, siempre pregunta
 // dónde y no cambia el archivo actual ni la marca del documento.
+//
+// Exportar sin comprimir (T21, D4-C): los mismos pasos, siempre pregunta
+// dónde (con `.brn.json`) y nunca cambia el archivo actual ni la marca: es
+// una copia.
 //
 // Abrir, paso a paso:
 // 1. Si hay otra operación en curso, o se está en Simular o en el banco
@@ -48,15 +53,25 @@
 // el mismo diálogo. "Guardar" guarda el documento, también si se está viendo
 // una escena del banco, y se cierra solo si quedó guardado y sin cambios.
 
-import { deserializar, serializar, type ProblemaArchivo } from "../core/io";
+import { deserializar, serializar, serializarPorLineas, type ProblemaArchivo } from "../core/io";
 import type { Documento } from "../core/model/documento";
 import type { MarcaGuardado } from "../core/model/historial";
 import { letra } from "../editor/atajos";
 import { documentoNuevo } from "../editor/editor";
 import type { ArchivoElegido, Archivos, Destino } from "./archivos";
-import { desempaquetar, empaquetar, MENSAJES, nombreArchivo, TOPE_BYTES } from "./brn";
+import {
+  desempaquetar,
+  empaquetar,
+  empaquetarPlano,
+  formatoDeNombre,
+  MENSAJES,
+  nombreArchivo,
+  TOPE_BYTES,
+  type FormatoArchivo,
+} from "./brn";
 
-export type AccionArchivo = "nuevo" | "abrir" | "guardar" | "guardarComo";
+/** Acciones de archivo de la barra. Exportar no tiene atajo (T21, D4). */
+export type AccionArchivo = "nuevo" | "abrir" | "guardar" | "guardarComo" | "exportar";
 
 /** Respuesta del diálogo de cambios sin guardar (D13-A). */
 export type RespuestaSinGuardar = "guardar" | "noGuardar" | "cancelar";
@@ -192,34 +207,67 @@ export class OperacionesArchivo {
     return (await this.escribir(editor, true, false)) && !editor.modificado;
   }
 
-  /** Pasos 2 a 7 de Guardar, sobre este editor. */
-  private async escribir(editor: EditorArchivo, esDocumento: boolean, como: boolean): Promise<boolean> {
+  /**
+   * Exportar sin comprimir (D4-C, T21): escribe una copia `.brn.json` de lo
+   * que se ve, por líneas. No cambia el archivo actual, la marca de cambios
+   * ni el historial. Como Guardar, no escribe un documento que no abriría
+   * (D22-B). Devuelve si se escribió.
+   */
+  async exportar(): Promise<boolean> {
+    if (this._enCurso) return false;
+    const mostrado = this.deps.mostrado();
+    if (!mostrado) return false;
+    this.deps.confirmarPanel();
+    return this.escribir(mostrado.editor, mostrado.esDocumento, "exportar");
+  }
+
+  /**
+   * Pasos 2 a 7 de Guardar (o de Exportar), sobre este editor. El formato lo
+   * da el nombre del destino (D4-C): `.brn.json` se escribe por líneas y sin
+   * comprimir.
+   */
+  private async escribir(editor: EditorArchivo, esDocumento: boolean, modo: boolean | "exportar"): Promise<boolean> {
+    const exportar = modo === "exportar";
+    const como = modo === true;
     this.empezar();
     try {
       const inicio = this.deps.ahora();
-      const texto = serializar(editor.documento);
-      const marca = editor.tomarMarca();
+      let destino = esDocumento && !como && !exportar ? this._archivoActual : null;
+      // El formato que se espera antes del diálogo; el nombre elegido puede cambiarlo.
+      const previsto: FormatoArchivo = exportar ? "brnJson" : destino ? formatoDeNombre(destino.nombre) : "brn";
+      let texto = textoDe(editor.documento, previsto);
+      // Exportar no toca la marca: es una copia.
+      const marca = exportar ? null : editor.tomarMarca();
       const prueba = deserializar(texto);
       if (!prueba.ok) {
         this.deps.mostrarProblemas(TITULOS.noSePuedeGuardar, prueba.errores);
         return false;
       }
-      const { bytes, comprimido } = await empaquetar(texto);
       // D20: el tiempo se corta durante el diálogo de dónde guardar.
       let ms = this.deps.ahora() - inicio;
-      let destino = esDocumento && !como ? this._archivoActual : null;
       if (!destino) {
-        destino = await this.deps.archivos.elegirDestino(nombreArchivo(editor.documento.meta.titulo));
+        destino = await this.deps.archivos.elegirDestino(nombreArchivo(editor.documento.meta.titulo, previsto), exportar ? "brnJson" : "brn");
         if (!destino) return false;
       }
       const escribiendo = this.deps.ahora();
+      const formato = formatoDeNombre(destino.nombre);
+      // Se escribió `.brn.json` a mano en Guardar como (o al revés): el texto
+      // sale del documento ya validado, que es el del momento de la marca
+      // aunque el editor haya cambiado durante el diálogo.
+      if (formato !== previsto) texto = textoDe(prueba.documento, formato);
+      const { bytes, comprimido } = formato === "brnJson" ? empaquetarPlano(texto) : await empaquetar(texto);
       await this.deps.archivos.guardar(destino, bytes);
       ms = Math.round(ms + this.deps.ahora() - escribiendo);
-      if (esDocumento) {
+      const tiempo = this.deps.medir ? ms : null;
+      if (exportar) {
+        this.deps.avisar(avisoExportado(tiempo));
+        return true;
+      }
+      if (esDocumento && marca) {
         this._archivoActual = destino;
         editor.marcarGuardado(marca);
       }
-      this.deps.avisar(avisoGuardado(comprimido, this.deps.medir ? ms : null));
+      this.deps.avisar(avisoGuardado(comprimido, tiempo));
       return true;
     } catch (e) {
       this.deps.mostrarProblemas(TITULOS.noSePudoGuardar, [{ donde: "", mensaje: textoError(e, "escribir") }]);
@@ -356,6 +404,16 @@ export class OperacionesArchivo {
 export function avisoGuardado(comprimido: boolean, ms: number | null): string {
   const base = comprimido ? "Guardado" : "Guardado sin comprimir";
   return ms === null ? base : `${base} en ${ms} ms`;
+}
+
+/** Aviso de la barra de estado al exportar (T21); con `ms`, dice el tiempo (D20). */
+export function avisoExportado(ms: number | null): string {
+  return ms === null ? "Exportado sin comprimir" : `Exportado sin comprimir en ${ms} ms`;
+}
+
+/** El texto del documento en ese formato: `.brn` en una línea, `.brn.json` por líneas (T21). */
+function textoDe(doc: Documento, formato: FormatoArchivo): string {
+  return formato === "brnJson" ? serializarPorLineas(doc) : serializar(doc);
 }
 
 /** Aviso de la barra de estado al abrir; con `ms`, dice el tiempo hasta el primer cuadro (D20). */

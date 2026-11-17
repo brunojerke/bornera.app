@@ -3,7 +3,8 @@
 // DecompressionStream del navegador; el núcleo (src/core/io) pasa
 // Documento ↔ texto.
 //
-// Guardar escribe gzip. Abrir acepta gzip o el JSON en texto plano, y los
+// Guardar escribe gzip (en un `.brn.json`, el texto por líneas sin comprimir,
+// T21). Abrir acepta gzip o el JSON en texto plano, y los
 // distingue por los dos primeros bytes (1f 8b) (D1-B). El tope de 16 MB vale
 // para el archivo y para lo descomprimido, y se cuenta mientras se
 // descomprime: una bomba de descompresión corta ahí, sin leer el resto (D18).
@@ -60,17 +61,39 @@ export async function desempaquetar(bytes: Uint8Array): Promise<ResultadoDesempa
 }
 
 /**
+ * Formato del archivo (D4-C): `.brn` es gzip; `.brn.json` es el texto por
+ * líneas, sin comprimir (T21).
+ */
+export type FormatoArchivo = "brn" | "brnJson";
+
+/** La extensión de cada formato, con el punto. */
+export const EXTENSIONES: Readonly<Record<FormatoArchivo, string>> = { brn: ".brn", brnJson: ".brn.json" };
+
+/**
+ * El formato lo da la extensión (D4-C): un nombre que termina en `.json` (sin
+ * mirar mayúsculas) es por líneas y sin comprimir; cualquier otro, `.brn`.
+ */
+export function formatoDeNombre(nombre: string): FormatoArchivo {
+  return /\.json$/i.test(nombre) ? "brnJson" : "brn";
+}
+
+/** Pasa el texto a UTF-8 sin comprimir (`.brn.json`). Sin BOM: `TextEncoder` no lo pone. */
+export function empaquetarPlano(texto: string): Empaquetado {
+  return { bytes: new TextEncoder().encode(texto), comprimido: false };
+}
+
+/**
  * Nombre de archivo sugerido para un título: quita `/ \ : * ? " < > |` y los
  * caracteres de control, los espacios de los lados y los puntos (y espacios)
- * del final, y agrega `.brn`. Si no queda nada, `circuito.brn`. Las tildes se
- * conservan.
+ * del final, y agrega la extensión del formato (`.brn` o `.brn.json`). Si no
+ * queda nada, `circuito`. Las tildes se conservan.
  */
-export function nombreArchivo(titulo: string): string {
+export function nombreArchivo(titulo: string, formato: FormatoArchivo = "brn"): string {
   const limpio = titulo
     .replace(/[\/\\:*?"<>|\p{Cc}]/gu, "")
     .trim()
     .replace(/[\s.]+$/u, "");
-  return `${limpio || "circuito"}.brn`;
+  return `${limpio || "circuito"}${EXTENSIONES[formato]}`;
 }
 
 function fallo(error: string): ResultadoDesempaquetar {

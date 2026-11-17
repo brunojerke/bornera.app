@@ -116,6 +116,7 @@
   function accionArchivo(a: AccionArchivo) {
     if (a === "guardar") void operaciones.guardar();
     else if (a === "guardarComo") void operaciones.guardar(true);
+    else if (a === "exportar") void operaciones.exportar();
     else if (a === "abrir") void operaciones.abrir();
     else void operaciones.nuevo();
   }
@@ -310,6 +311,7 @@
     onabrir={() => accionArchivo("abrir")}
     onguardar={() => accionArchivo("guardar")}
     onguardarcomo={() => accionArchivo("guardarComo")}
+    onexportar={() => accionArchivo("exportar")}
     onacercar={() => lienzo.acercar()}
     onalejar={() => lienzo.alejar()}
     onencuadrar={() => lienzo.encuadrar()}

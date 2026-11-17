@@ -1,11 +1,12 @@
 <script lang="ts">
   // Barra de herramientas superior. Andan Nuevo, Abrir, Guardar y Guardar
-  // como (T15a), el historial (deshacer y rehacer, desactivados si no hay
+  // como (T15a), Exportar sin comprimir (T21), el historial (deshacer y rehacer, desactivados si no hay
   // nada) y el zoom; el resto es estructura.
   import FilePlus from "@lucide/svelte/icons/file-plus";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Save from "@lucide/svelte/icons/save";
   import SaveAll from "@lucide/svelte/icons/save-all";
+  import FileBraces from "@lucide/svelte/icons/file-braces";
   import FileDown from "@lucide/svelte/icons/file-down";
   import Undo2 from "@lucide/svelte/icons/undo-2";
   import Redo2 from "@lucide/svelte/icons/redo-2";
@@ -29,6 +30,7 @@
     onabrir,
     onguardar,
     onguardarcomo,
+    onexportar,
     onacercar,
     onalejar,
     onencuadrar,
@@ -54,6 +56,8 @@
     onabrir?: () => void;
     onguardar?: () => void;
     onguardarcomo?: () => void;
+    /** Exportar sin comprimir (.brn.json), T21: una copia; no cambia el archivo actual. */
+    onexportar?: () => void;
     onacercar?: () => void;
     onalejar?: () => void;
     onencuadrar?: () => void;
@@ -96,6 +100,15 @@
       onclick={onguardarcomo}
     >
       <SaveAll size={TAM} />
+    </button>
+    <button
+      class="boton-icono"
+      title="Exportar sin comprimir (.brn.json)…"
+      aria-label="Exportar sin comprimir (.brn.json)"
+      disabled={!puedeGuardar}
+      onclick={onexportar}
+    >
+      <FileBraces size={TAM} />
     </button>
     <button class="boton-icono" title="Exportar PDF (Ctrl+P)" aria-label="Exportar PDF"><FileDown size={TAM} /></button>
   </div>

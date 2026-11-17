@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deserializar, serializar } from "../core/io";
-import { docCables, documentosDePrueba } from "../core/io/prueba-documentos";
+import { deserializar, serializar, serializarPorLineas } from "../core/io";
+import { docCables, docTextos, documentosDePrueba } from "../core/io/prueba-documentos";
 import type { Documento } from "../core/model/documento";
 import { documentoBancoCables } from "../editor/banco";
-import { desempaquetar, empaquetar, MENSAJES, nombreArchivo, TOPE_BYTES } from "./brn";
+import { desempaquetar, empaquetar, empaquetarPlano, formatoDeNombre, MENSAJES, nombreArchivo, TOPE_BYTES } from "./brn";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -233,5 +233,42 @@ describe("nombreArchivo", () => {
     ["Señalización ñandú", "Señalización ñandú.brn"],
   ])("%j → %j", (titulo, nombre) => {
     expect(nombreArchivo(titulo)).toBe(nombre);
+  });
+});
+
+// ── .brn.json (T21) ────────────────────────────────────────────────────────
+
+describe("formato por extensión (D4-C)", () => {
+  it("nombreArchivo con brnJson agrega .brn.json", () => {
+    expect(nombreArchivo("Marcha-parada", "brnJson")).toBe("Marcha-parada.brn.json");
+    expect(nombreArchivo("", "brnJson")).toBe("circuito.brn.json");
+    expect(nombreArchivo("Motor 1...", "brnJson")).toBe("Motor 1.brn.json");
+  });
+
+  it.each([
+    ["Marcha.brn", "brn"],
+    ["Marcha.BRN", "brn"],
+    ["Marcha.brn.json", "brnJson"],
+    ["MARCHA.BRN.JSON", "brnJson"],
+    ["Marcha.json", "brnJson"],
+    ["Marcha.json.brn", "brn"],
+    ["Marcha", "brn"],
+  ] as const)("formatoDeNombre(%j) → %s", (nombre, formato) => {
+    expect(formatoDeNombre(nombre)).toBe(formato);
+  });
+
+  it("empaquetarPlano: UTF-8 sin BOM ni gzip, y desempaquetar lo devuelve igual", async () => {
+    const texto = serializarPorLineas(docTextos());
+    const { bytes, comprimido } = empaquetarPlano(texto);
+    expect(comprimido).toBe(false);
+    expect([bytes[0], bytes[1], bytes[2]]).not.toEqual([0xef, 0xbb, 0xbf]);
+    expect([bytes[0], bytes[1]]).not.toEqual([0x1f, 0x8b]);
+    expect(await desempaquetar(bytes)).toEqual({ ok: true, texto });
+  });
+
+  it("un .brn.json guardado con BOM (por un editor de texto) abre igual", async () => {
+    const texto = serializarPorLineas(docTextos());
+    const conBom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode(texto)]);
+    expect(await desempaquetar(conBom)).toEqual({ ok: true, texto });
   });
 });

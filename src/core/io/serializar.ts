@@ -10,6 +10,9 @@
 //   (es el orden de dibujo).
 // - JSON compacto, sin BOM y sin salto de línea al final. `-0` sale como `0`.
 //
+// Los escritores de cada objeto (`componente`, `cable`…) también los usa la
+// forma por líneas del `.brn.json` (porLineas.ts, T21): este texto no cambia.
+//
 // El texto se arma a mano, sin depender del orden de las claves en memoria.
 // Hace falta en `params` y `contadores`: JavaScript pone primero las claves
 // que parecen números ("10", "2") en cualquier objeto, así que un objeto
@@ -24,7 +27,7 @@ import type { Cable, Componente, Documento, Extremo, Hoja, Meta } from "../model
  * (`undefined`, un valor cambiado a mano por la consola) sale como `null`,
  * para que el texto siga siendo JSON y `deserializar` diga qué campo falla.
  */
-function valor(v: unknown): string {
+export function valor(v: unknown): string {
   return JSON.stringify(v) ?? "null";
 }
 
@@ -39,7 +42,7 @@ function lista<T>(elementos: readonly T[], escribir: (e: T) => string): string {
 }
 
 /** Un mapa abierto (`params`, `contadores`): claves en orden alfabético (por unidades de código). */
-function mapa(m: Readonly<Record<string, unknown>>): string {
+export function mapa(m: Readonly<Record<string, unknown>>): string {
   return objeto(
     Object.keys(m)
       .sort()
@@ -47,7 +50,7 @@ function mapa(m: Readonly<Record<string, unknown>>): string {
   );
 }
 
-function meta(m: Meta): string {
+export function meta(m: Meta): string {
   return objeto([
     ["titulo", valor(m.titulo)],
     ["autor", valor(m.autor)],
@@ -55,7 +58,7 @@ function meta(m: Meta): string {
   ]);
 }
 
-function componente(c: Componente): string {
+export function componente(c: Componente): string {
   return objeto([
     ["id", valor(c.id)],
     ["tipo", valor(c.tipo)],
@@ -96,7 +99,7 @@ function extremo(e: Extremo): string {
   }
 }
 
-function cable(w: Cable): string {
+export function cable(w: Cable): string {
   return objeto([
     ["id", valor(w.id)],
     ["desde", extremo(w.desde)],

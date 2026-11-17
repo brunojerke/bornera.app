@@ -205,7 +205,25 @@ Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en form
   - Al arrancar después de un corte, Bornera ofrece Recuperar o Descartar.
   - La copia se borra al guardar o al cerrar bien.
 - **Biblioteca separada:** los símbolos no se guardan dentro de cada archivo; solo se referencia su tipo (`contactor.bobina`).
-- **Exportación de respaldo:** «Exportar sin comprimir (.brn.json)», para revisarlo o versionarlo con Git. Escribe un componente o cable por línea y no cambia el archivo actual. Ctrl+S sobre un `.brn.json` abierto lo vuelve a escribir sin comprimir. El `.brn` normal no cambia (fase 4, D4-C de `docs/plan-fase4.md`).
+- **Exportación de respaldo:** «Exportar sin comprimir (.brn.json)…» (botón de la barra, sin atajo), para revisarlo o versionarlo con Git. Escribe una copia y no cambia el archivo actual, la marca «•» ni el historial. El formato lo da la extensión: Ctrl+S sobre un `.brn.json` abierto lo vuelve a escribir sin comprimir, y en Guardar como se puede escribir `.brn.json` a mano. El `.brn` normal no cambia ni un byte: lo fijan los sha256 del banco en `src/editor/banco-brn.test.ts` (fase 4, D4-C de `docs/plan-fase4.md`, T21).
+- **Forma por líneas del `.brn.json`** (`serializarPorLineas`, `src/core/io/porLineas.ts`): UTF-8 sin BOM, cada línea termina en `\n` (también la última). Cada componente y cada cable es una línea con su JSON compacto canónico; una lista vacía va en la misma línea que su clave. Quitando todos los `\n` queda exactamente el texto de `serializar`. Al abrir se aceptan CRLF y BOM; al volver a guardar sale con `\n`. En Git, `*.brn.json -text` (`.gitattributes`). El ejemplo de arriba:
+
+  ```
+  {"formato":"bornera","version":1,
+  "meta":{"titulo":"Marcha-parada","autor":"","fecha":"2026-11-12"},
+  "contadores":{"c":3,"w":3},
+  "hojas":[
+  {"nombre":"Hoja 1",
+  "componentes":[
+  {"id":"c1","tipo":"pulsador.na","x":10,"y":8,"rot":90,"espejado":true,"etiqueta":"S1","params":{}}
+  ],
+  "cables":[
+  {"id":"w1","desde":{"tipo":"borne","comp":"c1","borne":"13"},"hasta":{"tipo":"cable","cable":"w2","x":10,"y":4},"codos":[[10,5]]}
+  ]}
+  ]}
+  ```
+
+  Con más hojas, cada una cierra con `]},` salvo la última. Una hoja vacía queda en tres líneas: `{"nombre":…,`, `"componentes":[],` y `"cables":[]}`.
 
 ## Exportación a PDF vectorial
 

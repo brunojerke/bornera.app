@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conExtensionBrn, escribirSeguro, mensajeErrorFs, nombreDeRuta, rutaTemporal, type FsEscritura } from "./archivos";
+import { conExtension, escribirSeguro, mensajeErrorFs, nombreDeRuta, rutaTemporal, type FsEscritura } from "./archivos";
 
 /** Un disco de mentira: los archivos en un Map, con fallas a pedido (Tauri rechaza con textos). */
 class DiscoFalso implements FsEscritura {
@@ -104,18 +104,36 @@ describe("rutas", () => {
     expect(nombreDeRuta("x.brn")).toBe("x.brn");
   });
 
-  it("conExtensionBrn: agrega .brn solo si falta (sin mirar mayúsculas)", () => {
-    expect(conExtensionBrn("C:\\a\\Parada")).toBe("C:\\a\\Parada.brn");
-    expect(conExtensionBrn("C:\\a\\Parada.brn")).toBe("C:\\a\\Parada.brn");
-    expect(conExtensionBrn("C:\\a\\PARADA.BRN")).toBe("C:\\a\\PARADA.BRN");
-    expect(conExtensionBrn("C:\\a\\Marcha.txt")).toBe("C:\\a\\Marcha.txt.brn");
-    expect(conExtensionBrn("C:\\x.brn\\Marcha")).toBe("C:\\x.brn\\Marcha.brn");
+  it("conExtension brn (Guardar, Guardar como): agrega .brn si falta; respeta .brn.json escrito a mano (D3)", () => {
+    expect(conExtension("C:\\a\\Parada", "brn")).toBe("C:\\a\\Parada.brn");
+    expect(conExtension("C:\\a\\Parada.brn", "brn")).toBe("C:\\a\\Parada.brn");
+    expect(conExtension("C:\\a\\PARADA.BRN", "brn")).toBe("C:\\a\\PARADA.BRN");
+    expect(conExtension("C:\\a\\Marcha.txt", "brn")).toBe("C:\\a\\Marcha.txt.brn");
+    expect(conExtension("C:\\x.brn\\Marcha", "brn")).toBe("C:\\x.brn\\Marcha.brn");
+    // Nunca "x.brn.json.brn".
+    expect(conExtension("C:\\a\\x.brn.json", "brn")).toBe("C:\\a\\x.brn.json");
+    expect(conExtension("C:\\a\\X.BRN.JSON", "brn")).toBe("C:\\a\\X.BRN.JSON");
+  });
+
+  it("conExtension brnJson (Exportar): siempre .brn.json, nunca x.brn.json.brn ni x.json", () => {
+    expect(conExtension("C:\\a\\x", "brnJson")).toBe("C:\\a\\x.brn.json");
+    expect(conExtension("C:\\a\\x.brn", "brnJson")).toBe("C:\\a\\x.brn.json");
+    expect(conExtension("C:\\a\\x.json", "brnJson")).toBe("C:\\a\\x.brn.json");
+    expect(conExtension("C:\\a\\x.brn.json", "brnJson")).toBe("C:\\a\\x.brn.json");
+    expect(conExtension("C:\\a\\X.BRN.JSON", "brnJson")).toBe("C:\\a\\X.BRN.JSON");
+    expect(conExtension("C:\\a\\X.BRN", "brnJson")).toBe("C:\\a\\X.brn.json");
+    expect(conExtension("C:\\a\\Marcha.txt", "brnJson")).toBe("C:\\a\\Marcha.txt.brn.json");
+    expect(conExtension("C:\\x.brn\\Marcha", "brnJson")).toBe("C:\\x.brn\\Marcha.brn.json");
+  });
+
+  it("rutaTemporal de un .brn.json: entra en el alcance **/*.brn.json.tmp", () => {
+    expect(rutaTemporal("C:\\a\\x.brn.json")).toBe("C:\\a\\x.brn.json.tmp");
   });
 });
 
 describe("mensajeErrorFs", () => {
   it("una ruta fuera del alcance se explica en español; los demás errores pasan como vienen", () => {
-    expect(mensajeErrorFs("forbidden path: C:\\a\\Marcha.txt.brn, maybe it is not allowed on the scope")).toMatch(/permiso.*\.brn/);
+    expect(mensajeErrorFs("forbidden path: C:\\a\\Marcha.txt.brn, maybe it is not allowed on the scope")).toMatch(/permiso.*\.brn o \.brn\.json/);
     const so = "Acceso denegado. (os error 5)";
     expect(mensajeErrorFs(so)).toBe(so);
     expect(mensajeErrorFs(new Error("x"))).toBe("x");

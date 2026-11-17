@@ -15,6 +15,9 @@
     "fs:allow-write-file",
     "fs:allow-rename",
     "fs:allow-remove",
-    { "identifier": "fs:scope", "allow": [{ "path": "**/*.brn.tmp" }] }
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "**/*.brn.tmp" }, { "path": "**/*.brn.json" }, { "path": "**/*.brn.json.tmp" }]
+    }
   ]
 }

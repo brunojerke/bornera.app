@@ -185,6 +185,15 @@ Cómo se prueba:
   - Claves sin ñ ni tildes.
 - **Humo `t21-exportar.mjs`:** la descarga `X.brn.json` abre igual; no cambia el archivo actual, la marca ni el historial; Ctrl+S sobre un `.brn.json` lo escribe sin comprimir.
 - **Modelo:** Opus alto.
+- **Hecho (2026-11-17), con D1 botón, D2 `*.brn.json -text`, D3 respetar `.brn.json` en Guardar como, D4 sin atajo, y los ajustes de Bruno:**
+  - `66e2a9a` fija, solo y antes de tocar `serializar.ts`, el largo y el sha256 del `.brn` de las 4 escenas del banco (`banco-brn.test.ts`).
+  - `serializarPorLineas` (`src/core/io/porLineas.ts`) usa los escritores de `serializar`. Quitando los `\n` da exactamente `serializar`. La forma exacta está en `docs/arquitectura.md`.
+  - Exportar es un botón con el ícono `file-braces`: una copia que no toca `archivoActual`, la marca ni el historial, y respeta D22-B. Guardar empaqueta según el nombre del destino. Si el formato cambia en el diálogo, se escribe el documento validado del momento de la marca.
+  - `conExtension`: en Exportar, `x`, `x.brn` y `x.json` pasan a `x.brn.json`. En Guardar y Guardar como, se respeta `.brn.json`.
+  - Capability: `**/*.brn.json` y `**/*.brn.json.tmp` (adelanto de D8-A, aprobado). `archivosTauri.test.ts` comprueba, con los plugins de mentira, que el nombre corregido se escribe y entra en el alcance.
+  - Resultados: 1891 tests, check sin errores, humo 771/771 (t21: 26). Sin banco.
+  - **Sin prueba a mano en `tauri dev`:** Smart App Control de Windows quedó activado en la PC y bloquea las DLL de Rust recién compiladas (Code Integrity 3077, `phf_macros`). Bruno decidió no tocar la configuración de Windows. Lo que falta del diálogo nativo va en la fila 5b de la checklist de la netbook.
+  - Pendiente (de T15a, no de T21): el alcance de fs distingue mayúsculas. Un nombre `X.BRN` da el temporal `X.BRN.tmp`, que queda fuera de `**/*.brn.tmp` (igual con `X.BRN.JSON`). Para T24.
 
 ### T22. Migraciones y corpus del formato (D3-A)
 - **Qué:**
@@ -230,7 +239,8 @@ Cómo se prueba:
 
 ### T24. Alcance de archivos y Abrir recientes (D8-A)
 - **Qué:**
-  - Capability `**/*.brn` y `**/*.brn.json`.
+  - Capability `**/*.brn` (`**/*.brn.json` ya lo sumó T21).
+  - Temporales con extensión en mayúsculas (`X.BRN.tmp`) dentro del alcance (pendiente de T15a, ver T21).
   - `src/ui/recientes.ts`: hasta 8 en `localStorage`, con `try`. Los repetidos suben arriba, y las rutas se comparan sin distinguir mayúsculas.
   - Si un archivo ya no existe, aviso y se quita de la lista.
 - **Pruebas:** unitarias de la lista. Humo: en el navegador (sin rutas) el menú no aparece.
@@ -309,6 +319,7 @@ Cómo se prueba:
 | 3 | Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
 | 4 | Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
 | 5 | «Abrir reciente» › `marcha-parada.brn` | Abre |
+| 5b | T21 (no se probó a mano en la PC). «Exportar sin comprimir (.brn.json)…» cuatro veces, escribiendo en el diálogo `x`, `x.brn`, `x.json` y `x.brn.json`. Guardar como, escribiendo `x.brn.json`. Abrir ese `x.brn.json`, mover algo y Ctrl+S | Las cuatro exportaciones dejan `x.brn.json` (nunca `x.brn.json.brn`, `x.brn.brn.json` ni `x.json`) y sin «permiso». Guardar como no deja `x.brn.json.brn`. Abrir muestra los `.brn.json`; Ctrl+S quita la «•» y el archivo tiene un componente por línea (Bloc de notas) |
 | 6 | Instalar el `.msi` de `0.1.4` (del borrador) encima de la alpha.N, sin desinstalar | Una sola «Bornera», versión 0.1.4, la lista de recientes sigue |
 
 ## 7. Riesgos
@@ -320,6 +331,7 @@ Cómo se prueba:
 - **`csp: null` con el alcance amplio de D8:** no hay una vía conocida de inyección (lienzo y textos escapados por Svelte). La CSP queda como tarea aparte.
 - **La cascada de T26 borra de más:** se ve en el aviso y se deshace con Ctrl+Z.
 - **WebKitGTK (Mint):** secundario, no bloquea (S8).
+- **Smart App Control en la PC (2026-11-17):** está activado y bloquea las DLL de Rust que se compilan, así que `tauri dev` no compila. T23 (S2, S3 y F1 en WebView2), T24 (a mano en `tauri dev`) y T25 lo necesitan. Desactivarlo no tiene vuelta atrás sin restablecer Windows: lo decide Bruno.
 
 ## 8. Fuera de la fase 4
 - **Fase 5, antes de simular:** conexiones aparentes, etiquetas de red en la netlist y aviso de L con L1, L2 o L3.
