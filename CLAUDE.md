@@ -21,6 +21,7 @@ Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en 
 - `npm test`             tests una vez (Vitest), incluida la regla de imports de `src/core`
 - `npm run test:watch`   tests en modo vigilancia
 - `npm run bench`        banco de dibujado (100/500/2000 símbolos) en un Chrome/Edge headless, sin abrir la ventana
+- `node tests/bench/abrir-node.mjs`  abrir y guardar el banco de 2000 + cables en Node, sin navegador (serializar, deserializar, gzip + deserializar); `--procesos=N`, `--json`
 - `npm run humo`         pruebas de humo de la app real en Chrome/Edge headless a 1024×600 (`tests/humo/*.mjs`: `tNN-*.mjs` por tarea o con nombre de tema; `-- t08` corre una, `-- --capturas=CARPETA` guarda capturas). Cada tarea suma ahí sus comprobaciones
 - `npm run circuito`     compara un `.brn` dibujado a mano con un circuito base, por redes (ruta en `BORNERA_BRN`; sin ella se saltea). La base va en `BORNERA_BASE`: `marcha-parada` (por defecto) o `inversion`. Paso para PowerShell en `docs/archivo/plan-T15.md` sección 5 y en `docs/netbook-fase3b.md` sección E
 - `npm run check`        chequeo de tipos completo (svelte-check + `check:core`)

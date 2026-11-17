@@ -10,6 +10,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { deserializar, serializar, serializarPorLineas, type ProblemaArchivo } from "../../src/core/io";
+import { deserializarCon } from "../../src/core/io/deserializar";
+import type { Migracion } from "../../src/core/io/migraciones";
 import { desempaquetar } from "../../src/ui/brn";
 
 const CARPETA = new URL("./formato-v1/", import.meta.url);
@@ -100,5 +102,19 @@ describe("tests/circuitos/formato-v1/: el corpus congelado del formato 1 (T22)",
     } else {
       expect(serializar(r.documento)).toBe(texto);
     }
+  });
+
+  // El camino de un archivo viejo, con el corpus real: una migración 1 → 2
+  // inyectada que solo sube la versión (el formato real sigue en 1).
+  const subir: Migracion = (d) => ({ ...d, version: 2 });
+
+  it.each(NOMBRES)("%s: con una migración 1 → 2 inyectada, abre como formato 2 y con el aviso primero", async (nombre) => {
+    const { texto } = await abrir(nombre);
+    const r = deserializarCon(texto, { version: 2, migraciones: [subir] });
+    expect(r.ok ? [] : r.errores).toEqual([]);
+    if (!r.ok) return;
+    const aviso = { donde: "version", mensaje: "El archivo es del formato 1: al guardarlo pasa al formato 2" };
+    expect(r.avisos).toEqual([aviso, ...CORPUS[nombre]!.avisos]);
+    expect(r.documento).toEqual({ ...JSON.parse(texto), version: 2 });
   });
 });

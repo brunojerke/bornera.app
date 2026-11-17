@@ -197,7 +197,13 @@ Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en form
 **Reglas:**
 
 - **Compresión:** Guardar escribe gzip con `CompressionStream` del navegador (sin librerías); si el sistema no lo tiene, guarda sin comprimir y lo avisa. Abrir acepta los dos (los distingue por los bytes `1f 8b`). Tope: 16 MB. Un circuito escolar pesa pocos KB.
-- **Versión y migraciones:** hoy hay una sola versión (1). Un archivo de una versión más nueva se rechaza ("hecho con una versión más nueva de Bornera"). Cada cambio de estructura sube `version` y agrega una función que convierte la versión anterior. Los archivos viejos siempre abren. Fase 4 (D3-A de `docs/plan-fase4.md`): las migraciones son funciones puras sobre el JSON leído, entre la versión y la estructura de `deserializar`. Un corpus congelado (`tests/circuitos/formato-v1/`) tiene que abrir siempre.
+- **Versión y migraciones** (fase 4, D3-A de `docs/plan-fase4.md`, T22): hoy hay una sola versión (1) y ninguna migración. Un archivo de una versión más nueva se rechaza ("hecho con una versión más nueva de Bornera"). Los archivos viejos siempre abren.
+  - Cada cambio de estructura sube `VERSION_FORMATO` y agrega en `src/core/io/migraciones.ts` la función que pasa de la versión anterior a la nueva.
+  - Una migración es pura: recibe el JSON leído (solo están revisados `formato` y `version`) y devuelve uno nuevo, con la versión siguiente. No valida: lo que no tiene la forma que espera lo deja, y lo informa la estructura.
+  - `deserializar` las corre en cadena entre la versión y la estructura. Lo migrado pasa la misma lectura estricta. Si una migración tira o devuelve otra cosa, el archivo no abre ("No se pudo pasar del formato N al N+1: …") y el programa sigue.
+  - Un archivo migrado abre con el aviso "El archivo es del formato N: al guardarlo pasa al formato M", primero en la lista y sin la marca «•». Guardar lo escribe en el formato nuevo.
+  - Los tests inyectan migraciones de prueba con `deserializarCon`, que no sale por `index.ts`.
+- **Corpus congelado** (`tests/circuitos/formato-v1/`, T22): diez `.brn.json` generados una sola vez por `formato-v1.mjs`, y un `.brn` real guardado por la 0.1.4-alpha.1 en la netbook. `formato-v1.test.ts` fija el largo y el sha256 de cada uno: cada archivo abre, es igual a su JSON y se guarda igual. No se regenera sin el OK de Bruno. Cuando el formato suba, tiene que seguir abriendo con sus migraciones.
 - **Validación al abrir:** un archivo dañado se rechaza con la lista de problemas, sin cerrar el programa: claves desconocidas, cables rotos, contadores atrasados, ciclos de apoyos o una T sobre el extremo de su anfitrión. Un símbolo desconocido sin cables abre con "?" y un aviso.
 - **Autoguardado** (fase 4, D2 de `docs/plan-fase4.md`):
   - La copia de recuperación va en IndexedDB del webview, una por instancia abierta.

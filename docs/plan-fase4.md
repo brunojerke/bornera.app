@@ -212,6 +212,15 @@ Cómo se prueba:
   - Cada archivo del corpus abre, es igual a su documento y se guarda igual.
 - **Humo y banco:** no.
 - **Modelo:** Opus xhigh (núcleo).
+- **Hecho (2026-11-17), con D1 `deserializarCon` aparte, D2 la migración sube la versión y se comprueba, D3 sin «•», D4 con símbolo desconocido y D5 el script commiteado:**
+  - `153c5ad` suma el corpus solo, antes de tocar `deserializar.ts`, así que lo prueba el mismo lector de la alpha.1. Son 10 `.brn.json` generados una vez por `formato-v1.mjs`, que no escribe si ya hay corpus, más `alpha1-inversion.brn`: la inversión dibujada en la netbook y guardada por la 0.1.4-alpha.1 (gzip, 721 bytes, sin convertir). `formato-v1.test.ts` fija la lista de archivos, el largo y el sha256 de cada uno.
+  - `migraciones.ts`: `MIGRACIONES = []` y `migrar` nunca tira. Comprueba que cada paso devuelva un objeto con `formato: "bornera"` y la versión siguiente. `deserializar` = `deserializarCon(texto, FORMATO_ACTUAL)`. El aviso va primero, antes del de varias hojas.
+  - `VERSION_FORMATO` sigue en 1 y los sha256 del banco de T21 no cambiaron.
+  - **Medición** (`tests/bench/abrir-node.mjs`, Node 26, escena de 2000 + cables, 653 364 caracteres y 73 448 bytes en gzip). Regla: no cambia si la mediana queda a ±10 % o a ≤ 1 ms.
+    - Antes y después en bloques: `deserializar` 23,7 → 21,4 ms (−9,6 %), abrir 28,8 → 25,1 ms (−12,7 %). Abrir se pasó del ±10 %, pero hacia abajo, y `serializar`, que no cambió, también bajó (−18 %): fue una deriva de la PC entre bloques.
+    - Por la regla se investigó: con el `deserializar.ts` viejo y el nuevo intercalados, un proceso cada uno, 3 veces, `deserializar` da 29,4 → 29,9 ms (+0,5 ms) y abrir 29,4 → 29,8 ms (+0,4 ms). Pasa.
+    - Entre procesos, la PC varía de 24 a 36 ms: para T23 conviene intercalar.
+  - Resultados: 1959 tests, check sin errores y humo 771/771. No hay humo nuevo: con la versión 1, el aviso no puede aparecer. Sin banco.
 
 ### T23. Autoguardado y recuperación (D2, D5-A)
 - **Plan propio:** `docs/plan-T23.md` (Opus xhigh). Fija el esquema de IndexedDB, los relojes, los textos y la regla de F1 antes de medir.

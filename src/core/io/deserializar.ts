@@ -11,8 +11,12 @@
 //   suponen las anteriores. Dentro de una etapa junta todos los errores, hasta
 //   MAXIMO_PROBLEMAS ("y N más").
 //
-// Etapas: 0 texto, 1 JSON, 2 formato, 3 versión, 4 estructura, 5 ids,
-// 6 contadores, 7 símbolos, 8 cables (`validarHoja`), 9 apoyos y T.
+// Etapas: 0 texto, 1 JSON, 2 formato, 3 versión y migraciones, 4 estructura,
+// 5 ids, 6 contadores, 7 símbolos, 8 cables (`validarHoja`), 9 apoyos y T.
+//
+// Migraciones (T22, D3-A): un archivo de una versión anterior pasa por las
+// funciones de migraciones.ts antes de la etapa 4. Lo migrado se lee con la
+// misma lista blanca estricta que un archivo nuevo, y abre con un aviso.
 //
 // No se miran: las etiquetas (el documento acepta cualquier texto), la forma
 // de `meta.fecha` (es un texto) ni las conexiones aparentes (D10-A).
@@ -20,8 +24,9 @@
 // puede detectar sin un parser propio.
 
 import { componentesCableados, indexarHoja, recorridoCable, seApoyaEn, validarHoja } from "../model/cables";
-import { VERSION_FORMATO, type Cable, type Componente, type Documento, type Extremo, type Hoja, type Meta } from "../model/documento";
+import type { Cable, Componente, Documento, Extremo, Hoja, Meta } from "../model/documento";
 import { buscarSimbolo, type Rotacion } from "../symbols";
+import { FORMATO_ACTUAL, migrar, revisarFormato, type FormatoLectura } from "./migraciones";
 
 /**
  * Rango de la grilla (D21-A), inclusivo: cada coordenada (componentes,
@@ -464,6 +469,15 @@ function revisarApoyos(doc: Documento, p: Problemas): void {
  * con lo que dio `JSON.parse`.
  */
 export function deserializar(texto: string): ResultadoAbrir {
+  return deserializarCon(texto, FORMATO_ACTUAL);
+}
+
+/**
+ * `deserializar` con otro formato de lectura (versión y migraciones). Solo
+ * para los tests, que inyectan migraciones de prueba (T22, D1): no sale por
+ * index.ts, así la app no puede pasarle otro formato.
+ */
+export function deserializarCon(texto: string, formato: FormatoLectura): ResultadoAbrir {
   // 0. Texto.
   if (texto.length > LARGO_MAXIMO_TEXTO) return rechazoUnico("", "El archivo es demasiado grande (el máximo es 16 MB)");
   if (texto.charCodeAt(0) === 0xfeff) texto = texto.slice(1);
@@ -481,19 +495,27 @@ export function deserializar(texto: string): ResultadoAbrir {
   // 2. Formato.
   if (!esObjeto(datos) || datos["formato"] !== "bornera") return rechazoUnico("", "No es un archivo de Bornera");
 
-  // 3. Versión (D4-A).
+  // 3. Versión (D4-A) y migraciones (T22, D3-A).
+  const malFormato = revisarFormato(formato);
+  if (malFormato) return rechazoUnico("", malFormato);
   const version = datos["version"];
   if (!Object.hasOwn(datos, "version")) return rechazoUnico("version", "falta");
   if (typeof version !== "number" || !Number.isSafeInteger(version) || version < 1) {
     return rechazoUnico("version", `tiene que ser un entero mayor o igual a 1 (es ${describir(version)})`);
   }
-  if (version > VERSION_FORMATO) {
-    return rechazoUnico("", `El archivo está hecho con una versión más nueva de Bornera (formato ${version}; esta lee hasta el ${VERSION_FORMATO})`);
+  if (version > formato.version) {
+    return rechazoUnico("", `El archivo está hecho con una versión más nueva de Bornera (formato ${version}; esta lee hasta el ${formato.version})`);
+  }
+  let raiz = datos;
+  if (version < formato.version) {
+    const migrado = migrar(datos, version, formato);
+    if (!migrado.ok) return rechazoUnico("", migrado.mensaje);
+    raiz = migrado.datos;
   }
 
-  // 4. Estructura.
+  // 4. Estructura. Lo migrado pasa la misma lectura estricta.
   const estructura = new Problemas();
-  const documento = new Lector(estructura).documento(datos, version);
+  const documento = new Lector(estructura).documento(raiz, formato.version);
   if (estructura.hay) return rechazo(estructura);
 
   // 5 y 6. Ids y contadores.
@@ -505,9 +527,11 @@ export function deserializar(texto: string): ResultadoAbrir {
   revisarContadores(documento, ids, problemasContadores);
   if (problemasContadores.hay) return rechazo(problemasContadores);
 
-  // Varias hojas (D18): abre, las conserva y avisa. Va primero entre los
-  // avisos, así no queda escondido en "y N más". Las etapas 5 a 9 miran todas.
+  // El formato viejo (T22) y las varias hojas (D18) van primero entre los
+  // avisos, así no quedan escondidos en "y N más".
   const avisos = new Problemas();
+  if (version < formato.version) avisos.agregar("version", `El archivo es del formato ${version}: al guardarlo pasa al formato ${formato.version}`);
+  // Varias hojas: abre, las conserva y avisa. Las etapas 5 a 9 miran todas.
   const n = documento.hojas.length;
   if (n > 1) avisos.agregar("hojas", `Tiene ${n} hojas: solo se ve la primera`);
 
