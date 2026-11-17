@@ -44,6 +44,7 @@
     diagnostico = $bindable(),
     onprobararrastre,
     onprobarfase3b,
+    onmedircopia,
   }: {
     modo?: Modo;
     /** Zoom actual (1 = 100 %). */
@@ -74,6 +75,8 @@
     onprobararrastre?: () => void;
     /** «Probar la fase 3b» (cierre 3b, etapa 4). */
     onprobarfase3b?: () => void;
+    /** «Medir la copia (F1)» (T23). */
+    onmedircopia?: () => void;
   } = $props();
 
   const TAM = 18;
@@ -135,7 +138,7 @@
 
   {#if mostrarMenuDesarrollo(VERSION, import.meta.env.DEV)}
     <div class="grupo-final">
-      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} />
+      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} {onmedircopia} />
     </div>
   {/if}
 

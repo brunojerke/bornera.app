@@ -2,7 +2,8 @@
   // Menú de desarrollo (en `npm run dev` / `tauri dev` y en las prereleases):
   // elegir la escena de prueba, ver el contador de rendimiento (F3), apagar
   // optimizaciones para comparar cuánto aporta cada una, diagnosticar el
-  // arrastre (alpha.2) y «Probar la fase 3b» (cierre 3b, etapa 4).
+  // arrastre (alpha.2), «Probar la fase 3b» (cierre 3b, etapa 4) y «Medir la
+  // copia (F1)» (T23).
   import Wrench from "@lucide/svelte/icons/wrench";
   import Check from "@lucide/svelte/icons/check";
   import { CANTIDADES_BANCO } from "../render/banco";
@@ -17,6 +18,7 @@
     diagnostico = $bindable(),
     onprobararrastre,
     onprobarfase3b,
+    onmedircopia,
   }: {
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
@@ -26,6 +28,8 @@
     onprobararrastre?: () => void;
     /** Escenarios del banco de la checklist de la netbook, sin tocar la hoja (cierre 3b, etapa 4). */
     onprobarfase3b?: () => void;
+    /** «Medir la copia (F1)»: la parte síncrona de la copia de recuperación con 2000 + cables (T23). */
+    onmedircopia?: () => void;
   } = $props();
 
   const MODOS_ARRASTRE: { valor: ModoArrastreDiagnostico; texto: string }[] = [
@@ -45,6 +49,11 @@
   function probarFase3b() {
     abierto = false;
     onprobarfase3b?.();
+  }
+
+  function medirCopia() {
+    abierto = false;
+    onmedircopia?.();
   }
 
   let abierto = $state(false);
@@ -163,6 +172,10 @@
       <button role="menuitem" onclick={probarFase3b}>
         <span class="marca"></span>
         Probar la fase 3b…
+      </button>
+      <button role="menuitem" onclick={medirCopia}>
+        <span class="marca"></span>
+        Medir la copia (F1)…
       </button>
     </div>
   {/if}

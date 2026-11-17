@@ -23,6 +23,7 @@
   import DialogoSinGuardar from "./DialogoSinGuardar.svelte";
   import DialogoProbar from "./DialogoProbar.svelte";
   import { probarFase3b as correrFase3b } from "./probarFase3b";
+  import { medirCopia as correrMedirCopia } from "./medirCopia";
   import type { ProblemaArchivo } from "../core/io";
   import {
     atajoArchivo,
@@ -226,6 +227,25 @@
     }
   }
 
+  /**
+   * «Medir la copia (F1)» (T23, etapa 1a): la parte síncrona de la copia de
+   * recuperación con la escena de 2000 + cables, armada aparte. No toca la
+   * hoja ni su copia, así que no avisa de cambios sin guardar.
+   */
+  async function medirCopia() {
+    if (prueba?.corriendo || avisoProbar) return;
+    const titulo = "Medir la copia (F1)";
+    prueba = { titulo, corriendo: true, texto: "Medir la copia: preparando…" };
+    try {
+      const texto = await correrMedirCopia((t) => {
+        if (prueba) prueba.texto = `Medir la copia: ${t}…`;
+      });
+      prueba = { titulo, corriendo: false, texto };
+    } catch (e) {
+      prueba = { titulo, corriendo: false, texto: `La prueba falló: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
   function alCambiarSeleccion(r: ResumenSeleccion) {
     if (abrirAlSeleccionar(seleccion.cantidad, r.cantidad, propiedadesPlegadoPorUsuario)) propiedadesAbierto = true;
     seleccion = r;
@@ -325,6 +345,7 @@
     bind:diagnostico
     onprobararrastre={probarArrastre}
     onprobarfase3b={probarFase3b}
+    onmedircopia={medirCopia}
   />
   <main class="centro">
     <Paleta

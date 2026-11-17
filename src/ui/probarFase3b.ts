@@ -12,16 +12,12 @@
 
 import { crearEscenaBanco } from "../render/banco";
 import { corre, elegir, ESCENARIOS_500, evaluar, OBLIGATORIOS_CABLES, textoParaCopiar, type MedidaFase3b } from "./fase3b";
+// Motor del WebView o del navegador (Edg/…, Chrome/…), como en el banco.
+import { motor } from "./medirCopia";
 import { VERSION } from "./version";
 
 /** Deja respirar a la interfaz entre escenarios (y que se vea el progreso). */
 const respirar = () => new Promise((r) => setTimeout(r, 0));
-
-/** Motor del WebView o del navegador (Edg/…, Chrome/…), como en el banco. */
-function motor(): string {
-  const ua = navigator.userAgent;
-  return /Edg\/[\d.]+/.exec(ua)?.[0] ?? /Chrome\/[\d.]+/.exec(ua)?.[0] ?? /AppleWebKit\/[\d.]+/.exec(ua)?.[0] ?? ua;
-}
 
 /** El banco, cargado una vez (un archivo aparte que se pide la primera vez). */
 const cargarBanco = () => import("../../tests/bench/escenarios");
