@@ -156,6 +156,23 @@ describe("Historial: marca de guardado (T15a, D16-A)", () => {
     expect(h.modificado).toBe(false);
   });
 
+  it("con { modificado: true } (una copia recuperada, T23 D7): modificado, sin deshacer, y sigue así aunque se deshaga todo", () => {
+    const doc = crearDocumento(meta);
+    const h = new Historial(doc, { modificado: true });
+    expect(h.modificado).toBe(true);
+    expect(h.puedeDeshacer).toBe(false);
+    h.ejecutar(colocar(doc, lampara(0, 0)));
+    h.deshacer();
+    expect(h.modificado).toBe(true);
+    // Guardar con la pila vacía también lo deja sin cambios.
+    guardar(h);
+    expect(h.modificado).toBe(false);
+    h.rehacer();
+    expect(h.modificado).toBe(true);
+    h.deshacer();
+    expect(h.modificado).toBe(false);
+  });
+
   it("ejecutar marca cambios; guardar los quita", () => {
     const { doc, h } = nuevo();
     h.ejecutar(colocar(doc, lampara(0, 0)));

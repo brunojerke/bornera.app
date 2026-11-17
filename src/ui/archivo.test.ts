@@ -150,9 +150,9 @@ function preparar() {
     mostrado: () => p.mostrado,
     reemplazable: () => (p.puedeAbrir ? p.editor : null),
     documento: () => p.editor,
-    reemplazar: (documento) => {
+    reemplazar: (documento, opciones) => {
       p.reemplazos.push(documento);
-      p.editor = new Editor(documento);
+      p.editor = new Editor(documento, 0, opciones);
       p.mostrado = { editor: p.editor, esDocumento: true };
       return p.cuadroInmediato ? Promise.resolve() : new Promise<void>((r) => p.cuadros.push(r));
     },
@@ -1142,5 +1142,102 @@ describe("lineasProblemas", () => {
     const lineas = lineasProblemas(r.errores);
     expect(lineas).toHaveLength(11);
     expect(lineas.at(-1)).toBe("y 20 más");
+  });
+});
+
+describe("Recuperar una copia (T23, D2c-A)", () => {
+  const original = { nombre: "marcha.brn", ruta: "C:\\x\\marcha.brn" };
+
+  it("el documento queda con cambios, sin deshacer y sin archivo actual; el título lleva el nombre original", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    const r = await p.ops.recuperar(doc, original);
+    // La promesa del primer cuadro llega envuelta: si no, el await la esperaría.
+    expect(r?.cuadro).toBeInstanceOf(Promise);
+    expect(p.reemplazos).toEqual([doc]);
+    expect(p.editor.modificado).toBe(true);
+    expect(p.editor.puedeDeshacer).toBe(false);
+    expect(p.ops.archivoActual).toBeNull();
+    expect(p.ops.sugerido).toEqual(original);
+    expect(tituloVentana({ archivo: p.ops.nombreVisible, titulo: doc.meta.titulo, modificado: p.editor.modificado })).toBe("• marcha.brn — Bornera");
+  });
+
+  it("Guardar pregunta dónde, sugiriendo la ruta original; después queda como archivo actual", async () => {
+    const p = preparar();
+    await p.ops.recuperar(docRotados(), original);
+    expect(await p.ops.guardar()).toBe(true);
+    expect(p.archivos.llamadas).toEqual(["elegir C:\\x\\marcha.brn", "guardar C:\\x\\marcha.brn"]);
+    expect(p.ops.sugerido).toBeNull();
+    expect(p.ops.archivoActual?.nombre).toBe("C:\\x\\marcha.brn");
+    expect(p.editor.modificado).toBe(false);
+  });
+
+  it("sin archivo original (nunca se guardó), sugiere el nombre del título, como un documento nuevo", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    await p.ops.recuperar(doc, null);
+    expect(p.ops.nombreVisible).toBeNull();
+    await p.ops.guardar();
+    expect(p.archivos.llamadas[0]).toBe(`elegir ${nombreArchivo(doc.meta.titulo)}`);
+  });
+
+  it("si el original era .brn.json, Guardar lo escribe por líneas", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    await p.ops.recuperar(doc, { nombre: "x.brn.json", ruta: null });
+    await p.ops.guardar();
+    expect(new TextDecoder().decode(p.archivos.escritos[0]!.bytes)).toBe(serializarPorLineas(doc));
+  });
+
+  it("Abrir y Nuevo limpian el nombre sugerido", async () => {
+    const p = preparar();
+    p.respuesta = "noGuardar";
+    await p.ops.recuperar(docRotados(), original);
+    await p.ops.nuevo();
+    expect(p.ops.sugerido).toBeNull();
+    await p.ops.recuperar(docRotados(), original);
+    p.archivos.aAbrir = await archivo(docCables(), "Otro.brn");
+    await p.ops.abrir();
+    expect(p.ops.sugerido).toBeNull();
+    expect(p.ops.nombreVisible).toBe("Otro.brn");
+  });
+
+  it("con cambios a la vista, primero pregunta (como Abrir); Cancelar no recupera", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.respuesta = "cancelar";
+    expect(await p.ops.recuperar(docRotados(), original)).toBeNull();
+    expect(p.preguntas).toHaveLength(1);
+    expect(p.reemplazos).toEqual([]);
+  });
+
+  it("en Simular o en el banco no recupera", async () => {
+    const p = preparar();
+    p.puedeAbrir = false;
+    expect(await p.ops.recuperar(docRotados(), original)).toBeNull();
+    expect(p.reemplazos).toEqual([]);
+  });
+});
+
+describe("Exportar tal cual una copia que no abre (T23)", () => {
+  it("escribe el texto crudo, sin validar, a «<nombre> (copia de recuperación).brn.json»", async () => {
+    const p = preparar();
+    expect(await p.ops.exportarTexto("{roto", "marcha.brn")).toBe(true);
+    expect(p.archivos.llamadas).toEqual(["elegir marcha (copia de recuperación).brn.json", "guardar marcha (copia de recuperación).brn.json"]);
+    expect(p.archivos.formatos).toEqual(["brnJson"]);
+    expect(new TextDecoder().decode(p.archivos.escritos[0]!.bytes)).toBe("{roto");
+    expect(p.avisos).toEqual(["Copia exportada tal cual"]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("Cancelar en el diálogo no escribe; un error se muestra", async () => {
+    const p = preparar();
+    p.archivos.eleccion = null;
+    expect(await p.ops.exportarTexto("x", "Sin título")).toBe(false);
+    expect(p.archivos.escritos).toEqual([]);
+    p.archivos.eleccion = undefined;
+    p.archivos.falla = new Error("disco lleno");
+    expect(await p.ops.exportarTexto("x", "Sin título")).toBe(false);
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoGuardar, problemas: [{ donde: "", mensaje: "disco lleno" }] }]);
   });
 });

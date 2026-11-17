@@ -161,6 +161,21 @@ export class Autoguardado {
   }
 
   /**
+   * Una copia propia lo antes posible, como si vencieran los 60 s (después de
+   * Recuperar, T23): hasta que quede escrita, la copia ajena recuperada es la
+   * única. La copia propia que hubiera era de otro documento.
+   */
+  copiarPronto(): void {
+    if (this.estado.apagado || this.cerrando) return;
+    this.estado.hayCopia = false;
+    this.copiado = null;
+    const t = this.deps.ahora();
+    this.ultimoCambio = t - SIN_COMANDOS_MS;
+    this.pendienteDesde = t - MAXIMO_SIN_COPIA_MS;
+    this.rearmar();
+  }
+
+  /**
    * Cerrar la ventana (D2e): no copia más y borra la copia propia, esperando
    * hasta `tope` ms para que un IndexedDB colgado no trabe el cierre.
    */

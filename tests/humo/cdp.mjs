@@ -155,10 +155,22 @@ export class Pagina {
     throw new Error(`No se cumplió a tiempo: ${expresion}`);
   }
 
-  /** Carga la app de cero (documento vacío) en 1024×600 y espera a que el lienzo esté listo. */
-  async abrir(url, ancho = 1024, alto = 600) {
+  /**
+   * Carga la app de cero (documento vacío) en 1024×600 y espera a que el
+   * lienzo esté listo. Antes pasa por about:blank y borra IndexedDB del
+   * origen (T23): una copia de recuperación de la página anterior abriría el
+   * diálogo «Bornera no se cerró bien». Con `conservarCopias`, recarga sin
+   * borrar (las pruebas de recuperar).
+   */
+  async abrir(url, ancho = 1024, alto = 600, { conservarCopias = false } = {}) {
     this.errores = [];
     await this.cdp("Emulation.setDeviceMetricsOverride", { width: ancho, height: alto, deviceScaleFactor: 1, mobile: false });
+    if (!conservarCopias) {
+      // Primero se descarga la página: suelta sus candados y su conexión a la base.
+      await this.cdp("Page.navigate", { url: "about:blank" });
+      await this.esperarA(`location.href === "about:blank"`, 5000);
+      await this.cdp("Storage.clearDataForOrigin", { origin: new URL(url).origin, storageTypes: "indexeddb" });
+    }
     await this.cdp("Page.navigate", { url });
     await this.esperarA("!!globalThis.bornera?.editor?.vista");
     await esperar(100);

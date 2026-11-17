@@ -257,6 +257,19 @@ describe("Autoguardado: borrados (D2e, D2-A)", () => {
   });
 });
 
+describe("Autoguardado: después de Recuperar", () => {
+  it("copiarPronto: la copia sale enseguida, sin esperar los 10 s", async () => {
+    const { e, ag } = entorno();
+    e.ed = { documento: docPrueba(), cambios: 0, modificado: true };
+    ag.alCambiar();
+    ag.copiarPronto();
+    await e.pasar(0);
+    await e.terminar();
+    expect(ag.estado.hayCopia).toBe(true);
+    expect(await e.texto()).toBe(serializar(e.ed.documento));
+  });
+});
+
 describe("Autoguardado: fallos y salida de emergencia", () => {
   it("si falla la escritura: un aviso, una vez, y reintenta a los 10 s", async () => {
     let fallas = 2;

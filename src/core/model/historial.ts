@@ -23,13 +23,33 @@ export interface MarcaGuardado {
   readonly tope: Comando | null;
 }
 
+/**
+ * Marca de un documento que nunca se guardó tal como está (T23, D7: una copia
+ * recuperada). No es ningún comando, así que nunca está arriba de la pila: el
+ * documento queda modificado hasta que se guarde, aunque se deshaga todo.
+ */
+const NUNCA_GUARDADO = Symbol("nunca guardado");
+
+export interface OpcionesHistorial {
+  /** Arranca con cambios sin guardar y sin nada que deshacer (una copia recuperada, T23). */
+  modificado?: boolean;
+}
+
 export class Historial {
   private readonly hechos: Comando[] = [];
   private readonly deshechos: Comando[] = [];
-  /** Lo que estaba arriba de la pila en el último guardado; un historial nuevo arranca sin cambios. */
-  private marca: Comando | null = null;
+  /**
+   * Lo que estaba arriba de la pila en el último guardado. Un historial nuevo
+   * arranca sin cambios (null), salvo con `modificado` (NUNCA_GUARDADO).
+   */
+  private marca: Comando | null | typeof NUNCA_GUARDADO;
 
-  constructor(readonly documento: Documento) {}
+  constructor(
+    readonly documento: Documento,
+    opciones: OpcionesHistorial = {},
+  ) {
+    this.marca = opciones.modificado ? NUNCA_GUARDADO : null;
+  }
 
   get puedeDeshacer(): boolean {
     return this.hechos.length > 0;

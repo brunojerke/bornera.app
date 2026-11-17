@@ -68,8 +68,12 @@ export function registroCopia(
   return { id, esquema: 1, ...partes, archivo, titulo: doc.meta.titulo, componentes, fecha, version };
 }
 
-/** Lo que da leer una copia: el texto unido, o por qué no se puede. */
-export type CopiaLeida = { ok: true; registro: RegistroCopia; texto: string } | { ok: false; problema: string };
+/**
+ * Lo que da leer una copia: el texto unido, o por qué no se puede. Si hay
+ * registro pero los trozos no dan, `parcial` trae lo que hay unido (para
+ * exportarlo tal cual).
+ */
+export type CopiaLeida = { ok: true; registro: RegistroCopia; texto: string } | { ok: false; problema: string; parcial?: string };
 
 /**
  * Las copias guardadas. Cada escritura hace su parte síncrona al llamarla
@@ -86,18 +90,20 @@ export interface AlmacenCopias {
   listar(): Promise<RegistroCopia[]>;
   /** Borra el registro y todos los trozos de `id` (completos o no). */
   borrar(id: string): Promise<void>;
+  /** Los ids que tienen trozos (con copia completa o no), sin las mediciones. */
+  idsConTrozos(): Promise<string[]>;
   cerrar(): void;
 }
 
 /** Une los trozos de una copia y comprueba que estén todos y que el largo dé. */
 export function unirTrozos(registro: RegistroCopia, trozos: readonly Trozo[]): CopiaLeida {
   const orden = trozos.filter((t) => t.generacion === registro.generacion).sort((a, b) => a.n - b.n);
-  if (orden.length !== registro.trozos || orden.some((t, i) => t.n !== i)) {
-    return { ok: false, problema: `Faltan trozos de la copia: hay ${orden.length} de ${registro.trozos}` };
-  }
   const texto = orden.map((t) => t.texto).join("");
+  if (orden.length !== registro.trozos || orden.some((t, i) => t.n !== i)) {
+    return { ok: false, problema: `Faltan trozos de la copia: hay ${orden.length} de ${registro.trozos}`, parcial: texto };
+  }
   if (texto.length !== registro.caracteres) {
-    return { ok: false, problema: `La copia tiene ${texto.length} caracteres y tendría que tener ${registro.caracteres}` };
+    return { ok: false, problema: `La copia tiene ${texto.length} caracteres y tendría que tener ${registro.caracteres}`, parcial: texto };
   }
   return { ok: true, registro, texto };
 }
@@ -134,6 +140,12 @@ export interface Candados {
   tomarPropio(id: string): void;
   /** Los ids con el candado tomado ahora (por esta u otra instancia viva), sin tomar nada. */
   conDueno(): Promise<Set<string>>;
+  /**
+   * Si el candado de `id` está libre (su instancia murió), lo toma y devuelve
+   * cómo soltarlo; si tiene dueño, null. Mientras se retiene, otra instancia
+   * no ofrece esa copia.
+   */
+  retener(id: string): Promise<(() => void) | null>;
 }
 
 /** Candados de Web Locks; null si `navigator.locks` no está (contexto no seguro o motor viejo). */
@@ -149,6 +161,18 @@ export function candadosWebLocks(locks: LockManager | undefined = globalThis.nav
       for (const l of estado.held ?? []) if (l.name?.startsWith("bornera-copia-")) ids.add(l.name.slice("bornera-copia-".length));
       return ids;
     },
+    retener(id) {
+      return new Promise((resolver) => {
+        void locks.request(candado(id), { ifAvailable: true }, (lock) => {
+          if (!lock) {
+            resolver(null);
+            return undefined;
+          }
+          // El candado dura lo que esta promesa: se suelta al llamar a `soltar`.
+          return new Promise<void>((soltar) => resolver(() => soltar()));
+        });
+      });
+    },
   };
 }
 
@@ -161,6 +185,11 @@ export function candadosMemoria(vivos = new Set<string>()): Candados & { vivos: 
     },
     conDueno() {
       return Promise.resolve(new Set(vivos));
+    },
+    retener(id) {
+      if (vivos.has(id)) return Promise.resolve(null);
+      vivos.add(id);
+      return Promise.resolve(() => void vivos.delete(id));
     },
   };
 }
@@ -204,6 +233,9 @@ export function almacenMemoria(opciones: OpcionesMemoria = {}): AlmacenCopias & 
       registros.delete(id);
       trozos = trozos.filter((t) => t.id !== id);
       return Promise.resolve();
+    },
+    idsConTrozos() {
+      return Promise.resolve([...new Set(trozos.map((t) => t.id))].filter((id) => !id.startsWith(PREFIJO_MEDICION)));
     },
     cerrar() {},
   };
@@ -297,6 +329,12 @@ export function almacenIndexedDB(base: IDBDatabase): AlmacenCopias {
       tx.objectStore(ALMACEN_COPIAS).delete(id);
       tx.objectStore(ALMACEN_TROZOS).delete(rangoTrozos(id));
       return terminada(tx);
+    },
+    async idsConTrozos() {
+      // Solo las claves ([id, generacion, n]), sin leer los textos.
+      const tx = base.transaction(ALMACEN_TROZOS, "readonly");
+      const claves = (await resultado(tx.objectStore(ALMACEN_TROZOS).getAllKeys())) as [string, number, number][];
+      return [...new Set(claves.map((k) => k[0]))].filter((id) => !id.startsWith(PREFIJO_MEDICION));
     },
     cerrar() {
       base.close();

@@ -109,8 +109,12 @@ export interface DependenciasArchivo {
   reemplazable(): EditorDocumento | null;
   /** El editor del documento, siempre (aunque se vea una escena del banco): lo guarda el cierre. */
   documento(): EditorDocumento;
-  /** Pone este documento en un editor nuevo (D19-A). Se cumple con el primer cuadro dibujado. */
-  reemplazar(documento: Documento): Promise<void>;
+  /**
+   * Pone este documento en un editor nuevo (D19-A). Se cumple con el primer
+   * cuadro dibujado. Con `modificado`, el editor arranca con cambios sin
+   * guardar y sin nada que deshacer (una copia recuperada, T23).
+   */
+  reemplazar(documento: Documento, opciones?: { modificado?: boolean }): Promise<void>;
   /** Diálogo de cambios sin guardar del documento `nombre` (D13-A). */
   preguntarSinGuardar(nombre: string): Promise<RespuestaSinGuardar>;
   /** El panel de propiedades confirma lo que se esté escribiendo. */
@@ -143,9 +147,18 @@ export const AVISOS_ABRIR = {
 /** Aviso de la barra de estado cuando no se puede cerrar la ventana. */
 export const AVISO_CERRAR_EN_CURSO = "No se puede cerrar: hay una operación de archivo en curso";
 
+/** Aviso de la barra al exportar tal cual una copia que no abre (T23). */
+export const AVISO_EXPORTADO_TAL_CUAL = "Copia exportada tal cual";
+
 export class OperacionesArchivo {
   /** Archivo donde Guardar escribe sin preguntar; null en un documento nuevo. */
   private _archivoActual: Destino | null = null;
+  /**
+   * El archivo de una copia recuperada (T23, D2c): no es el actual (Guardar
+   * pregunta dónde), pero da el nombre del título y lo que sugiere el diálogo.
+   * Se limpia al guardar, abrir o con Nuevo.
+   */
+  private _sugerido: Destino | null = null;
   private _enCurso = false;
   /** El diálogo de cambios sin guardar está abierto: otra Abrir o Nuevo no hace nada. */
   private preguntando = false;
@@ -156,6 +169,16 @@ export class OperacionesArchivo {
 
   get archivoActual(): Destino | null {
     return this._archivoActual;
+  }
+
+  /** El archivo de una copia recuperada, mientras no se guarde, abra otro o haga Nuevo (T23). */
+  get sugerido(): Destino | null {
+    return this._sugerido;
+  }
+
+  /** El nombre del archivo para el título y los diálogos: el actual o, si no hay, el de la copia recuperada. */
+  get nombreVisible(): string | null {
+    return this._archivoActual?.nombre ?? this._sugerido?.nombre ?? null;
   }
 
   /** Hay una operación de archivo en curso: las cuatro acciones no hacen nada. */
@@ -194,7 +217,7 @@ export class OperacionesArchivo {
     this.preguntando = true;
     let respuesta: RespuestaSinGuardar;
     try {
-      respuesta = await this.deps.preguntarSinGuardar(nombreDocumento(this._archivoActual?.nombre ?? null, editor.documento.meta.titulo));
+      respuesta = await this.deps.preguntarSinGuardar(nombreDocumento(this.nombreVisible, editor.documento.meta.titulo));
     } finally {
       this.preguntando = false;
     }
@@ -233,8 +256,16 @@ export class OperacionesArchivo {
     try {
       const inicio = this.deps.ahora();
       let destino = esDocumento && !como && !exportar ? this._archivoActual : null;
+      // Una copia recuperada (T23): el diálogo sugiere su archivo original.
+      const sugerido = esDocumento && !exportar ? this._sugerido : null;
       // El formato que se espera antes del diálogo; el nombre elegido puede cambiarlo.
-      const previsto: FormatoArchivo = exportar ? "brnJson" : destino ? formatoDeNombre(destino.nombre) : "brn";
+      const previsto: FormatoArchivo = exportar
+        ? "brnJson"
+        : destino
+          ? formatoDeNombre(destino.nombre)
+          : sugerido
+            ? formatoDeNombre(sugerido.nombre)
+            : "brn";
       let texto = textoDe(editor.documento, previsto);
       // Exportar no toca la marca: es una copia.
       const marca = exportar ? null : editor.tomarMarca();
@@ -246,7 +277,8 @@ export class OperacionesArchivo {
       // D20: el tiempo se corta durante el diálogo de dónde guardar.
       let ms = this.deps.ahora() - inicio;
       if (!destino) {
-        destino = await this.deps.archivos.elegirDestino(nombreArchivo(editor.documento.meta.titulo, previsto), exportar ? "brnJson" : "brn");
+        const propuesta = sugerido ? (sugerido.ruta ?? sugerido.nombre) : nombreArchivo(editor.documento.meta.titulo, previsto);
+        destino = await this.deps.archivos.elegirDestino(propuesta, exportar ? "brnJson" : "brn");
         if (!destino) return false;
       }
       const escribiendo = this.deps.ahora();
@@ -265,6 +297,7 @@ export class OperacionesArchivo {
       }
       if (esDocumento && marca) {
         this._archivoActual = destino;
+        this._sugerido = null;
         editor.marcarGuardado(marca);
       }
       this.deps.avisar(avisoGuardado(comprimido, tiempo));
@@ -317,7 +350,51 @@ export class OperacionesArchivo {
     if (!editor || this._enCurso) return;
     void this.deps.reemplazar(documentoNuevo());
     this._archivoActual = null;
+    this._sugerido = null;
     this.alCambiar?.();
+  }
+
+  /**
+   * Recuperar una copia (T23, D2c-A): el documento pasa a ser el de la copia,
+   * con cambios sin guardar y el historial vacío. No queda archivo actual:
+   * Guardar pregunta dónde, sugiriendo `archivo` (el original), que también da
+   * el nombre del título. Si el documento a la vista tiene cambios, primero
+   * el diálogo de cambios sin guardar, como Abrir. Devuelve la promesa del
+   * primer cuadro, o null si no se reemplazó (otra operación, Simular, el
+   * banco o Cancelar).
+   */
+  async recuperar(documento: Documento, archivo: Destino | null): Promise<{ cuadro: Promise<void> } | null> {
+    const editor = await this.antesDeReemplazar();
+    if (!editor || this._enCurso) return null;
+    const cuadro = this.deps.reemplazar(documento, { modificado: true });
+    this._archivoActual = null;
+    this._sugerido = archivo;
+    this.alCambiar?.();
+    // En un objeto: una función async que devuelve una promesa la espera.
+    return { cuadro };
+  }
+
+  /**
+   * Exportar tal cual el texto de una copia que no abre (T23, D2c): sin
+   * validar ni cambiar nada, a un `.brn.json` que se elige. Devuelve si se
+   * escribió.
+   */
+  async exportarTexto(texto: string, nombre: string): Promise<boolean> {
+    if (this._enCurso) return false;
+    this.empezar();
+    try {
+      const base = nombre.replace(/\.brn(\.json)?$/i, "");
+      const destino = await this.deps.archivos.elegirDestino(nombreArchivo(`${base} (copia de recuperación)`, "brnJson"), "brnJson");
+      if (!destino) return false;
+      await this.deps.archivos.guardar(destino, new TextEncoder().encode(texto));
+      this.deps.avisar(AVISO_EXPORTADO_TAL_CUAL);
+      return true;
+    } catch (e) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoGuardar, [{ donde: "", mensaje: textoError(e, "escribir") }]);
+      return false;
+    } finally {
+      this.terminar();
+    }
   }
 
   /**
@@ -363,6 +440,7 @@ export class OperacionesArchivo {
     }
     const cuadro = this.deps.reemplazar(r.documento);
     this._archivoActual = { nombre: elegido.nombre, ruta: elegido.ruta };
+    this._sugerido = null;
     return { cuadro, avisos: r.avisos, inicio };
   }
 
@@ -379,7 +457,7 @@ export class OperacionesArchivo {
     this.preguntando = true;
     let respuesta: RespuestaSinGuardar;
     try {
-      respuesta = await this.deps.preguntarSinGuardar(nombreDocumento(this._archivoActual?.nombre ?? null, editor.documento.meta.titulo));
+      respuesta = await this.deps.preguntarSinGuardar(nombreDocumento(this.nombreVisible, editor.documento.meta.titulo));
     } finally {
       this.preguntando = false;
     }

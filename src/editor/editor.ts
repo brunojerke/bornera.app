@@ -111,7 +111,7 @@ import {
 } from "../core/model/documento";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import type { MotivoSinArrastre } from "../core/model/etiquetado";
-import { Historial, type MarcaGuardado } from "../core/model/historial";
+import { Historial, type MarcaGuardado, type OpcionesHistorial } from "../core/model/historial";
 import { problemasPegado, recortar, recorteVacio, type Recorte } from "../core/model/portapapeles";
 import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
@@ -466,8 +466,10 @@ export class Editor {
     readonly documento: Documento = documentoNuevo(),
     /** Índice de la hoja que se dibuja. */
     readonly hoja = 0,
+    /** `modificado`: una copia recuperada, con cambios sin guardar y sin nada que deshacer (T23, D7). */
+    opciones: OpcionesHistorial = {},
   ) {
-    this.historial = new Historial(documento);
+    this.historial = new Historial(documento, opciones);
     this.etiquetas = new EtiquetasHoja(documento, hoja);
     this.referencias = new ReferenciasHoja(documento, hoja);
     const h = documento.hojas[hoja];

@@ -148,7 +148,8 @@ async function main() {
       };
       try {
         await pagina.abrir(url);
-        await conLimite(prueba.default(pagina, comprobar, { cargar }), LIMITE_PRUEBA_MS, "La prueba no terminó a tiempo.");
+        // `url`: para volver a cargar la app (T23 la recarga conservando las copias).
+        await conLimite(prueba.default(pagina, comprobar, { cargar, url }), LIMITE_PRUEBA_MS, "La prueba no terminó a tiempo.");
       } catch (e) {
         comprobar("la prueba terminó sin errores", false, e instanceof Error ? e.message : String(e));
       }

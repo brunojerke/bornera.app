@@ -106,7 +106,7 @@ Sale de `docs/plan-fase4.md` (T23, D2a–D2e, D5-A, F1 y sección 7). Fija el es
 - Título: **«Bornera no se cerró bien»**.
 - Con una copia: «Quedó una copia de recuperación de **marcha-parada.brn**, de hoy a las 11:32.» Botones **Recuperar** (el principal) y **Descartar**. Abajo: «Esc: decidir la próxima vez».
 - Con varias (D3-A): «Quedaron 2 copias de recuperación:» y una fila por copia, la más nueva primero: «**marcha-parada.brn** · hoy 11:32 · 42 componentes», con [Recuperar] [Descartar].
-- Sin archivo: el título del documento sin extensión, **«Sin título»** en uno nuevo, y «· nunca se guardó».
+- Sin archivo: el título del documento sin extensión, **«Sin título»** en uno nuevo, y «(nunca se guardó)» en la frase de una copia, o «· nunca se guardó» en las filas.
 - Fechas: «hoy a las 11:32», «ayer a las 18:05», «el 12/11 a las 09:40».
 
 **Copia que no abre:** título **«No se pudo recuperar»**, la lista de `lineasProblemas` y los botones **Exportar tal cual…** (escribe el `texto` crudo a un `.brn.json` elegido, sin validar), **Descartar** y **Cerrar** (Esc: queda para el próximo arranque).
@@ -255,6 +255,14 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
     - Cada instancia ve los candados de las dos, y la 1.ª lee en IndexedDB lo que escribió la 2.ª.
     - **El proceso de WebView2 (el «browser») es hijo de la 1.ª Bornera**, y el renderer de la 2.ª cuelga de él; la 2.ª no tiene proceso de WebView2 propio. Cortar el árbol de la 1.ª probablemente tira la página de la 2.ª. Lo decide la prueba a mano.
     - WebView2 deja compartir el perfil solo si las dos instancias tienen las mismas opciones: una 2.ª instancia sin el argumento de depuración no abrió su página. En el uso normal todas tienen las mismas. `f1-webview2.mjs` ya pide que no haya otra Bornera abierta.
+  - **S2 y S3 a mano: pasan** (Bruno, 2026-11-17, PC, exe de release, «Finalizar tarea» sobre la app Bornera):
+    - **S3:** una instancia y Finalizar tarea. La copia de `uno.brn` queda «sin dueño» y abre.
+    - **S2:** con dos instancias, la copia de la que se corta queda «sin dueño».
+    - **Cortar la 1.ª no tiró la 2.ª**, que siguió editable e hizo su copia (paso más largo 1,0 ms, 2 pasos, 12,9 ms en total). El riesgo de WebView2 compartido no se dio en la PC; **se repite en la netbook en C4** (fila 3b de la checklist de `plan-fase4.md`).
+    - **Corte sin esperar:** queda la copia anterior («Sin título (nunca se guardó)», 2 componentes, abre) y se pierde solo el último cambio. Es lo esperado (D2b).
+    - **Cerrar con la X** borró la copia propia (D2e, adelantado de la etapa 3).
+    - S2 pasa, así que no hace falta el latido.
+    - Quedaron 3 copias viejas de prueba en el perfil de la PC: se descartan con el diálogo de la etapa 2.
 
 ### Etapa 1b — Copia por partes (Opus xhigh, núcleo)
 **Elegida (a) por partes** (Bruno, 2026-11-17), con 3 ajustes: el `put` también por partes, F1 por paso y la salida de los reinicios. Va antes que el resto de la etapa 1.
@@ -327,6 +335,36 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
 - `tests/humo/correr.mjs`:
   - Antes de cada prueba, `about:blank` y `Storage.clearDataForOrigin` (indexeddb), para que una copia de una prueba no abra el diálogo en la siguiente.
   - Les pasa a las pruebas `nuevaPestana()`.
+
+- **Hecho (2026-11-17).**
+  - **Núcleo (D7):** `Historial` con `{ modificado: true }`, con una marca `Symbol` que nunca está en la pila; el `Editor` lo pasa como tercer parámetro. Test en `historial.test.ts`.
+  - **`src/ui/recuperar.ts`:**
+    - `nombreVisible`, `fechaVisible` («hoy a las», «ayer a las», «el dd/mm a las») y `filaRecuperar`.
+    - `copiasParaOfrecer`: las completas ajenas sin dueño, la más nueva primero, con su candado **retenido** (`Candados.retener`, con `ifAvailable`).
+    - De paso borra los trozos sueltos de ids sin dueño y sin copia completa (sección 2; nunca una copia completa ni los de una instancia viva).
+    - `abrirCopia`, con la validación estricta de Abrir, el esquema y el texto (o lo que haya) para exportarlo tal cual.
+  - **`respaldo.ts`:** `retener`, `idsConTrozos` (solo las claves) y `parcial` en una lectura fallida.
+  - **`OperacionesArchivo`:**
+    - `sugerido` y `nombreVisible`: el título y el diálogo de cambios sin guardar usan el nombre original.
+    - Guardar pregunta dónde con la ruta original (o el nombre) y respeta `.brn.json`.
+    - El sugerido se limpia al guardar, con Abrir y con Nuevo.
+    - `recuperar(documento, archivo)` devuelve `{ cuadro }`: envuelto, porque una función async que devuelve una promesa la espera, y el humo lo encontró.
+    - `exportarTexto` escribe el texto crudo a «<nombre> (copia de recuperación).brn.json».
+  - **`DialogoRecuperar.svelte`** con los textos de la sección 5.
+    - En la frase de una sola copia, «(nunca se guardó)» va entre paréntesis; en las filas, «· nunca se guardó».
+    - Esc o Cerrar sueltan los candados y dejan las copias para el próximo arranque.
+  - **`Ventana`:**
+    - Ofrece las copias al abrir la base.
+    - Recuperar:
+      - Abre la copia, suelta las demás y pide `copiarPronto()`.
+      - La copia ajena se borra (y se suelta su candado) cuando la propia queda escrita o el documento se guarda.
+      - Muestra los avisos de abrir y «Recuperado (en N ms)».
+    - Una copia que no abre muestra «No se pudo recuperar» y ofrece Exportar tal cual.
+  - **Humo:**
+    - `Pagina.abrir` pasa por about:blank y borra IndexedDB del origen antes de cada carga; con `{ conservarCopias: true }` no borra. `correr.mjs` les pasa `url` a las pruebas.
+    - `t23` suma 20 comprobaciones del diálogo: una copia, sin archivo, Descartar, Esc, varias y rota con Exportar tal cual. En total, 33.
+  - **Adelantado de la etapa 3:** retener los candados mientras se decide y la limpieza de trozos sueltos al arrancar. **De la 4:** los casos del diálogo en el humo.
+  - Resultados: 2060 tests, check limpio y **humo entero 804/804**.
 
 ### Etapa 3 — Una copia por instancia y los borrados de D2e (Opus alto)
 - Solo se ofrecen copias sin dueño, reteniendo su candado mientras se decide.

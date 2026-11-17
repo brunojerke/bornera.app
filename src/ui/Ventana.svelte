@@ -27,13 +27,25 @@
   import { Autoguardado, avisoFallo } from "./autoguardado";
   import { abrirBase, almacenIndexedDB, candadosWebLocks, idInstancia, motivoFallo, type AlmacenCopias } from "./respaldo";
   import { textoCopias } from "./listaCopias";
+  import DialogoRecuperar from "./DialogoRecuperar.svelte";
+  import {
+    abrirCopia,
+    AVISO_DESCARTADA,
+    avisoRecuperado,
+    copiasParaOfrecer,
+    filaRecuperar,
+    type CopiaOfrecida,
+    type FilaRecuperar,
+  } from "./recuperar";
   import type { ProblemaArchivo } from "../core/io";
   import {
     atajoArchivo,
     atajoArchivoActua,
     esTeclaRecarga,
+    lineasProblemas,
     nombreDocumento,
     OperacionesArchivo,
+    TITULOS,
     tituloVentana,
     type AccionArchivo,
     type RespuestaSinGuardar,
@@ -92,6 +104,9 @@
   /** Editor de lo que muestra el lienzo: a él van las ediciones del panel. */
   let editorActivo = $state.raw<Editor | null>(null);
 
+  /** Los avisos dicen el tiempo: en desarrollo y en las prereleases (D20). */
+  const MEDIR = import.meta.env.DEV || ES_PRERELEASE;
+
   // ── Archivo (T15a) ───────────────────────────────────────────────────────
   // En el escritorio, diálogos nativos y escritura segura; en el navegador,
   // descargas y <input type="file">.
@@ -103,7 +118,7 @@
     // Abrir y Nuevo: solo en Editar y viendo el documento (D17).
     reemplazable: () => (puedeAbrir ? editorActivo : null),
     documento: () => lienzo.editorDelDocumento(),
-    reemplazar: (documento) => lienzo.reemplazarDocumento(new Editor(documento)),
+    reemplazar: (documento, opciones) => lienzo.reemplazarDocumento(new Editor(documento, 0, opciones)),
     preguntarSinGuardar: (nombre) =>
       new Promise((responder) => {
         sinGuardar?.responder("cancelar");
@@ -113,9 +128,10 @@
     mostrarProblemas: (titulo, problemas) => (dialogoArchivo = { titulo, problemas }),
     avisar,
     ahora: () => performance.now(),
-    medir: import.meta.env.DEV || ES_PRERELEASE,
+    medir: MEDIR,
   });
-  operaciones.alCambiar = () => (archivoActual = operaciones.archivoActual?.nombre ?? null);
+  // El nombre del título: el archivo actual o, después de Recuperar, el original de la copia (T23).
+  operaciones.alCambiar = () => (archivoActual = operaciones.nombreVisible);
 
   function accionArchivo(a: AccionArchivo) {
     if (a === "guardar") void operaciones.guardar();
@@ -159,7 +175,8 @@
           almacen,
           editor: () => lienzo.editorDelDocumento(),
           archivo: () => {
-            const a = operaciones.archivoActual;
+            // Después de Recuperar, el original de la copia (T23): una copia de la copia lo conserva.
+            const a = operaciones.archivoActual ?? operaciones.sugerido;
             return a ? { nombre: a.nombre, ruta: a.ruta } : null;
           },
           version: VERSION,
@@ -177,7 +194,15 @@
         };
         almacenCopias = almacen;
         autoguardado = ag;
+        ag.alCambiarEstado = revisarAdoptada;
         ag.alCambiar();
+        // D2c-A: las copias sin dueño, con su candado retenido mientras se decide.
+        void copiasParaOfrecer(almacen, candados, idPropio)
+          .then((ofrecidas) => {
+            if (montado) recuperables = ofrecidas;
+            else for (const o of ofrecidas) o.soltar();
+          })
+          .catch((e) => console.warn("No se pudieron leer las copias de recuperación", e));
         if (import.meta.env.DEV) {
           const global = (globalThis as Record<string, unknown>).bornera as Record<string, unknown> | undefined;
           if (global) Object.assign(global, { autoguardado: ag, respaldo: almacen, idInstancia: idPropio });
@@ -211,6 +236,100 @@
       prueba = { titulo, corriendo: false, texto };
     } catch (e) {
       prueba = { titulo, corriendo: false, texto: `No se pudieron leer las copias: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
+  // ── Recuperar al arrancar (T23, D2c-A) ───────────────────────────────────
+  /** Las copias sin dueño que ofrece el diálogo, con su candado retenido; vacío: sin diálogo. */
+  let recuperables = $state.raw<CopiaOfrecida[]>([]);
+  /** La copia que no abrió: sus problemas y su texto (si hay), para exportarlo tal cual. */
+  let copiaRota = $state.raw<{ ofrecida: CopiaOfrecida; lineas: string[]; texto: string | null } | null>(null);
+  let recuperando = $state(false);
+  /**
+   * La copia ajena recuperada: se borra (y se suelta su candado) cuando la
+   * copia propia queda escrita o el documento se guarda. Hasta entonces, si
+   * Bornera se corta, se vuelve a ofrecer.
+   */
+  let adoptada: CopiaOfrecida | null = null;
+  const filasRecuperar = $derived.by((): FilaRecuperar[] => {
+    const ahora = new Date();
+    return recuperables.map((o) => filaRecuperar(o.registro, ahora));
+  });
+
+  function revisarAdoptada() {
+    const a = adoptada;
+    const ag = autoguardado;
+    if (!a || !ag || !almacenCopias) return;
+    if (!ag.estado.hayCopia && lienzo.editorDelDocumento().modificado) return;
+    adoptada = null;
+    almacenCopias
+      .borrar(a.registro.id)
+      .catch((e) => console.warn("No se pudo borrar la copia recuperada", e))
+      .finally(() => a.soltar());
+  }
+
+  /** Cierra el diálogo; las copias que quedan se ofrecen en el próximo arranque. */
+  function cerrarRecuperar() {
+    for (const o of recuperables) o.soltar();
+    recuperables = [];
+    copiaRota = null;
+  }
+
+  async function recuperarCopia(id: string) {
+    const o = recuperables.find((x) => x.registro.id === id);
+    if (!o || !almacenCopias || recuperando) return;
+    recuperando = true;
+    try {
+      const abierta = await abrirCopia(almacenCopias, id);
+      if (!abierta.ok) {
+        copiaRota = { ofrecida: o, lineas: lineasProblemas(abierta.problemas), texto: abierta.texto };
+        return;
+      }
+      const inicio = performance.now();
+      const recuperado = await operaciones.recuperar(abierta.documento, o.registro.archivo);
+      if (!recuperado) {
+        avisar("No se pudo recuperar ahora: hay otra operación en curso");
+        return;
+      }
+      // Las demás quedan para el próximo arranque.
+      for (const x of recuperables) if (x !== o) x.soltar();
+      recuperables = [];
+      copiaRota = null;
+      adoptada = o;
+      autoguardado?.copiarPronto();
+      if (abierta.avisos.length > 0) dialogoArchivo = { titulo: TITULOS.seAbrioConAvisos, problemas: abierta.avisos };
+      await recuperado.cuadro;
+      avisar(avisoRecuperado(MEDIR ? Math.round(performance.now() - inicio) : null));
+    } finally {
+      recuperando = false;
+    }
+  }
+
+  async function descartarCopia(id: string) {
+    const o = recuperables.find((x) => x.registro.id === id);
+    if (!o || !almacenCopias || recuperando) return;
+    recuperando = true;
+    try {
+      await almacenCopias.borrar(id);
+      o.soltar();
+      recuperables = recuperables.filter((x) => x !== o);
+      if (copiaRota?.ofrecida === o) copiaRota = null;
+      avisar(AVISO_DESCARTADA);
+    } catch (e) {
+      avisar(avisoFallo(e));
+    } finally {
+      recuperando = false;
+    }
+  }
+
+  async function exportarCopia(id: string) {
+    const r = copiaRota;
+    if (!r || r.ofrecida.registro.id !== id || r.texto === null || recuperando) return;
+    recuperando = true;
+    try {
+      await operaciones.exportarTexto(r.texto, filaRecuperar(r.ofrecida.registro).nombre);
+    } finally {
+      recuperando = false;
     }
   }
 
@@ -480,6 +599,24 @@
 
 {#if prueba}
   <DialogoDiagnostico titulo={prueba.titulo} corriendo={prueba.corriendo} texto={prueba.texto} oncerrar={() => (prueba = null)} />
+{/if}
+
+{#if recuperables.length > 0}
+  <DialogoRecuperar
+    copias={filasRecuperar}
+    rota={copiaRota
+      ? {
+          fila: filaRecuperar(copiaRota.ofrecida.registro),
+          lineas: copiaRota.lineas,
+          puedeExportar: copiaRota.texto !== null,
+        }
+      : null}
+    ocupado={recuperando}
+    onrecuperar={recuperarCopia}
+    ondescartar={descartarCopia}
+    onexportar={exportarCopia}
+    oncerrar={cerrarRecuperar}
+  />
 {/if}
 
 {#if dialogoArchivo}

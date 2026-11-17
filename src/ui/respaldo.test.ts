@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { documentosDePrueba } from "../core/io/prueba-documentos";
-import { abrirBase, almacenMemoria, registroCopia, unirTrozos, type RegistroCopia, type Trozo } from "./respaldo";
+import { abrirBase, almacenMemoria, candadosMemoria, motivoFallo, registroCopia, unirTrozos, type RegistroCopia, type Trozo } from "./respaldo";
 
 const registro = (generacion: number, trozos: number, caracteres: number): RegistroCopia => ({
   id: "a",
@@ -43,12 +43,20 @@ describe("unirTrozos", () => {
     expect(r).toEqual({ ok: true, registro: registro(2, 3, 6), texto: "abcdef" });
   });
 
-  it("si falta un trozo, es una copia que no abre", () => {
-    expect(unirTrozos(registro(2, 3, 6), [trozo(2, 0, "ab"), trozo(2, 2, "ef")])).toEqual({ ok: false, problema: "Faltan trozos de la copia: hay 2 de 3" });
+  it("si falta un trozo, es una copia que no abre (con lo que hay, para exportarlo tal cual)", () => {
+    expect(unirTrozos(registro(2, 3, 6), [trozo(2, 0, "ab"), trozo(2, 2, "ef")])).toEqual({
+      ok: false,
+      problema: "Faltan trozos de la copia: hay 2 de 3",
+      parcial: "abef",
+    });
   });
 
   it("si el largo no da, también", () => {
-    expect(unirTrozos(registro(2, 1, 5), [trozo(2, 0, "abc")])).toEqual({ ok: false, problema: "La copia tiene 3 caracteres y tendría que tener 5" });
+    expect(unirTrozos(registro(2, 1, 5), [trozo(2, 0, "abc")])).toEqual({
+      ok: false,
+      problema: "La copia tiene 3 caracteres y tendría que tener 5",
+      parcial: "abc",
+    });
   });
 });
 
@@ -71,6 +79,32 @@ describe("almacenMemoria (la misma conducta que el de IndexedDB)", () => {
     await a.borrar("a");
     expect(await a.listar()).toEqual([]);
     expect(a.trozos.map((t) => t.id)).toEqual(["b"]);
+  });
+});
+
+describe("idsConTrozos y candados en memoria", () => {
+  it("idsConTrozos da cada id una vez, con copia completa o no, sin las mediciones", async () => {
+    const a = almacenMemoria();
+    for (const t of [trozo(1, 0, "x"), trozo(1, 1, "y"), trozo(2, 0, "z", "b"), trozo(1, 0, "m", "medicion-1")]) await a.escribirTrozo(t);
+    expect((await a.idsConTrozos()).sort()).toEqual(["a", "b"]);
+  });
+
+  it("retener: null si tiene dueño; si no, lo toma hasta soltarlo", async () => {
+    const c = candadosMemoria(new Set(["vivo"]));
+    expect(await c.retener("vivo")).toBeNull();
+    const soltar = await c.retener("muerto");
+    expect(soltar).not.toBeNull();
+    expect(await c.retener("muerto")).toBeNull();
+    soltar!();
+    expect(await c.retener("muerto")).not.toBeNull();
+  });
+});
+
+describe("motivoFallo", () => {
+  it("espacio, el mensaje del error, o IndexedDB no disponible", () => {
+    expect(motivoFallo(new DOMException("x", "QuotaExceededError"))).toBe("no hay espacio en el disco");
+    expect(motivoFallo(new Error("se cerró"))).toBe("se cerró");
+    expect(motivoFallo(undefined)).toBe("IndexedDB no está disponible");
   });
 });
 
