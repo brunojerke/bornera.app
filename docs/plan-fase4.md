@@ -157,6 +157,21 @@ Cómo se prueba:
 - **Resultado:**
   - Se queda si se cumplen (a) y (b), o solo (b) cuando (a) no decide.
   - Si no, se revierte y se hace una pasada de calentamiento, medida igual.
+- **Resultado (2026-11-17):** no se queda. Falla (b): en caliente, B3, B6, B8, B11 y B16 suben entre 38 y 100 %. Detalle en `docs/bench.md`.
+- **Pasada de calentamiento** (Bruno, 2026-11-17, fijada antes de medir):
+  - Corre solo la 1.ª vez que se usa «Probar» después de abrir la app.
+  - Recorre todos los escenarios B1–B16 sin medir, cada uno con **1 repetición** (más la de calentamiento propia del banco). Después viene la medición normal.
+  - El encabezado dice «Con calentamiento (N s)». El banco y los escenarios no cambian.
+  - Se juzga con la misma regla (a) contra el mismo exe «antes».
+  - Si las frías no quedan como las calientes, se prueba la pasada entera (las repeticiones normales) y se anotan las dos.
+- **Resultado del calentamiento (2026-11-17):** queda la **pasada entera**. Las dos pasadas tardan 13–14 s.
+  - (a) **no pasa** con ninguna de las dos, por máximos sueltos de B1, B3 y B4.
+  - La causa es conocida: esos máximos varían lo mismo entre corridas calientes. Por ejemplo, el máx. de B1 en caliente va de 46 a 57 ms.
+  - Lo que se buscaba sí desaparece: B8, B15 y B16 en frío quedan como en caliente.
+  - La prueba real es la netbook en C4. Detalle en `docs/bench.md`.
+- **Regla de las frías en C4** (Bruno, 2026-11-17, fijada antes de medir en la netbook):
+  - Una corrida fría pasa si cada fila queda dentro del rango de las calientes del mismo día (entre su mín. y su máx.), más un piso de 1 ms.
+  - Los máximos sueltos no deciden solos.
 
 ### T21. Exportar sin comprimir `.brn.json` (D4-C)
 - **Qué:**
@@ -274,7 +289,7 @@ Cómo se prueba:
 | C1 | «Probar la fase 4» en el menú de desarrollo: «Probar la fase 3b» más F1, F2, F3, K1 y K2, con «Copiar» | Opus alto |
 | C2 | `docs/netbook-fase4.md`: una hoja, la checklist de abajo | Sonnet |
 | C3 | `0.1.4-alpha.N` con la skill `bornera-release`. Tag y push con autorización | Opus alto |
-| C4 | Netbook (Bruno), y «Probar la fase 4» en la PC el mismo día para K1 y K2. Yo paso los números | Sonnet |
+| C4 | Netbook (Bruno), y «Probar la fase 4» en la PC el mismo día para K1 y K2. Yo paso los números. Las frías se juzgan con la regla de C4 (T20) | Sonnet |
 | C5 | `0.1.4`: probar lo que se publica. Ver los pasos abajo | Opus alto |
 | C6 | Docs (arquitectura: fase 4 cerrada y factores para la fase 5) y Obsidian | Sonnet |
 

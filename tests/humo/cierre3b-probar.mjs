@@ -121,6 +121,7 @@ export default async function (p, comprobar) {
   d = await dialogo();
   comprobar("el diálogo del resultado se titula «Probar la fase 3b»", d?.titulo === "Probar la fase 3b", String(d?.titulo));
   comprobar("encabezado con la versión y el lienzo", /^Probar la fase 3b · Bornera \d+\.\d+\.\d+\S* · .* · lienzo 1366×768 fuera de pantalla · \d+ s$/.test(texto.split("\n")[0]), texto.split("\n")[0]);
+  comprobar("la 1.ª corrida tras abrir avisa «Con calentamiento (N s)» (T20)", / · Con calentamiento \(\d+ s\) · /.test(texto.split("\n")[0]), texto.split("\n")[0]);
   const filas = celdas(texto);
   comprobar(
     "B1 a B16 con #, escenario, medida y tope de la checklist",
@@ -152,6 +153,7 @@ export default async function (p, comprobar) {
     const segunda = await esperarTabla();
     info(`segunda corrida: ${(segunda.ms / 1000).toFixed(1)} s`);
     comprobar("la segunda corrida también da B1 a B16", celdas(segunda.texto).length === 16);
+    comprobar("la segunda corrida no vuelve a calentar", !/calentamiento/.test(segunda.texto.split("\n")[0]), segunda.texto.split("\n")[0]);
     await cerrarTabla();
   }
 }

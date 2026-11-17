@@ -26,6 +26,9 @@ function motor(): string {
 /** El banco, cargado una vez (un archivo aparte que se pide la primera vez). */
 const cargarBanco = () => import("../../tests/bench/escenarios");
 
+/** Si ya se calentó en este proceso (la 1.ª corrida tras abrir la app). */
+let calentado = false;
+
 /**
  * Corre los escenarios y devuelve lo que midió cada uno. `progreso` recibe
  * el nombre del escenario que empieza.
@@ -60,12 +63,22 @@ export async function medirFase3b(progreso: (escenario: string) => void = () => 
 /** Corre los escenarios y devuelve la tabla para copiar. */
 export async function probarFase3b(progreso: (escenario: string) => void = () => {}): Promise<string> {
   const inicio = performance.now();
+  // La 1.ª corrida tras abrir la app es una pasada entera sin medir (T20,
+  // docs/plan-fase4.md): en frío, el getImageData con el lienzo en GPU sumaba
+  // decenas de ms (B8, B15, B16; docs/bench.md). La corta (1 repetición)
+  // tardaba lo mismo.
+  let calentamiento = "";
+  if (!calentado) {
+    await medirFase3b((e) => progreso(`Calentando: ${e}`));
+    calentado = true;
+    calentamiento = `Con calentamiento (${Math.round((performance.now() - inicio) / 1000)} s) · `;
+  }
   const medidas = await medirFase3b(progreso);
   const banco = await cargarBanco();
   const segundos = Math.round((performance.now() - inicio) / 1000);
   const fecha = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
   const encabezado =
-    `Probar la fase 3b · Bornera ${VERSION} · ${fecha} · ${motor()} · ` +
+    `Probar la fase 3b · Bornera ${VERSION} · ${fecha} · ${motor()} · ${calentamiento}` +
     `lienzo ${banco.ANCHO}×${banco.ALTO} fuera de pantalla · ${segundos} s`;
   return textoParaCopiar(evaluar(medidas), encabezado);
 }

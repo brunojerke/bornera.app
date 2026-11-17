@@ -18,6 +18,52 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 
+## Línea base PC de «Probar la fase 3b» (fase 4, T20) — 2026-11-17
+
+**Regla escrita y commiteada antes de medir** (`ac3fded`, `docs/plan-fase4.md`, regla de D6b-C): piso de 1 ms, lentos ±1, B9 en el mismo escalón.
+
+**Cómo se midió:**
+- PC enchufada, en «Mejor rendimiento», con las apps cerradas. Edge 157 (WebView2), lienzo 1366×768 fuera de pantalla.
+- Todo en la misma sesión (8:05 a 8:26), sin reiniciar la PC.
+- Cada variante es un exe de `tauri build --no-bundle` desde `ac3fded`, con su cambio.
+- En cada variante, 2 aperturas de la app: la 1.ª corrida de cada apertura es fría (F) y la 2.ª caliente (C).
+- **Base de la fase:** las calientes de la pasada entera.
+
+**Variantes:**
+- **antes:** `ac3fded`, sin cambios.
+- **wRF:** `willReadFrequently: true` en `contexto()`.
+- **corta:** calentamiento de 1 repetición por escenario.
+- **entera:** calentamiento con las repeticiones normales (queda). Tiene una 3.ª caliente (C3).
+
+Valores en ms (en B8, % de cuadros > 16,7 ms; en B15, lentos). Cada celda tiene el formato «F1 · F2 | C1 · C2».
+
+| # | Medida | antes | wRF | corta | entera (C3) |
+|---|---|---|---|---|---|
+| B1 | paso: máx. | 43,6 · 48,0 \| 53,9 · 46,8 | 46,6 · 48,5 \| 47,0 · 44,9 | 55,8 · 55,2 \| 47,0 · 46,2 | 48,5 · 56,2 \| 50,7 · 46,0 (57,3) |
+| B1 | paso: mediana | 42,9 · 46,6 \| 45,2 · 45,2 | 42,4 · 45,8 \| 45,9 · 44,5 | 46,2 · 46,4 \| 45,7 · 44,9 | 46,0 · 47,6 \| 44,4 · 44,8 (45,3) |
+| B2 | deshacer: máx. | 11,9 · 9,9 \| 9,6 · 9,9 | 9,9 · 10,4 \| 9,9 · 9,7 | 8,9 · 12,1 \| 9,5 · 10,3 | 9,6 · 9,4 \| 9,5 · 9,4 (9,2) |
+| B3 | cuadros: máx. | 9,9 · 9,8 \| 9,7 · 9,6 | 15,3 · 16,3 \| 23,6 · 15,3 | 12,6 · 9,8 \| 9,7 · 9,7 | 11,3 · 9,6 \| 9,7 · 9,6 (13,1) |
+| B4 | paso: máx. | 6,6 · 6,4 \| 7,0 · 6,2 | 7,5 · 13,2 \| 7,1 · 6,6 | 6,8 · 6,9 \| 6,7 · 6,4 | 7,1 · 8,6 \| 6,7 · 6,7 (7,1) |
+| B6 | cuadros: máx. | 8,5 · 6,9 \| 6,7 · 7,9 | 10,2 · 11,1 \| 9,8 · 10,9 | 9,0 · 8,2 \| 8,3 · 7,9 | 8,3 · 7,2 \| 6,9 · 8,4 (6,8) |
+| B8 | cuadros: máx.; % | 68,3; 15,8 · 74,2; 15,8 \| 4,4 · 4,1 | 6,6 · 6,8 \| 5,9 · 5,8 | 4,3 · 4,4 \| 4,2 · 4,1 | 4,2 · 4,3 \| 4,3 · 4,2 (4,3) |
+| B10 | por gesto | 22,5 · 22,5 \| 22,6 · 24,3 | 24,0 · 25,4 \| 24,0 · 25,2 | 21,8 · 22,0 \| 22,7 · 23,2 | 21,6 · 22,0 \| 22,0 · 23,3 (21,3) |
+| B11 | cuadros: máx. | 9,0 · 9,0 \| 9,1 · 10,8 | 15,4 · 16,2 \| 15,3 · 15,6 | 9,3 · 9,0 \| 9,0 · 9,1 | 8,9 · 9,1 \| 9,0 · 11,2 (8,8) |
+| B15 | lentos; máx. | 2; 17,6 · 0; 15,9 \| 0; 6,1 · 0; 7,2 | 0; 7,9 · 0; 7,6 \| 0; 7,2 · 0; 7,9 | 0; 5,9 · 0; 6,0 \| 0; 6,9 · 0; 6,3 | 0; 6,3 · 0; 5,7 \| 0; 6,5 · 0; 6,3 (0; 6,0) |
+| B16 | por gesto | 98,0 · 96,1 \| 10,0 · 9,0 | 15,7 · 16,8 \| 14,8 · 15,1 | 9,1 · 8,7 \| 10,0 · 9,5 | 9,1 · 8,8 \| 8,8 · 8,8 (8,1) |
+
+- **B5, B7, B9, B12, B13 y B14** quedan igual en todas las variantes, dentro del piso. B9 da N = 500 en todas.
+- **Calentamiento:** 13 y 14 s con la corta, 14 y 13 s con la entera. El tiempo se va en armar las escenas, no en las repeticiones. En la netbook, con ×3 a ×5,5, serían unos 40 a 75 s más en la primera corrida.
+
+**Resultado:**
+- **wRF no se queda: falla (b).**
+  - En caliente, B3, B6, B8, B11 y B16 suben entre 38 y 100 % contra «antes».
+  - El lienzo pasa a la CPU y todos los cuadros se rasterizan más lento.
+  - Saca el frío (B8 de 68–74 a 6,7 ms; B16 de 96–98 a 16 ms) a costa de alejarse de la app, que dibuja en GPU.
+- **El calentamiento entero queda.** B8, B15 y B16 en frío ya dan como en caliente.
+  - Según la regla tal como estaba escrita, (a) no pasa ni con la corta ni con la entera: fallan máximos sueltos de B1, B3 y B4 (+16 a +30 %).
+  - La causa es conocida: esos máximos varían lo mismo sin frío de por medio.
+- **Ruido de referencia:** el máx. de B1 en las 7 corridas calientes del día con el lienzo en GPU (antes, corta y entera; sin wRF) da 53,9, 46,8, 47,0, 46,2, 50,7, 46,0 y 57,3 ms. Va de 46 a 57 ms, un ±11 % alrededor de 51. Un máx. suelto no alcanza para decidir; por eso C4 juzga las frías por el rango de las calientes (`docs/plan-fase4.md`).
+
 ## Cierre de la fase 3b, contra `v0.1.3` — 2026-11-16
 
 **Criterios escritos antes de la primera corrida (15:29)**: plan de cierre, sección 6, con los ajustes de Bruno al aprobar la etapa 3. No se cambian después de ver los números.
