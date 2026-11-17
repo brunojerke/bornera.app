@@ -44,6 +44,7 @@
     diagnostico = { modo: "auto", sonda: false },
     onseleccion,
     onaviso,
+    oncambiodocumento,
   }: {
     /** Zoom actual (1 = 100 %). Solo lectura desde afuera. */
     zoom?: number;
@@ -87,6 +88,12 @@
     onseleccion?: (resumen: ResumenSeleccion) => void;
     /** Una acción que no se pudo hacer (para la barra de estado). */
     onaviso?: (texto: string) => void;
+    /**
+     * Cambió el historial del editor del documento (un comando, deshacer,
+     * rehacer, la marca de guardado) o el documento mismo (Abrir, Nuevo). Lo
+     * usa el autoguardado (T23); las escenas del banco no avisan.
+     */
+    oncambiodocumento?: () => void;
   } = $props();
 
   let canvas: HTMLCanvasElement;
@@ -136,6 +143,7 @@
       if (ed === editorDocumento) {
         modificado = ed.modificado;
         tituloDocumento = ed.documento.meta.titulo;
+        oncambiodocumento?.();
       }
     };
     historial();
@@ -246,6 +254,16 @@
     return editor?.enGesto ?? false;
   }
 
+  /**
+   * La copia de recuperación espera (T23, D1): un gesto, la previa de pegar
+   * o de colocar, o un tramo de cable en curso en el editor a la vista. Las
+   * previas siguen al mouse: una pausa ahí se nota.
+   */
+  export function ocupadoParaCopia(): boolean {
+    const ed = editor;
+    return !!ed && (ed.enGesto || ed.pegando !== null || ed.colocar !== null || ed.enTramo);
+  }
+
   export function acercar() {
     if (vista?.zoomAlCentro(PASO_ZOOM)) cambio();
   }
@@ -287,6 +305,7 @@
       // documento, `editorPara` ya da el editor nuevo.
       modificado = ed.modificado;
       tituloDocumento = ed.documento.meta.titulo;
+      oncambiodocumento?.();
       return Promise.resolve();
     }
     const cuadro = new Promise<void>((r) => esperasCuadro.push(r));

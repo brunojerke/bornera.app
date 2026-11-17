@@ -186,6 +186,16 @@ describe("copiarPorPartes (T23, 1b)", () => {
     expect(e.almacen.registros.size).toBe(0);
   });
 
+  it("si la fuente da null después del último trozo, no escribe el registro", async () => {
+    const e = entorno(documentosDePrueba()[0]![1]);
+    let llamadas = 0;
+    // Un documento chico: entra en un solo paso, y la fuente se mira al empezarlo y antes del registro.
+    const r = await copiarPorPartes(e.opciones({ fuente: () => (++llamadas <= 1 ? { documento: e.doc, cambios: 0 } : null) }));
+    expect(llamadas).toBe(2);
+    expect(r).toEqual({ ok: false, cancelada: true, reinicios: 0 });
+    expect(e.almacen.registros.size).toBe(0);
+  });
+
   it("otro documento (Abrir o Nuevo) también hace volver a empezar", async () => {
     const e = entorno(structuredClone(BANCO));
     const otro = documentosDePrueba()[2]![1];

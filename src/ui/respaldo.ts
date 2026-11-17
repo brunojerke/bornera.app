@@ -82,7 +82,7 @@ export interface AlmacenCopias {
   completar(registro: RegistroCopia): Promise<void>;
   /** La copia completa de `id`, con sus trozos unidos y comprobados. */
   leer(id: string): Promise<CopiaLeida>;
-  /** Los registros de las copias completas. */
+  /** Los registros de las copias completas, sin las de «Medir la copia (F1)». */
   listar(): Promise<RegistroCopia[]>;
   /** Borra el registro y todos los trozos de `id` (completos o no). */
   borrar(id: string): Promise<void>;
@@ -103,6 +103,67 @@ export function unirTrozos(registro: RegistroCopia, trozos: readonly Trozo[]): C
 }
 
 const NO_HAY_COPIA = "No hay una copia completa";
+
+/** Prefijo de las copias de «Medir la copia (F1)»: nunca son copias de recuperación. */
+export const PREFIJO_MEDICION = "medicion-";
+
+/** El motivo de un fallo de IndexedDB, para el aviso de la barra (una vez por sesión). */
+export function motivoFallo(e: unknown): string {
+  if ((e as { name?: unknown } | null)?.name === "QuotaExceededError") return "no hay espacio en el disco";
+  const m = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  return m.trim() || "IndexedDB no está disponible";
+}
+
+/** El id de esta instancia: al azar, uno por arranque. */
+export function idInstancia(): string {
+  const c = globalThis.crypto as Crypto | undefined;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+// ── Candados (D2d-B) ───────────────────────────────────────────────────────
+// La instancia viva toma el candado de su id y no lo suelta nunca: se suelta
+// solo cuando la página o el proceso mueren. Una copia sin dueño es la de un
+// id cuyo candado está libre.
+
+/** Nombre del candado de Web Locks de la instancia `id`. */
+export const candado = (id: string) => `bornera-copia-${id}`;
+
+export interface Candados {
+  /** Toma el candado de esta instancia para siempre. */
+  tomarPropio(id: string): void;
+  /** Los ids con el candado tomado ahora (por esta u otra instancia viva), sin tomar nada. */
+  conDueno(): Promise<Set<string>>;
+}
+
+/** Candados de Web Locks; null si `navigator.locks` no está (contexto no seguro o motor viejo). */
+export function candadosWebLocks(locks: LockManager | undefined = globalThis.navigator?.locks): Candados | null {
+  if (!locks) return null;
+  return {
+    tomarPropio(id) {
+      void locks.request(candado(id), () => new Promise<never>(() => {}));
+    },
+    async conDueno() {
+      const estado = await locks.query();
+      const ids = new Set<string>();
+      for (const l of estado.held ?? []) if (l.name?.startsWith("bornera-copia-")) ids.add(l.name.slice("bornera-copia-".length));
+      return ids;
+    },
+  };
+}
+
+/** Candados en memoria (tests): `vivos` son los ids con dueño. */
+export function candadosMemoria(vivos = new Set<string>()): Candados & { vivos: Set<string> } {
+  return {
+    vivos,
+    tomarPropio(id) {
+      vivos.add(id);
+    },
+    conDueno() {
+      return Promise.resolve(new Set(vivos));
+    },
+  };
+}
 
 // ── En memoria (tests) ─────────────────────────────────────────────────────
 
@@ -137,7 +198,7 @@ export function almacenMemoria(opciones: OpcionesMemoria = {}): AlmacenCopias & 
       return Promise.resolve(unirTrozos(r, trozos.filter((t) => t.id === id)));
     },
     listar() {
-      return Promise.resolve([...registros.values()].map((r) => ({ ...r })));
+      return Promise.resolve([...registros.values()].filter((r) => !r.id.startsWith(PREFIJO_MEDICION)).map((r) => ({ ...r })));
     },
     borrar(id) {
       registros.delete(id);
@@ -228,7 +289,8 @@ export function almacenIndexedDB(base: IDBDatabase): AlmacenCopias {
     },
     async listar() {
       const tx = base.transaction(ALMACEN_COPIAS, "readonly");
-      return (await resultado(tx.objectStore(ALMACEN_COPIAS).getAll())) as RegistroCopia[];
+      const todos = (await resultado(tx.objectStore(ALMACEN_COPIAS).getAll())) as RegistroCopia[];
+      return todos.filter((r) => !r.id.startsWith(PREFIJO_MEDICION));
     },
     borrar(id) {
       const tx = escribir([ALMACEN_COPIAS, ALMACEN_TROZOS]);

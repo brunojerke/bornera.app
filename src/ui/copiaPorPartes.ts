@@ -78,7 +78,8 @@ export interface OpcionesCopia {
 export type ResultadoCopia =
   | {
       ok: true;
-      /** El contador de cambios del documento copiado. */
+      /** El documento copiado y su contador de cambios en ese momento. */
+      documento: Documento;
       cambios: number;
       generacion: number;
       trozos: number;
@@ -193,6 +194,9 @@ export async function copiarPorPartes(op: OpcionesCopia): Promise<ResultadoCopia
     if (!it) throw new Error("La copia terminó sin intento");
     // Las escrituras de los trozos, y recién después el registro.
     await Promise.all(it.escrituras);
+    // Si mientras tanto se canceló (se guardó, se cerró…), no se marca
+    // completa: el borrado pedido antes no tiene que quedar pisado.
+    if (!op.fuente()) return { ok: false, cancelada: true, reinicios };
     const t0 = op.ahora();
     const d = op.datos();
     const registro = registroCopia(
@@ -208,6 +212,7 @@ export async function copiarPorPartes(op: OpcionesCopia): Promise<ResultadoCopia
     await escrito;
     return {
       ok: true,
+      documento: it.documento,
       cambios: it.cambios,
       generacion: it.generacion,
       trozos: it.n,

@@ -5,7 +5,9 @@
 // al final el registro. F1 es el paso síncrono más largo. En la PC con
 // WebView2 pasa si es ≤ 9 ms (objetivo ~3); en la netbook, ≤ 50 ms. La
 // duración total, los pasos por copia y los reinicios se informan, pero no
-// deciden.
+// deciden. La salida de emergencia (la copia de una vez, tras 5 reinicios)
+// va aparte: su máximo y cuántas veces ocurrió, fuera de la mediana y sin
+// decidir. Límite conocido: en la netbook puede pasar de 50 ms.
 //
 // Se mide con la escena del banco de 2000 + 3030 cables, armada aparte: no
 // toca el documento ni su copia. Son 20 copias seguidas, a la clave
@@ -21,7 +23,7 @@ import { documentoBancoCables } from "../editor/banco";
 import { copiarPorPartes, PRESUPUESTO_PASO_MS } from "./copiaPorPartes";
 import { mediana } from "./diagnostico";
 import { SIMBOLOS_BANCO_CABLES } from "./escenas";
-import { abrirBase, almacenIndexedDB } from "./respaldo";
+import { abrirBase, almacenIndexedDB, PREFIJO_MEDICION } from "./respaldo";
 import { VERSION } from "./version";
 
 /** Copias que hace la medición. */
@@ -40,6 +42,8 @@ export interface MuestraCopia {
   /** Del primer paso a la escritura del registro. */
   duracion: number;
   reinicios: number;
+  /** Si salió de una vez (salida de emergencia), lo que tardó esa tarea; si no, 0. */
+  deUnaVezMs: number;
 }
 
 /** Mediana, máximo y el de la primera copia (la fría). */
@@ -59,7 +63,9 @@ export interface ResumenF1 {
   pasosPorCopia: number;
   duracion: Estadistica;
   reinicios: number;
-  /** El paso síncrono más largo de todas las copias. */
+  /** La salida de emergencia (copias de una vez): aparte, no decide. */
+  emergencia: { veces: number; maximo: number };
+  /** El paso síncrono más largo de las copias por partes (sin la salida de emergencia). */
   f1: number;
   pasa: boolean;
 }
@@ -67,8 +73,14 @@ export interface ResumenF1 {
 const maximo = (v: readonly number[]) => (v.length ? Math.max(...v) : 0);
 const pasoMasLargo = (m: MuestraCopia) => Math.max(m.registro, ...m.trozos);
 
-/** El resumen de las copias medidas, en orden. Se compara sin redondear. */
-export function resumirF1(muestras: readonly MuestraCopia[]): ResumenF1 {
+/**
+ * El resumen de las copias medidas, en orden. Se compara sin redondear. Las
+ * copias de una vez (salida de emergencia) no entran en las estadísticas ni
+ * en F1: se cuentan aparte.
+ */
+export function resumirF1(todas: readonly MuestraCopia[]): ResumenF1 {
+  const emergencias = todas.filter((m) => m.deUnaVezMs > 0);
+  const muestras = todas.filter((m) => m.deUnaVezMs <= 0);
   const todos = muestras.flatMap((m) => m.trozos);
   const largos = muestras.map(pasoMasLargo);
   const f1 = maximo(largos);
@@ -84,7 +96,8 @@ export function resumirF1(muestras: readonly MuestraCopia[]): ResumenF1 {
       maximo: maximo(muestras.map((m) => m.duracion)),
       primera: primera?.duracion ?? 0,
     },
-    reinicios: muestras.reduce((s, m) => s + m.reinicios, 0),
+    reinicios: todas.reduce((s, m) => s + m.reinicios, 0),
+    emergencia: { veces: emergencias.length, maximo: maximo(emergencias.map((m) => m.deUnaVezMs)) },
     f1,
     pasa: muestras.length > 0 && f1 <= TOPE_F1_PC_MS,
   };
@@ -129,6 +142,8 @@ export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): stri
       `(tope en la PC con WebView2: ≤ ${TOPE_F1_PC_MS} ms; objetivo ~${OBJETIVO_F1_PC_MS} ms)`,
     `Se informa, no decide: ${r.pasosPorCopia} pasos por copia (mediana) · duración total: mediana ${ms(r.duracion.mediana)} ms, ` +
       `máx. ${ms(r.duracion.maximo)} ms · reinicios: ${r.reinicios}`,
+    `Salida de emergencia (de una vez, tras 5 reinicios; aparte, no decide): ${r.emergencia.veces} veces` +
+      (r.emergencia.veces > 0 ? `, máx. ${ms(r.emergencia.maximo)} ms` : ""),
     `Lectura: la última copia, releída, ${datos.igual ? "es igual a serializar" : "NO es igual a serializar (MAL)"}`,
     `Paso más largo por copia (ms): ${muestras.map((m) => ms(pasoMasLargo(m))).join(" · ")}`,
   ].join("\n");
@@ -149,7 +164,7 @@ export async function medirCopias(
   progreso: (texto: string) => void = () => {},
 ): Promise<{ muestras: MuestraCopia[]; igual: boolean }> {
   const almacen = almacenIndexedDB(await abrirBase());
-  const id = `medicion-${Math.random().toString(36).slice(2)}`;
+  const id = `${PREFIJO_MEDICION}${Math.random().toString(36).slice(2)}`;
   let generacion = 0;
   const muestras: MuestraCopia[] = [];
   try {
@@ -164,7 +179,13 @@ export async function medirCopias(
         ahora: () => performance.now(),
       });
       if (!r.ok) throw r.cancelada ? new Error("La copia se canceló") : r.error;
-      muestras.push({ trozos: r.pasos.slice(0, -1), registro: r.pasos.at(-1) ?? 0, duracion: r.duracionMs, reinicios: r.reinicios });
+      muestras.push({
+        trozos: r.pasos.slice(0, -1),
+        registro: r.pasos.at(-1) ?? 0,
+        duracion: r.duracionMs,
+        reinicios: r.reinicios,
+        deUnaVezMs: r.deUnaVez ? r.deUnaVezMs : 0,
+      });
     }
     const leida = await almacen.leer(id);
     return { muestras, igual: leida.ok && leida.texto === serializar(doc) };

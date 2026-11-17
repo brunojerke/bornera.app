@@ -11,7 +11,13 @@ const datos = {
   igual: true,
 };
 
-const muestra = (trozos: number[], registro = 0.3, duracion = 100, reinicios = 0): MuestraCopia => ({ trozos, registro, duracion, reinicios });
+const muestra = (trozos: number[], registro = 0.3, duracion = 100, reinicios = 0, deUnaVezMs = 0): MuestraCopia => ({
+  trozos,
+  registro,
+  duracion,
+  reinicios,
+  deUnaVezMs,
+});
 
 describe("resumirF1 (1b: por partes)", () => {
   it("F1 es el paso síncrono más largo de todas las copias, con la primera incluida", () => {
@@ -32,6 +38,17 @@ describe("resumirF1 (1b: por partes)", () => {
 
   it("sin copias no pasa", () => {
     expect(resumirF1([]).pasa).toBe(false);
+  });
+
+  it("la salida de emergencia va aparte: máximo y veces, fuera de la mediana y de F1", () => {
+    const r = resumirF1([muestra([2.5]), muestra([2.4, 2.6], 0.3, 40, 5, 16.2), muestra([2.7]), muestra([2.2], 0.3, 40, 5, 14)]);
+    expect(r.emergencia).toEqual({ veces: 2, maximo: 16.2 });
+    expect(r.f1).toBe(2.7);
+    expect(r.pasa).toBe(true);
+    expect(r.pasoMasLargo.mediana).toBe(2.7);
+    expect(r.reinicios).toBe(10);
+    const t = textoF1([muestra([2.5]), muestra([2.4], 0.3, 40, 5, 16.2)], datos);
+    expect(t).toContain("Salida de emergencia (de una vez, tras 5 reinicios; aparte, no decide): 1 veces, máx. 16,2 ms");
   });
 
   it("la duración total y los reinicios se informan, pero no deciden", () => {

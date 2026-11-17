@@ -19,6 +19,7 @@
     onprobararrastre,
     onprobarfase3b,
     onmedircopia,
+    oncopias,
   }: {
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
@@ -30,6 +31,8 @@
     onprobarfase3b?: () => void;
     /** «Medir la copia (F1)»: la parte síncrona de la copia de recuperación con 2000 + cables (T23). */
     onmedircopia?: () => void;
+    /** «Copias de recuperación»: las copias, de quién son y si abren (T23, S2 y S3 a mano). */
+    oncopias?: () => void;
   } = $props();
 
   const MODOS_ARRASTRE: { valor: ModoArrastreDiagnostico; texto: string }[] = [
@@ -54,6 +57,11 @@
   function medirCopia() {
     abierto = false;
     onmedircopia?.();
+  }
+
+  function verCopias() {
+    abierto = false;
+    oncopias?.();
   }
 
   let abierto = $state(false);
@@ -176,6 +184,10 @@
       <button role="menuitem" onclick={medirCopia}>
         <span class="marca"></span>
         Medir la copia (F1)…
+      </button>
+      <button role="menuitem" onclick={verCopias}>
+        <span class="marca"></span>
+        Copias de recuperación…
       </button>
     </div>
   {/if}

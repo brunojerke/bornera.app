@@ -23,7 +23,10 @@
   import DialogoSinGuardar from "./DialogoSinGuardar.svelte";
   import DialogoProbar from "./DialogoProbar.svelte";
   import { probarFase3b as correrFase3b } from "./probarFase3b";
-  import { medirCopia as correrMedirCopia } from "./medirCopia";
+  import { medirCopia as correrMedirCopia, motor } from "./medirCopia";
+  import { Autoguardado, avisoFallo } from "./autoguardado";
+  import { abrirBase, almacenIndexedDB, candadosWebLocks, idInstancia, motivoFallo, type AlmacenCopias } from "./respaldo";
+  import { textoCopias } from "./listaCopias";
   import type { ProblemaArchivo } from "../core/io";
   import {
     atajoArchivo,
@@ -36,7 +39,7 @@
     type RespuestaSinGuardar,
   } from "./archivo";
   import { archivosNavegador, archivosTauri } from "./archivos";
-  import { ES_PRERELEASE } from "./version";
+  import { ES_PRERELEASE, VERSION } from "./version";
 
   /** Corre dentro de Tauri (el escritorio); si no, es el navegador (`npm run dev` y el humo). */
   const enEscritorio = isTauri();
@@ -130,6 +133,87 @@
     if (enEscritorio) getCurrentWindow().setTitle(titulo).catch((e) => console.warn("No se pudo poner el título de la ventana", e));
   });
 
+  // ── Copia de recuperación (T23) ──────────────────────────────────────────
+  // Cada instancia tiene su id y toma su candado de Web Locks para siempre
+  // (D2d-B). La base se abre al montar; si no abre, un aviso y la app sigue.
+  // Solo se copia el editor del documento (ver autoguardado.ts).
+  const idPropio = idInstancia();
+  const candados = candadosWebLocks();
+  candados?.tomarPropio(idPropio);
+  let almacenCopias: AlmacenCopias | null = null;
+  let autoguardado: Autoguardado | null = null;
+  /** Por qué no abrió IndexedDB; null si abrió (o todavía no se sabe). */
+  let falloCopias: string | null = null;
+
+  onMount(() => {
+    let montado = true;
+    abrirBase()
+      .then((base) => {
+        if (!montado) {
+          base.close();
+          return;
+        }
+        const almacen = almacenIndexedDB(base);
+        const ag = new Autoguardado({
+          id: idPropio,
+          almacen,
+          editor: () => lienzo.editorDelDocumento(),
+          archivo: () => {
+            const a = operaciones.archivoActual;
+            return a ? { nombre: a.nombre, ruta: a.ruta } : null;
+          },
+          version: VERSION,
+          // D1: gestos, previas, tramo de cable, y mientras corre «Probar» o una medición.
+          ocupado: () => (lienzo?.ocupadoParaCopia() ?? false) || (prueba?.corriendo ?? false),
+          avisar,
+          ahora: () => performance.now(),
+          programar: (f, ms) => window.setTimeout(f, ms),
+          cancelar: (t) => clearTimeout(t as number),
+        });
+        // Otra versión de Bornera quiere subir la base: se la deja y esta instancia no copia más.
+        base.onversionchange = () => {
+          base.close();
+          ag.apagar(avisoFallo(new Error("otra versión de Bornera cambió la base")));
+        };
+        almacenCopias = almacen;
+        autoguardado = ag;
+        ag.alCambiar();
+        if (import.meta.env.DEV) {
+          const global = (globalThis as Record<string, unknown>).bornera as Record<string, unknown> | undefined;
+          if (global) Object.assign(global, { autoguardado: ag, respaldo: almacen, idInstancia: idPropio });
+        }
+      })
+      .catch((e) => {
+        falloCopias = motivoFallo(e);
+        avisar(avisoFallo(e));
+      });
+    return () => {
+      montado = false;
+    };
+  });
+
+  /** Menú de desarrollo › «Copias de recuperación» (T23, etapa 1: S2 y S3 a mano). */
+  async function verCopias() {
+    if (prueba?.corriendo || avisoProbar) return;
+    const titulo = "Copias de recuperación";
+    prueba = { titulo, corriendo: true, texto: "Leyendo las copias…" };
+    try {
+      const texto = await textoCopias({
+        idPropio,
+        almacen: almacenCopias,
+        fallo: falloCopias,
+        candados,
+        estado: autoguardado?.estado ?? null,
+        version: VERSION,
+        motor: motor(),
+        fecha: new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "medium" }),
+      });
+      prueba = { titulo, corriendo: false, texto };
+    } catch (e) {
+      prueba = { titulo, corriendo: false, texto: `No se pudieron leer las copias: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
   /** La ventana se está cerrando (ya se respondió el diálogo): `beforeunload` no pregunta otra vez. */
   let cerrando = false;
 
@@ -145,6 +229,8 @@
       .onCloseRequested(async (e) => {
         e.preventDefault();
         if (!(await operaciones.antesDeCerrar())) return;
+        // Se cierra bien (sin cambios, guardado o «No guardar»): la copia propia se borra (D2e, hasta 1 s).
+        await autoguardado?.cerrar();
         cerrando = true;
         try {
           await ventana.destroy();
@@ -346,6 +432,7 @@
     onprobararrastre={probarArrastre}
     onprobarfase3b={probarFase3b}
     onmedircopia={medirCopia}
+    oncopias={verCopias}
   />
   <main class="centro">
     <Paleta
@@ -377,6 +464,7 @@
       {diagnostico}
       onseleccion={alCambiarSeleccion}
       onaviso={avisar}
+      oncambiodocumento={() => autoguardado?.alCambiar()}
     />
     <PanelPropiedades
       bind:this={panel}

@@ -129,7 +129,8 @@ Sale de `docs/plan-fase4.md` (T23, D2a–D2e, D5-A, F1 y sección 7). Fija el es
 > - **F1 = máximo de UN paso síncrono de la copia:** un trozo más su `put`, o el registro final, con la escena de 2000 + 3030 cables.
 > - **Pasa con ≤ 9 ms en la PC con WebView2** (objetivo ~3 ms) y **≤ 50 ms en la netbook**.
 > - La duración total de la copia, la cantidad de pasos y los reinicios se informan, pero no deciden.
-> - La copia de una vez (sección 7, etapa 1b, reinicios) se informa aparte: es la salida para no quedarse sin copia editando sin parar.
+> - **Salida de emergencia** (Bruno, 2026-11-17): la copia de una vez, después de 5 reinicios (sección 7, etapa 1b), se informa **aparte** en F1, con su máximo y cuántas veces ocurrió. No entra en la mediana ni en el máximo de los pasos, y no decide.
+> - **Límite conocido:** en la netbook, esa tarea puede pasar de 50 ms (la copia entera, ~80 ms estimados con ×5,5).
 >
 > Lo de abajo es la regla de la etapa 1a, con la copia entera en un paso. Esa medición queda como «antes».
 
@@ -216,6 +217,39 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
   - **F1** con la herramienta (sección 6).
 - **Si S2 falla:** latido (D2d-B) en la etapa 3.
 - **Si F1 > 9 ms:** etapa 1b.
+- **Hecho el código (2026-11-17); faltan S2 y S3 a mano.**
+  - `src/ui/autoguardado.ts` (clase `Autoguardado`):
+    - Relojes de 10 s y 60 s, con un solo temporizador.
+    - «Ocupado» (D1): reintenta a 1 s.
+    - Copia por partes, con `copiarYa()` para desarrollo y humo.
+    - Aviso único si falla y reintento a los 10 s. `apagar()` con `onversionchange`.
+    - Cuenta aparte la salida de emergencia.
+  - `copiaPorPartes` vuelve a mirar la fuente antes del registro: si en el medio se guardó o se cerró, no escribe la copia completa.
+  - `respaldo.ts`:
+    - `Candados` con Web Locks (`tomarPropio`; `conDueno` usa `locks.query()`, que mira sin tomar) y en memoria.
+    - `motivoFallo` e `idInstancia`.
+    - `listar` saltea las `medicion-…`.
+  - `Lienzo` avisa `oncambiodocumento` (solo el editor del documento) y da `ocupadoParaCopia()` (gesto, previa de pegar o de colocar, tramo).
+  - `Ventana`:
+    - Id y candado al arrancar. Abre la base al montar; si falla, el aviso y la app sigue.
+    - «Probar» y las mediciones cuentan como ocupado.
+    - En desarrollo: `bornera.autoguardado`, `bornera.respaldo` y `bornera.idInstancia`.
+  - Menú de desarrollo › «Copias de recuperación…» (`src/ui/listaCopias.ts`): esta instancia, si hay Web Locks, cómo viene el autoguardado y una fila por copia (dueño, nombre, hora, componentes, trozos, caracteres, si abre).
+  - **Adelantado de la etapa 3** (sale solo y es poco):
+    - Con `modificado` en falso se borra la copia propia. Eso cubre guardar, deshacer hasta lo guardado (D2-A), Nuevo y Abrir.
+    - Cerrar la ventana bien la borra (`cerrar()` en `onCloseRequested`, hasta 1 s).
+  - Tests:
+    - `autoguardado.test.ts` (15) y `listaCopias.test.ts` (4).
+    - Un test más en `copiaPorPartes`.
+    - La emergencia aparte en `medirCopia.test.ts`.
+    - En total, 2037 tests y check limpio.
+  - Humo `t23-autoguardado.mjs` (13):
+    - La copia es igual al documento.
+    - No sale durante un arrastre ni con la previa de pegar, y sí al soltar o con Esc.
+    - La lista la muestra.
+    - Guardar la borra.
+    - «Medir la copia (F1)» no deja nada en la base.
+    - `t06` y `t15a` siguen bien (83).
 
 ### Etapa 1b — Copia por partes (Opus xhigh, núcleo)
 **Elegida (a) por partes** (Bruno, 2026-11-17), con 3 ajustes: el `put` también por partes, F1 por paso y la salida de los reinicios. Va antes que el resto de la etapa 1.
@@ -232,7 +266,8 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
     - Espera un ocio largo (`timeRemaining() ≥ 40 ms`; con el respaldo de `setTimeout`, el próximo) y escribe todos los trozos y el registro en esa misma tarea, sin ceder.
     - Cada trozo sigue con su `put`, así que tampoco junta los 653 K.
     - Ningún comando puede caer en el medio de una tarea, así que esta copia siempre termina. No se queda sin copia mientras se edita sin parar: alcanza con una pausa de ~50 ms entre acciones, que en la edición normal siempre hay.
-    - Tarda lo que la copia entera (~15 ms en la PC, ~80 ms estimados en la netbook) y por eso se informa aparte, sin entrar en F1. Si los comandos llegan cada menos de 40 ms (una tecla mantenida apretada), espera a que se suelte.
+    - Tarda lo que la copia entera (~15 ms en la PC, ~80 ms estimados en la netbook). Por eso es la **salida de emergencia**: se informa aparte en F1 (máximo y cuántas veces ocurrió), no entra en la mediana y no decide (sección 6). Límite conocido: en la netbook puede pasar de 50 ms.
+    - Si los comandos llegan cada menos de 40 ms (una tecla mantenida apretada), espera a que se suelte.
   - **Informa:** pasos por copia, duración total, reinicios y copias de una vez.
 - **Tests (sin DOM):**
   - `porPartes.test.ts`: la unión es igual a `serializar` en:
@@ -364,6 +399,7 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
 
 - **F1 no pasa:** pasó, con la 1b (3,4 ms). Queda la netbook, en el cierre de la fase.
 - **Editar sin parar con ocios cortos** (una tecla mantenida apretada, comandos cada < 40 ms): la copia de una vez espera a que se suelte. Se acepta.
+- **Límite conocido de la salida de emergencia:** en la netbook, la copia de una vez puede pasar de 50 ms. Es rara (5 reinicios seguidos) y se informa aparte en F1, con su máximo y cuántas veces ocurrió.
 - **Cortar la primera instancia puede tirar el WebView2 de la segunda**, porque comparten proceso. Las dos copias quedan en disco y se ofrecen al volver. Se observa en S2.
 - **`navigator.locks` en `tauri.localhost`:** si no es contexto seguro, no está, y queda el latido. Se ve en la etapa 1.
 - **Una previa abierta mucho tiempo** posterga la copia todo ese tiempo, porque «nunca» durante una previa. Se acepta: hay alguien usando la app.
