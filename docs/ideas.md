@@ -28,3 +28,7 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 ## ESP32 o hardware real por USB
 - **Qué:** conectar un ESP32 u otro hardware por USB para leer entradas y mover salidas reales desde la simulación.
 - **Cuándo:** al final, después de lo demás.
+
+## Menú de configuración de la app
+- **Qué:** configuración de la app (no del `.brn`): prender o apagar el etiquetado, y elegir los prefijos y el número inicial.
+- **Cuándo:** después de la fase 5 (Bruno, 2026-11-17).

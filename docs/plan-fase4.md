@@ -2,7 +2,7 @@
 
 **Aprobado por Bruno el 2026-11-17** con las opciones D1-C (sin «Transformar re-rutea»), D2a-A, D2b-C, D2c-A, D2d-B, D2e-A, D3-A, D4-C, D5-A, D6a-B, D6b-C, D7-A y D8-A, más sus ajustes, ya incorporados abajo. Las decisiones están en la sección 3. Las descartadas van en una línea cada una.
 
-**Orden:** T20 → T21 → T22 → T23 → T24 → T25 → T26 → cierre (sección 6). T26 es independiente y puede adelantarse. Este plan fija qué hace cada tarea. El detalle (pasos, archivos exactos, tests uno por uno) lo arma la sesión de cada tarea con la skill `bornera-inicio`, antes de programar.
+**Orden:** T20 → T21 → T22 → T23 → T24 → T25 → T26 → T27 → cierre (sección 6). T26 es independiente y puede adelantarse. Este plan fija qué hace cada tarea. El detalle (pasos, archivos exactos, tests uno por uno) lo arma la sesión de cada tarea con la skill `bornera-inicio`, antes de programar.
 
 **Reglas** (las de la 3b):
 - Una tarea por sesión, con el plan aprobado antes de programar.
@@ -139,6 +139,25 @@ Cómo se prueba:
 - **Pruebas:** banco y `cierre3b-probar.mjs`. Sin humo nuevo.
 - **Modelo:** Opus alto.
 
+**Regla de D6b-C** (Bruno, 2026-11-17, fijada antes de medir):
+- **Cómo se mide:**
+  - «Probar la fase 3b» en la PC: enchufada, en «Mejor rendimiento», con las apps cerradas.
+  - El mismo build para antes y después (`tauri build --no-bundle`, exe sin instalar).
+  - Antes y después se miden en la misma sesión, sin reiniciar la PC.
+  - Cada vez se hacen 2 aperturas de la app. En cada apertura, la 1.ª corrida es fría y la 2.ª caliente.
+  - Si una corrida da un valor raro (por ejemplo, por Windows Update), se repite y se anota.
+- **Qué se compara:** el valor de cada fila B1–B16 de «Copiar». En las filas de cuadros cuentan el máx. y los lentos.
+- **Piso de ruido:**
+  - Una diferencia de ≤ 1 ms es igual.
+  - Los lentos, ±1.
+  - B9, el mismo escalón.
+- **(a) Frías como calientes:** con `willReadFrequently`, cada corrida fría queda a ±10 % (o dentro del piso) de la mediana de las calientes.
+  - Si en la medición «antes» la fría ya da como la caliente, la PC no reproduce el problema y (a) no decide nada. En ese caso decide solo (b). La prueba real de (a) es la netbook en C4.
+- **(b) Las calientes no cambian:** la mediana de las calientes de después queda a ±10 % (o dentro del piso) de la de antes.
+- **Resultado:**
+  - Se queda si se cumplen (a) y (b), o solo (b) cuando (a) no decide.
+  - Si no, se revierte y se hace una pasada de calentamiento, medida igual.
+
 ### T21. Exportar sin comprimir `.brn.json` (D4-C)
 - **Qué:**
   - La forma por líneas es **una función aparte** de `serializar`.
@@ -224,6 +243,15 @@ Cómo se prueba:
 - **Banco:** B16 contra el commit anterior.
 - **Modelo:** Opus xhigh (núcleo).
 
+### T27. Etiquetado de pulsadores desde S0 (Bruno, 2026-11-17)
+- **Qué:** última tarea antes del cierre.
+  - Los pulsadores NC se numeran desde S0 (parada) y los NA desde S1.
+  - K y H siguen numerándose desde 1.
+- **Pruebas:**
+  - Ajustar los tests de T17 y los humos que esperan S1.
+  - Los `.brn` congelados no cambian.
+- **Modelo:** Opus alto.
+
 ## 5. Topes
 
 | # | Qué | PC | Netbook | Origen |
@@ -256,17 +284,17 @@ Cómo se prueba:
 3. Se baja el instalador del borrador y se prueba en la netbook (fila 6).
 4. Si pasa, Bruno publica el borrador. Si falla, se borran el tag (local y remoto) y el borrador, con el OK de Bruno.
 
-**Checklist de la netbook** (una hoja). **Regla:** la `0.1.4` se instala con el mismo tipo de instalador que la alpha instalada. Mezclar MSI y NSIS deja dos «Bornera». Las releases traen solo `.msi`; Bruno confirma cuál usó.
+**Checklist de la netbook** (una hoja). **Regla:** la `0.1.4` se instala con el mismo tipo de instalador que la alpha instalada. Mezclar MSI y NSIS deja dos «Bornera». `release.yml` arma solo el `.msi`, así que los pasos 0 y 6 usan el `.msi`. Bruno confirma que la alpha.1 se instaló con el `.msi`.
 
 | # | Paso | Pasa si |
 |---|---|---|
-| 0 | Enchufada, en «Mejor rendimiento». Instalar `0.1.4-alpha.N` encima de la alpha.1, con el mismo tipo de instalador | Una sola «Bornera», versión alpha.N |
+| 0 | Enchufada, en «Mejor rendimiento». Instalar el `.msi` de `0.1.4-alpha.N` encima de la alpha.1 | Una sola «Bornera», versión alpha.N |
 | 1 | Menú de desarrollo › «Probar la fase 4», 3 veces seguidas, con «Copiar» cada vez | Las filas con tope pasan (mediana de las 3) |
 | 2 | Abrir `marcha-parada.brn`, arrastrar S1 dos unidades a la derecha y esperar 15 s sin tocar nada. Administrador de tareas › Bornera › Finalizar tarea. Abrir Bornera › **Recuperar** | S1 corrido, título con «•», Deshacer desactivado |
 | 3 | Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
 | 4 | Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
 | 5 | «Abrir reciente» › `marcha-parada.brn` | Abre |
-| 6 | Instalar `0.1.4` (del borrador, mismo tipo) encima de la alpha.N, sin desinstalar | Una sola «Bornera», versión 0.1.4, la lista de recientes sigue |
+| 6 | Instalar el `.msi` de `0.1.4` (del borrador) encima de la alpha.N, sin desinstalar | Una sola «Bornera», versión 0.1.4, la lista de recientes sigue |
 
 ## 7. Riesgos
 - **F1 no pasa en la PC:** `serializar` por partes (vuelve a empezar si el historial cambia en el medio) o caché por objeto, antes de la netbook.
