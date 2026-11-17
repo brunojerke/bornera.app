@@ -250,6 +250,11 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
     - Guardar la borra.
     - «Medir la copia (F1)» no deja nada en la base.
     - `t06` y `t15a` siguen bien (83).
+  - **Comprobación previa de S2** (automática y sin cortar nada; exe de release ×2 abierto por el puerto de depuración; script temporal, ya borrado):
+    - En `http://tauri.localhost` hay contexto seguro y `navigator.locks`. El supuesto de la sección 0 se cumple.
+    - Cada instancia ve los candados de las dos, y la 1.ª lee en IndexedDB lo que escribió la 2.ª.
+    - **El proceso de WebView2 (el «browser») es hijo de la 1.ª Bornera**, y el renderer de la 2.ª cuelga de él; la 2.ª no tiene proceso de WebView2 propio. Cortar el árbol de la 1.ª probablemente tira la página de la 2.ª. Lo decide la prueba a mano.
+    - WebView2 deja compartir el perfil solo si las dos instancias tienen las mismas opciones: una 2.ª instancia sin el argumento de depuración no abrió su página. En el uso normal todas tienen las mismas. `f1-webview2.mjs` ya pide que no haya otra Bornera abierta.
 
 ### Etapa 1b — Copia por partes (Opus xhigh, núcleo)
 **Elegida (a) por partes** (Bruno, 2026-11-17), con 3 ajustes: el `put` también por partes, F1 por paso y la salida de los reinicios. Va antes que el resto de la etapa 1.
