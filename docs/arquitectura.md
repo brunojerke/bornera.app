@@ -197,11 +197,15 @@ Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en form
 **Reglas:**
 
 - **Compresión:** Guardar escribe gzip con `CompressionStream` del navegador (sin librerías); si el sistema no lo tiene, guarda sin comprimir y lo avisa. Abrir acepta los dos (los distingue por los bytes `1f 8b`). Tope: 16 MB. Un circuito escolar pesa pocos KB.
-- **Versión y migraciones:** hoy hay una sola versión (1). Un archivo de una versión más nueva se rechaza ("hecho con una versión más nueva de Bornera"). Cada cambio de estructura sube `version` y agrega una función que convierte la versión anterior. Los archivos viejos siempre abren.
+- **Versión y migraciones:** hoy hay una sola versión (1). Un archivo de una versión más nueva se rechaza ("hecho con una versión más nueva de Bornera"). Cada cambio de estructura sube `version` y agrega una función que convierte la versión anterior. Los archivos viejos siempre abren. Fase 4 (D3-A de `docs/plan-fase4.md`): las migraciones son funciones puras sobre el JSON leído, entre la versión y la estructura de `deserializar`. Un corpus congelado (`tests/circuitos/formato-v1/`) tiene que abrir siempre.
 - **Validación al abrir:** un archivo dañado se rechaza con la lista de problemas, sin cerrar el programa: claves desconocidas, cables rotos, contadores atrasados, ciclos de apoyos o una T sobre el extremo de su anfitrión. Un símbolo desconocido sin cables abre con "?" y un aviso.
-- **Autoguardado:** copia de recuperación cada 60 s en el almacenamiento local (pendiente, fase 4).
+- **Autoguardado** (fase 4, D2 de `docs/plan-fase4.md`):
+  - La copia de recuperación va en IndexedDB del webview, una por instancia abierta.
+  - Sale a los 10 s sin comandos o a los 60 s del primer cambio sin copia, nunca durante un gesto.
+  - Al arrancar después de un corte, Bornera ofrece Recuperar o Descartar.
+  - La copia se borra al guardar o al cerrar bien.
 - **Biblioteca separada:** los símbolos no se guardan dentro de cada archivo; solo se referencia su tipo (`contactor.bobina`).
-- **Exportación de respaldo:** opción de guardar sin comprimir (`.brn.json`) para revisarlo o versionarlo con Git (pendiente: T15a la dejó para la fase 4).
+- **Exportación de respaldo:** «Exportar sin comprimir (.brn.json)», para revisarlo o versionarlo con Git. Escribe un componente o cable por línea y no cambia el archivo actual. Ctrl+S sobre un `.brn.json` abierto lo vuelve a escribir sin comprimir. El `.brn` normal no cambia (fase 4, D4-C de `docs/plan-fase4.md`).
 
 ## Exportación a PDF vectorial
 
@@ -264,7 +268,16 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
      - Pasa cuando (confirmado por Bruno el 2026-11-13): se arma a mano una inversión de giro con enclavamiento entre K1 y K2, duplicando la rama de K1 con Ctrl+D, sin bobinas repetidas, con las referencias cruzadas correctas y nada en naranja. El `.brn` dibujado se compara por redes con el archivo congelado `tests/circuitos/inversion.brn` (`npm run circuito`), como en T15. Criterio completo en el plan.
 4. **Guardar y abrir:** formato `.brn`, validación, autoguardado.
    - Nota (2026-11-13): lo básico (formato `.brn` y validación) se adelantó en la fase 3 (T15a), con la fase 3 ya cerrada. En esta fase quedan el autoguardado, las migraciones y los circuitos de referencia (`tests/circuitos/marcha-parada.brn` es el primero). Nota (2026-11-16): el segundo es `tests/circuitos/inversion.brn`, del cierre de la fase 3b; `npm run circuito` elige la base con `BORNERA_BASE`.
-   - Pasa cuando: guardar → cerrar → abrir deja el circuito idéntico (test automático).
+   - Plan aprobado el 2026-11-17: `docs/plan-fase4.md` (T20 a T26).
+     - **Alcance (D1-C):** autoguardado y recuperación, migraciones con corpus congelado, exportar `.brn.json`, abrir recientes, asociar `.brn` en Windows y borrar en cascada los cables en T.
+     - **Para la fase 5, antes de simular:** conexiones aparentes, etiquetas de red en la netlist y aviso de L con L1, L2 o L3.
+   - ~~Pasa cuando: guardar → cerrar → abrir deja el circuito idéntico (test automático).~~ Ya lo cumplía T15a.
+   - **Pasa cuando** (D5-A, 2026-11-17): con un circuito cambiado y sin guardar, se corta Bornera sin cerrarla (Finalizar tarea).
+     - Al abrirla, ofrece recuperarlo, y lo recuperado es idéntico a la última copia.
+     - Con 10 s sin comandos antes del corte, no se pierde nada.
+     - Lo prueba el humo `t23-autoguardado.mjs`, y en la netbook, a mano.
+     - La copia con 2000 símbolos y sus cables bloquea ≤ 50 ms en la netbook.
+     - Al cierre, `0.1.4` se instala encima de `0.1.4-alpha.N` sin desinstalar.
 5. **Simulación de mando:** fuentes, pulsadores, contactor, contactos auxiliares, lámpara, modo simular.
    - Pasa cuando: la marcha-parada con enclavamiento funciona y su test pasa.
 6. **Potencia:** fuente trifásica, contactos principales, térmico, fusible, motores, cortocircuito.

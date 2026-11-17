@@ -233,7 +233,7 @@ Cada etapa cierra con `npm test`, `npm run check` y commit local. Si toca algo v
 | 4 | «Probar la fase 3b» (sección 7) | Opus alto |
 | 5 | Versión `0.1.4-alpha.1` con la skill `bornera-release`; tag y push con autorización | Opus alto |
 | 6 | Netbook (Bruno), con la checklist; yo paso los números a la nota | Sonnet |
-| 7 | Cierre: `0.1.4` (tag, push y release con autorización), `docs/plan-fase3b.md`, `docs/arquitectura.md` (fase 3b cerrada), Obsidian | Sonnet |
+| 7 | Cierre en docs y Obsidian, sin release (D3 cambiada): `docs/plan-fase3b.md`, `docs/arquitectura.md` (fase 3b cerrada) | Sonnet |
 
 ### Etapa 0 hecha (2026-11-16)
 Este plan, `docs/netbook-fase3b.md` (checklist con topes de netbook y borrador de los pasos), `docs/ideas.md` y el puntero en `docs/plan-fase3b.md`. Sin código.
