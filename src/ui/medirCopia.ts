@@ -1,43 +1,48 @@
-// «Medir la copia (F1)» (T23, etapa 1a; docs/plan-T23.md, sección 6).
+// «Medir la copia (F1)» (T23; docs/plan-T23.md, sección 6).
 //
-// La parte síncrona de la copia de recuperación es lo que traba la página
-// mientras dura: `serializar` el documento, armar el registro, abrir la
-// transacción y pedir el `put` (que clona el texto). La escritura hasta
-// `complete` es asíncrona y no cuenta.
+// Desde la etapa 1b, la copia de recuperación va por partes
+// (copiaPorPartes.ts): un paso por ocio, cada uno con un trozo y su `put`, y
+// al final el registro. F1 es el paso síncrono más largo. En la PC con
+// WebView2 pasa si es ≤ 9 ms (objetivo ~3); en la netbook, ≤ 50 ms. La
+// duración total, los pasos por copia y los reinicios se informan, pero no
+// deciden.
 //
 // Se mide con la escena del banco de 2000 + 3030 cables, armada aparte: no
-// toca el documento ni su copia. Son 20 copias seguidas, cada una en su
-// tarea (con ocio antes), a la clave `medicion-…`, que se borra al final. La
-// primera copia cuenta: es la fría, la que se nota (D5-A).
+// toca el documento ni su copia. Son 20 copias seguidas, a la clave
+// `medicion-…`, que se borra al final. La primera copia cuenta: es la fría,
+// la que se nota (D5-A). Al terminar se relee la última copia y se compara
+// con `serializar`.
 //
-// F1 = el máximo de la parte síncrona. En la PC, con WebView2, pasa si es
-// ≤ 9 ms (50 ms de la netbook / 5,5; docs/plan-fase4.md, sección 5). Si no,
-// viene la etapa 1b. Lo reusa «Probar la fase 4» (C1).
+// Lo reusa «Probar la fase 4» (C1).
 
 import { serializar } from "../core/io";
 import type { Documento } from "../core/model/documento";
 import { documentoBancoCables } from "../editor/banco";
+import { copiarPorPartes, PRESUPUESTO_PASO_MS } from "./copiaPorPartes";
 import { mediana } from "./diagnostico";
 import { SIMBOLOS_BANCO_CABLES } from "./escenas";
-import { ALMACEN_COPIAS, abrirBase, registroCopia, terminada } from "./respaldo";
+import { abrirBase, almacenIndexedDB } from "./respaldo";
 import { VERSION } from "./version";
 
 /** Copias que hace la medición. */
 export const COPIAS_F1 = 20;
 /** Tope de F1 en la PC con WebView2 (ms). */
 export const TOPE_F1_PC_MS = 9;
+/** Objetivo de F1 en la PC (ms): no decide. */
+export const OBJETIVO_F1_PC_MS = 3;
 
 /** Una copia medida (ms). */
 export interface MuestraCopia {
-  /** `serializar(documento)`. */
-  serializar: number;
-  /** Armar el registro, abrir la transacción y pedir el `put`. */
-  put: number;
-  /** De pedir el `put` a `complete` (asíncrono, no cuenta para F1). */
-  escritura: number;
+  /** Cada paso de trozo: piezas unidas + su `put`. */
+  trozos: number[];
+  /** El paso del registro final. */
+  registro: number;
+  /** Del primer paso a la escritura del registro. */
+  duracion: number;
+  reinicios: number;
 }
 
-/** Mediana, máximo y la primera (la fría) de una lista de tiempos. */
+/** Mediana, máximo y el de la primera copia (la fría). */
 export interface Estadistica {
   mediana: number;
   maximo: number;
@@ -46,31 +51,42 @@ export interface Estadistica {
 
 export interface ResumenF1 {
   copias: number;
-  serializar: Estadistica;
-  put: Estadistica;
-  /** La parte síncrona: `serializar` + `put`. */
-  sincrona: Estadistica;
-  escritura: Estadistica;
-  /** Máximo de la parte síncrona. */
+  /** Todos los pasos de trozo; «primera» es el más largo de la primera copia. */
+  trozo: Estadistica;
+  registro: Estadistica;
+  /** El paso más largo de cada copia. */
+  pasoMasLargo: Estadistica;
+  pasosPorCopia: number;
+  duracion: Estadistica;
+  reinicios: number;
+  /** El paso síncrono más largo de todas las copias. */
   f1: number;
   pasa: boolean;
 }
 
-function estadistica(valores: readonly number[]): Estadistica {
-  return { mediana: mediana(valores), maximo: valores.length ? Math.max(...valores) : 0, primera: valores[0] ?? 0 };
-}
+const maximo = (v: readonly number[]) => (v.length ? Math.max(...v) : 0);
+const pasoMasLargo = (m: MuestraCopia) => Math.max(m.registro, ...m.trozos);
 
 /** El resumen de las copias medidas, en orden. Se compara sin redondear. */
 export function resumirF1(muestras: readonly MuestraCopia[]): ResumenF1 {
-  const sincrona = estadistica(muestras.map((m) => m.serializar + m.put));
+  const todos = muestras.flatMap((m) => m.trozos);
+  const largos = muestras.map(pasoMasLargo);
+  const f1 = maximo(largos);
+  const primera = muestras[0];
   return {
     copias: muestras.length,
-    serializar: estadistica(muestras.map((m) => m.serializar)),
-    put: estadistica(muestras.map((m) => m.put)),
-    sincrona,
-    escritura: estadistica(muestras.map((m) => m.escritura)),
-    f1: sincrona.maximo,
-    pasa: muestras.length > 0 && sincrona.maximo <= TOPE_F1_PC_MS,
+    trozo: { mediana: mediana(todos), maximo: maximo(todos), primera: primera ? maximo(primera.trozos) : 0 },
+    registro: { mediana: mediana(muestras.map((m) => m.registro)), maximo: maximo(muestras.map((m) => m.registro)), primera: primera?.registro ?? 0 },
+    pasoMasLargo: { mediana: mediana(largos), maximo: f1, primera: largos[0] ?? 0 },
+    pasosPorCopia: mediana(muestras.map((m) => m.trozos.length + 1)),
+    duracion: {
+      mediana: mediana(muestras.map((m) => m.duracion)),
+      maximo: maximo(muestras.map((m) => m.duracion)),
+      primera: primera?.duracion ?? 0,
+    },
+    reinicios: muestras.reduce((s, m) => s + m.reinicios, 0),
+    f1,
+    pasa: muestras.length > 0 && f1 <= TOPE_F1_PC_MS,
   };
 }
 
@@ -87,10 +103,12 @@ export interface DatosF1 {
   simbolos: number;
   cables: number;
   caracteres: number;
+  /** La última copia, releída, es igual a `serializar`. */
+  igual: boolean;
 }
 
 /**
- * El resultado para copiar. La última línea lleva la parte síncrona de cada
+ * El resultado para copiar. La última línea lleva el paso más largo de cada
  * copia, en orden, para que `tests/bench/f1-webview2.mjs` la lea.
  */
 export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): string {
@@ -99,17 +117,20 @@ export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): stri
   return [
     `Medir la copia (F1) · Bornera ${datos.version} · ${datos.fecha} · ${datos.motor}`,
     `Escena: ${datos.simbolos} símbolos + ${datos.cables} cables · texto de ${entero.format(datos.caracteres)} caracteres · ` +
-      `${r.copias} copias, una por tarea; la primera (en frío) cuenta`,
+      `${r.copias} copias por partes (${PRESUPUESTO_PASO_MS} ms de serializar por paso), una tras otra; la primera (en frío) cuenta`,
     "",
-    "| Parte | Mediana | Máx. | Primera |",
+    "| Paso síncrono | Mediana | Máx. | Primera copia |",
     "|---|---|---|---|",
-    fila("serializar", r.serializar),
-    fila("registro y put", r.put),
-    fila("**Parte síncrona**", r.sincrona),
+    fila("Trozo (piezas + put)", r.trozo),
+    fila("Registro final", r.registro),
+    fila("**El más largo de cada copia**", r.pasoMasLargo),
     "",
-    `F1 = ${ms(r.f1)} ms (máximo de la parte síncrona): ${r.pasa ? "pasa" : "no pasa"} (tope en la PC con WebView2: ≤ ${TOPE_F1_PC_MS} ms)`,
-    `Escritura hasta «complete» (no cuenta): mediana ${ms(r.escritura.mediana)} ms, máx. ${ms(r.escritura.maximo)} ms`,
-    `Parte síncrona por copia (ms): ${muestras.map((m) => ms(m.serializar + m.put)).join(" · ")}`,
+    `F1 = ${ms(r.f1)} ms (el paso síncrono más largo): ${r.pasa ? "pasa" : "no pasa"} ` +
+      `(tope en la PC con WebView2: ≤ ${TOPE_F1_PC_MS} ms; objetivo ~${OBJETIVO_F1_PC_MS} ms)`,
+    `Se informa, no decide: ${r.pasosPorCopia} pasos por copia (mediana) · duración total: mediana ${ms(r.duracion.mediana)} ms, ` +
+      `máx. ${ms(r.duracion.maximo)} ms · reinicios: ${r.reinicios}`,
+    `Lectura: la última copia, releída, ${datos.igual ? "es igual a serializar" : "NO es igual a serializar (MAL)"}`,
+    `Paso más largo por copia (ms): ${muestras.map((m) => ms(pasoMasLargo(m))).join(" · ")}`,
   ].join("\n");
 }
 
@@ -118,42 +139,42 @@ export function motor(ua: string = navigator.userAgent): string {
   return /Edg\/[\d.]+/.exec(ua)?.[0] ?? /Chrome\/[\d.]+/.exec(ua)?.[0] ?? /AppleWebKit\/[\d.]+/.exec(ua)?.[0] ?? ua;
 }
 
-/** Espera un rato de ocio (o, sin `requestIdleCallback`, la próxima tarea). */
-function ocio(): Promise<void> {
-  return new Promise((resolver) => {
-    if (typeof requestIdleCallback === "function") requestIdleCallback(() => resolver(), { timeout: 1000 });
-    else setTimeout(resolver, 0);
-  });
-}
-
-/** Mide `copias` copias de `doc` en IndexedDB. Borra su registro al terminar, también si falla. */
-export async function medirCopias(doc: Documento, copias = COPIAS_F1, progreso: (texto: string) => void = () => {}): Promise<MuestraCopia[]> {
-  const base = await abrirBase();
+/**
+ * Mide `copias` copias por partes de `doc` en IndexedDB, y relee la última.
+ * Borra su copia al terminar, también si falla.
+ */
+export async function medirCopias(
+  doc: Documento,
+  copias = COPIAS_F1,
+  progreso: (texto: string) => void = () => {},
+): Promise<{ muestras: MuestraCopia[]; igual: boolean }> {
+  const almacen = almacenIndexedDB(await abrirBase());
   const id = `medicion-${Math.random().toString(36).slice(2)}`;
+  let generacion = 0;
   const muestras: MuestraCopia[] = [];
   try {
     for (let i = 0; i < copias; i++) {
       progreso(`copia ${i + 1} de ${copias}`);
-      await ocio();
-      const t0 = performance.now();
-      const texto = serializar(doc);
-      const t1 = performance.now();
-      const tx = base.transaction(ALMACEN_COPIAS, "readwrite", { durability: "strict" });
-      tx.objectStore(ALMACEN_COPIAS).put(registroCopia(id, doc, texto, null, VERSION, Date.now()));
-      const t2 = performance.now();
-      await terminada(tx);
-      muestras.push({ serializar: t1 - t0, put: t2 - t1, escritura: performance.now() - t2 });
+      const r = await copiarPorPartes({
+        id,
+        almacen,
+        fuente: () => ({ documento: doc, cambios: 0 }),
+        generacion: () => ++generacion,
+        datos: () => ({ archivo: null, version: VERSION }),
+        ahora: () => performance.now(),
+      });
+      if (!r.ok) throw r.cancelada ? new Error("La copia se canceló") : r.error;
+      muestras.push({ trozos: r.pasos.slice(0, -1), registro: r.pasos.at(-1) ?? 0, duracion: r.duracionMs, reinicios: r.reinicios });
     }
+    const leida = await almacen.leer(id);
+    return { muestras, igual: leida.ok && leida.texto === serializar(doc) };
   } finally {
     try {
-      const tx = base.transaction(ALMACEN_COPIAS, "readwrite");
-      tx.objectStore(ALMACEN_COPIAS).delete(id);
-      await terminada(tx);
+      await almacen.borrar(id);
     } finally {
-      base.close();
+      almacen.cerrar();
     }
   }
-  return muestras;
 }
 
 /** «Medir la copia (F1)» del menú de desarrollo: el texto para copiar. */
@@ -162,7 +183,7 @@ export async function medirCopia(progreso: (texto: string) => void = () => {}): 
   // Que se vea el aviso antes de armar la escena (tarda).
   await new Promise((r) => setTimeout(r, 0));
   const doc = documentoBancoCables(SIMBOLOS_BANCO_CABLES);
-  const muestras = await medirCopias(doc, COPIAS_F1, progreso);
+  const { muestras, igual } = await medirCopias(doc, COPIAS_F1, progreso);
   let cables = 0;
   for (const h of doc.hojas) cables += h.cables.length;
   return textoF1(muestras, {
@@ -172,5 +193,6 @@ export async function medirCopia(progreso: (texto: string) => void = () => {}): 
     simbolos: SIMBOLOS_BANCO_CABLES,
     cables,
     caracteres: serializar(doc).length,
+    igual,
   });
 }

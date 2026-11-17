@@ -4,7 +4,9 @@
 // para la copia de recuperación (F1).
 //
 // Pasos que mide (el código es el de la app, cargado con Vite):
-//   serializar     Documento → texto .brn (lo que hace la copia de T23)
+//   serializar     Documento → texto .brn (lo que hizo la copia de T23 en la 1a)
+//   porPartes      las piezas de serializarPorPartes, unidas: lo que cuesta en
+//                  total la copia de T23 desde la 1b, sin el ocio ni los put
 //   deserializar   texto → Documento (las 9 etapas, con las migraciones)
 //   abrir          bytes gzip → Documento (desempaquetar + deserializar)
 //
@@ -26,7 +28,7 @@ import { fileURLToPath } from "node:url";
 const RAIZ = fileURLToPath(new URL("../..", import.meta.url));
 const ESTE = fileURLToPath(import.meta.url);
 const SIMBOLOS = 2000;
-const PASOS = ["serializar", "deserializar", "abrir"];
+const PASOS = ["serializar", "porPartes", "deserializar", "abrir"];
 
 const args = process.argv.slice(2);
 const opcion = (nombre, porDefecto) => {
@@ -55,7 +57,7 @@ async function medirProceso(calentamiento, vueltas) {
     server: { middlewareMode: true, hmr: false, watch: null },
   });
   try {
-    const { serializar, deserializar } = await servidor.ssrLoadModule("/src/core/io/index.ts");
+    const { serializar, serializarPorPartes, deserializar } = await servidor.ssrLoadModule("/src/core/io/index.ts");
     const { empaquetar, desempaquetar } = await servidor.ssrLoadModule("/src/ui/brn.ts");
     const { documentoBancoCables } = await servidor.ssrLoadModule("/src/editor/banco.ts");
 
@@ -69,6 +71,7 @@ async function medirProceso(calentamiento, vueltas) {
     // Cada paso devuelve algo que se usa, para que no se descarte.
     const pasos = {
       serializar: () => serializar(doc).length,
+      porPartes: () => [...serializarPorPartes(doc)].join("").length,
       deserializar: () => (deserializar(texto).ok ? 1 : 0),
       abrir: async () => {
         const p = await desempaquetar(bytes);

@@ -9,7 +9,7 @@
 // @ts-expect-error sin el paquete @types/node (como vite.config.js)
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { deserializar, serializar, serializarPorLineas, type ProblemaArchivo } from "../../src/core/io";
+import { deserializar, serializar, serializarPorLineas, serializarPorPartes, type ProblemaArchivo } from "../../src/core/io";
 import { deserializarCon } from "../../src/core/io/deserializar";
 import type { Migracion } from "../../src/core/io/migraciones";
 import { desempaquetar } from "../../src/ui/brn";
@@ -102,6 +102,13 @@ describe("tests/circuitos/formato-v1/: el corpus congelado del formato 1 (T22)",
     } else {
       expect(serializar(r.documento)).toBe(texto);
     }
+  });
+
+  // La copia de recuperación escribe por partes (T23, 1b): unidas, son el mismo texto.
+  it.each(NOMBRES)("%s: serializarPorPartes unido es serializar", async (nombre) => {
+    const { r } = await abrir(nombre);
+    if (!r.ok) throw new Error(`${nombre} no abre`);
+    expect([...serializarPorPartes(r.documento)].join("")).toBe(serializar(r.documento));
   });
 
   // El camino de un archivo viejo, con el corpus real: una migración 1 → 2

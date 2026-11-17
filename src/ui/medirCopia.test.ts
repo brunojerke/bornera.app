@@ -1,23 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { motor, resumirF1, textoF1, TOPE_F1_PC_MS, type MuestraCopia } from "./medirCopia";
 
-const datos = { version: "0.1.4-alpha.1", fecha: "17/11/26 12:00", motor: "Edg/142.0", simbolos: 2000, cables: 3030, caracteres: 653364 };
+const datos = {
+  version: "0.1.4-alpha.1",
+  fecha: "17/11/26 12:00",
+  motor: "Edg/157.0",
+  simbolos: 2000,
+  cables: 3030,
+  caracteres: 653364,
+  igual: true,
+};
 
-const muestra = (serializar: number, put: number, escritura = 5): MuestraCopia => ({ serializar, put, escritura });
+const muestra = (trozos: number[], registro = 0.3, duracion = 100, reinicios = 0): MuestraCopia => ({ trozos, registro, duracion, reinicios });
 
-describe("resumirF1", () => {
-  it("F1 es el máximo de la parte síncrona (serializar + put), con la primera incluida", () => {
-    const r = resumirF1([muestra(12, 0.5), muestra(8, 0.4), muestra(7, 0.3)]);
-    expect(r.f1).toBe(12.5);
-    expect(r.sincrona.primera).toBe(12.5);
-    expect(r.serializar.maximo).toBe(12);
-    expect(r.put.maximo).toBe(0.5);
+describe("resumirF1 (1b: por partes)", () => {
+  it("F1 es el paso síncrono más largo de todas las copias, con la primera incluida", () => {
+    const r = resumirF1([muestra([2.5, 3.1, 2.8]), muestra([2.2, 2.9], 3.4), muestra([2.4, 2.6])]);
+    expect(r.f1).toBe(3.4);
+    expect(r.pasoMasLargo.primera).toBe(3.1);
+    expect(r.trozo.maximo).toBe(3.1);
+    expect(r.registro.maximo).toBe(3.4);
+    expect(r.pasosPorCopia).toBe(3);
     expect(r.copias).toBe(3);
   });
 
   it("pasa con F1 ≤ 9 ms, sin redondear", () => {
-    expect(resumirF1([muestra(8.5, 0.5)]).pasa).toBe(true);
-    expect(resumirF1([muestra(8.5, 0.51)]).pasa).toBe(false);
+    expect(resumirF1([muestra([9])]).pasa).toBe(true);
+    expect(resumirF1([muestra([9.01])]).pasa).toBe(false);
     expect(TOPE_F1_PC_MS).toBe(9);
   });
 
@@ -25,23 +34,25 @@ describe("resumirF1", () => {
     expect(resumirF1([]).pasa).toBe(false);
   });
 
-  it("la escritura hasta complete no cuenta para F1", () => {
-    const r = resumirF1([muestra(5, 0.5, 80)]);
-    expect(r.f1).toBe(5.5);
-    expect(r.escritura.maximo).toBe(80);
+  it("la duración total y los reinicios se informan, pero no deciden", () => {
+    const r = resumirF1([muestra([2], 0.3, 900, 4)]);
+    expect(r.pasa).toBe(true);
+    expect(r.duracion.maximo).toBe(900);
+    expect(r.reinicios).toBe(4);
   });
 });
 
 describe("textoF1", () => {
-  it("dice F1, si pasa y la parte síncrona de cada copia en orden", () => {
-    const t = textoF1([muestra(12.25, 0.5), muestra(8, 0.4)], datos);
-    expect(t).toContain("F1 = 12,8 ms (máximo de la parte síncrona): no pasa");
+  it("dice F1, si pasa, lo que se informa y el paso más largo de cada copia en orden", () => {
+    const t = textoF1([muestra([2.25, 9.5]), muestra([2], 0.4)], datos);
+    expect(t).toContain("F1 = 9,5 ms (el paso síncrono más largo): no pasa (tope en la PC con WebView2: ≤ 9 ms; objetivo ~3 ms)");
     expect(t).toContain("2000 símbolos + 3030 cables");
-    expect(t.split("\n").at(-1)).toBe("Parte síncrona por copia (ms): 12,8 · 8,4");
+    expect(t).toContain("la última copia, releída, es igual a serializar");
+    expect(t.split("\n").at(-1)).toBe("Paso más largo por copia (ms): 9,5 · 2,0");
   });
 
-  it("pasa", () => {
-    expect(textoF1([muestra(4, 0.2)], datos)).toContain(": pasa (tope en la PC con WebView2: ≤ 9 ms)");
+  it("si la copia releída no es igual, lo dice", () => {
+    expect(textoF1([muestra([2])], { ...datos, igual: false })).toContain("NO es igual a serializar (MAL)");
   });
 });
 

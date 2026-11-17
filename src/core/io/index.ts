@@ -2,6 +2,7 @@
 // El gzip y el tope en bytes van fuera del núcleo (src/ui/brn.ts).
 export { serializar } from "./serializar";
 export { serializarPorLineas } from "./porLineas";
+export { serializarPorPartes } from "./porPartes";
 export {
   deserializar,
   LARGO_MAXIMO_TEXTO,

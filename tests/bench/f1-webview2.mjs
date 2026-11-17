@@ -14,6 +14,11 @@
 //   --exe=RUTA[,RUTA2]   por defecto src-tauri/target/release/bornera.exe
 //   --procesos=N         procesos por exe (por defecto 3)
 //   --puerto=N           puerto de depuración (por defecto 9333)
+//   --borrar-base        borra la base `bornera` del perfil antes de cada
+//                        medición. Solo para intercalar con un exe de la etapa
+//                        1a, que abre la base en versión 1 y no puede abrirla
+//                        después de que la 1b la subió a 2. OJO: borra también
+//                        las copias de recuperación de la app instalada.
 //   --json               imprime el resultado crudo en JSON
 //
 // El exe usa el perfil de la app instalada (%LOCALAPPDATA%\com.bornera.app):
@@ -82,6 +87,12 @@ async function medirUnProceso(exe) {
     pagina = await Pagina.conectar(await paginaDeLaApp());
     const listo = `!!document.querySelector('[aria-label="Menú de desarrollo"]') && !!document.querySelector("canvas")`;
     for (let i = 0; i < 300 && !(await pagina.evaluar(listo).catch(() => false)); i++) await esperar(100);
+    if (bandera("borrar-base")) {
+      const r = await pagina.evaluar(
+        `new Promise((r) => { const d = indexedDB.deleteDatabase("bornera"); d.onsuccess = () => r("ok"); d.onerror = () => r("error"); d.onblocked = () => r("bloqueada"); })`,
+      );
+      if (r !== "ok") throw new Error(`No se pudo borrar la base: ${r}`);
+    }
     await pagina.evaluar(`document.querySelector('[aria-label="Menú de desarrollo"]').click()`);
     await esperar(100);
     const tocado = await pagina.evaluar(

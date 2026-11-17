@@ -38,22 +38,38 @@ Sale de `docs/plan-fase4.md` (T23, D2a–D2e, D5-A, F1 y sección 7). Fija el es
 
 ## 2. Esquema de IndexedDB (fijo)
 
-- Base `bornera`, versión 1, almacén `copias` con `keyPath: "id"`.
+> **Cambió con la 1b (ajuste 1 de la 1b):** la copia se escribe por trozos, cada uno con su `put`, y un registro chico marca la generación completa. Ningún paso síncrono junta los 653 K.
+
+- Base `bornera`, **versión 2**, con dos almacenes. La 1 la usó solo el arnés de la etapa 1a (sin publicar, el texto entero en `copias`), y quedó en el perfil de la PC. Al subir, `onupgradeneeded` vuelve a crear `copias` vacío y crea `trozos`.
+  - `copias`, con `keyPath: "id"`: el **registro de copia completa**, uno por instancia. Es chico; al arrancar solo se leen estos.
+  - `trozos`, con `keyPath: ["id", "generacion", "n"]`: los trozos del texto.
 - Una copia por instancia. El `id` es el de la instancia: `crypto.randomUUID()` al arrancar, o un respaldo con `Math.random` si no está.
-- **Registro** (`esquema: 1`):
+- **Generación:** un número que sube con cada intento de copia de la instancia, también al volver a empezar. Los trozos de un intento llevan su generación.
+- **Trozo:** `{ id, generacion, n, texto }`, con `n` desde 0. Unidos en orden de `n` dan `serializar(documento)`: el formato `.brn` en una línea, sin gzip y sin la prueba D22-B (D2b).
+- **Registro de copia completa** (`esquema: 1`):
 
 | Campo | Tipo | Qué |
 |---|---|---|
 | `id` | string | Instancia dueña |
 | `esquema` | 1 | Versión del registro (no es la del formato `.brn`) |
-| `texto` | string | `serializar(documento)`: formato `.brn` en una línea, sin gzip y sin la prueba D22-B (D2b) |
+| `generacion` | number | La generación completa |
+| `trozos` | number | Cuántos trozos tiene (de 0 a `trozos - 1`) |
+| `caracteres` | number | Largo del texto unido, para comprobar al leer |
 | `archivo` | `{ nombre, ruta } \| null` | Archivo actual al copiar; `ruta` es null en el navegador |
 | `titulo` | string | `meta.titulo`, para nombrar una copia sin archivo |
 | `componentes` | number | Componentes de todas las hojas, para distinguir copias en la lista |
 | `fecha` | number | `Date.now()` de la copia |
 | `version` | string | Versión de Bornera que la escribió |
 
-- Escritura: `transaction("copias", "readwrite", { durability: "strict" })` y `put`. La copia se da por hecha con `complete`.
+- **Escritura:**
+  - Cada trozo va en su transacción `readwrite` sobre `trozos`, con `durability: "strict"`.
+  - Al final, una transacción sobre `copias` y `trozos`: `put` del registro y borrado de los trozos de las generaciones anteriores de ese `id` (`IDBKeyRange.bound([id, 0, 0], [id, g, 0], false, true)`). Es atómica: la copia completa anterior vale hasta que esta queda escrita.
+  - Antes de esa transacción se esperan los `complete` de los trozos; si uno falló, la copia no se marca completa.
+- **Lectura:** solo copias completas. Del registro se leen los trozos `[id, g, 0…trozos-1]`, se comprueban la cantidad y el largo, y se unen. Si falta algo, es una copia que no abre.
+- **Las incompletas se borran:**
+  - Los trozos de una generación mayor que la del registro son de un intento cortado.
+  - Los de un `id` sin registro son de una instancia que se cortó antes de su primera copia completa.
+  - Se borran al descartar o recuperar ese `id`, y al arrancar, solo para los `id` sin dueño. Nunca los de una instancia viva.
 - La conexión se abre una vez al arrancar y queda abierta. Con `onversionchange` (una versión futura sube el esquema), se cierra y la instancia deja de copiar, con el aviso único.
 - **Dueño (D2d-B):** la instancia toma `navigator.locks.request("bornera-copia-<id>")` al arrancar y no lo suelta nunca. Una copia está «sin dueño» si `request(…, { ifAvailable: true })` consigue su candado. La instancia que la ofrece **retiene ese candado** mientras el diálogo está abierto, así otra instancia que arranca en ese momento no la ofrece también. Con Esc o al decidir, lo suelta.
 - **Si S2 falla** (latido, D2d-B): se suma el almacén `latidos` (`{ id, ultimo }`) en la misma versión 1, porque nada salió publicado. Se escribe cada 10 s y una copia queda sin dueño a los 30 s sin latido.
@@ -64,7 +80,8 @@ Sale de `docs/plan-fase4.md` (T23, D2a–D2e, D5-A, F1 y sección 7). Fija el es
 - Al llegar un cambio (sube `cambios`): si no había cambios sin copiar, `pendienteDesde = ahora`. Un solo `setTimeout`, que se rearma a `min(ultimoCambio + 10 s, pendienteDesde + 60 s)`.
 - Al vencer, se pide ocio: `requestIdleCallback(copiar, { timeout: 1000 })` o, si no existe (WebKitGTK, S8), `setTimeout(copiar, 0)`. El `timeout` hace que la copia salga aunque la ventana esté oculta.
 - Si al entrar está «ocupado» (D1), se vuelve a mirar en 1 s. Ese reintento corre solo mientras hay cambios sin copiar y algo ocupado. No hay bucle sin cambios.
-- **Parte síncrona:** `serializar` + `transaction` + `put`. En ese mismo instante, `copiado = cambios` y `pendienteDesde = null`. Lo que cambie durante la escritura arranca otro ciclo.
+- **La copia va por partes (1b):** cada ocio es **un paso**: escribe trozos con `serializarPorPartes` hasta 2 ms (o lo que quede de ocio, si es menos; al menos una pieza), los une y hace el `put` de **ese** trozo. Al final, un paso más escribe el registro de copia completa. Ver «Etapa 1b» en la sección 7.
+- Al empezar el primer paso, se anota `cambios`. Si en un paso `cambios` ya es otro (o el documento es otro), la copia **vuelve a empezar** con otra generación. Al completarse: `copiado` = los `cambios` del comienzo y `pendienteDesde = null`. Lo que cambió durante la escritura del registro arranca otro ciclo.
 - Sin cambios sin copiar no corre ningún reloj.
 - Solo se copia el editor del documento. Las escenas del banco y el editor de «Probar» no se copian nunca.
 
@@ -77,7 +94,7 @@ Sale de `docs/plan-fase4.md` (T23, D2a–D2e, D5-A, F1 y sección 7). Fija el es
 - Al cerrar la ventana cuando `antesDeCerrar` da verdadero (sin cambios, «No guardar» o guardado). Se espera hasta 1 s antes de `destroy`, para que un IndexedDB colgado no trabe el cierre.
 - **Nunca sola al arrancar.**
 
-**Copias ajenas:** Descartar borra esa. Recuperar la **adopta**: en una sola transacción escribe el mismo `texto` con el `id` propio y borra el viejo, sin volver a serializar. Si se cortara justo después, la copia sigue estando.
+**Copias ajenas:** Descartar borra su registro y todos sus trozos. Recuperar ya no copia el texto en un paso: eso juntaría los 653 K (1b). Con el documento recuperado se pide una copia propia **ya**, por partes, como si vencieran los 60 s. Cuando queda completa, se borra la ajena y se suelta su candado. Si se cortara antes, la ajena sigue ahí y se ofrece de nuevo.
 
 **Orden:** IndexedDB ejecuta las transacciones `readwrite` de un mismo almacén en el orden en que se crean. Un borrado pedido después de una copia en curso queda después. Y la copia, al entrar, mira `modificado`: si ya se guardó, no escribe.
 
@@ -108,7 +125,15 @@ Sale de `docs/plan-fase4.md` (T23, D2a–D2e, D5-A, F1 y sección 7). Fija el es
 
 ## 6. Regla de F1 (fijada antes de medir)
 
-- **F1 = máximo de la parte síncrona de la copia** (sección 3) con la escena de 2000 + 3030 cables, **en WebView2 de la PC**.
+> **Redefinida para la 1b (ajuste 2 de la 1b, antes de medir):**
+> - **F1 = máximo de UN paso síncrono de la copia:** un trozo más su `put`, o el registro final, con la escena de 2000 + 3030 cables.
+> - **Pasa con ≤ 9 ms en la PC con WebView2** (objetivo ~3 ms) y **≤ 50 ms en la netbook**.
+> - La duración total de la copia, la cantidad de pasos y los reinicios se informan, pero no deciden.
+> - La copia de una vez (sección 7, etapa 1b, reinicios) se informa aparte: es la salida para no quedarse sin copia editando sin parar.
+>
+> Lo de abajo es la regla de la etapa 1a, con la copia entera en un paso. Esa medición queda como «antes».
+
+- **F1 (1a) = máximo de la parte síncrona de la copia** (sección 3) con la escena de 2000 + 3030 cables, **en WebView2 de la PC**.
 - **Herramienta:** menú de desarrollo › «Medir la copia (F1)». Hace 20 copias de esa escena, en memoria y sin tocar el documento, a una clave `medicion-<id>` que borra al final. Hay una por tarea, con ocio entre ellas. Muestra mediana, máximo y la primera, con «Copiar». Vive en `src/ui/medirCopia.ts` para que C1 la reuse. Se hace primero, en la etapa 1a (ajuste 1).
 - **Cómo se mide:** con el exe de release, 3 aperturas, intercalando con el de desarrollo si hay que comparar. La PC varía de 24 a 36 ms entre procesos (T22). La primera copia de cada proceso cuenta (D5-A). **F1 = el mayor de las 60.**
 - **Pasa si F1 ≤ 9 ms.** Si pasa de 9 ms, viene la etapa 1b antes de seguir, y en todo caso antes de la netbook.
@@ -151,7 +176,9 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
     - `CambiarEtiqueta` y `Etiquetar` asignan `c.etiqueta` (`comandos.ts:686`, `748` y `757`).
     - Un `WeakMap` por identidad daría líneas viejas. Lo que sí hay: cada comando devuelve un `Cambio` con los ids de los componentes y cables que tocó.
 
-#### Propuesta para la 1b (ajuste 2, para que elija Bruno)
+#### Propuesta para la 1b (ajuste 2)
+
+**Elegida: (a)** (Bruno, 2026-11-17), con los 3 ajustes que están en la etapa 1b.
 
 | | (a) Por partes | (b) Caché por objeto |
 |---|---|---|
@@ -166,7 +193,7 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
 
 ### Etapa 1 — Almacén, candados, relojes y verificación (Opus alto)
 - `src/ui/respaldo.ts`:
-  - Interfaz `Almacen` (`abrir`, `listar`, `escribir`, `borrar`, `adoptar`), con `almacenIndexedDB()` y `almacenMemoria()` para los tests.
+  - El almacén por trozos ya está (`AlmacenCopias`, 1b): `escribirTrozo`, `completar`, `leer`, `listar` y `borrar`, con `almacenIndexedDB()` y `almacenMemoria()`. Ya no hay `adoptar`: Recuperar hace una copia propia por partes (sección 4). Suma borrar los trozos incompletos de los `id` sin dueño.
   - Interfaz `Candados` (`tomarPropio`, `probarAjeno`), con `candadosWebLocks()` y `candadosMemoria()`.
   - `motivoFallo(e)`.
   - `listar` saltea y borra los registros `medicion-…` que hayan quedado de «Medir la copia (F1)» (por ejemplo, si se cortó a la mitad): nunca se ofrecen para recuperar.
@@ -190,14 +217,64 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
 - **Si S2 falla:** latido (D2d-B) en la etapa 3.
 - **Si F1 > 9 ms:** etapa 1b.
 
-### Etapa 1b — Solo si F1 > 9 ms (Opus xhigh, núcleo)
-Va antes que el resto de la etapa 1 (ajuste 1). Antes de programar, se le proponen a Bruno dos caminos (ajuste 2), después de verificar si el modelo es inmutable:
-- **(a) Por partes:** `serializarPorPartes(doc)` en `src/core/io`, un generador que devuelve el mismo texto que `serializar`, byte a byte. Cede cada N objetos. La copia corre las partes en ocios sucesivos y, si `cambios` sube en el medio, vuelve a empezar (fase 4, sección 7).
-- **(b) Caché por objeto:** un `WeakMap` objeto → texto con los escritores de cada objeto (los de `serializar`, que también usa `serializarPorLineas`). La copia solo vuelve a escribir lo que cambió. Solo vale si los comandos reemplazan los componentes y cables en lugar de cambiarlos en su lugar.
-- **Tests:** el texto es igual al de `serializar` en los 8 `documentosDePrueba`, el banco de 2000 + cables y las mutaciones al azar. En (b), también después de cada comando, deshacer y rehacer.
-- **Medición:**
-  - Una fila nueva en `abrir-node.mjs`, intercalada con `serializar`.
-  - Repetir F1 en WebView2.
+### Etapa 1b — Copia por partes (Opus xhigh, núcleo)
+**Elegida (a) por partes** (Bruno, 2026-11-17), con 3 ajustes: el `put` también por partes, F1 por paso y la salida de los reinicios. Va antes que el resto de la etapa 1.
+
+- **Núcleo:** `serializarPorPartes(doc)` en `src/core/io/porPartes.ts`. Es un generador de piezas cuya unión es `serializar(doc)`, carácter por carácter.
+  - Las piezas son: la cabeza hasta `"hojas":[`, la apertura de cada hoja, cada componente, el paso a los cables, cada cable, el cierre de cada hoja y el cierre final.
+  - Usa los mismos escritores (`valor`, `meta`, `mapa`, `componente`, `cable`). `serializar` no cambia: los sha256 del banco (T21) y el corpus (T22) lo cuidan.
+  - Lee el documento vivo pieza por pieza. Si el documento cambia en el medio, la copia lo detecta por `cambios` y vuelve a empezar.
+- **Copia (`src/ui/copiaPorPartes.ts`):** una función con todo inyectado (almacén, ocio, reloj y lectura del editor), que la usan el arnés de F1 y, desde la etapa 1, el autoguardado.
+  - **Un paso por ocio:** saca piezas hasta 2 ms, mirando el reloj cada 8 piezas, o hasta lo que quede de ocio si es menos (siempre al menos una pieza). Las une y hace el `put` de ese trozo. El objetivo es ~3 ms por paso.
+  - **Último paso:** el registro de copia completa y el borrado de las generaciones viejas (sección 2).
+  - **Vuelve a empezar** con otra generación si en un paso `cambios` (o el documento) ya no es el del comienzo.
+  - **Ajuste 3, reinicios:** después de **5 reinicios seguidos**, el intento siguiente es **de una vez**.
+    - Espera un ocio largo (`timeRemaining() ≥ 40 ms`; con el respaldo de `setTimeout`, el próximo) y escribe todos los trozos y el registro en esa misma tarea, sin ceder.
+    - Cada trozo sigue con su `put`, así que tampoco junta los 653 K.
+    - Ningún comando puede caer en el medio de una tarea, así que esta copia siempre termina. No se queda sin copia mientras se edita sin parar: alcanza con una pausa de ~50 ms entre acciones, que en la edición normal siempre hay.
+    - Tarda lo que la copia entera (~15 ms en la PC, ~80 ms estimados en la netbook) y por eso se informa aparte, sin entrar en F1. Si los comandos llegan cada menos de 40 ms (una tecla mantenida apretada), espera a que se suelte.
+  - **Informa:** pasos por copia, duración total, reinicios y copias de una vez.
+- **Tests (sin DOM):**
+  - `porPartes.test.ts`: la unión es igual a `serializar` en:
+    - Los 8 `documentosDePrueba`.
+    - El banco de 2000 + cables.
+    - El corpus `formato-v1` (abierto).
+    - Hojas sin componentes o sin cables.
+    - Documentos armados al azar (semilla fija) con 0 a 3 hojas y textos raros.
+  - `copiaPorPartes.test.ts`, con almacén en memoria, ocio y reloj falsos:
+    - Con varios presupuestos, los trozos unidos dan `serializar`.
+    - Ningún paso pasa del presupuesto más una pieza.
+    - El registro llega al final y borra las generaciones viejas.
+    - Un trozo que falla no marca la copia completa.
+    - Un cambio en el medio hace volver a empezar con otra generación.
+    - **Ediciones seguidas** (un comando entre cada paso): a los 5 reinicios la copia sale de una vez en el primer ocio largo y su texto es el del documento de ese momento. Con ocios cortos, espera.
+  - `respaldo.test.ts`: lectura de una copia completa desde el almacén en memoria. Faltan trozos o el largo no da: es una copia que no abre.
+- **Arnés de F1:** `medirCopia.ts` mide con la copia por partes. Informa el paso más largo de cada copia (F1), los pasos por copia, la duración total y el registro final. Al terminar, relee la última copia y comprueba que sea igual a `serializar`.
+- **Medición** (ajuste 2 de la 1b, antes y después):
+  - `node tests/bench/f1-webview2.mjs --exe=<exe de la 1a>,<exe de la 1b>` intercala procesos A B A B.
+  - `abrir-node.mjs` suma la fila «por partes» (todas las piezas unidas), para ver cuánto cuesta en total frente a `serializar`.
+- **Hecho (2026-11-17): F1 = 3,4 ms, pasa.**
+  - Archivos:
+    - `src/core/io/porPartes.ts`.
+    - `src/ui/copiaPorPartes.ts`.
+    - `src/ui/respaldo.ts`, por trozos: almacén de IndexedDB y en memoria, `unirTrozos`, base en versión 2.
+    - `src/ui/medirCopia.ts`, que relee la última copia y la compara con `serializar`.
+  - Tests:
+    - `porPartes.test.ts`: los 8 documentos de prueba, hojas vacías y 300 documentos al azar.
+    - El corpus `formato-v1` (en su test).
+    - `copiaPorPartes.test.ts` (20), con las ediciones seguidas y los ocios cortos del ajuste 3.
+    - `respaldo.test.ts`.
+    - En total, 2016 tests y check limpio.
+  - **Intercalado en WebView2** (Edg/157, exe de release; A = 1a, B = 1b; 3 + 3 procesos, 20 copias cada uno). `f1-webview2.mjs` suma `--borrar-base`, porque el exe de la 1a abre la base en versión 1 y no puede después de que la 1b la sube a 2.
+
+    | Exe | Mediana por proceso | Máx. (F1) |
+    |---|---|---|
+    | A, copia entera | 8,8–9,3 ms | 13,4 ms |
+    | B, paso más largo de cada copia | 2,6–2,7 ms | **3,4 ms** |
+
+  - Lo que se informa (B): 5 pasos por copia (4 trozos de ~2,5 ms y el registro de 0,1–0,4 ms), duración total de ~23 ms de mediana (máximo 183–285 ms, por esperar los ocios) y 0 reinicios. La copia releída es igual a `serializar` en los 3 procesos.
+  - **En Node** (`abrir-node.mjs`, 3 procesos): `serializar` 8,0 ms y por partes, todo unido, 8,4 ms (+5 %).
+  - Netbook (×5,5 de D6a): un paso de ~3 ms daría ~17–19 ms, debajo de 50. Se confirma en el cierre de la fase.
 
 ### Etapa 2 — Diálogo de recuperar (Opus alto)
 - `src/ui/recuperar.ts`, puro:
@@ -285,7 +362,8 @@ Va antes que el resto de la etapa 1 (ajuste 1). Antes de programar, se le propon
 
 ## 9. Riesgos
 
-- **F1 no pasa** (lo esperable): la etapa 1b. Si tampoco alcanza, se decide con Bruno entre caché por objeto y bajar el tope.
+- **F1 no pasa:** pasó, con la 1b (3,4 ms). Queda la netbook, en el cierre de la fase.
+- **Editar sin parar con ocios cortos** (una tecla mantenida apretada, comandos cada < 40 ms): la copia de una vez espera a que se suelte. Se acepta.
 - **Cortar la primera instancia puede tirar el WebView2 de la segunda**, porque comparten proceso. Las dos copias quedan en disco y se ofrecen al volver. Se observa en S2.
 - **`navigator.locks` en `tauri.localhost`:** si no es contexto seguro, no está, y queda el latido. Se ve en la etapa 1.
 - **Una previa abierta mucho tiempo** posterga la copia todo ese tiempo, porque «nunca» durante una previa. Se acepta: hay alguien usando la app.
