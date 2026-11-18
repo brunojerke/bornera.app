@@ -4,7 +4,7 @@ Editor y simulador de automatismos eléctricos, liviano y de código abierto. Pe
 
 ## Estado
 
-**Versión 0.1.3**: editor de circuitos (fase 3), con la fase 3b en curso (copiar y pegar, etiquetado, referencias cruzadas y validaciones). La simulación llega en la fase 5. El plan completo está en [docs/arquitectura.md](docs/arquitectura.md).
+**Versión 0.1.4**: editor de circuitos con copiar y pegar, etiquetado, referencias cruzadas y validaciones (fases 3 y 3b), y guardar y abrir completo (fase 4): autoguardado con recuperación después de un corte, archivos recientes, doble clic en un `.brn` en Windows y exportación sin comprimir (`.brn.json`). La simulación llega en la fase 5. El plan completo está en [docs/arquitectura.md](docs/arquitectura.md).
 
 [Descargas](https://github.com/brunojerke/bornera.app/releases) · [Instalar en Windows](#instalar-en-windows)
 
@@ -30,11 +30,13 @@ npm run tauri build # genera el instalador
 
 Los instaladores de Windows (`.msi`) todavía no están firmados, así que Windows SmartScreen puede mostrar "Windows protegió su PC". Para instalar, hacé clic en "Más información" y después en "Ejecutar de todas formas".
 
+Para actualizar, instalá el `.msi` nuevo encima, sin desinstalar la versión anterior: queda una sola Bornera. El instalador asocia los archivos `.brn`, así que se abren con doble clic.
+
 Los instaladores los compila GitHub Actions desde este repositorio al publicar un tag `v*` ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
 
 ## Privacidad
 
-Bornera no envía datos por red: no tiene telemetría, cuentas ni actualizaciones automáticas. Los circuitos se guardan solo en los archivos .brn que elegís en tu computadora.
+Bornera no envía datos por red: no tiene telemetría, cuentas ni actualizaciones automáticas. Los circuitos se guardan en los archivos .brn que elegís en tu computadora. Mientras trabajás, Bornera guarda además una copia de recuperación y la lista de archivos recientes en su carpeta de datos, también en tu computadora; la copia se borra al guardar o al cerrar bien.
 
 ## Licencia
 
