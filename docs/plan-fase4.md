@@ -141,6 +141,14 @@ El detalle de cada tarea (qué, pruebas, «Hecho», mediciones), el estado al ap
 - **K1 y K2:** en C1 solo se anotan los valores de la PC. El factor sale en C4.
 - No se vuelve a medir para que algo pase.
 
+**Hecho (2026-11-18, `bbf650b`):** el detalle de la medición está en `docs/bench.md`.
+- F1, F2 y F3 pasan en la PC. Los máximos: F1 3,1 ms, F2 34,7 ms y F3 57,5 ms, «con disco» y sin temporales que queden.
+- B1–B16: **B5 2.º no pasa, con causa conocida.** C1 no toca su ruta, y el valor tiene dos niveles en los dos exes. Lo demás da igual o baja.
+- Frías: B1 sigue fuera en los dos exes (también en `6d3ac66`). B3 máx. no se repite.
+- K de la PC anotado para C4.
+- 2149 tests, check sin errores, `cargo test` 7/7 y humo 893/893 (nuevo `c1-probar-fase4.mjs`: 18).
+- «Probar la fase 4» está en el exe de release (`0.1.4-alpha.1`), el mismo que empaqueta el `.msi`.
+
 ### C4. Si K1 > 3 o K2 > 5,5 (propuesta; decide Bruno en C4)
 Los factores de D6a-B (×3 y ×5,5) dieron los topes de PC derivados de la netbook: hoy, solo F1 (9 ms = 50 / 5,5). Los topes de la netbook de la fase 4 se juzgan en la netbook, así que un factor mayor no cambia lo que ya pasó allá.
 - **A. Recalcular para la fase 5:** los topes de PC de la fase 5 se derivan con el K medido. En la fase 4 no cambia nada.

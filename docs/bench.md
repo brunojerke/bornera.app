@@ -19,6 +19,53 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## «Probar la fase 4» en la PC (fase 4, C1) — 2026-11-18
+
+**Criterio escrito antes de medir** (`docs/plan-fase4.md`, sección 6, C1; commit `7c40c8a`):
+- B1–B16: D6b-C sobre las medianas calientes. Si una fila no pasa y el diff de C1 no pasa por su ruta, queda «no pasa, causa conocida», sin volver a medir.
+- F1 ≤ 9 ms de máximo en cada caliente. F2 y F3 ≤ 1 s, sobre el máximo de 5 vueltas, en todas las corridas.
+- Las frías se informan con la regla de C4. K se anota.
+
+**Cómo se midió:**
+- `probar-webview2.mjs --fase4 --bloques=3`: A es el exe de C1 (`bbf650b`), que corre «Probar la fase 4»; B es `6d3ac66`, que corre «Probar la fase 3b».
+- 6 aperturas por exe, cada una con una fría y una caliente.
+- Enchufada, en «Mejor rendimiento» (modo `ded574b5…`), sin otra Bornera abierta. Edge 157 (WebView2).
+- Los dos exes salen de `tauri build --no-bundle`. La base, de un worktree temporal con `npx svelte-kit sync`, ya borrado.
+- El exe de C1 es `0.1.4-alpha.1` de release y muestra «Probar la fase 4» en el menú de desarrollo: es el mismo exe que empaqueta el `.msi`.
+
+**F en la PC (A; máximos en ms): pasan las tres.**
+
+| # | Tope PC | Calientes | Frías | Mediana de las calientes |
+|---|---|---|---|---|
+| F1 | ≤ 9 (calientes) | 2,9–3,1 | 2,8–3,0 (informan) | 2,6 |
+| F2 | ≤ 1000 (todas) | 31,4–34,7 en las 12 | | 23,7 |
+| F3 | ≤ 1000 (todas) | 45,5–57,5 en las 12 | | 46,0 |
+
+- F2 y F3 corrieron «con disco»: un `.brn` de 73 448 bytes en la carpeta temporal. Al terminar no queda ningún `bornera-medicion-*` en `%TEMP%`.
+- Las capacidades no cambiaron.
+- De F3, la parte hasta el documento (leer, desempaquetar y deserializar) da como máximo 17,9 ms.
+- Lo abierto es igual al documento, y la copia de F1, releída, es igual a `serializar`.
+- La salida de emergencia de F1 da como máximo 7,8 ms; no decide.
+
+**B1–B16 (calientes, mediana de 6): todas iguales o bajan, salvo B5 2.º.**
+- **B5 2.º** (el máximo de deshacer «Pegar 500») va de 1,9 a 3,0: **no pasa, causa conocida**.
+  - La ruta de B5 (pegar y deshacer en el editor y el dibujo, medidos dentro de `medir()` del banco) no tiene cambios en C1.
+  - El diff de C1 en el camino de «Probar» es `medirConCalentamiento`: mueve las mismas llamadas a `medirFase3b` a una función, fuera de lo que se cronometra.
+  - El valor tiene dos niveles por apertura en los dos exes: ~1,6–1,9 o ~2,8–3,4. A cayó 4 veces en el alto y B, 1. Los rangos se superponen: base 1,8–2,9, C1 1,6–3,2.
+  - En T27, el mismo código de `6d3ac66` había dado 3,0 de mediana. Hoy da 1,9.
+- Bajan: B2 2.º (11,1 → 9,6), B6 máx. (8,1 → 7,0) y B11 máx. (10,6 → 8,9). B9 = 500 en las 12 aperturas.
+
+**Frías (regla de C4, informan): seguimiento de B1 y B3 máx.**
+- **B1 sigue fuera en los dos exes:** 1.º y 2.º, 3 + 3 valores en la base y 2 + 2 en C1. Ya no es solo en el exe nuevo: pasa también en `6d3ac66`.
+- **B3 máx. frío queda en rango** en los dos (C1: 9,7 de mediana fría). Esta vez no se repite.
+- Además, en C1: B2 1.º (1 valor), B2 2.º (3) y B10 (1, 26,1 ms).
+- La prueba real de las frías es la netbook en C4.
+
+**Valores K de la PC** (mediana de las calientes de A; el factor sale en C4):
+- K1: B1 45,5 · B2 9,3 · B4 5,0 · B5 1,4 · B7 0,9 · B10 20,6 · B12 1,0 · B13 0,0 · F1 2,6 · F2 23,7.
+- K2: B3 9,7 · B6 7,0 · B11 8,9 · B14 0,6 · B16 9,3 · F3 46,0.
+- B13 da 0,0 en la PC: no da cociente (`factores.mjs` lo deja fuera).
+
 ## Pulsadores desde S0 (fase 4, T27) — 2026-11-18
 
 **Criterio escrito antes de medir** (`docs/plan-fase4.md`, T27): headless (`npm run bench -- --json`) en ABBA ×3 contra `5cf70f2`. Deciden todas las filas con la regla D6b-C, sobre la mediana de las 6 corridas de cada lado:
