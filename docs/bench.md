@@ -32,13 +32,37 @@ WebView2 (`probar-webview2.mjs`) se corre solo si alguna fila no pasa.
 - La base sale de un worktree temporal en `5cf70f2`, ya borrado. Hizo falta `svelte-kit sync`: sin `.svelte-kit/`, Vite no transforma la página del banco y cada corrida espera los 10 min del límite.
 - Los dos exes de WebView2 salen de `tauri build --no-bundle`. Edge 157.
 
-**Headless: 11 de 75 filas no pasan.** Ninguna pasa por el `Numerador`, y van para los dos lados: 5 bajan y 6 suben. Las tres que pasan por el `Numerador` dan igual (ms, mediana de 6):
+**Headless: 14 de 75 filas no pasan** (corregido el 2026-11-18, en C1; antes decía 11, con 5 que bajan y 6 que suben). Ninguna pasa por el `Numerador`, y van para los dos lados: 4 bajan y 10 suben. Las tres que pasan por el `Numerador` dan igual (ms, mediana de 6):
 
 | Escenario (2000 + 3000 cables + 30 T, al 31 %) | Por gesto: base | Por gesto: T27 | Paso: base | Paso: T27 | Lentos | Juicio |
 |---|---|---|---|---|---|---|
 | Pegar 500 y deshacer | 63,9 | 64,8 | 5,55 | 5,55 | 0 / 0 | igual |
 | Duplicar todo (2000) y deshacer | 43,9 | 43,9 | 50,05 | 49,85 | 0 / 0 | igual |
 | Etiquetar los vacíos (2000) y deshacer | 42,4 | 42,6 | 4,45 | 4,55 | 0 / 0 | igual |
+
+**Las 14 que no pasan** (revisión en C1, sin volver a medir: los mismos 12 JSON del ABBA y el mismo `comparar.mjs` de la sesión de T27). **El 11 no se reproduce con esos JSON**, y no se sabe de dónde salió. Por gesto, en ms, mediana de 6 (Δ de T27 contra la base):
+
+| Escena | Escenario | T27 | Base | Δ |
+|---|---|---|---|---|
+| 100 | Rehacer al 100 % | 15,4 | 12,4 | +25 % |
+| 100 | Seleccionar al 31 % | 10,3 | 8,4 | +22 % |
+| 100 | Mover 1 al 31 % | 12,9 | 18,6 | −31 % |
+| 100 | Mover todo al 31 % | 43,8 | 53,3 | −18 % |
+| 100 | Arrastrar 40 completos al 58 % | 49,2 | 40,7 | +21 % |
+| 500 | Editar al 100 % | 8,3 | 10,3 | −20 % |
+| 500 | Arrastrar 40 en contornos al 58 % | 20,85 | 18,95 | +10,03 % |
+| 2000 | Editar al 31 % | 13,3 | 11,2 | +18 % |
+| 2000 | Mover 1 al 31 % | 10,0 | 11,2 | −11 % |
+| cables | Soltar con todo seleccionado al 31 % | paso 17,3 | paso 15,7 | +10,2 % (por gesto, igual) |
+| cables | Arrastrar todo seleccionado al 31 % | 78,3 | 70,1 | +12 % |
+| cables | Cable en curso al 58 % | 22,9 | 20,3 | +13 % |
+| cables | Reconectar un extremo libre al 58 % | 25,8 | 22,4 | +16 % |
+| cables | Previa de pegar 320 al 31 % | 61,3 | 52,2 | +17 % |
+
+**Causa de cada fila: no se sabe.** Lo verificado:
+- **No es código de T27.** El diff contra `5cf70f2` solo toca el `Numerador` (`menorLibre`, `etiquetarLote`, `etiquetarVacios`) y una propiedad de la biblioteca. Ninguna de las 14 pasa por ahí: las etiquetas de la escena salen de la generación del banco y el dibujo no cambió.
+- **La corrida `12-A` vino lenta en todo:** +17 % de mediana sobre las 75 filas, y la más lenta en 38 de ellas. La `01-A` es la más lenta en 14. En ABBA ×3, la 1.ª y la 12.ª caen las dos en T27. Por qué vino lenta la 12, no se sabe.
+- **El conjunto no es estable:** sin la `12-A` quedan 12, y sin la `01-A` ni la `12-A` también 12, pero entran y salen filas distintas. Con 6 corridas, ±10 % queda por debajo del ruido del headless en estas filas. Algunas tienen dos niveles en los dos lados (Rehacer al 100 %: ~12 y ~16 en T27 y en la base).
 
 **WebView2: `probar-webview2.mjs --bloques=3`.** Son 6 aperturas por exe, cada una con una fría y una caliente. Tabla caliente (mediana de 6, ms):
 
