@@ -456,7 +456,14 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
   - Al probar las herramientas: con `--corridas=1` no quedaban calientes y `compararB` daba «pasa» sin comparar nada. Ahora falla: `probar-webview2.mjs` exige al menos 2 corridas, y `compararB` rechaza las listas vacías (con su test).
 - **Escenario F1 en el banco:** «Copia de recuperación con 2000 + 3030 cables» en `npm run bench`, con `medirCopias` sobre el IndexedDB del Chrome headless. Informativo; F1 se juzga en WebView2. C1 reusa `medirCopia.ts`.
 
+- **A mano en `tauri dev` (Bruno, 2026-11-18): pasa.**
+  - D5-A: Finalizar tarea sobre la app Bornera y Recuperar dejan S1 corrido, el título con «•» y Deshacer desactivado.
+  - Ctrl+S sugiere `tests\circuitos\marcha-parada.brn`.
+  - Cerrar con «No guardar» borra la copia: al volver a abrir no pregunta.
+  - Descartar: al cerrar y volver a abrir no pregunta.
+
 **Cierre:** skill `bornera-cierre` (Sonnet), con el humo entero y las líneas «Hecho» en `plan-fase4.md`.
+- **T23 cerrada (2026-11-18):** 2065 tests, check sin errores, humo entero 845/845. Se borró `tests/bench/tmp-d1.mjs`. En la netbook (cierre de la fase): F1 ≤ 50 ms con «Probar la fase 4» y las filas 2, 3 y 3b de la checklist.
 
 ## 8. Tests unitarios (Vitest, sin DOM)
 

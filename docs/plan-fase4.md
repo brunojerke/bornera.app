@@ -245,6 +245,23 @@ Cómo se prueba:
   - Dos páginas con el mismo perfil.
 - **Banco:** escenario «Copia de recuperación con 2000 + 3030 cables», con la regla de F1.
 - **Modelo:** plan Opus xhigh, código Opus alto, cierre Sonnet.
+- **Hecho (2026-11-18), con todas las decisiones A del plan propio y los ajustes de Bruno.** El detalle de cada etapa está en `docs/plan-T23.md`.
+  - **1a y 1b** (`0929a36`, `85cd377`): la copia entera en un paso dio F1 = 25,1 ms en WebView2 y no pasó. Ahora la copia va **por partes** (trozos de hasta 2 ms, cada uno con su `put`, más un registro final).
+  - **1** (`fc386eb`, `21870d0`): almacén en IndexedDB, relojes (10 s / 60 s, en ocio, nunca durante un gesto) y candados por instancia con Web Locks. S2 y S3 a mano pasan en la PC.
+  - **2** (`beb5c2c`): diálogo «Bornera no se cerró bien» con Recuperar y Descartar, varias copias y una copia que no abre. La 3 quedó hecha por adelantado.
+  - **4** (`f2ede98`): humo `t23-autoguardado.mjs`, con corte por CDP y recuperación idéntica (D5-A), dos pestañas y varias copias.
+  - **5** (`fb11f65`, `e60047e`):
+    - **F1 final en WebView2 = 3,1 ms (tope 9), mediana 2,6 ms.** La salida de emergencia, aparte: máx. 8,4 ms.
+    - **ABBA ×3 de «Probar la fase 3b» contra `32c32b4`: nada sube.**
+    - **D1** (opción A): `alCambiar` suma 0,001 ms de mediana por comando y 0,19 ms de máximo.
+    - Tablas en `docs/bench.md`.
+  - **A mano en `tauri dev` (Bruno, 2026-11-18): pasa.** Se probaron:
+    - D5-A con Finalizar tarea y Recuperar.
+    - Guardar sugiere la ruta original.
+    - «No guardar» borra la copia.
+    - Descartar no vuelve a preguntar.
+  - Resultados: 2065 tests, check sin errores, humo entero 845/845.
+  - **Queda para el cierre de la fase:** en la netbook, F1 ≤ 50 ms con «Probar la fase 4» y las filas 2, 3 y 3b de la checklist.
 
 ### T24. Alcance de archivos y Abrir recientes (D8-A)
 - **Qué:**
@@ -324,8 +341,8 @@ Cómo se prueba:
 |---|---|---|
 | 0 | Enchufada, en «Mejor rendimiento». Instalar el `.msi` de `0.1.4-alpha.N` encima de la alpha.1 | Una sola «Bornera», versión alpha.N |
 | 1 | Menú de desarrollo › «Probar la fase 4», 3 veces seguidas, con «Copiar» cada vez | Las filas con tope pasan (mediana de las 3) |
-| 2 | Abrir `marcha-parada.brn`, arrastrar S1 dos unidades a la derecha y esperar 15 s sin tocar nada. Administrador de tareas › Bornera › Finalizar tarea (sobre la app Bornera, no sobre los procesos «Microsoft Edge WebView2»; T23, ajuste 3). Abrir Bornera › **Recuperar** | S1 corrido, título con «•», Deshacer desactivado |
-| 3 | Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
+| 2 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Abrir `marcha-parada.brn`, arrastrar S1 dos unidades a la derecha y esperar 15 s sin tocar nada. Administrador de tareas › Bornera › Finalizar tarea (sobre la app Bornera, no sobre los procesos «Microsoft Edge WebView2»; T23, ajuste 3). Abrir Bornera › **Recuperar** | S1 corrido, título con «•», Deshacer desactivado |
+| 3 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
 | 3b | T23 (en la PC pasó el 2026-11-17). Abrir Bornera dos veces; en cada una, cambiar algo y esperar 15 s. Finalizar tarea sobre la **primera** (la app Bornera). En la segunda, menú de desarrollo › «Copias de recuperación…» | La segunda sigue viva y editable (no queda en blanco ni se cierra); la copia de la primera dice «sin dueño» |
 | 4 | Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
 | 5 | «Abrir reciente» › `marcha-parada.brn` | Abre |

@@ -208,8 +208,9 @@ Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en form
 - **Autoguardado** (fase 4, D2 de `docs/plan-fase4.md`):
   - La copia de recuperación va en IndexedDB del webview, una por instancia abierta.
   - Sale a los 10 s sin comandos o a los 60 s del primer cambio sin copia, nunca durante un gesto.
-  - Al arrancar después de un corte, Bornera ofrece Recuperar o Descartar.
-  - La copia se borra al guardar o al cerrar bien.
+  - Se escribe por partes, en ocio: trozos de hasta 2 ms, cada uno con su `put`, y al final un registro de copia completa (`src/ui/autoguardado.ts`, `src/ui/respaldo.ts`). Si el documento cambia en el medio, la copia vuelve a empezar. Cada instancia retiene su copia con un candado de Web Locks.
+  - Al arrancar después de un corte, Bornera ofrece Recuperar o Descartar («Bornera no se cerró bien»), una fila por copia si hay varias.
+  - La copia se borra al guardar, al cerrar bien (también con «No guardar») y al reemplazar el documento con Nuevo o Abrir. Nunca sola al arrancar.
 - **Biblioteca separada:** los símbolos no se guardan dentro de cada archivo; solo se referencia su tipo (`contactor.bobina`).
 - **Exportación de respaldo:** «Exportar sin comprimir (.brn.json)…» (botón de la barra, sin atajo), para revisarlo o versionarlo con Git. Escribe una copia y no cambia el archivo actual, la marca «•» ni el historial. El formato lo da la extensión: Ctrl+S sobre un `.brn.json` abierto lo vuelve a escribir sin comprimir, y en Guardar como se puede escribir `.brn.json` a mano. El `.brn` normal no cambia ni un byte: lo fijan los sha256 del banco en `src/editor/banco-brn.test.ts` (fase 4, D4-C de `docs/plan-fase4.md`, T21).
 - **Forma por líneas del `.brn.json`** (`serializarPorLineas`, `src/core/io/porLineas.ts`): UTF-8 sin BOM, cada línea termina en `\n` (también la última). Cada componente y cada cable es una línea con su JSON compacto canónico; una lista vacía va en la misma línea que su clave. Quitando todos los `\n` queda exactamente el texto de `serializar`. Al abrir se aceptan CRLF y BOM; al volver a guardar sale con `\n`. En Git, `*.brn.json -text` (`.gitattributes`). El ejemplo de arriba:
@@ -301,6 +302,7 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
      - Con 10 s sin comandos antes del corte, no se pierde nada.
      - Lo prueba el humo `t23-autoguardado.mjs`, y en la netbook, a mano.
      - La copia con 2000 símbolos y sus cables bloquea ≤ 50 ms en la netbook.
+       - Nota (2026-11-18, T23): desde la 1b, lo que se mide es el paso síncrono más largo de la copia por partes. En la PC con WebView2 dio 3,1 ms. La netbook queda para el cierre de la fase.
      - Al cierre, `0.1.4` se instala encima de `0.1.4-alpha.N` sin desinstalar.
 5. **Simulación de mando:** fuentes, pulsadores, contactor, contactos auxiliares, lámpara, modo simular.
    - Pasa cuando: la marcha-parada con enclavamiento funciona y su test pasa.
