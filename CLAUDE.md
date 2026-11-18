@@ -20,6 +20,7 @@ Editor + simulador de circuitos eléctricos liviano. Tiene que correr fluido en 
 - `npm run dev`          solo el frontend en el navegador (http://localhost:1420), sin Tauri
 - `npm test`             tests una vez (Vitest), incluida la regla de imports de `src/core`
 - `npm run test:watch`   tests en modo vigilancia
+- `cargo test` (en `src-tauri`)  tests de Rust (`elegir_archivo`, el archivo del argumento de T25). Se corre al cerrar junto con `npm test` y `npm run check`
 - `npm run bench`        banco de dibujado (100/500/2000 símbolos) en un Chrome/Edge headless, sin abrir la ventana
 - `node tests/bench/abrir-node.mjs`  abrir y guardar el banco de 2000 + cables en Node, sin navegador (serializar, deserializar, gzip + deserializar); `--procesos=N`, `--json`
 - `node tests/bench/f1-webview2.mjs`  F1 de T23 (parte síncrona de la copia de recuperación) en WebView2, con el exe de release (`npm run tauri build -- --no-bundle`); solo Windows y sin otra Bornera abierta; `--procesos=N`, `--exe=A,B` (intercala), `--borrar-base` (solo para intercalar con un exe de la etapa 1a; borra las copias del perfil), `--json`. Desde la etapa 5 informa aparte la salida de emergencia (3 copias forzadas de una vez por proceso)

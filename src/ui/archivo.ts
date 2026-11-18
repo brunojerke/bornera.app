@@ -54,6 +54,11 @@
 // Abrir (`abrirElegido`). Abrir, Guardar y Guardar como suman la ruta arriba
 // de la lista; Exportar y Recuperar no (no cambian el archivo actual).
 //
+// Abrir el archivo del argumento (T25, doble clic en un `.brn`): los pasos de
+// Abrir reciente, salvo que un archivo que no existe es un error y no toca la
+// lista. Si abre, sube en la lista como Abrir. La ventana lo llama al
+// arrancar, después de resolver la recuperación.
+//
 // Nuevo: los pasos 1 y 2 y un documento vacío, sin archivo actual.
 //
 // Cerrar la ventana (D14-A, `antesDeCerrar`): con cambios en el documento,
@@ -156,6 +161,11 @@ export const AVISOS_ABRIR = {
 /** Aviso de la barra de estado cuando el archivo de Abrir reciente ya no existe (T24). */
 export function avisoNoExiste(nombre: string): string {
   return `Ya no existe «${nombre}»: se quitó de recientes`;
+}
+
+/** Problema de «No se pudo abrir» cuando el archivo con que arrancó Bornera no existe (T25). */
+export function mensajeNoExiste(ruta: string): string {
+  return `No existe el archivo «${ruta}»`;
 }
 
 /** Aviso de la barra de estado cuando no se puede cerrar la ventana. */
@@ -345,7 +355,21 @@ export class OperacionesArchivo {
    * Abrir reciente (T24): abre esta ruta sin el selector. Si el archivo ya no
    * existe, avisa y la quita de la lista, sin preguntar por los cambios.
    */
-  async abrirReciente(ruta: string): Promise<void> {
+  abrirReciente(ruta: string): Promise<void> {
+    return this.abrirRuta(ruta, "reciente");
+  }
+
+  /**
+   * Abrir el archivo con que arrancó Bornera (T25, doble clic en un `.brn`):
+   * los pasos de Abrir reciente, pero si el archivo no existe es un error
+   * («No se pudo abrir») y la lista de recientes no se toca. Si abre, sube en
+   * la lista (D3-A).
+   */
+  abrirArgumento(ruta: string): Promise<void> {
+    return this.abrirRuta(ruta, "argumento");
+  }
+
+  private async abrirRuta(ruta: string, origen: "reciente" | "argumento"): Promise<void> {
     const archivos = this.deps.archivos;
     if (!archivos.existe || !archivos.deRuta) return;
     // Los bloqueos del paso 1, antes de mirar el disco.
@@ -356,6 +380,10 @@ export class OperacionesArchivo {
     } catch (e) {
       // Sin permiso u otro error: queda en la lista (D3-A).
       this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "abrir") }]);
+      return;
+    }
+    if (!hay && origen === "argumento") {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: mensajeNoExiste(ruta) }]);
       return;
     }
     if (!hay) {

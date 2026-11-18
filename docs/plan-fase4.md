@@ -61,8 +61,8 @@ En la netbook, con la alpha.1, guardar y abrir 2000 tardó 71 / 54 ms.
 - **S2.** Dos procesos de Bornera comparten el perfil de WebView2: se ven IndexedDB y Web Locks entre ellos, y el candado se suelta si el proceso muere. Se verifica en T23, etapa 1.
 - **S3.** IndexedDB con `durability: "strict"` sobrevive a cortar el proceso (T23).
 - **S4.** El humo puede tirar la página con CDP (`Page.crash`) y abrir otra con el mismo perfil (T23).
-- **S5.** `fileAssociations` anda con el instalador de Windows, y la ruta llega en los argumentos del proceso (T25).
-- **S6.** El MSI de `0.1.4` reemplaza al de `0.1.4-alpha.N` (misma versión para MSI) gracias a `AllowDowngrades`. Se prueba en la fila 6 de la checklist.
+- **S5.** `fileAssociations` anda con el instalador de Windows, y la ruta llega en los argumentos del proceso (T25). **Se cumple (2026-11-18, T25):** pasó con el `.msi` local en la PC, y desinstalar quita la asociación.
+- **S6.** El MSI de `0.1.4` reemplaza al de `0.1.4-alpha.N` (misma versión para MSI) gracias a `AllowDowngrades`. Se prueba en la fila 6 de la checklist. **Adelanto (2026-11-18, T25):** en la PC, un `.msi` local con la misma versión MSI (`0.1.4.1`) reemplazó al instalado y quedó una sola «Bornera». La fila 6 sigue igual.
 - **S7.** El EPERM del humo al borrar el perfil temporal puede seguir pasando (T20).
 - **S8.** `requestIdleCallback` puede no estar en WebKitGTK (T23 usa `setTimeout` de respaldo).
 
@@ -292,6 +292,19 @@ Cómo se prueba:
 - **Pruebas:** unitaria de la elección del argumento. Sin humo (solo existe en el escritorio).
 - **A mano:** solo con el instalador (S5).
 - **Modelo:** Opus alto.
+- **Hecho (2026-11-18), con D1-A (la elección en Rust), D2-A (si se recuperó una copia, se abre igual y antes pregunta por sus cambios), D3-A (el archivo del argumento sube en recientes), D4-A (sin single-instance) y los ajustes de Bruno:**
+  - `tauri.conf.json`: `fileAssociations` para `brn`, con el tipo «Circuito de Bornera». El `.wxs` generado lleva `ProgId Bornera.brn` con `Advertise="yes"` y `"%1"`. `.brn.json` no se asocia: Windows mira solo la última extensión.
+  - `lib.rs`: `archivo_inicial` reemplaza a `greet`. Ajuste 1: `std::env::args_os`, porque `args` hace panic con argumentos que no son Unicode. La elección es la función pura `elegir_archivo` (iterador de `OsString` y carpeta base → `Option<PathBuf>`). Si la ruta no se puede pasar a texto, no llega a la página. Se entrega una sola vez (`Mutex<Option<String>>`), así F5 no la reabre. 7 tests con `cargo test`: mayúsculas (`X.BRN`), `.brn.json`, sin archivo, argumentos que no son archivo, ruta relativa, ruta completa y un argumento que no es Unicode.
+  - `archivo.ts`: `abrirArgumento` y `abrirReciente` comparten `abrirRuta`. Si el archivo del argumento no existe, sale «No se pudo abrir» («No existe el archivo «ruta»») y la lista no se toca. 5 tests.
+  - `Ventana.svelte`: el archivo se abre cuando la recuperación ya está resuelta, sin diálogo y sin «Recuperar» en curso. Si IndexedDB no abrió, se abre igual.
+  - Resultados: 2102 tests, check sin errores, humo 852/852 (sin humo propio: solo existe en el escritorio), `cargo test` 7/7. Sin banco.
+  - **S5 pasó (2026-11-18), con el `.msi` armado en local (`npm.cmd run tauri build -- --bundles msi`, sin tag ni push), en la PC:**
+    - Antes de instalar, el registro ya tenía una asociación `.brn` que había dejado Windows por un «Abrir con» viejo: `HKCU\Software\Classes\.brn` → `brn_auto_file`, `Applications\bornera.exe` y un `UserChoiceLatest`. Con el OK de Bruno se respaldaron con `reg export` y se borraron, así la prueba mostraba solo lo que hace el MSI.
+    - Instalado: una sola «Bornera» en «Aplicaciones instaladas». El MSI local, de la misma versión `0.1.4.1`, reemplazó al instalado (cambió el ProductCode): S6 adelantado. `assoc .brn` da `Bornera.brn` (en `HKLM\Software\Classes`), y no queda `UserChoice` en `FileExts\.brn`. El MSI deja una clave `ShellNew` vacía en `.brn`: no agrega nada al menú «Nuevo».
+    - Bruno probó los pasos 1 a 5 y pasaron: doble clic con Bornera cerrada (ruta con espacios y «ñ», y `INVERSION.BRN`), Ctrl+S sin «permiso», otra ventana con Bornera abierta, primero el diálogo de recuperar y después el archivo, y el tipo y el ícono en el Explorador.
+    - Desinstalado: `assoc .brn` no encuentra la asociación. `HKCR\.brn`, `HKLM\Software\Classes\.brn`, `HKCU\Software\Classes\.brn`, `HKCR\Bornera.brn`, `Applications\bornera.exe` y `FileExts\.brn` no existen, y `C:\Program Files\Bornera` tampoco. El respaldo de las claves de Windows no se restauró: apuntaban al exe desinstalado.
+  - Con el mismo instalador, la fila 5b (T21, diálogo nativo con `.brn.json`) pasó en la PC.
+  - Falta la fila 4 de la checklist de la netbook (al cierre de la fase).
 
 ### T26. Borrar un cable con T colgando (D7-A)
 - **Qué:** la cascada en el comando de borrar (núcleo) y el aviso en la barra.
@@ -355,9 +368,9 @@ Cómo se prueba:
 | 2 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Abrir `marcha-parada.brn`, arrastrar S1 dos unidades a la derecha y esperar 15 s sin tocar nada. Administrador de tareas › Bornera › Finalizar tarea (sobre la app Bornera, no sobre los procesos «Microsoft Edge WebView2»; T23, ajuste 3). Abrir Bornera › **Recuperar** | S1 corrido, título con «•», Deshacer desactivado |
 | 3 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
 | 3b | T23 (en la PC pasó el 2026-11-17). Abrir Bornera dos veces; en cada una, cambiar algo y esperar 15 s. Finalizar tarea sobre la **primera** (la app Bornera). En la segunda, menú de desarrollo › «Copias de recuperación…» | La segunda sigue viva y editable (no queda en blanco ni se cierra); la copia de la primera dice «sin dueño» |
-| 4 | Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
+| 4 | T25 (en la PC, con el `.msi` local, pasó el 2026-11-18). Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
 | 5 | T24 (en la PC, en `tauri dev`, pasó el 2026-11-18). Abrir `marcha-parada.brn`, cerrar Bornera y volver a abrirla. Flecha junto a Abrir › `marcha-parada.brn` | Abre, sin el aviso de «permiso» |
-| 5b | T21 (no se probó a mano en la PC). «Exportar sin comprimir (.brn.json)…» cuatro veces, escribiendo en el diálogo `x`, `x.brn`, `x.json` y `x.brn.json`. Guardar como, escribiendo `x.brn.json`. Abrir ese `x.brn.json`, mover algo y Ctrl+S | Las cuatro exportaciones dejan `x.brn.json` (nunca `x.brn.json.brn`, `x.brn.brn.json` ni `x.json`) y sin «permiso». Guardar como no deja `x.brn.json.brn`. Abrir muestra los `.brn.json`; Ctrl+S quita la «•» y el archivo tiene un componente por línea (Bloc de notas) |
+| 5b | T21 (en la PC, con el `.msi` local de T25, pasó el 2026-11-18). «Exportar sin comprimir (.brn.json)…» cuatro veces, escribiendo en el diálogo `x`, `x.brn`, `x.json` y `x.brn.json`. Guardar como, escribiendo `x.brn.json`. Abrir ese `x.brn.json`, mover algo y Ctrl+S | Las cuatro exportaciones dejan `x.brn.json` (nunca `x.brn.json.brn`, `x.brn.brn.json` ni `x.json`) y sin «permiso». Guardar como no deja `x.brn.json.brn`. Abrir muestra los `.brn.json`; Ctrl+S quita la «•» y el archivo tiene un componente por línea (Bloc de notas) |
 | 6 | Instalar el `.msi` de `0.1.4` (del borrador) encima de la alpha.N, sin desinstalar | Una sola «Bornera», versión 0.1.4, la lista de recientes sigue |
 
 ## 7. Riesgos
@@ -365,7 +378,7 @@ Cómo se prueba:
 - **S2 falla:** queda el latido. Single-instance sería una dependencia, a decidir con Bruno.
 - **Una copia que no abre** (el editor deja colocar fuera de ±10 000, pendiente de T15a): se muestran los problemas y se ofrece exportarla tal cual.
 - **S6 falla** (el MSI no reemplaza la alpha): se frena antes de publicar el borrador y se decide con Bruno.
-- **La asociación de archivos** solo se prueba con la app instalada.
+- **La asociación de archivos** solo se prueba con la app instalada. **Nota (2026-11-18):** en la PC pasó con el `.msi` local (T25); falta la fila 4 en la netbook.
 - **`csp: null` con el alcance amplio de D8:** no hay una vía conocida de inyección (lienzo y textos escapados por Svelte). La CSP queda como tarea aparte.
 - **La cascada de T26 borra de más:** se ve en el aviso y se deshace con Ctrl+Z.
 - **WebKitGTK (Mint):** secundario, no bloquea (S8).

@@ -33,6 +33,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["brn"],
+        "name": "Bornera",
+        "description": "Circuito de Bornera",
+        "role": "Editor"
+      }
+    ],
     "windows": {
       "allowDowngrades": true,
       "wix": {

@@ -16,7 +16,7 @@
   import { hayModal } from "../editor/punteros";
   import { Editor } from "../editor/editor";
   import { onMount, tick, untrack } from "svelte";
-  import { isTauri } from "@tauri-apps/api/core";
+  import { invoke, isTauri } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import DialogoDiagnostico from "./DialogoDiagnostico.svelte";
   import DialogoArchivo from "./DialogoArchivo.svelte";
@@ -215,6 +215,7 @@
           })
           .catch((e) => console.warn("No se pudieron leer las copias de recuperación", e))
           .finally(() => {
+            if (montado) recuperacionResuelta = true;
             // Desarrollo (humo): ya se decidió si hay diálogo, sin esperar un tiempo fijo.
             const global = (globalThis as Record<string, unknown>).bornera as Record<string, unknown> | undefined;
             if (import.meta.env.DEV && global) global.recuperacionLista = true;
@@ -227,6 +228,7 @@
       .catch((e) => {
         falloCopias = motivoFallo(e);
         avisar(avisoFallo(e));
+        if (montado) recuperacionResuelta = true;
       });
     return () => {
       montado = false;
@@ -267,6 +269,31 @@
    * Bornera se corta, se vuelve a ofrecer.
    */
   let adoptada: CopiaOfrecida | null = null;
+
+  // ── El archivo del argumento (T25, doble clic en un `.brn`) ────────────────
+  // Primero se resuelve la recuperación: se leen las copias y, si hay, se
+  // espera a que se cierre su diálogo. Después se abre el archivo. Si en el
+  // diálogo se recuperó una copia, Abrir pregunta antes por sus cambios
+  // (D2-A). Si IndexedDB no abrió, se abre igual.
+  /** La ruta que dio Rust, una sola vez; null cuando ya se usó (o en el navegador). */
+  let rutaInicial: Promise<string | null> | null = enEscritorio
+    ? invoke<string | null>("archivo_inicial").catch((e) => {
+        console.warn("No se pudo leer el archivo del argumento", e);
+        return null;
+      })
+    : null;
+  /** Ya se sabe si hay copias para ofrecer (o IndexedDB no abrió). */
+  let recuperacionResuelta = $state(false);
+  $effect(() => {
+    if (!recuperacionResuelta || recuperables.length > 0 || recuperando) return;
+    const pedida = rutaInicial;
+    if (!pedida) return;
+    rutaInicial = null;
+    void pedida.then((ruta) => {
+      if (ruta) void operaciones.abrirArgumento(ruta);
+    });
+  });
+
   const filasRecuperar = $derived.by((): FilaRecuperar[] => {
     const ahora = new Date();
     return recuperables.map((o) => filaRecuperar(o.registro, ahora));

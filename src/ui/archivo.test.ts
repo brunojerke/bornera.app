@@ -13,6 +13,7 @@ import {
   AVISO_CERRAR_EN_CURSO,
   avisoGuardado,
   avisoNoExiste,
+  mensajeNoExiste,
   AVISOS_ABRIR,
   esTeclaRecarga,
   lineasProblemas,
@@ -1390,6 +1391,67 @@ describe("Abrir reciente (T24, D8-A)", () => {
     await ops.abrirReciente(RUTA);
     expect(p.archivos.llamadas).toEqual([]);
     expect(p.avisos).toEqual([]);
+  });
+});
+
+describe("Abrir el archivo del argumento (T25)", () => {
+  const RUTA = "C:\\Usuarios\\Bruno Jerke\\Tableros\\Marcha.BRN";
+
+  it("abre la ruta como Abrir reciente y sube en la lista (D3-A)", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    p.archivos.enDisco.set(RUTA, { ...(await archivo(doc, "Marcha.BRN")), ruta: RUTA });
+    await p.ops.abrirArgumento(RUTA);
+    expect(p.archivos.llamadas).toEqual([`existe ${RUTA}`, `deRuta ${RUTA}`]);
+    expect(p.editor.documento).toEqual(doc);
+    expect(p.editor.puedeDeshacer).toBe(false);
+    expect(p.ops.archivoActual).toEqual({ nombre: "Marcha.BRN", ruta: RUTA });
+    expect(p.recientes).toEqual([`agregar ${RUTA}`]);
+    expect(p.avisos).toEqual([avisoAbierto(null)]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("si no existe: «No se pudo abrir» con la ruta, y la lista no se toca", async () => {
+    const p = preparar();
+    const viejo = p.editor;
+    await p.ops.abrirArgumento(RUTA);
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: mensajeNoExiste(RUTA) }] }]);
+    expect(mensajeNoExiste("C:\\x.brn")).toBe("No existe el archivo «C:\\x.brn»");
+    expect(p.recientes).toEqual([]);
+    expect(p.avisos).toEqual([]);
+    expect(p.editor).toBe(viejo);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("sin permiso: «No se pudo abrir» y la lista no se toca", async () => {
+    const p = preparar();
+    p.archivos.fallaExiste = new Error("forbidden path");
+    await p.ops.abrirArgumento(RUTA);
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: "forbidden path" }] }]);
+    expect(p.recientes).toEqual([]);
+  });
+
+  it("un archivo dañado no abre ni sube en la lista", async () => {
+    const p = preparar();
+    const viejo = p.editor;
+    p.archivos.enDisco.set(RUTA, { ...archivoTexto("{"), ruta: RUTA });
+    await p.ops.abrirArgumento(RUTA);
+    expect(p.problemas.map((x) => x.titulo)).toEqual([TITULOS.noSePudoAbrir]);
+    expect(p.editor).toBe(viejo);
+    expect(p.recientes).toEqual([]);
+  });
+
+  it("D2-A: con cambios (una copia recuperada) pregunta antes; Cancelar no abre", async () => {
+    const p = preparar();
+    const viejo = p.editor;
+    cambiar(p.editor);
+    p.archivos.enDisco.set(RUTA, { ...(await archivo(docRotados())), ruta: RUTA });
+    await p.ops.abrirArgumento(RUTA);
+    expect(p.preguntas).toEqual(["Prueba.brn"]);
+    expect(p.editor).toBe(viejo);
+    p.respuesta = "noGuardar";
+    await p.ops.abrirArgumento(RUTA);
+    expect(p.ops.archivoActual?.ruta).toBe(RUTA);
   });
 });
 
