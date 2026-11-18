@@ -19,6 +19,71 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Netbook y PC el mismo día, K1 y K2 (fase 4, C4) — 2026-11-18
+
+**Cómo se midió:**
+- Las dos máquinas con el `.msi` del borrador de `v0.1.4-alpha.2` (`33680e5`). Se usó «Probar la fase 4» (menú de desarrollo), con 3 aperturas × (1 fría con calentamiento + 1 caliente) y «Copiar» cada vez. Edge 157 (WebView2).
+- Netbook de 2:57 a 3:15 p. m. PC de 3:50 a 3:53 p. m., en las condiciones del banco.
+- Los 12 textos quedaron fuera del repo (`frio1–3`, `caliente1–3`, `pcfrio1–3` y `pccaliente1–3`), igual que en la 3b. Acá va solo la tabla.
+- **Excluidas: `c1.txt` y `c2.txt`** (netbook, 2:41 y 2:45 p. m.). Son dos frías anteriores a la serie de 3 aperturas, que no forman parte del protocolo. Se usaron las seis de la serie.
+
+**F en la netbook (máximos en ms): pasan las tres en las 6 corridas.**
+
+| # | Tope netbook | Calientes | Frías |
+|---|---|---|---|
+| F1 | ≤ 50 (calientes) | 12,0 / 3,5 / 3,6 | 3,4 / 4,1 / 3,8 (informan) |
+| F2 | ≤ 1000 (todas) | 127,8 / 115,5 / 133,3 | 125,3 / 105,0 / 123,6 |
+| F3 | ≤ 3000 (todas) | 162,7 / 154,6 / 153,7 | 166,3 / 157,8 / 157,0 |
+
+- F1 = 12,0 en la caliente 1. En esa misma corrida, B5 2.º (20,3), B6 (1 lento) y B11 también se van. Es una corrida ruidosa; las otras dos dan 3,5 y 3,6.
+
+**B1–B16 en la netbook: pasan con la regla vigente de la 3b.**
+- **B10** (rehacer por gesto, informativa desde la 3b): 118,2–138,8 ms en las 6, contra los 62,5 del tope. En la 3b la mediana había dado 124,5. No es una regresión.
+- **B11** (cuadros del rehacer): decide la mediana de las corridas (3b). Máx. 18,3 ms y 0,6 % > 16,7 ms, así que **pasa**. Corrida suelta que falla, informada: caliente 1, máx. 27,2 ms y 1,9 % (3 de 162).
+- B9: N = 500 en las 6. Las demás filas, dentro del tope en todas las corridas.
+
+**PC el mismo día (máximos en ms; topes de PC de C1):** F1 3,4 / 2,7 / 2,8 en las calientes (≤ 9). F2 31,6–39,7 y F3 50,7–64,1 en las 6 (≤ 1000). B1–B16 dentro del tope en las 6.
+
+**Frías (regla de C4: dentro del rango de las calientes del mismo exe, más 1 ms; informan).** Salen de `friasFuera`.
+- **Netbook:**
+  - **B1** 1.º: 138,3 y 133,3, debajo de 141,2–156,8. 2.º: 144,2 (debajo) y 223,6 (arriba de 157,1–214,1).
+  - **B3 máx.**: 21,7, arriba de 12,4–12,6, con 1 lento en la fría 3.
+  - **B2** 1.º: 22,1, debajo de 24,2–25,6. 2.º: 37,0, arriba de 26,8–34,0, y 23,4, debajo.
+- **PC:**
+  - B1 1.º: 56,9 y 50,4. B1 2.º: 79,7, 53,0 y 52,6.
+  - B10: 28,1. B16 por gesto: 11,7.
+  - Todas arriba del rango.
+- **B1 y B3 máx. siguen en seguimiento** (T26, T27, C1 y ahora la netbook). B1 se repite en todas las mediciones. En la netbook, varias frías quedan **por debajo** de las calientes: la fría no es siempre la más lenta.
+
+**K1 y K2** (`calcular-factores.mjs`, mediana de las 3 calientes de cada máquina; grupos fijados en C1, con B13 incluido):
+
+| # | K | PC | Netbook | Netbook / PC |
+|---|---|---|---|---|
+| B1 | K1 | 45,5 | 151,4 | 3,33 |
+| B2 | K1 | 9,6 | 25,5 | 2,66 |
+| B4 | K1 | 5,3 | 16,1 | 3,04 |
+| B5 | K1 | 1,6 | 3,8 | 2,37 |
+| B7 | K1 | 0,9 | 2,8 | 3,11 |
+| B10 | K1 | 22,2 | 137,6 | 6,20 |
+| B12 | K1 | 1,1 | 3,3 | 3,00 |
+| B13 | K1 | 0,1 | 0,1 | 1,00 |
+| F1 | K1 | 2,6 | 3,0 | 1,15 |
+| F2 | K1 | 24,0 | 69,3 | 2,89 |
+| B3 | K2 | 9,8 | 12,5 | 1,28 |
+| B6 | K2 | 8,4 | 11,8 | 1,40 |
+| B11 | K2 | 9,2 | 23,9 | 2,60 |
+| B14 | K2 | 0,6 | 5,2 | 8,67 |
+| B16 | K2 | 9,4 | 46,7 | 4,97 |
+| F3 | K2 | 45,9 | 128,5 | 2,80 |
+
+- **K1 = 2,94** (2,94375, entre F2 y B12). **K2 = 2,70** (2,6987, entre B11 y F3). Ninguno pasa K1 > 3 ni K2 > 5,5, así que A–D no se activan.
+- El «3,0 sin B13» no se usa: sacar B13 cambiaría el grupo después de medir.
+- **Notas para la fase 5:**
+  - **B10 ×6,2:** el rehacer al 31 % con referencias es mucho más caro en la netbook que en la PC. El tope de B10 salía de ×2,5 y ya era informativo desde la 3b.
+  - **B14 ×8,7:** el valor de la PC (0,6 ms) está cerca de la resolución de 0,1 ms. El cociente no es confiable.
+  - B12 y B13 también están cerca de la resolución.
+  - La elección de K para los topes de la fase 5 (A o D) queda para el plan de la fase 5.
+
 ## «Probar la fase 4» en la PC (fase 4, C1) — 2026-11-18
 
 **Criterio escrito antes de medir** (`docs/plan-fase4.md`, sección 6, C1; commit `7c40c8a`):

@@ -161,6 +161,19 @@ Los factores de D6a-B (×3 y ×5,5) dieron los topes de PC derivados de la netbo
 - **C. Repetir C4 otro día** si K pasa en más de un 30 % (K1 > 3,9 o K2 > 7,2), por si la netbook vino en un estado raro (energía, Windows Update). Recién después se fija el factor.
 - **D. Conservador:** para la fase 5 se usa el mayor entre el K medido y el factor anterior.
 
+**Hecho de C4 (2026-11-18, `.msi` de `v0.1.4-alpha.2`; aprobado por Bruno):** el detalle está en `docs/bench.md`.
+- **Netbook:**
+  - Las filas 0, 2, 3, 3b, 4, 5, 5b y 5c pasan.
+  - Fila 1: F1, F2 y F3 pasan en las 3 calientes (máx. F1 12,0 / 3,5 / 3,6 ms; F2 ≤ 133,3; F3 ≤ 162,7). F2 y F3 también pasan en las frías.
+  - B1–B16 pasan con la regla vigente. B10 es informativa (118–139 ms, como en la 3b). B11 pasa por la mediana de las corridas; la caliente 1 suelta falla y se informa.
+- **PC el mismo día**, con el mismo `.msi`: F1–F3 dentro de los topes de C1 y B1–B16 dentro del tope.
+- **K oficial: K1 = 2,94 y K2 = 2,70**, con el grupo fijado en C1 (B13 incluido). El «3,0 sin B13» no se usa, porque cambiaría la regla después de medir.
+  - A–D no se activan.
+  - La elección de K para los topes de la fase 5 (A o D) queda para el plan de la fase 5.
+- **Notas para la fase 5:** B10 ×6,2 (rehacer con referencias, caro en la netbook). B14 ×8,7 (PC 0,6 ms, cerca de la resolución).
+- **Frías, en seguimiento:** B1 y B3 máx. fuera del rango en la netbook. También B2, con valores arriba y abajo. En la PC: B1, B10 y B16.
+- **Excluidas:** `c1.txt` y `c2.txt`, dos frías de la netbook anteriores a la serie de 3 aperturas.
+
 **Checklist de la netbook** (una hoja). **Regla:** la `0.1.4` se instala con el mismo tipo de instalador que la alpha instalada. Mezclar MSI y NSIS deja dos «Bornera». `release.yml` arma solo el `.msi`, así que los pasos 0 y 6 usan el `.msi`. Bruno confirma que la alpha.1 se instaló con el `.msi`.
 
 | # | Paso | Pasa si |
