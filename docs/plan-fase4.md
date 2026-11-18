@@ -149,6 +149,9 @@ El detalle de cada tarea (qué, pruebas, «Hecho», mediciones), el estado al ap
 - 2149 tests, check sin errores, `cargo test` 7/7 y humo 893/893 (nuevo `c1-probar-fase4.mjs`: 18).
 - «Probar la fase 4» está en el exe de release (`0.1.4-alpha.1`), el mismo que empaqueta el `.msi`.
 
+### C2. Hoja de la netbook
+**Hecho (2026-11-18):** `docs/netbook-fase4.md`, con la checklist de abajo en pasos numerados, el juicio de la fila 1 y K1/K2 a mano en la PC el mismo día (`probar-webview2.mjs` exige dos exes en ABBA, así que no da 3 aperturas de uno). Al final, descartar las copias que queden y traer los 6 textos.
+
 ### C4. Si K1 > 3 o K2 > 5,5 (propuesta; decide Bruno en C4)
 Los factores de D6a-B (×3 y ×5,5) dieron los topes de PC derivados de la netbook: hoy, solo F1 (9 ms = 50 / 5,5). Los topes de la netbook de la fase 4 se juzgan en la netbook, así que un factor mayor no cambia lo que ya pasó allá.
 - **A. Recalcular para la fase 5:** los topes de PC de la fase 5 se derivan con el K medido. En la fase 4 no cambia nada.
@@ -160,8 +163,8 @@ Los factores de D6a-B (×3 y ×5,5) dieron los topes de PC derivados de la netbo
 
 | # | Paso | Pasa si |
 |---|---|---|
-| 0 | Enchufada, en «Mejor rendimiento». Instalar el `.msi` de `0.1.4-alpha.N` encima de la alpha.1 | Una sola «Bornera», versión alpha.N |
-| 1 | Menú de desarrollo › «Probar la fase 4», 3 veces seguidas, con «Copiar» cada vez | Las filas con tope pasan (mediana de las 3) |
+| 0 | Enchufada, en «Mejor rendimiento». Instalar el `.msi` del borrador de `0.1.4-alpha.N` encima de la alpha.1 (SmartScreen, sin firma: «Más información» › «Ejecutar de todas formas») | Una sola «Bornera», versión alpha.N |
+| 1 | Menú de desarrollo › «Probar la fase 4»: 3 aperturas × (1 fría, con el calentamiento, + 1 caliente), con «Copiar» cada vez | F1–F3: el máximo ≤ tope en las 3 calientes. B1–B16: mediana por corrida (regla vigente). Las frías informan (regla de C4). K: la PC el mismo día, con el `.msi` del mismo tag y el mismo protocolo |
 | 2 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Abrir `marcha-parada.brn`, arrastrar S1 dos unidades a la derecha y esperar 15 s sin tocar nada. Administrador de tareas › Bornera › Finalizar tarea (sobre la app Bornera, no sobre los procesos «Microsoft Edge WebView2»; T23, ajuste 3). Abrir Bornera › **Recuperar** | S1 corrido, título con «•», Deshacer desactivado |
 | 3 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
 | 3b | T23 (en la PC pasó el 2026-11-17). Abrir Bornera dos veces; en cada una, cambiar algo y esperar 15 s. Finalizar tarea sobre la **primera** (la app Bornera). En la segunda, menú de desarrollo › «Copias de recuperación…» | La segunda sigue viva y editable (no queda en blanco ni se cierra); la copia de la primera dice «sin dueño» |
