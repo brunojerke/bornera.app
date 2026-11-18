@@ -38,6 +38,11 @@ export function prefijoDe(def: DefinicionSimbolo | undefined): string | null {
   return def !== undefined && esTitular(def) ? (def.prefijoEtiqueta ?? null) : null;
 }
 
+/** Desde qué número se numera (T27): el `primerNumero` del símbolo, o 1. */
+export function primerNumeroDe(def: DefinicionSimbolo | undefined): number {
+  return def?.primerNumero ?? 1;
+}
+
 /** Las etiquetas normalizadas y no vacías de los titulares de la hoja. */
 export function etiquetasDeTitulares(hoja: ConComponentes): Set<string> {
   const usadas = new Set<string>();
@@ -54,16 +59,25 @@ export function etiquetasDeTitulares(hoja: ConComponentes): Set<string> {
 /** Etiqueta numerada: letras y número ("K01" es K y 1). */
 const NUMERADA = /^([A-Z]+)(\d+)$/;
 
+/** Los números de un prefijo. */
+interface NumerosDePrefijo {
+  /** Los ocupados. */
+  ocupados: Set<number>;
+  /** Primer número → próximo candidato: de ese primer número a próximo − 1, todos ocupados. */
+  proximo: Map<number, number>;
+}
+
 /**
- * Da el menor número libre de cada prefijo, desde 1. Se arma con una pasada
- * por las etiquetas usadas y después cada número sale en tiempo constante
+ * Da el menor número libre de cada prefijo, desde el primer número del
+ * símbolo (1, o 0 en el pulsador NC: T27). Se arma con una pasada por las
+ * etiquetas usadas y después cada número sale en tiempo constante
  * (amortizado): los ocupados solo se agregan, así que el próximo libre de un
- * prefijo nunca baja. Con 2000 que chocan no se recorre la lista 2000 veces.
+ * prefijo, desde un mismo primer número, nunca baja. Hay un cursor por primer
+ * número, pero los ocupados son uno solo por prefijo: un NC y un NA nunca
+ * reciben el mismo número. Con 2000 que chocan no se recorre la lista 2000 veces.
  */
 class Numerador {
-  private readonly ocupados = new Map<string, Set<number>>();
-  /** Todos los números de 1 a proximo − 1 del prefijo están ocupados. */
-  private readonly proximo = new Map<string, number>();
+  private readonly porPrefijo = new Map<string, NumerosDePrefijo>();
 
   constructor(usadas: Iterable<string>) {
     for (const e of usadas) this.reservar(e);
@@ -72,33 +86,34 @@ class Numerador {
   /** Marca la etiqueta como usada. Una que no es letras y número no ocupa nada. */
   reservar(etiqueta: string): void {
     const m = NUMERADA.exec(normalizarEtiqueta(etiqueta));
-    if (m) this.numerosDe(m[1]!).add(Number(m[2]));
+    if (m) this.numerosDe(m[1]!).ocupados.add(Number(m[2]));
   }
 
-  /** El menor libre del prefijo, que queda ocupado. */
-  siguiente(prefijo: string): string {
-    const numeros = this.numerosDe(prefijo);
-    let n = this.proximo.get(prefijo) ?? 1;
-    while (numeros.has(n)) n++;
-    numeros.add(n);
-    this.proximo.set(prefijo, n + 1);
+  /** El menor libre del prefijo desde `desde`, que queda ocupado. */
+  siguiente(prefijo: string, desde = 1): string {
+    const { ocupados, proximo } = this.numerosDe(prefijo);
+    let n = proximo.get(desde) ?? desde;
+    while (ocupados.has(n)) n++;
+    ocupados.add(n);
+    proximo.set(desde, n + 1);
     return `${prefijo}${n}`;
   }
 
-  private numerosDe(prefijo: string): Set<number> {
-    let numeros = this.ocupados.get(prefijo);
-    if (!numeros) this.ocupados.set(prefijo, (numeros = new Set()));
+  private numerosDe(prefijo: string): NumerosDePrefijo {
+    let numeros = this.porPrefijo.get(prefijo);
+    if (!numeros) this.porPrefijo.set(prefijo, (numeros = { ocupados: new Set(), proximo: new Map() }));
     return numeros;
   }
 }
 
 /**
- * `prefijo + n` con el menor n ≥ 1 que no esté en `usadas`. Se comparan los
- * números, no los textos: "K01" ocupa el 1. "S0" no ocupa nada (los números
- * empiezan en 1) y otras letras no cuentan ("KA1" no ocupa el 1 de K).
+ * `prefijo + n` con el menor n ≥ `desde` que no esté en `usadas`. Se
+ * comparan los números, no los textos: "K01" ocupa el 1. "S0" ocupa el 0, que
+ * solo pide quien empieza en 0 (el pulsador NC, T27). Otras letras no cuentan
+ * ("KA1" no ocupa el 1 de K).
  */
-export function menorLibre(usadas: Iterable<string>, prefijo: string): string {
-  return new Numerador(usadas).siguiente(prefijo);
+export function menorLibre(usadas: Iterable<string>, prefijo: string, desde = 1): string {
+  return new Numerador(usadas).siguiente(prefijo, desde);
 }
 
 /** Los componentes en orden (y, x) y, a igualdad, en el de la lista (`sort` es estable). */
@@ -116,7 +131,8 @@ function enOrden(lista: readonly Componente[]): Componente[] {
  * 1. Los titulares del lote que no chocan conservan, y su etiqueta queda
  *    reservada: nadie del lote la recibe.
  * 2. Los que chocan, en orden (y, x) y, a igualdad, en el del lote, reciben
- *    el menor libre de su prefijo. Sin prefijo, conservan.
+ *    el menor libre de su prefijo, desde su primer número (T27). Sin
+ *    prefijo, conservan.
  * 3. Con varias bobinas de una misma etiqueta que chocan, la primera en
  *    (y, x) encabeza el grupo: los contactos del lote con esa etiqueta la
  *    siguen. Las demás reciben su número, sin contactos (D3).
@@ -142,7 +158,7 @@ export function etiquetarLote(usadas: Iterable<string>, lote: readonly Component
     const def = buscarSimbolo(c.tipo);
     const prefijo = prefijoDe(def);
     if (prefijo === null) continue;
-    const nueva = numerador.siguiente(prefijo);
+    const nueva = numerador.siguiente(prefijo, primerNumeroDe(def));
     cambios.set(c.id, nueva);
     const vieja = normalizarEtiqueta(c.etiqueta);
     if (esBobina(def) && !encabezadas.has(vieja)) encabezadas.set(vieja, nueva);
@@ -174,15 +190,17 @@ export function conEtiquetas(recorte: Recorte, cambios: ReadonlyMap<string, stri
 
 /**
  * Etiquetas para los titulares vacíos de la hoja, en orden (y, x): el menor
- * libre de su prefijo. Los seguidores, las fuentes y los titulares sin
+ * libre de su prefijo, desde su primer número (el NC desde S0, el NA desde
+ * S1: T27). Los seguidores, las fuentes y los titulares sin
  * prefijo quedan como están.
  */
 export function etiquetarVacios(hoja: ConComponentes): Map<string, string> {
   const numerador = new Numerador(etiquetasDeTitulares(hoja));
   const cambios = new Map<string, string>();
   for (const c of enOrden(hoja.componentes.filter((k) => normalizarEtiqueta(k.etiqueta) === ""))) {
-    const prefijo = prefijoDe(buscarSimbolo(c.tipo));
-    if (prefijo !== null) cambios.set(c.id, numerador.siguiente(prefijo));
+    const def = buscarSimbolo(c.tipo);
+    const prefijo = prefijoDe(def);
+    if (prefijo !== null) cambios.set(c.id, numerador.siguiente(prefijo, primerNumeroDe(def)));
   }
   return cambios;
 }

@@ -129,6 +129,13 @@ export type DefinicionSimbolo = Comportamiento & {
    */
   prefijoEtiqueta?: string;
   /**
+   * Desde qué número se numera (T27). Por defecto, 1. El pulsador NC lleva 0:
+   * la parada es S0 y la marcha, S1. Comparte los números con los demás
+   * símbolos de su prefijo: es el menor libre desde acá. Solo junto con
+   * `prefijoEtiqueta`. Vive en la biblioteca: no se guarda en el archivo.
+   */
+  primerNumero?: number;
+  /**
    * Dibujar los nombres de los bornes. Por defecto, sí. La fase y el neutro no
    * los dibujan: su nombre visible es la etiqueta, y si no se vería dos veces.
    */

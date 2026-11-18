@@ -17,6 +17,7 @@ import {
   menorLibre,
   planRenombrarBobina,
   prefijoDe,
+  primerNumeroDe,
 } from "./etiquetado";
 import { normalizarEtiqueta } from "./etiquetas";
 import { Historial } from "./historial";
@@ -68,6 +69,16 @@ describe("titular y prefijo", () => {
     ]);
   });
 
+  it("primer número (T27): el pulsador NC desde 0; los demás, desde 1", () => {
+    expect(SIMBOLOS.filter((s) => prefijoDe(s) !== null).map((s) => [s.tipo, primerNumeroDe(s)])).toEqual([
+      [PULSADOR_NA, 1],
+      [PULSADOR_NC, 0],
+      [BOBINA, 1],
+      [LAMPARA, 1],
+    ]);
+    expect(primerNumeroDe(buscarSimbolo(DESCONOCIDO))).toBe(1);
+  });
+
   it("un símbolo desconocido es titular sin prefijo (D2)", () => {
     expect(esTitular(buscarSimbolo(DESCONOCIDO))).toBe(true);
     expect(prefijoDe(buscarSimbolo(DESCONOCIDO))).toBeNull();
@@ -107,9 +118,20 @@ describe("menorLibre", () => {
     expect(menorLibre(["k1 "], "K")).toBe("K2");
   });
 
-  it("S0 no cambia nada: los números empiezan en 1", () => {
+  it("desde 1, S0 no cambia nada; desde 0 (el NC, T27), S0 ocupa el 0", () => {
     expect(menorLibre(["S0"], "S")).toBe("S1");
     expect(menorLibre(["S0", "S1"], "S")).toBe("S2");
+    expect(menorLibre([], "S", 0)).toBe("S0");
+    expect(menorLibre(["S1"], "S", 0)).toBe("S0");
+    // Al pie de la letra (opción A): el menor libre desde 0, aunque sea el 1.
+    expect(menorLibre(["S0"], "S", 0)).toBe("S1");
+    expect(menorLibre(["S0", "S1"], "S", 0)).toBe("S2");
+    expect(menorLibre(["S00", "S2"], "S", 0)).toBe("S1");
+  });
+
+  it("K y H siguen desde 1: un K0 o un H0 a mano no cambian nada", () => {
+    expect(menorLibre(["K0"], "K")).toBe("K1");
+    expect(menorLibre(["H0", "H1"], "H")).toBe("H2");
   });
 
   it("otra letra no cuenta", () => {
@@ -219,12 +241,38 @@ describe("etiquetarLote", () => {
       comp("izquierda", PULSADOR_NA, "S1", 0, 0),
       comp("empate", PULSADOR_NC, "S2", 0, 0),
     ];
+    // El NC ("empate") recibe el 0, libre (T27); los NA, desde el 1.
     expect([...etiquetarLote(etiquetasDeTitulares(h), lote)]).toEqual([
       ["izquierda", "S3"],
-      ["empate", "S4"],
-      ["derecha", "S5"],
-      ["abajo", "S6"],
+      ["empate", "S0"],
+      ["derecha", "S4"],
+      ["abajo", "S5"],
     ]);
+  });
+
+  it("T27: lote [NC, NC, NA] que choca, sin ninguna S usada, da S0, S1 y S2 (nunca dos iguales)", () => {
+    // Chocan con "P", una etiqueta sin número de un desconocido: no ocupa ninguna S.
+    const h = hoja(comp("m", DESCONOCIDO, "P"));
+    const lote = [comp("nc1", PULSADOR_NC, "P", 0, 0), comp("nc2", PULSADOR_NC, "P", 0, 10), comp("na", PULSADOR_NA, "P", 0, 20)];
+    expect([...etiquetarLote(etiquetasDeTitulares(h), lote)]).toEqual([
+      ["nc1", "S0"],
+      ["nc2", "S1"],
+      ["na", "S2"],
+    ]);
+    // Al revés, [NA, NC, NC]: S1, S0 y S2.
+    const alReves = [comp("na", PULSADOR_NA, "P", 0, 0), comp("nc1", PULSADOR_NC, "P", 0, 10), comp("nc2", PULSADOR_NC, "P", 0, 20)];
+    expect([...etiquetarLote(etiquetasDeTitulares(h), alReves)]).toEqual([
+      ["na", "S1"],
+      ["nc1", "S0"],
+      ["nc2", "S2"],
+    ]);
+  });
+
+  it("T27: un NC que choca no toma un número que el lote reserva", () => {
+    const h = hoja(comp("a", PULSADOR_NC, "S0"));
+    // "S1" no choca (no está en la hoja) y queda reservado: el NC que choca recibe S2.
+    const lote = [comp("nc", PULSADOR_NC, "S0", 0, 0), comp("na", PULSADOR_NA, "S1", 0, 10)];
+    expect(Object.fromEntries(etiquetarLote(etiquetasDeTitulares(h), lote))).toEqual({ nc: "S2" });
   });
 
   it("un símbolo desconocido conserva y reserva su etiqueta (D2)", () => {
@@ -264,11 +312,21 @@ describe("etiquetarVacios", () => {
       comp("motor", DESCONOCIDO, "", 0, 50),
       comp("s2", PULSADOR_NA, "S2", 9, 9),
     );
+    // El NC (p2) recibe S0 (T27); el NA (p1), S1.
     expect([...etiquetarVacios(h)]).toEqual([
       ["p1", "S1"],
-      ["p2", "S3"],
+      ["p2", "S0"],
       ["bobina", "K2"],
       ["lampara", "H1"],
+    ]);
+  });
+
+  it("T27: [NC, NC, NA] vacíos, sin nada usado, dan S0, S1 y S2", () => {
+    const h = hoja(comp("nc1", PULSADOR_NC, "", 0, 0), comp("nc2", PULSADOR_NC, "", 0, 10), comp("na", PULSADOR_NA, "", 0, 20));
+    expect([...etiquetarVacios(h)]).toEqual([
+      ["nc1", "S0"],
+      ["nc2", "S1"],
+      ["na", "S2"],
     ]);
   });
 

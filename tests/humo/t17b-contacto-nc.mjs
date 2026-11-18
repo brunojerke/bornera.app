@@ -207,8 +207,8 @@ async function probar(p, comprobar, buscarSimbolo, carpeta, archivos) {
   await esperar(60);
   const tras = porId(await componentes());
   comprobar(
-    "«Etiquetar los vacíos»: S1 y K1 en un paso, y el NC queda vacío",
-    (await pasos()) === n + 1 && tras[v.pulsador] === "S1" && tras[v.bobina] === "K1" && tras[v.nc] === "",
+    "«Etiquetar los vacíos»: S0 (pulsador NC, T27) y K1 en un paso, y el NC auxiliar queda vacío",
+    (await pasos()) === n + 1 && tras[v.pulsador] === "S0" && tras[v.bobina] === "K1" && tras[v.nc] === "",
     JSON.stringify(tras),
   );
   await p.captura("etiquetar-vacios");

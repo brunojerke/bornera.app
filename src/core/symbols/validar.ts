@@ -44,6 +44,13 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
   } else if (!PREFIJO_VALIDO.test(prefijo)) {
     errores.push(`El prefijo de etiqueta tiene que ser solo letras mayúsculas (es "${prefijo}").`);
   }
+  const primero = def.primerNumero;
+  if (primero !== undefined) {
+    if (prefijo === undefined) errores.push(`El primer número va solo con prefijo de etiqueta (es ${primero}).`);
+    else if (!Number.isSafeInteger(primero) || primero < 0) {
+      errores.push(`El primer número tiene que ser un entero ≥ 0 (es ${primero}).`);
+    }
+  }
 
   if (def.bornes.length === 0) errores.push("El símbolo no tiene bornes.");
 

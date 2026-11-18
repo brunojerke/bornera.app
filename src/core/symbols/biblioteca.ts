@@ -119,8 +119,10 @@ export const PULSADOR_NC: DefinicionSimbolo = {
   elemento: "contacto_nc",
   accionamiento: "manual_momentaneo",
   prefijoEtiqueta: "S",
+  // La parada es S0; la marcha (pulsador NA) empieza en S1 (T27).
+  primerNumero: 0,
   tamano: { ancho: 4, alto: 4 },
-  primitivas: [...contactoNC(), ...pulsacion(xEnCentro(PUNTA_NC, BISAGRA_Y))],
+  primitivas: [...contactoNC(),...pulsacion(xEnCentro(PUNTA_NC, BISAGRA_Y))],
   // El tope del contacto está a la derecha: los nombres, del otro lado.
   ladoNombresBornes: "izquierda",
   bornes: [

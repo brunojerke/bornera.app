@@ -342,6 +342,41 @@ Cómo se prueba:
   - Ajustar los tests de T17 y los humos que esperan S1.
   - Los `.brn` congelados no cambian.
 - **Modelo:** Opus alto.
+- **Aprobado por Bruno (2026-11-18), opción A:** cada pulsador recibe el menor número libre de la S desde su primer número (NC 0, NA 1). Los dos comparten los números ocupados: un NC y un NA nunca reciben el mismo. Ajustes:
+  1. Solo `pulsador.na` y `pulsador.nc` llevan prefijo S. Solo el NC lleva `primerNumero: 0`.
+  2. Tests: lote [NC, NC, NA] sin S usadas da S0, S1, S2. Borrar S0 y colocar un NC da S0 otra vez.
+  3. `primerNumero` vive en la biblioteca y no se guarda en el archivo. El formato no cambia: versión 1, sin migración, y el corpus `formato-v1/` y los `.brn` congelados con el mismo sha256.
+  4. Ctrl+Y devuelve la etiqueta de la colocación original, sin recalcularla.
+- **Criterio del banco** (fijado antes de medir):
+  - Se corre `npm run bench -- --json` (headless) en ABBA ×3: 6 corridas de T27 y 6 de la base, desde un worktree temporal en `5cf70f2`.
+  - **Deciden todas las filas, con la regla D6b-C.** Se toma la mediana de las 6 corridas de cada lado:
+    - «Por gesto» y la mediana del paso (si la fila la tiene) son iguales si difieren ≤ 1 ms o ≤ 10 %.
+    - Los lentos, ±1.
+  - Las filas que pasan por el `Numerador` son «Pegar 500 y deshacer», «Duplicar todo (2000) y deshacer» y «Etiquetar los vacíos (2000) y deshacer».
+  - El «Máx.» de cada fila se informa y no decide.
+  - WebView2 (`probar-webview2.mjs`) se corre solo si alguna fila no pasa.
+- **Hecho (2026-11-18):**
+  - `primerNumero` en `DefinicionSimbolo`, validado: entero ≥ 0 y solo junto con el prefijo.
+  - El `Numerador` (núcleo) lleva un cursor por primer número y un solo conjunto de ocupados por prefijo. Lo usan colocar, pegar y duplicar, y «Etiquetar los vacíos».
+  - Formato: versión 1, sin migración. `src/core/io` sin cambios. Los 11 archivos de `formato-v1/` y los dos `.brn` congelados tienen el mismo sha256 que en `5cf70f2`.
+  - Tests nuevos:
+    - Lote [NC, NC, NA] → S0, S1, S2.
+    - Borrar S0 y colocar un NC → S0.
+    - Rehacer pone la etiqueta guardada en el comando, sin recalcularla.
+    - Validación de `primerNumero`.
+  - Humo `t27-etiquetado-s0.mjs`: paleta, Ctrl+Z/Ctrl+Y, borrar S0, Ctrl+D de parada y marcha, y «Etiquetar los vacíos».
+  - Humos ajustados por la regla nueva:
+    - `t17-etiquetado.mjs`: NA, NA, NC dan S1, S2, **S0**. «Etiquetar los vacíos» da S0 al NC.
+    - `t17b-contacto-nc.mjs`: el pulsador NC vacío da S0.
+    - `t15-marcha-parada.mjs`: parada y marcha entran S0 y S1 desde la paleta. Queda a mano solo el auxiliar K1, y son 16 pasos en vez de 18.
+  - Resultados: 2129 tests, check sin errores, `cargo test` 7/7, humo 875/875.
+  - **Banco:**
+    - Headless: 11 de 75 filas no pasan. Ninguna pasa por el `Numerador`, y van para los dos lados. Pegar 500, Duplicar todo y Etiquetar los vacíos dan igual.
+    - WebView2: **D6b-C no pasa en B5 2.º y B11 máx.** Causa conocida: máximos sueltos en filas que no pasan por el `Numerador`. B1 y B4, las que sí pasan, dan igual.
+    - Por la regla fijada antes de medir, no se vuelve a medir.
+    - En las frías, B1 y B3 máx. se repiten de T26: seguimiento en la medición de cierre de la fase 4 (C1–C4).
+    - Detalle en `docs/bench.md`.
+  - Pendiente: `tests/bench/correr.mjs` espera los 10 min del límite cuando Vite falla al transformar la página. Debería cortar con el primer error. En un worktree nuevo hace falta `svelte-kit sync` antes de medir.
 
 ## 5. Topes
 

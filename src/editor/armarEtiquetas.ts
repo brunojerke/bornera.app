@@ -22,6 +22,7 @@ import {
   menorLibre,
   planRenombrarBobina,
   prefijoDe,
+  primerNumeroDe,
   type PlanRenombrar,
 } from "../core/model/etiquetado";
 import { pegar, type Pegar, type Recorte } from "../core/model/portapapeles";
@@ -76,7 +77,7 @@ export class EtiquetasHoja {
   alColocar(def: DefinicionSimbolo): string {
     if (esFuente(def)) return def.etiquetaInicial ?? "";
     const prefijo = prefijoDe(def);
-    return prefijo === null ? "" : menorLibre(this.usadas, prefijo);
+    return prefijo === null ? "" : menorLibre(this.usadas, prefijo, primerNumeroDe(def));
   }
 
   /**

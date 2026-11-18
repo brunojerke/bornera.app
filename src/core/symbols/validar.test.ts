@@ -146,6 +146,26 @@ describe("validarDefinicion: prefijo de etiqueta (T17)", () => {
   });
 });
 
+describe("validarDefinicion: primer número (T27)", () => {
+  it("acepta un entero ≥ 0 junto con el prefijo", () => {
+    for (const primerNumero of [0, 1, 7]) expect(validarDefinicion({ ...PULSADOR, primerNumero }), String(primerNumero)).toEqual([]);
+  });
+
+  it("rechaza un número negativo, no entero o no finito", () => {
+    for (const primerNumero of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(validarDefinicion({ ...PULSADOR, primerNumero }), String(primerNumero)).toEqual([
+        `El primer número tiene que ser un entero ≥ 0 (es ${primerNumero}).`,
+      ]);
+    }
+  });
+
+  it("sin prefijo (fuente o seguidor) no lleva primer número", () => {
+    const { prefijoEtiqueta: _, ...sinPrefijo } = PULSADOR;
+    const auxiliar = { ...sinPrefijo, accionamiento: "bobina" } as const;
+    expect(validarDefinicion({ ...auxiliar, primerNumero: 0 })).toEqual(["El primer número va solo con prefijo de etiqueta (es 0)."]);
+  });
+});
+
 // Chequeos de tipos: no corren en Vitest, los verifica `npm run check:core`.
 // Si algún @ts-expect-error deja de ser un error, el chequeo de tipos falla.
 export const comprobacionesDeTipos: DefinicionSimbolo[] = [

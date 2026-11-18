@@ -10,6 +10,7 @@ import { Borrar, colocar } from "../core/model/comandos";
 import type { Componente, Documento, Hoja } from "../core/model/documento";
 import { esTitular, etiquetasDeTitulares } from "../core/model/etiquetado";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
+import { Historial } from "../core/model/historial";
 import { recortar, type Recorte } from "../core/model/portapapeles";
 import { textoAviso } from "../core/model/validaciones";
 import { buscarSimbolo, esFuente, SIMBOLOS } from "../core/symbols";
@@ -73,7 +74,7 @@ beforeEach(() => vaciarPortapapeles());
 // ── La memoria ─────────────────────────────────────────────────────────────
 
 describe("EtiquetasHoja", () => {
-  it("al colocar: el menor libre del prefijo; NA y NC comparten la S; el auxiliar vacío; las fuentes, su inicial", () => {
+  it("al colocar: el menor libre del prefijo (el NC desde 0, T27); NA y NC comparten la S; el auxiliar vacío; las fuentes, su inicial", () => {
     const { editor, poner } = armar();
     const e = editor.etiquetas;
     expect(e.alColocar(def(BOBINA))).toBe("K1");
@@ -82,7 +83,7 @@ describe("EtiquetasHoja", () => {
     poner(PULSADOR_NA, 10, 0, "S1");
     poner(PULSADOR_NC, 20, 0, "S2");
     expect(e.alColocar(def(PULSADOR_NA))).toBe("S3");
-    expect(e.alColocar(def(PULSADOR_NC))).toBe("S3");
+    expect(e.alColocar(def(PULSADOR_NC))).toBe("S0");
     expect(e.alColocar(def(LAMPARA))).toBe("H1");
     expect(e.alColocar(def(AUXILIAR))).toBe("");
     expect(e.alColocar(def(FASE))).toBe("L");
@@ -139,6 +140,68 @@ describe("Editor: Colocar con etiqueta (T17)", () => {
     editor.rehacer();
     expect(comps().map((c) => c.etiqueta)).toEqual(["S1", "S2"]);
     expect(editor.colocar!.previa!.etiqueta).toBe("S3");
+  });
+
+  it("T27: NC, NC y NA colocados en una hoja vacía dan S0, S1 y S2; parada y marcha, S0 y S1", () => {
+    const { editor, comps } = armar();
+    editor.iniciarColocar(def(PULSADOR_NC), "clic");
+    mover(editor, 0, 0);
+    expect(editor.colocar!.previa!.etiqueta).toBe("S0");
+    clic(editor, 0, 0);
+    expect(editor.colocar!.previa!.etiqueta).toBe("S1");
+    clic(editor, 10, 0);
+    editor.iniciarColocar(def(PULSADOR_NA), "clic");
+    clic(editor, 20, 0);
+    expect(comps().map((c) => c.etiqueta)).toEqual(["S0", "S1", "S2"]);
+
+    const otra = armar();
+    otra.editor.iniciarColocar(def(PULSADOR_NC), "clic");
+    clic(otra.editor, 0, 0);
+    otra.editor.iniciarColocar(def(PULSADOR_NA), "clic");
+    clic(otra.editor, 10, 0);
+    expect(otra.comps().map((c) => c.etiqueta)).toEqual(["S0", "S1"]);
+  });
+
+  it("T27: borrar S0 y colocar un NC vuelve a dar S0; un NA, no", () => {
+    const { editor, poner, comps } = armar();
+    const s0 = poner(PULSADOR_NC, 0, 0, "S0");
+    poner(PULSADOR_NA, 10, 0, "S1");
+    editor.ejecutar(new Borrar([s0]));
+    expect(editor.etiquetas.alColocar(def(PULSADOR_NA))).toBe("S2");
+    editor.iniciarColocar(def(PULSADOR_NC), "clic");
+    clic(editor, 20, 0);
+    expect(comps().map((c) => c.etiqueta)).toEqual(["S1", "S0"]);
+  });
+
+  it("T27: Ctrl+Z y Ctrl+Y de NC y NA devuelven los mismos componentes con las mismas etiquetas", () => {
+    const { editor, comps } = armar();
+    editor.iniciarColocar(def(PULSADOR_NC), "clic");
+    clic(editor, 0, 0);
+    editor.iniciarColocar(def(PULSADOR_NA), "clic");
+    clic(editor, 10, 0);
+    const antes = comps().map((c) => [c.id, c.etiqueta]);
+    expect(antes.map(([, e]) => e)).toEqual(["S0", "S1"]);
+    editor.deshacer();
+    editor.deshacer();
+    expect(comps()).toEqual([]);
+    editor.rehacer();
+    editor.rehacer();
+    expect(comps().map((c) => [c.id, c.etiqueta])).toEqual(antes);
+  });
+
+  it("T27: rehacer pone la etiqueta guardada en el comando, no la recalcula", () => {
+    const doc = documentoNuevo();
+    const e = new EtiquetasHoja(doc);
+    const historial = new Historial(doc);
+    const cmd = colocar(doc, { tipo: PULSADOR_NC, x: 0, y: 0, rot: 0, espejado: false, etiqueta: e.alColocar(def(PULSADOR_NC)), params: {} });
+    historial.ejecutar(cmd);
+    historial.deshacer();
+    // Solo para el test, fuera del historial: otro pulsador ocupa S0. Recalcular daría S1.
+    doc.hojas[0]!.componentes.push({ id: "intruso", tipo: PULSADOR_NC, x: 20, y: 0, rot: 0, espejado: false, etiqueta: "S0", params: {} });
+    e.invalidar();
+    expect(e.alColocar(def(PULSADOR_NC))).toBe("S1");
+    historial.rehacer();
+    expect(doc.hojas[0]!.componentes.find((c) => c.id === cmd.id)!.etiqueta).toBe("S0");
   });
 
   it("borrar deja un hueco y la próxima bobina lo rellena", () => {
@@ -332,7 +395,7 @@ describe("Editor: Etiquetar los vacíos (T17)", () => {
     const n = pasos();
     expect(editor.etiquetarVacios()).toBe(true);
     expect(pasos()).toBe(n + 1);
-    expect([etiqueta(b), etiqueta(p), etiqueta(c), etiqueta(f)]).toEqual(["K2", "S1", "", "L"]);
+    expect([etiqueta(b), etiqueta(p), etiqueta(c), etiqueta(f)]).toEqual(["K2", "S0", "", "L"]);
     editor.deshacer();
     expect([etiqueta(b), etiqueta(p)]).toEqual(["", ""]);
   });

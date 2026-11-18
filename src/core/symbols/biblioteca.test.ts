@@ -142,6 +142,10 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     ]);
   });
 
+  it("solo el pulsador NC empieza en 0 (S0, la parada); los demás, en 1 (T27)", () => {
+    expect(SIMBOLOS.filter((s) => s.primerNumero !== undefined).map((s) => [s.tipo, s.primerNumero])).toEqual([["pulsador.nc", 0]]);
+  });
+
   it("fase y neutro son fuentes; los auxiliares NA y NC son los únicos seguidores (los pulsadores, a mano, se numeran)", () => {
     expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO]);
     expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC]);

@@ -38,10 +38,11 @@ const CAMPO = "#prop-etiqueta";
 /**
  * La etiqueta con que entra cada uno desde la paleta (T17: el menor libre de
  * su prefijo, en el orden en que se colocan; el auxiliar vacío; las fuentes,
- * su inicial). En el panel se escriben solo las que difieren de la sección 3:
- * S0, S1 y el auxiliar K1. K1 y H1 ya entran bien.
+ * su inicial). Desde T27 el pulsador NC entra S0 y el NA, S1. En el panel se
+ * escribe solo la que difiere de la sección 3: el auxiliar K1. S0, S1, K1 y H1
+ * ya entran bien.
  */
-const AL_COLOCAR = { c1: "L", c2: "S1", c3: "S2", c4: "", c5: "K1", c6: "H1", c7: "N" };
+const AL_COLOCAR = { c1: "L", c2: "S0", c3: "S1", c4: "", c5: "K1", c6: "H1", c7: "N" };
 /** Lo que se va a tocar tiene que quedar a esta distancia (px) del borde del lienzo; si no, se desplaza la vista. */
 const MARGEN = 40;
 const ARCHIVO = "marcha-parada.brn";
@@ -239,7 +240,7 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
     id, tipo, x, y, rot, espejado, etiqueta: AL_COLOCAR[id],
   }));
   comprobar(
-    "los 7 colocados desde la paleta: tipo, posición y giro de la sección 3 (el Neutro a 180°), con su etiqueta automática (L, S1, S2, vacío, K1, H1 y N)",
+    "los 7 colocados desde la paleta: tipo, posición y giro de la sección 3 (el Neutro a 180°), con su etiqueta automática (L, S0, S1, vacío, K1, H1 y N)",
     isDeepStrictEqual(puestos, esperados),
     JSON.stringify(puestos),
   );
@@ -270,8 +271,8 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
     }
   }
   comprobar(
-    "las 3 etiquetas que difieren (S0, S1 y el auxiliar K1), con clic en el símbolo, el campo del panel y Enter: un paso cada una",
-    etiquetasBien && aMano === 3 && (await pasos()) === 10,
+    "la etiqueta que difiere (el auxiliar K1), con clic en el símbolo, el campo del panel y Enter: un paso",
+    etiquetasBien && aMano === 1 && (await pasos()) === 8,
     `${aMano} a mano, ${await pasos()} pasos`,
   );
   await p.esc(); // sin selección
@@ -305,7 +306,7 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
       );
     }
   }
-  comprobar("los 8 cables con clics: cada uno en un gesto y un paso de deshacer (18 pasos en total)", fallas.length === 0 && (await pasos()) === 18, fallas.join(" | ") || `${await pasos()} pasos`);
+  comprobar("los 8 cables con clics: cada uno en un gesto y un paso de deshacer (16 pasos en total)", fallas.length === 0 && (await pasos()) === 16, fallas.join(" | ") || `${await pasos()} pasos`);
   await p.esc();
   comprobar("Esc sale de W", await p.evaluar("bornera.editor.cable === null"));
 

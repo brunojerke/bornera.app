@@ -3,7 +3,8 @@
 // Cada bloque arranca en un documento nuevo (Ctrl+N), así los números no
 // dependen del bloque anterior:
 //  1. Colocar desde la paleta: dos bobinas seguidas en modo clic dan K1 y K2
-//     (previa y resultado), tres pulsadores S1, S2 y S3; borrar K1 y colocar
+//     (previa y resultado), tres pulsadores S1, S2 y S0 (el NC, desde S0:
+//     T27); borrar K1 y colocar
 //     otra bobina da K1; el auxiliar entra vacío; Fase y Neutro entran L y N.
 //     Cada colocación es un paso.
 //  2. La rama de K1 (S1, auxiliar K1, bobina K1, H1) con Ctrl+D: S2, K2, K2 y
@@ -146,17 +147,17 @@ export default async function (p, comprobar) {
   await p.esc();
   cs = await componentes();
   comprobar(
-    "tres pulsadores (NA, NA, NC): S1, S2 y S3",
-    JSON.stringify(cs.slice(2).map((c) => c.etiqueta)) === JSON.stringify(["S1", "S2", "S3"]),
+    "tres pulsadores (NA, NA, NC): S1, S2 y S0 (T27)",
+    JSON.stringify(cs.slice(2).map((c) => c.etiqueta)) === JSON.stringify(["S1", "S2", "S0"]),
     JSON.stringify(cs.map((c) => c.etiqueta)),
   );
 
   // Ctrl+Z deshace una colocación en un paso.
   n = await pasos();
   await tecla(Z, CTRL);
-  comprobar("Ctrl+Z deshace la última colocación (S3) en un paso", (await pasos()) === n - 1 && (await componentes()).length === 4);
+  comprobar("Ctrl+Z deshace la última colocación (S0) en un paso", (await pasos()) === n - 1 && (await componentes()).length === 4);
   await tecla(Y, CTRL);
-  comprobar("Ctrl+Y la rehace con la misma etiqueta", (await pasos()) === n && (await componentes())[4]?.etiqueta === "S3");
+  comprobar("Ctrl+Y la rehace con la misma etiqueta", (await pasos()) === n && (await componentes())[4]?.etiqueta === "S0");
 
   // Borrar K1 y colocar otra bobina: rellena el hueco.
   await seleccionar([b1.id]);
@@ -325,9 +326,9 @@ export default async function (p, comprobar) {
   await esperar(60);
   const tras = porId(await componentes());
   comprobar(
-    "«Etiquetar los vacíos»: un paso, en orden (y, x): S1, K2 arriba, K3 y H1 abajo; K1 conserva",
+    "«Etiquetar los vacíos»: un paso, en orden (y, x): S0 (el NC), K2 arriba, K3 y H1 abajo; K1 conserva",
     (await pasos()) === n + 1 &&
-      tras[v.pulsador] === "S1" && tras[v.bobinaArriba] === "K2" && tras[v.bobinaAbajo] === "K3" && tras[v.lampara] === "H1" && tras[v.k1] === "K1",
+      tras[v.pulsador] === "S0" && tras[v.bobinaArriba] === "K2" && tras[v.bobinaAbajo] === "K3" && tras[v.lampara] === "H1" && tras[v.k1] === "K1",
     JSON.stringify(tras),
   );
   comprobar("el contacto auxiliar queda vacío y la Fase sigue L", tras[v.aux] === "" && tras[v.fase] === "L", JSON.stringify(tras));

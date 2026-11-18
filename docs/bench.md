@@ -19,6 +19,69 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Pulsadores desde S0 (fase 4, T27) — 2026-11-18
+
+**Criterio escrito antes de medir** (`docs/plan-fase4.md`, T27): headless (`npm run bench -- --json`) en ABBA ×3 contra `5cf70f2`. Deciden todas las filas con la regla D6b-C, sobre la mediana de las 6 corridas de cada lado:
+- «Por gesto» y la mediana del paso: ±10 % o ≤ 1 ms.
+- Lentos: ±1.
+
+WebView2 (`probar-webview2.mjs`) se corre solo si alguna fila no pasa.
+
+**Cómo se midió:**
+- Enchufada, en «Mejor rendimiento» (modo `ded574b5…`), sin otra Bornera abierta.
+- La base sale de un worktree temporal en `5cf70f2`, ya borrado. Hizo falta `svelte-kit sync`: sin `.svelte-kit/`, Vite no transforma la página del banco y cada corrida espera los 10 min del límite.
+- Los dos exes de WebView2 salen de `tauri build --no-bundle`. Edge 157.
+
+**Headless: 11 de 75 filas no pasan.** Ninguna pasa por el `Numerador`, y van para los dos lados: 5 bajan y 6 suben. Las tres que pasan por el `Numerador` dan igual (ms, mediana de 6):
+
+| Escenario (2000 + 3000 cables + 30 T, al 31 %) | Por gesto: base | Por gesto: T27 | Paso: base | Paso: T27 | Lentos | Juicio |
+|---|---|---|---|---|---|---|
+| Pegar 500 y deshacer | 63,9 | 64,8 | 5,55 | 5,55 | 0 / 0 | igual |
+| Duplicar todo (2000) y deshacer | 43,9 | 43,9 | 50,05 | 49,85 | 0 / 0 | igual |
+| Etiquetar los vacíos (2000) y deshacer | 42,4 | 42,6 | 4,45 | 4,55 | 0 / 0 | igual |
+
+**WebView2: `probar-webview2.mjs --bloques=3`.** Son 6 aperturas por exe, cada una con una fría y una caliente. Tabla caliente (mediana de 6, ms):
+
+| # | Métrica | Base | T27 | Juicio |
+|---|---|---|---|---|
+| B1 | 1.º / 2.º | 44,5 / 51,6 | 44,9 / 48,4 | igual / igual |
+| B2 | 1.º / 2.º | 8,9 / 10,4 | 9,3 / 10,4 | igual / igual |
+| B3 | lentos por gesto / en total / máx. | 0 / 0 / 9,7 | 0 / 0 / 10,2 | igual |
+| B4 | 1.º / 2.º | 5,0 / 6,8 | 5,0 / 6,9 | igual / igual |
+| B5 | 1.º / 2.º | 1,4 / 1,6 | 1,5 / **3,0** | igual / **sube** |
+| B6 | lentos por gesto / en total / máx. | 0 / 0 / 7,5 | 0 / 0 / 8,1 | igual |
+| B7 | valor | 1,0 | 0,9 | igual |
+| B8 | máx. / lentos | 4,7 / 0 | 4,5 / 0 | igual |
+| B9 | N | 500 | 500 | igual |
+| B10 | valor | 20,5 | 20,9 | igual |
+| B11 | máx. / lentos | 9,1 / 0 | **10,2** / 0 | **sube** / igual |
+| B12 | valor | 1,0 | 1,1 | igual |
+| B13 | 1.º / 2.º | 0,1 / 0,1 | 0,1 / 0,1 | igual |
+| B14 | máx. / lentos | 0,5 / 0 | 0,8 / 0 | igual |
+| B15 | lentos / máx. | 0 / 6,1 | 0 / 5,8 | igual |
+| B16 | lentos / por gesto | 0 / 8,4 | 0 / 8,4 | igual |
+
+**Rangos de las calientes en las dos filas que suben:**
+- B5 2.º (máximo de deshacer «Pegar 500»): base 1,6–2,3, T27 1,7–3,2. Se superponen.
+- B11 máx. (cuadros de rehacer con referencias): base 8,8–10,3, T27 8,8–12,6. Se superponen.
+
+**Frías** (regla de C4: cada una dentro del rango de las calientes del mismo exe, más 1 ms; informan):
+- **T27, 4 fuera:** B1 1.º (51,6), B3 máx. (13,4), B8 máx. (7,9) y B16 por gesto (10,3).
+- **Base, 9 fuera:**
+  - B1 1.º, 3 valores (49,1, 55,2 y 61,4).
+  - B1 2.º, 1 valor (65,5).
+  - B2 1.º, 1 valor (11).
+  - B2 2.º, 2 valores (13,1 y 19,5).
+  - B4 2.º, 1 valor (8,4).
+  - B10, 1 valor (25,8).
+- **B1 y B3 máx. se repiten de T26** (B1 ×3, B3 máx. ×2, B5 2.º ×2, B15 máx. ×1). Quedan en seguimiento para la medición de cierre de la fase 4.
+
+**Veredicto:**
+- D6b-C no pasa en B5 2.º y B11 máx.
+- Causa conocida: máximos sueltos en filas que no pasan por el `Numerador`. Deshacer un pegado solo saca componentes, y B11 es dibujo.
+- B1 y B4, las que sí pasan por el `Numerador`, dan igual.
+- Por la regla, no se vuelve a medir para que pase.
+
 ## Borrar con T colgando (fase 4, T26) — 2026-11-18
 
 **Criterio escrito antes de medir** (`docs/plan-fase4.md`, T26): decide B16 en caliente, con la regla D6b-C contra la base (±10 % o ≤ 1 ms; lentos ±1) y además el tope absoluto (≤ 11,10 ms por gesto; 0 lentos). B1–B15 se informan. Las frías se informan con la regla de C4 (dentro del rango de las calientes del mismo exe, más 1 ms).
