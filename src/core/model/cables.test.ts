@@ -223,14 +223,22 @@ describe("Borrar con cables", () => {
     expect(doc).toEqual(borrado);
   });
 
-  it("borrar un cable suelta las T que llegan a él", () => {
+  it("borrar un cable borra las T que cuelgan de él, recursivamente (T26)", () => {
     const doc = docCombinado();
     const antes = copia(doc);
     const b = new Borrar(["w1"]);
-    expect(b.aplicar(doc)).toEqual({ componentes: [], cables: ["w1", "w3"] });
-    expect(doc.hojas[0]!.cables.find((k) => k.id === "w3")!.desde).toEqual(libre(5, -2));
-    b.deshacer(doc);
+    expect(b.enCascada).toBe(0);
+    // w3 cuelga de w1 y w6 de w3: se van los dos, en el mismo paso.
+    expect(b.aplicar(doc)).toEqual({ componentes: [], cables: ["w1", "w3", "w6"] });
+    expect(b.enCascada).toBe(2);
+    expect(doc.hojas[0]!.cables.map((k) => k.id)).toEqual(["w2", "w4", "w5", "w7"]);
+    expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+    const borrado = copia(doc);
+    expect(b.deshacer(doc)).toEqual({ componentes: [], cables: ["w1", "w3", "w6"] });
     expect(doc).toEqual(antes);
+    b.aplicar(doc);
+    expect(doc).toEqual(borrado);
+    expect(b.enCascada).toBe(2);
   });
 
   it("ids mezclados, en cualquier orden, en un solo paso", () => {
@@ -240,7 +248,9 @@ describe("Borrar con cables", () => {
     b.aplicar(doc);
     const hoja = doc.hojas[0]!;
     expect(hoja.componentes.map((c) => c.id)).toEqual(["c1", "c4"]);
-    expect(hoja.cables.map((c) => c.id)).toEqual(["w2", "w3", "w5", "w6", "w7"]);
+    // w3 y w6 se van con w1 (T26).
+    expect(hoja.cables.map((c) => c.id)).toEqual(["w2", "w5", "w7"]);
+    expect(b.enCascada).toBe(2);
     // El puente de c3 queda con los dos extremos libres, en sus bornes.
     expect(hoja.cables[0]).toMatchObject({ desde: libre(20, -2), hasta: libre(20, 2) });
     b.deshacer(doc);
@@ -274,6 +284,168 @@ describe("Borrar con cables", () => {
       expect(doc, `rehacer ${ids}`).toEqual(borrado);
       expect(validarHoja(doc.hojas[0]!)).toEqual([]);
     }
+  });
+});
+
+/**
+ * Cadena de T de 3 niveles, entre cables que no tienen nada que ver:
+ * - w1: c1.A1 → c2.13, en y = −2.
+ * - w2: suelto en (30, 0)–(30, 5).
+ * - w3: T sobre w1 en (3, −2) → libre (3, −8).
+ * - w4: suelto en (40, 0)–(40, 5).
+ * - w5: T sobre w3 en (3, −6) → libre (8, −6).
+ * - w6: T sobre w5 en (6, −6) → libre (6, −10).
+ * - w7: c1.A2 → c2.14, en y = 2.
+ */
+function docCadena(): Documento {
+  const doc = docBase();
+  tender(doc, { desde: borne("c1", "A1"), hasta: borne("c2", "13"), codos: [] });
+  tender(doc, { desde: libre(30, 0), hasta: libre(30, 5), codos: [] });
+  tender(doc, { desde: enCable("w1", 3, -2), hasta: libre(3, -8), codos: [] });
+  tender(doc, { desde: libre(40, 0), hasta: libre(40, 5), codos: [] });
+  tender(doc, { desde: enCable("w3", 3, -6), hasta: libre(8, -6), codos: [] });
+  tender(doc, { desde: enCable("w5", 6, -6), hasta: libre(6, -10), codos: [] });
+  tender(doc, { desde: borne("c1", "A2"), hasta: borne("c2", "14"), codos: [] });
+  return doc;
+}
+
+describe("Borrar en cascada (T26, D7-A)", () => {
+  const ids = (doc: Documento) => doc.hojas[0]!.cables.map((k) => k.id);
+
+  it("las hojas de prueba son válidas", () => {
+    expect(validarHoja(docCadena().hojas[0]!)).toEqual([]);
+  });
+
+  it("cascada de varios niveles: desde la raíz, desde el medio y desde la punta", () => {
+    for (const [pedido, quedan, enCascada] of [
+      ["w1", ["w2", "w4", "w7"], 3],
+      ["w3", ["w1", "w2", "w4", "w7"], 2],
+      ["w6", ["w1", "w2", "w3", "w4", "w5", "w7"], 0],
+    ] as const) {
+      const doc = docCadena();
+      const b = new Borrar([pedido]);
+      b.aplicar(doc);
+      expect(ids(doc), pedido).toEqual(quedan);
+      expect(b.enCascada, pedido).toBe(enCascada);
+      expect(validarHoja(doc.hojas[0]!), pedido).toEqual([]);
+    }
+  });
+
+  it("deshacer y rehacer devuelven los ids, el orden y los datos exactos", () => {
+    const doc = docCadena();
+    const antes = copia(doc);
+    const b = new Borrar(["w1"]);
+    const cambio = b.aplicar(doc);
+    expect(cambio).toEqual({ componentes: [], cables: ["w1", "w3", "w5", "w6"] });
+    const borrado = copia(doc);
+    // Varias vueltas: cada una deja lo mismo, y la cuenta no se acumula.
+    for (let i = 0; i < 3; i++) {
+      expect(b.deshacer(doc)).toEqual(cambio);
+      expect(doc).toEqual(antes);
+      expect(ids(doc)).toEqual(["w1", "w2", "w3", "w4", "w5", "w6", "w7"]);
+      expect(b.aplicar(doc)).toEqual(cambio);
+      expect(doc).toEqual(borrado);
+      expect(b.enCascada).toBe(3);
+    }
+  });
+
+  it("un ciclo de apoyos (documento inválido) termina: cada cable entra una vez", () => {
+    const doc = docCadena();
+    const hoja = doc.hojas[0]!;
+    // w8 y w9 se apoyan uno en el otro; w10 cuelga de los dos.
+    hoja.cables.push(
+      { id: "w8", desde: enCable("w9", 50, 3), hasta: libre(50, 0), codos: [] },
+      { id: "w9", desde: enCable("w8", 50, 1), hasta: libre(55, 1), codos: [] },
+      { id: "w10", desde: enCable("w8", 50, 2), hasta: enCable("w9", 52, 1), codos: [[52, 2]] },
+    );
+    const antes = copia(doc);
+    for (const pedido of [["w8"], ["w9"], ["w8", "w9"], ["w10", "w9"]]) {
+      const b = new Borrar(pedido);
+      expect(b.aplicar(doc).cables.sort(), `${pedido}`).toEqual(["w10", "w8", "w9"]);
+      expect(b.enCascada, `${pedido}`).toBe(3 - pedido.length);
+      b.deshacer(doc);
+      expect(doc).toEqual(antes);
+    }
+  });
+
+  it("borrar a la vez el anfitrión y uno en T: nada se repite y la cuenta no incluye lo pedido", () => {
+    for (const [pedido, enCascada] of [
+      [["w1", "w3"], 2],
+      [["w3", "w1"], 2],
+      [["w5", "w1"], 2],
+      [["w1", "w3", "w5", "w6"], 0],
+    ] as const) {
+      const doc = docCadena();
+      const antes = copia(doc);
+      const b = new Borrar(pedido);
+      expect(b.aplicar(doc), `${pedido}`).toEqual({ componentes: [], cables: ["w1", "w3", "w5", "w6"] });
+      expect(b.enCascada, `${pedido}`).toBe(enCascada);
+      b.deshacer(doc);
+      expect(doc).toEqual(antes);
+    }
+  });
+
+  it("una T sobre dos anfitriones, o con las dos puntas sobre el mismo, se borra una sola vez", () => {
+    const doc = docCadena();
+    // w8: de w1 en (8, −2) a w7 en (8, 2). w9: las dos puntas sobre w1.
+    tender(doc, { desde: enCable("w1", 8, -2), hasta: enCable("w7", 8, 2), codos: [] });
+    tender(doc, { desde: enCable("w1", 1, -2), hasta: enCable("w1", 9, -2), codos: [[1, -4], [9, -4]] });
+    expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+    const antes = copia(doc);
+    for (const [pedido, enCascada] of [
+      [["w1"], 5],
+      [["w1", "w7"], 5],
+      [["w7"], 1],
+    ] as const) {
+      const b = new Borrar(pedido);
+      const cambio = b.aplicar(doc);
+      expect(new Set(cambio.cables).size, `${pedido}`).toBe(cambio.cables.length);
+      expect(b.enCascada, `${pedido}`).toBe(enCascada);
+      expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+      b.deshacer(doc);
+      expect(doc).toEqual(antes);
+    }
+  });
+
+  it("un cable en T con la otra punta en un borne de un componente que no se borra: se va entero; el componente queda igual; deshacer lo devuelve al mismo borne", () => {
+    const doc = docCombinado();
+    const antes = copia(doc);
+    // w6 cuelga de w3 y llega a c1.A2, donde también llega w7.
+    const b = new Borrar(["w3"]);
+    expect(b.aplicar(doc)).toEqual({ componentes: [], cables: ["w3", "w6"] });
+    expect(b.enCascada).toBe(1);
+    const hoja = doc.hojas[0]!;
+    expect(hoja.componentes).toEqual(antes.hojas[0]!.componentes);
+    expect(hoja.cables.find((k) => k.id === "w7")!.desde).toEqual(borne("c1", "A2"));
+    expect(hoja.cables.some((k) => k.id === "w6")).toBe(false);
+    b.deshacer(doc);
+    expect(doc).toEqual(antes);
+    expect(doc.hojas[0]!.cables.find((k) => k.id === "w6")!.hasta).toEqual(borne("c1", "A2"));
+  });
+
+  it("borrar solo componentes no arrastra cables: las T sobre un cable soltado siguen ahí", () => {
+    const doc = docCombinado();
+    const b = new Borrar(["c2"]);
+    b.aplicar(doc);
+    expect(b.enCascada).toBe(0);
+    const hoja = doc.hojas[0]!;
+    expect(hoja.cables.map((k) => k.id)).toEqual(["w1", "w2", "w3", "w4", "w5", "w6", "w7"]);
+    expect(hoja.cables.find((k) => k.id === "w3")!.desde).toEqual(enCable("w1", 5, -2));
+    expect(hoja.cables.find((k) => k.id === "w1")!.hasta).toEqual(libre(10, -2));
+  });
+
+  it("un componente y un cable juntos: la cascada sale del cable y lo del componente se suelta", () => {
+    const doc = docCombinado();
+    const antes = copia(doc);
+    const b = new Borrar(["c2", "w3"]);
+    const cambio = b.aplicar(doc);
+    expect(cambio.componentes).toEqual(["c2"]);
+    // w3 y w6 se borran; w1 y w4 se sueltan del borne de c2.
+    expect(cambio.cables).toEqual(["w3", "w6", "w1", "w4"]);
+    expect(b.enCascada).toBe(1);
+    expect(validarHoja(doc.hojas[0]!)).toEqual([]);
+    b.deshacer(doc);
+    expect(doc).toEqual(antes);
   });
 });
 

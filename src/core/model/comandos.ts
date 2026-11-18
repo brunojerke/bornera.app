@@ -535,17 +535,25 @@ interface Soltado {
 const porLugar = <T>(a: Borrado<T>, b: Borrado<T>) => a.hoja - b.hoja || a.indice - b.indice;
 
 /**
- * Quita componentes y cables (los ids pueden venir mezclados). Lo que colgaba
- * de lo borrado se suelta, no se borra: un extremo en un borne de un
- * componente borrado, o sobre un cable borrado, pasa a libre en el punto
- * donde estaba. Deshacer devuelve todo a su hoja y a su lugar en la lista, y
- * los extremos soltados a su conexión.
+ * Quita componentes y cables (los ids pueden venir mezclados).
+ * - Los cables en T que cuelgan de un cable borrado se borran también, en el
+ *   mismo paso y recursivamente (T26, D7-A): los que cuelgan de esos, y así.
+ *   `enCascada` dice cuántos, sin contar los pedidos. Un ciclo de apoyos (un
+ *   documento que ya era inválido) no lo traba: cada cable entra una vez.
+ * - Lo que llega a un borne de un componente borrado se suelta, no se borra:
+ *   ese extremo pasa a libre en el punto donde estaba.
+ * Deshacer devuelve todo a su hoja y a su lugar en la lista, y los extremos
+ * soltados a su conexión. Rehacer recalcula la cascada desde los mismos ids,
+ * sobre el mismo documento: da lo mismo.
  *
  * Todo sale de un índice armado en una pasada por el documento:
- * O(componentes + cables), sin búsquedas por id.
+ * O(componentes + cables), sin búsquedas por id. El de las T (anfitrión →
+ * cables que cuelgan de él) es otra pasada por los cables, y solo se arma si
+ * entre los ids pedidos hay algún cable.
  */
 export class Borrar implements Comando {
   private readonly ids: string[];
+  private _enCascada = 0;
   private hecho: {
     /** Ordenados por hoja e índice, de menor a mayor. */
     componentes: Borrado<Componente>[];
@@ -555,6 +563,14 @@ export class Borrar implements Comando {
 
   constructor(ids: Iterable<string>) {
     this.ids = idsUnicos(ids, "Borrar");
+  }
+
+  /**
+   * Cuántos cables en T se borraron además de los pedidos, la última vez que
+   * se aplicó (0 si nunca se aplicó).
+   */
+  get enCascada(): number {
+    return this._enCascada;
   }
 
   aplicar(doc: Documento): Cambio {
@@ -567,13 +583,34 @@ export class Borrar implements Comando {
     const componentes: Borrado<Componente>[] = [];
     const cables: Borrado<Cable>[] = [];
     const quitados = new Set<string>();
+    /** Cables quitados cuyos colgantes falta revisar: de ellos sale la cascada. */
+    const pila: string[] = [];
     for (const id of this.ids) {
       const u = lugares.get(id);
       if (!u) throw new Error(`No existe "${id}".`);
       const hoja = doc.hojas[u.hoja]!;
-      if (u.cable) cables.push({ hoja: u.hoja, indice: u.indice, dato: copiarCable(hoja.cables[u.indice]!) });
-      else componentes.push({ hoja: u.hoja, indice: u.indice, dato: copiarComponente(hoja.componentes[u.indice]!) });
+      if (u.cable) {
+        cables.push({ hoja: u.hoja, indice: u.indice, dato: copiarCable(hoja.cables[u.indice]!) });
+        pila.push(id);
+      } else componentes.push({ hoja: u.hoja, indice: u.indice, dato: copiarComponente(hoja.componentes[u.indice]!) });
       quitados.add(id);
+    }
+    // La cascada (T26): los cables en T que cuelgan de un cable quitado, hasta
+    // que no quede ninguno. Cada cable entra a `quitados` una sola vez, así
+    // que termina aunque haya un ciclo de apoyos. Solo componentes: no se arma.
+    let enCascada = 0;
+    if (pila.length > 0) {
+      const colgantes = colgantesPorAnfitrion(doc);
+      while (pila.length > 0) {
+        for (const id of colgantes.get(pila.pop()!) ?? []) {
+          if (quitados.has(id)) continue;
+          const u = lugares.get(id)!;
+          cables.push({ hoja: u.hoja, indice: u.indice, dato: copiarCable(doc.hojas[u.hoja]!.cables[u.indice]!) });
+          quitados.add(id);
+          pila.push(id);
+          enCascada++;
+        }
+      }
     }
     componentes.sort(porLugar);
     cables.sort(porLugar);
@@ -609,6 +646,7 @@ export class Borrar implements Comando {
       doc.hojas[componentes[i]!.hoja]!.componentes.splice(componentes[i]!.indice, 1);
     }
     this.hecho = { componentes, cables, soltados };
+    this._enCascada = enCascada;
     return this.cambio();
   }
 
@@ -649,6 +687,27 @@ export class Borrar implements Comando {
       cables: [...h.cables.map((b) => b.dato.id), ...h.soltados.map((s) => s.id)],
     };
   }
+}
+
+/**
+ * Cada cable que tiene alguna T encima → los cables con un extremo en T sobre
+ * él (cada uno una vez, aunque tenga las dos puntas encima). Una pasada por
+ * los cables; las T quedan siempre dentro de su hoja.
+ */
+function colgantesPorAnfitrion(doc: Documento): Map<string, string[]> {
+  const colgantes = new Map<string, string[]>();
+  const agregar = (anfitrion: string, id: string) => {
+    const lista = colgantes.get(anfitrion);
+    if (!lista) colgantes.set(anfitrion, [id]);
+    else if (lista[lista.length - 1] !== id) lista.push(id);
+  };
+  for (const hoja of doc.hojas) {
+    for (const w of hoja.cables) {
+      if (w.desde.tipo === "cable") agregar(w.desde.cable, w.id);
+      if (w.hasta.tipo === "cable") agregar(w.hasta.cable, w.id);
+    }
+  }
+  return colgantes;
 }
 
 /** True si el extremo está conectado a algo de `quitados`. */

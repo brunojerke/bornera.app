@@ -317,6 +317,22 @@ Cómo se prueba:
 - **Humo `t26-borrar-t.mjs`:** el paso 3 de la hoja 2 con un clic y Supr, y Ctrl+Z.
 - **Banco:** B16 contra el commit anterior.
 - **Modelo:** Opus xhigh (núcleo).
+- **Aprobado por Bruno (2026-11-18)**, con Cortar en cascada y el aviso en singular y plural («Se borró también 1 cable en T.», «Se borraron también N cables en T.»). Ajustes:
+  1. El mapa anfitrión → cables en T se arma solo si entre los ids pedidos hay algún cable.
+  2. Banco: las frías se informan con la regla de C4, sin decidir. Al terminar se borra el worktree temporal y el árbol queda limpio.
+  3. Test extra: un cable en T cuya otra punta está en un borne de un componente que no se borra.
+  4. Fila T26 en la checklist de la netbook de la fase 4. La hoja de la fase 3b no se toca.
+- **Criterio del banco** (fijado antes de medir):
+  - `probar-webview2.mjs --exe=<T26>,<67e9c4c> --bloques=3`: ABBA ×3, 6 aperturas por exe, una fría y una caliente cada una. Los dos exes salen de `tauri build --no-bundle`; la base, de un worktree temporal en `67e9c4c`.
+  - **Decide B16 en caliente:** la mediana de las 6 calientes de T26 queda a ±10 % de la base o a ≤ 1 ms, con los lentos a ±1, y además dentro del tope absoluto (≤ 11,10 ms por gesto; 0 lentos).
+  - B1–B15 se informan con la regla D6b-C y no deciden: no pasan por `Borrar`.
+  - Las frías se informan con la regla de C4 (cada fila dentro del rango de las calientes del mismo exe, más 1 ms) y no deciden.
+- **Hecho (2026-11-18):**
+  - `Borrar` (núcleo) suma la cascada y `enCascada`. Supr y Cortar avisan en la barra. Rehacer no repite el aviso.
+  - En el recorrido al azar de `src/editor/uniones.test.ts`, el piso de anfitriones borrados pasa de «> 10» a «≥ 10» (con la cascada quedan menos anfitriones para borrar). Se suma un piso de más de 10 cables en cascada.
+  - Resultados: 2116 tests, check sin errores, `cargo test` 7/7, humo 863/863 (`t26-borrar-t.mjs`, 11 comprobaciones).
+  - **Banco: B16 pasa** (8,3 contra 8,3 ms por gesto; 0 lentos). Hizo falta una 2.ª corrida en «Mejor rendimiento»: la 1.ª, sin comprobar ese modo, había dado 11,6 ms, por encima del tope. Detalle en `docs/bench.md`.
+  - Falta la fila 5c de la checklist de la netbook (al cierre de la fase).
 
 ### T27. Etiquetado de pulsadores desde S0 (Bruno, 2026-11-17)
 - **Qué:** última tarea antes del cierre.
@@ -371,6 +387,7 @@ Cómo se prueba:
 | 4 | T25 (en la PC, con el `.msi` local, pasó el 2026-11-18). Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
 | 5 | T24 (en la PC, en `tauri dev`, pasó el 2026-11-18). Abrir `marcha-parada.brn`, cerrar Bornera y volver a abrirla. Flecha junto a Abrir › `marcha-parada.brn` | Abre, sin el aviso de «permiso» |
 | 5b | T21 (en la PC, con el `.msi` local de T25, pasó el 2026-11-18). «Exportar sin comprimir (.brn.json)…» cuatro veces, escribiendo en el diálogo `x`, `x.brn`, `x.json` y `x.brn.json`. Guardar como, escribiendo `x.brn.json`. Abrir ese `x.brn.json`, mover algo y Ctrl+S | Las cuatro exportaciones dejan `x.brn.json` (nunca `x.brn.json.brn`, `x.brn.brn.json` ni `x.json`) y sin «permiso». Guardar como no deja `x.brn.json.brn`. Abrir muestra los `.brn.json`; Ctrl+S quita la «•» y el archivo tiene un componente por línea (Bloc de notas) |
+| 5c | T26. Abrir `marcha-parada.brn`. Clic (sin Mayús) en el cable que baja de S1·14 a K1·A1, entre la T y A1, y Supr. Después Ctrl+Z | Se borran también el cable de la T de H1 y la barra dice «Se borró también 1 cable en T.». Ctrl+Z trae los dos, con H1 conectada |
 | 6 | Instalar el `.msi` de `0.1.4` (del borrador) encima de la alpha.N, sin desinstalar | Una sola «Bornera», versión 0.1.4, la lista de recientes sigue |
 
 ## 7. Riesgos

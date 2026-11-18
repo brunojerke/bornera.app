@@ -266,6 +266,11 @@ export const AVISO_SIN_VACIOS = "No hay componentes sin etiqueta.";
 /** Con un tramo en curso, ni copiar ni pegar. */
 export const AVISO_ESC_CABLE = "Esc cancela el cable en curso.";
 
+/** Aviso al borrar (o cortar) un cable que tenía cables en T colgando (T26, D7-A): Ctrl+Z los trae. */
+export function textoCascada(n: number): string {
+  return n === 1 ? "Se borró también 1 cable en T." : `Se borraron también ${n} cables en T.`;
+}
+
 /** Aviso cuando el documento cambia por otra vía en medio de un arrastre. */
 export const AVISO_ARRASTRE_CANCELADO = "El documento cambió: se canceló el arrastre.";
 
@@ -1087,11 +1092,15 @@ export class Editor {
   }
 
   /**
-   * Borra lo seleccionado en un solo paso, componentes y cables juntos.
-   * `Borrar` suelta lo que colgaba de lo borrado.
+   * Borra lo seleccionado en un solo paso, componentes y cables juntos (Supr
+   * y Cortar). `Borrar` se lleva los cables en T que colgaban de un cable
+   * borrado y suelta lo que llegaba a un componente borrado. Si hubo cascada,
+   * lo avisa en la barra; rehacer no lo vuelve a avisar.
    */
   private borrarSeleccion(ids: readonly string[]): void {
-    this.ejecutar(new Borrar(ids));
+    const cmd = new Borrar(ids);
+    this.ejecutar(cmd);
+    if (cmd.enCascada > 0) this.alAvisar?.(textoCascada(cmd.enCascada));
   }
 
   /**

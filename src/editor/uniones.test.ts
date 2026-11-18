@@ -403,6 +403,8 @@ describe("Uniones de a poco", () => {
       aceptadas: 0,
       rechazadas: 0,
       anfitrionesBorrados: 0,
+      /** Cables en T que se llevó la cascada de Borrar (T26). */
+      enCascada: 0,
       deshechos: 0,
       rehechos: 0,
       cascadas: 0,
@@ -455,6 +457,7 @@ describe("Uniones de a poco", () => {
           try {
             ed.ejecutar(cmd);
             n.aceptadas++;
+            if (cmd instanceof Borrar) n.enCascada += cmd.enCascada;
           } catch {
             n.rechazadas++;
             // Un rechazo no cambia nada.
@@ -469,7 +472,10 @@ describe("Uniones de a poco", () => {
     // Que la prueba pruebe algo: hay de todo.
     expect(n.aceptadas, JSON.stringify(n)).toBeGreaterThan(150);
     expect(n.rechazadas, JSON.stringify(n)).toBeGreaterThan(10);
-    expect(n.anfitrionesBorrados, JSON.stringify(n)).toBeGreaterThan(10);
+    // Desde T26 la cascada se lleva cadenas enteras de T y quedan menos
+    // anfitriones para borrar (la segunda semilla da 10 justos).
+    expect(n.anfitrionesBorrados, JSON.stringify(n)).toBeGreaterThanOrEqual(10);
+    expect(n.enCascada, JSON.stringify(n)).toBeGreaterThan(10);
     expect(n.deshechos, JSON.stringify(n)).toBeGreaterThan(20);
     expect(n.rehechos, JSON.stringify(n)).toBeGreaterThan(10);
     expect(n.cascadas, JSON.stringify(n)).toBeGreaterThan(10);

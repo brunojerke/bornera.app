@@ -19,6 +19,33 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Borrar con T colgando (fase 4, T26) — 2026-11-18
+
+**Criterio escrito antes de medir** (`docs/plan-fase4.md`, T26): decide B16 en caliente, con la regla D6b-C contra la base (±10 % o ≤ 1 ms; lentos ±1) y además el tope absoluto (≤ 11,10 ms por gesto; 0 lentos). B1–B15 se informan. Las frías se informan con la regla de C4 (dentro del rango de las calientes del mismo exe, más 1 ms).
+
+**Cómo se midió:** `probar-webview2.mjs --exe=<T26>,<67e9c4c> --bloques=3`, con 6 aperturas por exe y una corrida fría y una caliente en cada una. Los dos exes salen de `tauri build --no-bundle`; la base, de un worktree temporal en `67e9c4c`, ya borrado. Edge 157 (WebView2).
+
+**1.ª corrida, no vale.** La PC estaba enchufada, pero no se comprobó que estuviera en «Mejor rendimiento»: solo se miró el plan base («Equilibrado»).
+- B16 da 10,9 en la base y 11,6 en T26: +0,7 ms, igual por el piso, pero por encima del tope de 11,10.
+- Se ve que la sesión vino lenta y dispersa:
+  - La base misma va de 8,9 a 17,1 en B16.
+  - B1 1.º da 58,5 contra 45,8 en T23.
+- Se repitió con el OK de Bruno.
+
+**2.ª corrida (la que vale):** enchufada, en «Mejor rendimiento» (modo `ded574b5…`), sin otra Bornera abierta.
+
+| # | Métrica | Base | T26 | Juicio |
+|---|---|---|---|---|
+| B16 | por gesto | 8,3 | 8,3 | igual |
+| B16 | lentos | 0 | 0 | igual |
+
+- **B16 pasa:** igual a la base y dentro del tope (8,3 ≤ 11,10; 0 lentos). Era lo esperado: B16 borra un componente, y por ese camino la cascada no arma el mapa de las T.
+- **B1–B15 (informan):** nada sube; B9 = 500 en las 12 aperturas.
+- **Frías (C4, informan):**
+  - En la base, 0 valores fuera del rango.
+  - En T26, 8 valores fuera, todos máximos sueltos de filas que no pasan por `Borrar`: B1 (3), B3 máx. (2), B5 2.º (2) y B15 máx. (1). Es lo mismo que se vio en T20, donde esos máximos varían igual entre corridas calientes.
+  - Las frías de B16 quedan en rango en los dos exes.
+
 ## Autoguardado y costo de editar (fase 4, T23 etapa 5, D1) — 2026-11-17
 
 En Node, escena 2000 + 3030 cables, `Editor` real. Cada vuelta hace Mover 1, deshacer, rehacer y Mover de vuelta, con el autoguardado conectado (relojes reales, almacén en memoria) o sin él, alternando. Son 3 procesos y 300 vueltas por modo (más 40 de calentamiento). Script temporal, no commiteado. En ms:
