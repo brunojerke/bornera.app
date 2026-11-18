@@ -14,7 +14,8 @@ const fs = vi.hoisted(() => ({
   writeFile: vi.fn(async (ruta: string) => void fs.escritos.push(ruta)),
   rename: vi.fn(async (de: string, a: string) => void fs.renombres.push([de, a])),
   remove: vi.fn(async () => undefined),
-  stat: vi.fn(async () => ({ size: 10 })),
+  stat: vi.fn(async (_ruta: string) => ({ size: 10 })),
+  exists: vi.fn(async (_ruta: string) => true),
   readFile: vi.fn(async () => new Uint8Array()),
 }));
 
@@ -29,17 +30,19 @@ const ALCANCE: string[] = (capability.permissions as (string | { identifier: str
 );
 
 /**
- * Un glob de la capability como lo mira Tauri (crate glob, con
- * `require_literal_separator` y distinguiendo mayúsculas): `**​/` es
- * cualquier carpeta y `*` no cruza `/`. Alcanza para los de esta capability.
+ * Un glob de la capability como lo mira Tauri 2.12 (crate glob, con
+ * `require_literal_separator` y distinguiendo mayúsculas, también en
+ * Windows: `src/scope/fs.rs`): `**​/` es cualquier carpeta, `*` no cruza un
+ * separador y `[bB]` es una letra de la clase. En Windows, `\` también es
+ * separador. Alcanza para los de esta capability.
  */
 function coincide(ruta: string, glob: string): boolean {
   const re = glob
-    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/[.+?^${}()|\\]/g, "\\$&")
     .replace(/\*\*\//g, "\u0000")
     .replace(/\*/g, "[^/]*")
     .replace(/\u0000/g, "(?:.*/)?");
-  return new RegExp(`^${re}$`).test(ruta);
+  return new RegExp(`^${re}$`).test(ruta.replace(/\\/g, "/"));
 }
 
 const enAlcance = (ruta: string) => ALCANCE.some((g) => coincide(ruta, g));
@@ -51,12 +54,58 @@ beforeEach(() => {
 });
 
 describe("archivosTauri (T21)", () => {
-  it("la capability suma solo **/*.brn.json y **/*.brn.json.tmp (el alcance amplio de .brn es T24)", () => {
-    expect(ALCANCE).toEqual(["**/*.brn.tmp", "**/*.brn.json", "**/*.brn.json.tmp"]);
-    expect(enAlcance("/c/a/x.brn")).toBe(false);
-    expect(enAlcance("/c/a/x.brn.json.brn")).toBe(false);
-    expect(enAlcance("/c/a/b/x.brn.tmp")).toBe(true);
-    expect(enAlcance("/c/a/x.brn.jsonx")).toBe(false);
+  it("T24 (D8-A): todo .brn y .brn.json, y sus .tmp, sin mirar mayúsculas", () => {
+    expect(ALCANCE).toEqual([
+      "**/*.[bB][rR][nN]",
+      "**/*.[bB][rR][nN].tmp",
+      "**/*.[bB][rR][nN].[jJ][sS][oO][nN]",
+      "**/*.[bB][rR][nN].[jJ][sS][oO][nN].tmp",
+    ]);
+    for (const r of [
+      "/c/a/x.brn",
+      "/c/a/b/x.brn.tmp",
+      "/c/a/x.brn.json",
+      "/c/a/x.brn.json.tmp",
+      // El pendiente de T15a: la extensión en mayúsculas y su temporal.
+      "C:\\a\\X.BRN",
+      "C:\\a\\X.BRN.tmp",
+      "C:\\a\\X.BRN.JSON",
+      "C:\\a\\X.BRN.JSON.tmp",
+      "C:\\a\\x.Brn.Json.tmp",
+      "/home/b/Marcha.bRn",
+    ])
+      expect(enAlcance(r), r).toBe(true);
+    for (const r of ["/c/a/x.json", "/c/a/x.brnx", "/c/a/x.brn.jsonx", "/c/a/x.brn.TMP", "/c/a/x.txt", "/c/a/brn", "C:\\a\\x.brn\\otro.txt"])
+      expect(enAlcance(r), r).toBe(false);
+  });
+
+  it("los permisos de fs: los de T15a más exists (Abrir reciente, T24)", () => {
+    const permisos = (capability.permissions as unknown[]).filter((x): x is string => typeof x === "string" && x.startsWith("fs:"));
+    expect(permisos).toEqual(["fs:allow-stat", "fs:allow-exists", "fs:allow-read-file", "fs:allow-write-file", "fs:allow-rename", "fs:allow-remove"]);
+  });
+
+  it("Abrir reciente: existe y deRuta usan la ruta tal cual, sin el diálogo", async () => {
+    fs.exists.mockResolvedValueOnce(false);
+    expect(await archivosTauri.existe!("C:\\a\\X.BRN")).toBe(false);
+    expect(fs.exists).toHaveBeenCalledWith("C:\\a\\X.BRN");
+    const a = await archivosTauri.deRuta!("C:\\a\\X.BRN");
+    expect(a).toMatchObject({ nombre: "X.BRN", ruta: "C:\\a\\X.BRN", tamano: 10 });
+    expect(fs.stat).toHaveBeenCalledWith("C:\\a\\X.BRN");
+    expect(dialogo.open).not.toHaveBeenCalled();
+  });
+
+  it("Abrir reciente: «forbidden path» se traduce, como en Abrir", async () => {
+    fs.exists.mockRejectedValueOnce("forbidden path: C:\\a\\x.txt");
+    await expect(archivosTauri.existe!("C:\\a\\x.txt")).rejects.toThrow(/no tiene permiso/);
+  });
+
+  it("Guardar como «X.BRN»: el temporal X.BRN.tmp entra en el alcance (pendiente de T15a)", async () => {
+    dialogo.save.mockResolvedValue("C:\\a\\X.BRN");
+    const destino = await archivosTauri.elegirDestino("Marcha.brn", "brn");
+    expect(destino?.ruta).toBe("C:\\a\\X.BRN");
+    await archivosTauri.guardar(destino!, new Uint8Array([1]));
+    expect(fs.escritos).toEqual(["C:\\a\\X.BRN.tmp"]);
+    for (const r of ["C:\\a\\X.BRN.tmp", "C:\\a\\X.BRN"]) expect(enAlcance(r), r).toBe(true);
   });
 
   it("Abrir: un filtro con los dos formatos", async () => {

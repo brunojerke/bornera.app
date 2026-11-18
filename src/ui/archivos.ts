@@ -9,15 +9,17 @@
 // - Escritorio (`archivosTauri`): el camino del usuario, con los diálogos
 //   nativos (plugin dialog) y escritura segura (plugin fs): se escribe un
 //   temporal `<ruta>.tmp` en la misma carpeta y se renombra sobre la ruta. La
-//   ruta que da el diálogo entra sola al alcance de fs (dura la sesión); el
-//   temporal entra por la entrada `**/*.brn.tmp` de la capability. Los
-//   `.brn.json` (T21) entran por `**/*.brn.json` y `**/*.brn.json.tmp`.
+//   ruta que da el diálogo entra sola al alcance de fs (dura la sesión). Desde
+//   T24 (D8-A), la capability deja usar sin el diálogo todo `.brn` y
+//   `.brn.json`, y sus temporales, sin mirar mayúsculas (`X.BRN.tmp` también):
+//   Abrir reciente lo necesita después de reiniciar. El alcance de Tauri
+//   distingue mayúsculas, así que los globs van con clases (`[bB][rR][nN]`).
 // - Navegador (`archivosNavegador`): solo para `npm run dev` y el humo. Abrir
 //   con un <input type="file">; Guardar y Guardar como, con una descarga. No
 //   hay ruta, y se da por guardado al disparar la descarga.
 
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readFile, remove, rename, stat, writeFile } from "@tauri-apps/plugin-fs";
+import { exists, readFile, remove, rename, stat, writeFile } from "@tauri-apps/plugin-fs";
 import { TOPE_BYTES, type FormatoArchivo } from "./brn";
 
 /** Un archivo elegido para abrir, todavía sin leer. */
@@ -49,6 +51,13 @@ export interface Archivos {
   elegirDestino(sugerido: string, formato: FormatoArchivo): Promise<Destino | null>;
   /** Escribe en ese destino, sin preguntar. */
   guardar(destino: Destino, bytes: Uint8Array): Promise<void>;
+  /**
+   * Abrir reciente (T24), solo en el escritorio: si el archivo de la ruta
+   * existe. Tira si no se puede saber (sin permiso).
+   */
+  existe?(ruta: string): Promise<boolean>;
+  /** Abrir reciente (T24): el archivo de la ruta, como si se lo eligiera en el diálogo. No lo lee. */
+  deRuta?(ruta: string): Promise<ArchivoElegido>;
 }
 
 // ── Escritorio ─────────────────────────────────────────────────────────────
@@ -138,20 +147,30 @@ async function conMensaje<T>(f: () => Promise<T>): Promise<T> {
   }
 }
 
+/** El archivo de una ruta, sin leerlo: el tamaño antes de leer, así uno enorme no se carga entero en memoria. */
+async function archivoDeRuta(ruta: string): Promise<ArchivoElegido> {
+  const { size } = await conMensaje(() => stat(ruta));
+  return { nombre: nombreDeRuta(ruta), ruta, tamano: size, leer: () => conMensaje(() => readFile(ruta)) };
+}
+
 export const archivosTauri: Archivos = {
   async elegirParaAbrir() {
     const ruta = await open({ multiple: false, directory: false, filters: FILTROS_ABRIR });
     if (ruta === null) return null;
-    // El tamaño antes de leer: un archivo enorme no se carga entero en memoria.
-    const { size } = await conMensaje(() => stat(ruta));
-    return { nombre: nombreDeRuta(ruta), ruta, tamano: size, leer: () => conMensaje(() => readFile(ruta)) };
+    return archivoDeRuta(ruta);
   },
+
+  existe(ruta) {
+    return conMensaje(() => exists(ruta));
+  },
+
+  deRuta: archivoDeRuta,
 
   async elegirDestino(sugerido, formato) {
     const elegida = await save({ defaultPath: sugerido, filters: FILTROS_GUARDAR[formato] });
     if (elegida === null) return null;
     // Si se corrige el nombre, la ruta nueva no la dio el diálogo: entra al
-    // alcance por `**/*.brn.json` (y `**/*.brn` desde T24) de la capability.
+    // alcance por los globs de `.brn` y `.brn.json` de la capability.
     const ruta = conExtension(elegida, formato);
     return { nombre: nombreDeRuta(ruta), ruta };
   },

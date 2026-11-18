@@ -11,13 +11,19 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:allow-stat",
+    "fs:allow-exists",
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-rename",
     "fs:allow-remove",
     {
       "identifier": "fs:scope",
-      "allow": [{ "path": "**/*.brn.tmp" }, { "path": "**/*.brn.json" }, { "path": "**/*.brn.json.tmp" }]
+      "allow": [
+        { "path": "**/*.[bB][rR][nN]" },
+        { "path": "**/*.[bB][rR][nN].tmp" },
+        { "path": "**/*.[bB][rR][nN].[jJ][sS][oO][nN]" },
+        { "path": "**/*.[bB][rR][nN].[jJ][sS][oO][nN].tmp" }
+      ]
     }
   ]
 }

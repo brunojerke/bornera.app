@@ -47,6 +47,13 @@
 //    cuadro dibujado sale "Abierto" (con el tiempo desde la lectura, sin el
 //    diálogo, D20).
 //
+// Abrir reciente (T24, D8-A): sin selector. Primero, con los bloqueos del
+// paso 1, se mira si el archivo existe (`exists` del plugin fs): si no, un
+// aviso, se quita de la lista y no se pregunta nada. Si existe, los pasos 2 y
+// 3 con la ruta en lugar del selector, y los pasos 4 a 7 son los mismos de
+// Abrir (`abrirElegido`). Abrir, Guardar y Guardar como suman la ruta arriba
+// de la lista; Exportar y Recuperar no (no cambian el archivo actual).
+//
 // Nuevo: los pasos 1 y 2 y un documento vacío, sin archivo actual.
 //
 // Cerrar la ventana (D14-A, `antesDeCerrar`): con cambios en el documento,
@@ -58,7 +65,7 @@ import type { Documento } from "../core/model/documento";
 import type { MarcaGuardado } from "../core/model/historial";
 import { letra } from "../editor/atajos";
 import { documentoNuevo } from "../editor/editor";
-import type { ArchivoElegido, Archivos, Destino } from "./archivos";
+import { nombreDeRuta, type ArchivoElegido, type Archivos, type Destino } from "./archivos";
 import {
   desempaquetar,
   empaquetar,
@@ -125,6 +132,8 @@ export interface DependenciasArchivo {
   avisar(texto: string): void;
   /** Milisegundos, para medir (performance.now). */
   ahora(): number;
+  /** Abrir reciente (T24): la lista de rutas; null si no hay (el navegador). */
+  recientes?: { agregar(ruta: string): void; quitar(ruta: string): void } | null;
   /** Los avisos dicen el tiempo (en desarrollo y en las prereleases, D20). */
   medir: boolean;
 }
@@ -143,6 +152,11 @@ export const AVISOS_ABRIR = {
   cambioModo: "Se canceló abrir: se cambió de modo o de escena",
   otraOperacion: "Se canceló abrir: hay otra operación de archivo en curso",
 } as const;
+
+/** Aviso de la barra de estado cuando el archivo de Abrir reciente ya no existe (T24). */
+export function avisoNoExiste(nombre: string): string {
+  return `Ya no existe «${nombre}»: se quitó de recientes`;
+}
 
 /** Aviso de la barra de estado cuando no se puede cerrar la ventana. */
 export const AVISO_CERRAR_EN_CURSO = "No se puede cerrar: hay una operación de archivo en curso";
@@ -299,6 +313,7 @@ export class OperacionesArchivo {
         this._archivoActual = destino;
         this._sugerido = null;
         editor.marcarGuardado(marca);
+        if (destino.ruta !== null) this.deps.recientes?.agregar(destino.ruta);
       }
       this.deps.avisar(avisoGuardado(comprimido, tiempo));
       return true;
@@ -323,6 +338,49 @@ export class OperacionesArchivo {
       return;
     }
     if (!elegido) return;
+    await this.abrirElegido(elegido, editor, cambios);
+  }
+
+  /**
+   * Abrir reciente (T24): abre esta ruta sin el selector. Si el archivo ya no
+   * existe, avisa y la quita de la lista, sin preguntar por los cambios.
+   */
+  async abrirReciente(ruta: string): Promise<void> {
+    const archivos = this.deps.archivos;
+    if (!archivos.existe || !archivos.deRuta) return;
+    // Los bloqueos del paso 1, antes de mirar el disco.
+    if (this._enCurso || this.preguntando || !this.deps.reemplazable()) return;
+    let hay: boolean;
+    try {
+      hay = await archivos.existe(ruta);
+    } catch (e) {
+      // Sin permiso u otro error: queda en la lista (D3-A).
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "abrir") }]);
+      return;
+    }
+    if (!hay) {
+      this.deps.recientes?.quitar(ruta);
+      this.deps.avisar(avisoNoExiste(nombreDeRuta(ruta)));
+      return;
+    }
+    const editor = await this.antesDeReemplazar();
+    if (!editor) return;
+    const cambios = editor.cambios;
+    let elegido: ArchivoElegido;
+    try {
+      elegido = await archivos.deRuta(ruta);
+    } catch (e) {
+      this.deps.mostrarProblemas(TITULOS.noSePudoAbrir, [{ donde: "", mensaje: textoError(e, "leer") }]);
+      return;
+    }
+    await this.abrirElegido(elegido, editor, cambios);
+  }
+
+  /**
+   * Pasos 4 a 7 de Abrir y de Abrir reciente, con el archivo ya elegido:
+   * empieza la operación, lo carga y reemplaza el documento, y avisa.
+   */
+  private async abrirElegido(elegido: ArchivoElegido, editor: EditorDocumento, cambios: number): Promise<void> {
     if (this._enCurso) {
       this.deps.avisar(AVISOS_ABRIR.otraOperacion);
       return;
@@ -441,6 +499,7 @@ export class OperacionesArchivo {
     const cuadro = this.deps.reemplazar(r.documento);
     this._archivoActual = { nombre: elegido.nombre, ruta: elegido.ruta };
     this._sugerido = null;
+    if (elegido.ruta !== null) this.deps.recientes?.agregar(elegido.ruta);
     return { cuadro, avisos: r.avisos, inicio };
   }
 

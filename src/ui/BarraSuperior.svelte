@@ -1,6 +1,6 @@
 <script lang="ts">
   // Barra de herramientas superior. Andan Nuevo, Abrir, Guardar y Guardar
-  // como (T15a), Exportar sin comprimir (T21), el historial (deshacer y rehacer, desactivados si no hay
+  // como (T15a), Exportar sin comprimir (T21), Abrir reciente (T24, solo en el escritorio), el historial (deshacer y rehacer, desactivados si no hay
   // nada) y el zoom; el resto es estructura.
   import FilePlus from "@lucide/svelte/icons/file-plus";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
@@ -16,6 +16,7 @@
   import Pencil from "@lucide/svelte/icons/pencil";
   import Play from "@lucide/svelte/icons/play";
   import MenuDesarrollo from "./MenuDesarrollo.svelte";
+  import MenuRecientes from "./MenuRecientes.svelte";
   import type { OpcionesCapas } from "../render/capas";
   import type { DiagnosticoArrastre } from "../editor/editor";
   import type { EscenaDesarrollo, Modo } from "./tipos";
@@ -28,6 +29,9 @@
     puedeAbrir = false,
     onnuevo,
     onabrir,
+    recientes = null,
+    onabrirreciente,
+    onmostrarrecientes,
     onguardar,
     onguardarcomo,
     onexportar,
@@ -56,6 +60,11 @@
     puedeAbrir?: boolean;
     onnuevo?: () => void;
     onabrir?: () => void;
+    /** Abrir reciente (T24): las rutas, la más nueva primero; null en el navegador (no se muestra). */
+    recientes?: readonly string[] | null;
+    onabrirreciente?: (ruta: string) => void;
+    /** Al desplegar Abrir reciente: que se relea la lista. */
+    onmostrarrecientes?: () => void;
     onguardar?: () => void;
     onguardarcomo?: () => void;
     /** Exportar sin comprimir (.brn.json), T21: una copia; no cambia el archivo actual. */
@@ -95,6 +104,9 @@
     <button class="boton-icono" title="Abrir (Ctrl+O)" aria-label="Abrir" disabled={!puedeAbrir} onclick={onabrir}>
       <FolderOpen size={TAM} />
     </button>
+    {#if recientes}
+      <MenuRecientes rutas={recientes} desactivado={!puedeAbrir} onabrir={onabrirreciente} onmostrar={onmostrarrecientes} />
+    {/if}
     <button class="boton-icono" title="Guardar (Ctrl+S)" aria-label="Guardar" disabled={!puedeGuardar} onclick={onguardar}>
       <Save size={TAM} />
     </button>

@@ -12,6 +12,7 @@ import {
   avisoExportado,
   AVISO_CERRAR_EN_CURSO,
   avisoGuardado,
+  avisoNoExiste,
   AVISOS_ABRIR,
   esTeclaRecarga,
   lineasProblemas,
@@ -19,6 +20,7 @@ import {
   OperacionesArchivo,
   TITULOS,
   tituloVentana,
+  type DependenciasArchivo,
   type Mostrado,
   type RespuestaSinGuardar,
 } from "./archivo";
@@ -81,6 +83,31 @@ class ArchivosFalsos implements Archivos {
     if (this.fallaElegir) throw this.fallaElegir;
     const a = this.aAbrir;
     if (!a) return null;
+    return this.elegido(a);
+  }
+
+  /** Abrir reciente (T24): los archivos que hay en el disco, por ruta. */
+  enDisco = new Map<string, Archivo>();
+  /** Si está, `existe` falla con este error. */
+  fallaExiste: Error | null = null;
+  /** Si está, `deRuta` falla con este error. */
+  fallaDeRuta: Error | null = null;
+
+  async existe(ruta: string): Promise<boolean> {
+    this.llamadas.push(`existe ${ruta}`);
+    if (this.fallaExiste) throw this.fallaExiste;
+    return this.enDisco.has(ruta);
+  }
+
+  async deRuta(ruta: string): Promise<ArchivoElegido> {
+    this.llamadas.push(`deRuta ${ruta}`);
+    if (this.fallaDeRuta) throw this.fallaDeRuta;
+    const a = this.enDisco.get(ruta);
+    if (!a) throw new Error("No existe");
+    return this.elegido(a);
+  }
+
+  private elegido(a: Archivo): ArchivoElegido {
     return {
       nombre: a.nombre,
       ruta: a.ruta,
@@ -96,13 +123,16 @@ class ArchivosFalsos implements Archivos {
 
   /** El formato pedido en cada diálogo de dónde guardar. */
   formatos: FormatoArchivo[] = [];
+  /** La carpeta que da el diálogo de dónde guardar (como el escritorio); null: sin ruta (el navegador). */
+  carpeta: string | null = null;
 
   async elegirDestino(sugerido: string, formato: FormatoArchivo): Promise<Destino | null> {
     this.llamadas.push(`elegir ${sugerido}`);
     this.formatos.push(formato);
     this.alElegirDestino();
     if (this.eleccion === null) return null;
-    return { nombre: this.eleccion ?? sugerido, ruta: null };
+    const nombre = this.eleccion ?? sugerido;
+    return { nombre, ruta: this.carpeta === null ? null : `${this.carpeta}\\${nombre}` };
   }
 
   async guardar(destino: Destino, bytes: Uint8Array): Promise<void> {
@@ -143,6 +173,8 @@ function preparar() {
     /** Lo que pasa cada vez que se lee el reloj. */
     alLeerReloj: () => {},
     medir: false,
+    /** Abrir reciente (T24): lo que se sumó y quitó de la lista, en orden. */
+    recientes: [] as string[],
     ops: null as unknown as OperacionesArchivo,
   };
   p.ops = new OperacionesArchivo({
@@ -173,6 +205,10 @@ function preparar() {
     },
     get medir() {
       return p.medir;
+    },
+    recientes: {
+      agregar: (ruta) => p.recientes.push(`agregar ${ruta}`),
+      quitar: (ruta) => p.recientes.push(`quitar ${ruta}`),
     },
   });
   return p;
@@ -1239,5 +1275,160 @@ describe("Exportar tal cual una copia que no abre (T23)", () => {
     p.archivos.falla = new Error("disco lleno");
     expect(await p.ops.exportarTexto("x", "Sin título")).toBe(false);
     expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoGuardar, problemas: [{ donde: "", mensaje: "disco lleno" }] }]);
+  });
+});
+
+describe("Abrir reciente (T24, D8-A)", () => {
+  const RUTA = "C:\\a\\Marcha.brn";
+
+  it("abre la ruta sin selector, como Abrir: historial vacío, archivo actual, «Abierto», y sube en la lista", async () => {
+    const p = preparar();
+    const doc = docRotados();
+    p.archivos.enDisco.set(RUTA, { ...(await archivo(doc)), ruta: RUTA });
+    await p.ops.abrirReciente(RUTA);
+    expect(p.archivos.llamadas).toEqual([`existe ${RUTA}`, `deRuta ${RUTA}`]);
+    expect(p.editor.documento).toEqual(doc);
+    expect(p.editor.puedeDeshacer).toBe(false);
+    expect(p.ops.archivoActual).toEqual({ nombre: "Marcha.brn", ruta: RUTA });
+    expect(p.recientes).toEqual([`agregar ${RUTA}`]);
+    expect(p.avisos).toEqual([avisoAbierto(null)]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("si ya no existe: aviso y se quita de la lista, sin preguntar por los cambios ni tocar el documento", async () => {
+    const p = preparar();
+    const viejo = p.editor;
+    cambiar(p.editor);
+    await p.ops.abrirReciente(RUTA);
+    expect(p.preguntas).toEqual([]);
+    expect(p.archivos.llamadas).toEqual([`existe ${RUTA}`]);
+    expect(p.recientes).toEqual([`quitar ${RUTA}`]);
+    expect(p.avisos).toEqual([avisoNoExiste("Marcha.brn")]);
+    expect(avisoNoExiste("Marcha.brn")).toBe("Ya no existe «Marcha.brn»: se quitó de recientes");
+    expect(p.editor).toBe(viejo);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("D3-A: si no se puede saber (sin permiso), «No se pudo abrir» y queda en la lista", async () => {
+    const p = preparar();
+    p.archivos.fallaExiste = new Error("forbidden path");
+    await p.ops.abrirReciente(RUTA);
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: "forbidden path" }] }]);
+    expect(p.recientes).toEqual([]);
+  });
+
+  it("D3-A: un archivo dañado no abre, no toca el documento y queda en la lista (los pasos de Abrir)", async () => {
+    const p = preparar();
+    const viejo = p.editor;
+    p.archivos.enDisco.set(RUTA, { ...archivoTexto("{"), ruta: RUTA });
+    await p.ops.abrirReciente(RUTA);
+    expect(p.problemas.map((x) => x.titulo)).toEqual([TITULOS.noSePudoAbrir]);
+    expect(p.editor).toBe(viejo);
+    expect(p.ops.archivoActual).toBeNull();
+    expect(p.recientes).toEqual([]);
+    expect(p.ops.enCurso).toBe(false);
+  });
+
+  it("si desaparece entre mirar y abrir: el error se muestra y queda en la lista", async () => {
+    const p = preparar();
+    p.archivos.enDisco.set(RUTA, { ...(await archivo(docRotados())), ruta: RUTA });
+    p.archivos.fallaDeRuta = new Error("No existe el archivo");
+    await p.ops.abrirReciente(RUTA);
+    expect(p.problemas).toEqual([{ titulo: TITULOS.noSePudoAbrir, problemas: [{ donde: "", mensaje: "No existe el archivo" }] }]);
+    expect(p.recientes).toEqual([]);
+    expect(p.reemplazos).toEqual([]);
+  });
+
+  it("con cambios pregunta: Cancelar no abre; No guardar abre", async () => {
+    const p = preparar();
+    const viejo = p.editor;
+    cambiar(p.editor);
+    p.archivos.enDisco.set(RUTA, { ...(await archivo(docRotados())), ruta: RUTA });
+    await p.ops.abrirReciente(RUTA);
+    expect(p.preguntas).toEqual(["Prueba.brn"]);
+    expect(p.editor).toBe(viejo);
+    expect(p.archivos.llamadas).toEqual([`existe ${RUTA}`]);
+    p.respuesta = "noGuardar";
+    await p.ops.abrirReciente(RUTA);
+    expect(p.reemplazos).toHaveLength(1);
+    expect(p.ops.archivoActual?.ruta).toBe(RUTA);
+  });
+
+  it("el documento cambió mientras se leía: se cancela y no sube en la lista", async () => {
+    const p = preparar();
+    p.archivos.enDisco.set(RUTA, { ...(await archivo(docRotados())), ruta: RUTA });
+    p.archivos.alLeer = () => cambiar(p.editor);
+    await p.ops.abrirReciente(RUTA);
+    expect(p.avisos).toEqual([AVISOS_ABRIR.documentoCambio]);
+    expect(p.reemplazos).toEqual([]);
+    expect(p.recientes).toEqual([]);
+  });
+
+  it("D17: en Simular o en el banco, o con otra operación en curso, no hace nada (ni mira el disco)", async () => {
+    const p = preparar();
+    p.puedeAbrir = false;
+    await p.ops.abrirReciente(RUTA);
+    p.puedeAbrir = true;
+    p.archivos.pausar();
+    cambiar(p.editor);
+    const guardando = p.ops.guardar();
+    await Promise.resolve();
+    await p.ops.abrirReciente(RUTA);
+    p.archivos.soltar();
+    await guardando;
+    expect(p.archivos.llamadas.filter((l) => l.startsWith("existe"))).toEqual([]);
+  });
+
+  it("en el navegador (sin existe ni deRuta) no hace nada", async () => {
+    const p = preparar();
+    const archivos: Archivos = {
+      elegirParaAbrir: p.archivos.elegirParaAbrir.bind(p.archivos),
+      elegirDestino: p.archivos.elegirDestino.bind(p.archivos),
+      guardar: p.archivos.guardar.bind(p.archivos),
+    };
+    const ops = new OperacionesArchivo({ ...(p.ops as unknown as { deps: DependenciasArchivo }).deps, archivos });
+    await ops.abrirReciente(RUTA);
+    expect(p.archivos.llamadas).toEqual([]);
+    expect(p.avisos).toEqual([]);
+  });
+});
+
+describe("Qué entra a la lista de recientes (T24, D2-A)", () => {
+  it("Abrir con ruta suma; sin ruta (el navegador), no", async () => {
+    const p = preparar();
+    p.archivos.aAbrir = { ...(await archivo(docRotados())), ruta: "C:\\a\\Marcha.brn" };
+    await p.ops.abrir();
+    p.archivos.aAbrir = await archivo(docRotados());
+    await p.ops.abrir();
+    expect(p.recientes).toEqual(["agregar C:\\a\\Marcha.brn"]);
+  });
+
+  it("Guardar y Guardar como con ruta suman; Exportar, una escena del banco, un error y el navegador, no", async () => {
+    const p = preparar();
+    cambiar(p.editor);
+    p.archivos.carpeta = "C:\\a";
+    expect(await p.ops.guardar()).toBe(true);
+    p.archivos.eleccion = "Otro.brn";
+    expect(await p.ops.guardar(true)).toBe(true);
+    expect(await p.ops.exportar()).toBe(true);
+    const banco = new Editor(docCables());
+    p.mostrado = { editor: banco, esDocumento: false };
+    expect(await p.ops.guardar()).toBe(true);
+    p.mostrado = { editor: p.editor, esDocumento: true };
+    p.archivos.falla = new Error("disco lleno");
+    expect(await p.ops.guardar(true)).toBe(false);
+    p.archivos.falla = null;
+    p.archivos.carpeta = null;
+    expect(await p.ops.guardar(true)).toBe(true);
+    expect(p.recientes).toEqual(["agregar C:\\a\\Prueba.brn", "agregar C:\\a\\Otro.brn"]);
+  });
+
+  it("Recuperar y Nuevo no tocan la lista", async () => {
+    const p = preparar();
+    await p.ops.recuperar(docRotados(), { nombre: "x.brn", ruta: "C:\\a\\x.brn" });
+    await p.ops.nuevo();
+    p.respuesta = "noGuardar";
+    await p.ops.nuevo();
+    expect(p.recientes).toEqual([]);
   });
 });

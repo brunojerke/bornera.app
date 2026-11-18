@@ -51,6 +51,7 @@
     type RespuestaSinGuardar,
   } from "./archivo";
   import { archivosNavegador, archivosTauri } from "./archivos";
+  import { esWindows, Recientes } from "./recientes";
   import { ES_PRERELEASE, VERSION } from "./version";
 
   /** Corre dentro de Tauri (el escritorio); si no, es el navegador (`npm run dev` y el humo). */
@@ -110,8 +111,18 @@
   // ── Archivo (T15a) ───────────────────────────────────────────────────────
   // En el escritorio, diálogos nativos y escritura segura; en el navegador,
   // descargas y <input type="file">.
+  // Abrir reciente (T24): solo en el escritorio, en `localStorage` (por
+  // origen: `tauri dev` y la app compilada tienen listas separadas).
+  const recientes = enEscritorio ? new Recientes(() => window.localStorage, esWindows(navigator.userAgent)) : null;
+  /** Las rutas de Abrir reciente; null en el navegador (no se muestra el menú). */
+  let listaRecientes = $state.raw<string[] | null>(recientes?.lista() ?? null);
+
   const operaciones = new OperacionesArchivo({
     archivos: enEscritorio ? archivosTauri : archivosNavegador,
+    recientes: recientes && {
+      agregar: (ruta) => (listaRecientes = recientes.agregar(ruta)),
+      quitar: (ruta) => (listaRecientes = recientes.quitar(ruta)),
+    },
     // Lo que se ve: el documento o una escena del banco (D17). Las escenas
     // sin editor ("símbolos" y "vacía") no se guardan.
     mostrado: () => (editorActivo ? { editor: editorActivo, esDocumento: escena === "documento" } : null),
@@ -529,7 +540,8 @@
   }
 </script>
 
-<svelte:window onkeydown={alTecla} onbeforeunload={alSalir} />
+<!-- `storage`: otra ventana de Bornera cambió la lista de recientes (T24). -->
+<svelte:window onkeydown={alTecla} onbeforeunload={alSalir} onstorage={() => recientes && (listaRecientes = recientes.lista())} />
 
 <div class="ventana">
   <BarraSuperior
@@ -539,6 +551,9 @@
     {puedeAbrir}
     onnuevo={() => accionArchivo("nuevo")}
     onabrir={() => accionArchivo("abrir")}
+    recientes={listaRecientes}
+    onabrirreciente={(ruta) => void operaciones.abrirReciente(ruta)}
+    onmostrarrecientes={() => recientes && (listaRecientes = recientes.lista())}
     onguardar={() => accionArchivo("guardar")}
     onguardarcomo={() => accionArchivo("guardarComo")}
     onexportar={() => accionArchivo("exportar")}

@@ -272,6 +272,17 @@ Cómo se prueba:
 - **Pruebas:** unitarias de la lista. Humo: en el navegador (sin rutas) el menú no aparece.
 - **A mano:** en `tauri dev` y en la netbook.
 - **Modelo:** Opus alto.
+- **Hecho (2026-11-18), con D1-A (clases en el glob), D2-A, D3-A, D4-A y los ajustes de Bruno:**
+  - Capability: `**/*.[bB][rR][nN]`, `**/*.[bB][rR][nN].tmp`, `**/*.[bB][rR][nN].[jJ][sS][oO][nN]` y `**/*.[bB][rR][nN].[jJ][sS][oO][nN].tmp`, más `fs:allow-exists`. El alcance de Tauri 2.12 distingue mayúsculas también en Windows (`MatchOptions` por defecto en `scope/fs.rs`), y los globs de la capability se cargan sin escapar, así que las clases valen. Con esto se cierra el pendiente de T15a: `X.BRN.tmp` y `X.BRN.JSON` entran.
+  - `src/ui/recientes.ts`: guarda hasta 8 rutas en `localStorage`, con `try` en cada acceso. Un repetido sube arriba. Solo entran `.brn` y `.brn.json`. Ajuste 1: en Windows, dos rutas son la misma sin mirar mayúsculas y con `/` igual a `\`; en Linux tienen que ser iguales letra por letra. El sistema se saca del user agent (`esWindows`). Otra ventana se entera por el evento `storage`.
+  - Ajuste 2: Abrir reciente llama primero a `exists` del plugin fs. Si el archivo no está, sale el aviso «Ya no existe «X»: se quitó de recientes» y se quita, sin preguntar por los cambios. D3-A: si `exists` tira o el archivo no abre, se muestra el error y la ruta queda.
+  - Ajuste 3: los pasos 4 a 7 de Abrir pasaron a `abrirElegido`, que usan Abrir y `abrirReciente`.
+  - D2-A: suman a la lista Abrir, Guardar y Guardar como con ruta. Exportar, Recuperar, Nuevo y Guardar en una escena del banco no.
+  - D4-A: la flecha junto a Abrir (`MenuRecientes.svelte`), sin atajo, desactivada con la lista vacía, en Simular y en el banco. En el navegador no aparece.
+  - Ajuste 4: `docs/arquitectura.md` anota que `tauri dev` y la app compilada tienen listas separadas (`localStorage` es por origen).
+  - Resultados: 2097 tests, check sin errores, humo 852/852 (t24: 7). Sin banco: no toca el dibujado.
+  - A mano en `tauri dev` (Bruno, 2026-11-18), pasó: Guardar como `X.BRN` sin «permiso», `X.BRN` en la flecha, después de reiniciar abre desde la flecha y Ctrl+S quita la «•», y con el archivo renombrado sale el aviso y se quita de la lista.
+  - Falta la fila 5 de la checklist de la netbook (al cierre de la fase).
 
 ### T25. Asociar `.brn` en Windows (solo Windows)
 - **Qué:**
@@ -345,7 +356,7 @@ Cómo se prueba:
 | 3 | T23 (en la PC, en `tauri dev`, pasó el 2026-11-18). Repetir el paso 2 hasta Finalizar tarea. Abrir › **Descartar**. Cerrar y volver a abrir | No vuelve a preguntar |
 | 3b | T23 (en la PC pasó el 2026-11-17). Abrir Bornera dos veces; en cada una, cambiar algo y esperar 15 s. Finalizar tarea sobre la **primera** (la app Bornera). En la segunda, menú de desarrollo › «Copias de recuperación…» | La segunda sigue viva y editable (no queda en blanco ni se cierra); la copia de la primera dice «sin dueño» |
 | 4 | Explorador: doble clic en `marcha-parada.brn` | Bornera abre con ese archivo |
-| 5 | «Abrir reciente» › `marcha-parada.brn` | Abre |
+| 5 | T24 (en la PC, en `tauri dev`, pasó el 2026-11-18). Abrir `marcha-parada.brn`, cerrar Bornera y volver a abrirla. Flecha junto a Abrir › `marcha-parada.brn` | Abre, sin el aviso de «permiso» |
 | 5b | T21 (no se probó a mano en la PC). «Exportar sin comprimir (.brn.json)…» cuatro veces, escribiendo en el diálogo `x`, `x.brn`, `x.json` y `x.brn.json`. Guardar como, escribiendo `x.brn.json`. Abrir ese `x.brn.json`, mover algo y Ctrl+S | Las cuatro exportaciones dejan `x.brn.json` (nunca `x.brn.json.brn`, `x.brn.brn.json` ni `x.json`) y sin «permiso». Guardar como no deja `x.brn.json.brn`. Abrir muestra los `.brn.json`; Ctrl+S quita la «•» y el archivo tiene un componente por línea (Bloc de notas) |
 | 6 | Instalar el `.msi` de `0.1.4` (del borrador) encima de la alpha.N, sin desinstalar | Una sola «Bornera», versión 0.1.4, la lista de recientes sigue |
 
@@ -358,7 +369,7 @@ Cómo se prueba:
 - **`csp: null` con el alcance amplio de D8:** no hay una vía conocida de inyección (lienzo y textos escapados por Svelte). La CSP queda como tarea aparte.
 - **La cascada de T26 borra de más:** se ve en el aviso y se deshace con Ctrl+Z.
 - **WebKitGTK (Mint):** secundario, no bloquea (S8).
-- **Smart App Control en la PC (2026-11-17):** está activado y bloquea las DLL de Rust que se compilan, así que `tauri dev` no compila. T23 (S2, S3 y F1 en WebView2), T24 (a mano en `tauri dev`) y T25 lo necesitan. Desactivarlo no tiene vuelta atrás sin restablecer Windows: lo decide Bruno.
+- **Smart App Control en la PC (2026-11-17):** está activado y bloquea las DLL de Rust que se compilan, así que `tauri dev` no compila. T23 (S2, S3 y F1 en WebView2), T24 (a mano en `tauri dev`) y T25 lo necesitan. Desactivarlo no tiene vuelta atrás sin restablecer Windows: lo decide Bruno. **Nota (2026-11-18):** Bruno lo desactivó y `tauri dev` compila (T23 y T24 se probaron a mano).
 
 ## 8. Fuera de la fase 4
 - **Fase 5, antes de simular:** conexiones aparentes, etiquetas de red en la netlist y aviso de L con L1, L2 o L3.
