@@ -48,6 +48,7 @@
     diagnostico = $bindable(),
     onprobararrastre,
     onprobarfase3b,
+    onprobarfase4,
     onmedircopia,
     oncopias,
   }: {
@@ -85,6 +86,8 @@
     onprobararrastre?: () => void;
     /** «Probar la fase 3b» (cierre 3b, etapa 4). */
     onprobarfase3b?: () => void;
+    /** «Probar la fase 4» (C1). */
+    onprobarfase4?: () => void;
     /** «Medir la copia (F1)» (T23). */
     onmedircopia?: () => void;
     /** «Copias de recuperación» (T23). */
@@ -153,7 +156,7 @@
 
   {#if mostrarMenuDesarrollo(VERSION, import.meta.env.DEV)}
     <div class="grupo-final">
-      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} {onmedircopia} {oncopias} />
+      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} {onprobarfase4} {onmedircopia} {oncopias} />
     </div>
   {/if}
 

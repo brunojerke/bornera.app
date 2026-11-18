@@ -308,7 +308,7 @@ export function evaluar(mediciones: readonly MedidaFase3b[]): FilaEvaluada[] {
 }
 
 /** Celda de una tabla en Markdown (sin barras sueltas). */
-const celda = (s: string) => s.replace(/\|/g, "\\|");
+export const celda = (s: string) => s.replace(/\|/g, "\\|");
 
 /**
  * La tabla para copiar al `.txt` del pendrive: una línea de encabezado con

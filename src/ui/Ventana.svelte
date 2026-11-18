@@ -23,6 +23,7 @@
   import DialogoSinGuardar from "./DialogoSinGuardar.svelte";
   import DialogoProbar from "./DialogoProbar.svelte";
   import { probarFase3b as correrFase3b } from "./probarFase3b";
+  import { probarFase4 as correrFase4 } from "./probarFase4";
   import { medirCopia as correrMedirCopia, motor } from "./medirCopia";
   import { Autoguardado, avisoFallo } from "./autoguardado";
   import { abrirBase, almacenIndexedDB, candadosWebLocks, idInstancia, motivoFallo, type AlmacenCopias } from "./respaldo";
@@ -442,7 +443,7 @@
   }
 
   /** Aviso de cambios sin guardar antes de «Probar la fase 3b» (D3-A); null si no hay. */
-  let avisoProbar = $state.raw<{ nombre: string; responder: (probar: boolean) => void } | null>(null);
+  let avisoProbar = $state.raw<{ titulo: string; nombre: string; responder: (probar: boolean) => void } | null>(null);
 
   function responderProbar(probar: boolean) {
     const a = avisoProbar;
@@ -455,19 +456,26 @@
    * checklist de la netbook, en un editor y un lienzo aparte. No toca la hoja
    * ni la escena a la vista; con cambios sin guardar, avisa antes.
    */
-  async function probarFase3b() {
+  const probarFase3b = () => probarFase("Probar la fase 3b", correrFase3b);
+  /**
+   * «Probar la fase 4» (C1): lo mismo más F1, F2 y F3 con la escena de 2000 +
+   * cables, armada aparte. F2 y F3 no usan Guardar ni Abrir: no tocan
+   * recientes, título ni «modificado».
+   */
+  const probarFase4 = () => probarFase("Probar la fase 4", correrFase4);
+
+  async function probarFase(titulo: string, correr: (progreso: (t: string) => void) => Promise<string>) {
     if (prueba?.corriendo || avisoProbar) return;
     if (modificado) {
       const nombre = nombreDocumento(archivoActual, tituloDocumento);
-      const probar = await new Promise<boolean>((responder) => (avisoProbar = { nombre, responder }));
+      const probar = await new Promise<boolean>((responder) => (avisoProbar = { titulo, nombre, responder }));
       if (!probar) return;
     }
     panel?.confirmar();
-    const titulo = "Probar la fase 3b";
     prueba = { titulo, corriendo: true, texto: "Preparando las escenas…" };
     try {
-      const tabla = await correrFase3b((t) => {
-        if (prueba) prueba.texto = `Probar la fase 3b: ${t}…`;
+      const tabla = await correr((t) => {
+        if (prueba) prueba.texto = `${titulo}: ${t}…`;
       });
       prueba = { titulo, corriendo: false, texto: tabla };
     } catch (e) {
@@ -597,6 +605,7 @@
     bind:diagnostico
     onprobararrastre={probarArrastre}
     onprobarfase3b={probarFase3b}
+    onprobarfase4={probarFase4}
     onmedircopia={medirCopia}
     oncopias={verCopias}
   />
@@ -675,7 +684,7 @@
 {/if}
 
 {#if avisoProbar}
-  <DialogoProbar nombre={avisoProbar.nombre} onresponder={responderProbar} />
+  <DialogoProbar titulo={avisoProbar.titulo} nombre={avisoProbar.nombre} onresponder={responderProbar} />
 {/if}
 
 <style>

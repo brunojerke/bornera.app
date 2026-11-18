@@ -139,3 +139,84 @@ export function compararB(textosBase, textosHead) {
   }
   return { filas, pasa: filas.every((f) => f.juicio === null || f.juicio === "igual" || f.juicio === "baja") };
 }
+
+// ── «Probar la fase 4» (C1; docs/plan-fase4.md, sección 6) ─────────────────
+
+/** Topes de F en la PC con WebView2 (ms): F1 ≤ 9 sobre las calientes; F2 y F3 ≤ 1 s sobre todas. */
+export const TOPES_F_PC = { F1: 9, F2: 1000, F3: 1000 };
+
+/**
+ * Las filas F1–F3 de un texto de «Probar la fase 4»: id → máx. y mediana
+ * (la celda es «máx. / mediana ms»).
+ * @param {string} texto
+ * @returns {Map<string, { maximo: number, mediana: number }>}
+ */
+export function filasF(texto) {
+  /** @type {Map<string, { maximo: number, mediana: number }>} */
+  const filas = new Map();
+  for (const l of texto.split(/\r?\n/)) {
+    if (!/^\| F\d+ \|/.test(l)) continue;
+    const c = l.split("|").slice(1, -1).map((x) => x.trim());
+    const m = new RegExp(`^${N} / ${N} ms`).exec(c[4] ?? "");
+    if (!m) throw new Error(`No conozco el formato de «${c[4]}»`);
+    filas.set(c[0] ?? "", { maximo: num(m[1] ?? ""), mediana: num(m[2] ?? "") });
+  }
+  return filas;
+}
+
+/**
+ * El juicio de F en la PC (criterio de C1): F1 en cada corrida caliente (las
+ * frías se informan); F2 y F3 en todas, frías y calientes. Sobre el máximo.
+ * @param {readonly string[]} frias
+ * @param {readonly string[]} calientes
+ * @returns {{ filas: { id: string, tope: number, deciden: number[], informan: number[], pasa: boolean }[], pasa: boolean }}
+ */
+export function juzgarF(frias, calientes) {
+  const maximos = (/** @type {readonly string[]} */ textos, /** @type {string} */ id) =>
+    textos.map((t) => {
+      const f = filasF(t).get(id);
+      if (!f) throw new Error(`Falta ${id} en una corrida (¿es de «Probar la fase 3b»?).`);
+      return f.maximo;
+    });
+  const filas = Object.entries(TOPES_F_PC).map(([id, tope]) => {
+    const deciden = id === "F1" ? maximos(calientes, id) : [...maximos(frias, id), ...maximos(calientes, id)];
+    const informan = id === "F1" ? maximos(frias, id) : [];
+    return { id, tope, deciden, informan, pasa: deciden.length > 0 && deciden.every((v) => v <= tope) };
+  });
+  return { filas, pasa: filas.every((f) => f.pasa) };
+}
+
+/**
+ * Las frías con la regla de C4 (T20): cada valor en ms de una fría tiene que
+ * quedar dentro del rango de las calientes del mismo exe, más un piso de
+ * 1 ms. Devuelve los que quedan fuera, por fila y métrica.
+ * @param {readonly string[]} frias
+ * @param {readonly string[]} calientes
+ * @returns {{ id: string, nombre: string, fuera: number[], min: number, max: number }[]}
+ */
+export function friasFuera(frias, calientes) {
+  const valores = (/** @type {readonly string[]} */ textos) => {
+    /** @type {Map<string, { id: string, nombre: string, v: number[] }>} */
+    const m = new Map();
+    for (const t of textos)
+      for (const [id, celda] of filasB(t))
+        for (const x of metricas(celda)) {
+          if (x.tipo !== "ms" || typeof x.valor !== "number") continue;
+          const k = `${id} ${x.nombre}`;
+          if (!m.has(k)) m.set(k, { id, nombre: x.nombre, v: [] });
+          m.get(k)?.v.push(x.valor);
+        }
+    return m;
+  };
+  const cal = valores(calientes);
+  const salida = [];
+  for (const [k, { id, nombre, v }] of valores(frias)) {
+    const c = cal.get(k)?.v ?? [];
+    if (c.length === 0) continue;
+    const min = Math.min(...c);
+    const max = Math.max(...c);
+    const fuera = v.filter((x) => x < min - PISO_MS || x > max + PISO_MS);
+    if (fuera.length > 0) salida.push({ id, nombre, fuera, min, max });
+  }
+  return salida;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compararB, filasB, juzgar, mediana, metricas } from "./compararB.mjs";
+import { compararB, filasB, filasF, friasFuera, juzgar, juzgarF, mediana, metricas } from "./compararB.mjs";
 
 /** Una tabla de «Copiar» con B1–B16, como la arma la app, con los valores de `celdas`. */
 function tabla(celdas: Record<string, string>): string {
@@ -62,5 +62,43 @@ describe("compararB (T23, etapa 5: regla D6b-C)", () => {
   it("sin corridas de un lado no da «pasa»: falla", () => {
     expect(() => compararB([], [tabla(BASE)])).toThrow(/corridas/);
     expect(() => compararB([tabla(BASE)], [])).toThrow(/corridas/);
+  });
+});
+
+describe("«Probar la fase 4» (C1): F en la PC y frías con la regla de C4", () => {
+  /** Una corrida de la fase 4 con F1–F3 (máx. / mediana) y las B de `celdas`. */
+  const fase4 = (f: [number, number, number], celdas: Record<string, string> = BASE) =>
+    [
+      tabla(celdas),
+      ...f.map((m, i) => `| F${i + 1} | e | m | t | ${String(m).replace(".", ",")} / 1,0 ms | pasa | K1: 1,0 |`),
+    ].join("\n");
+
+  it("lee F1–F3 y juzga F1 solo en las calientes, F2 y F3 en todas", () => {
+    expect(filasF(fase4([8.5, 300, 400])).get("F1")).toEqual({ maximo: 8.5, mediana: 1 });
+    // F1 fría de 12 ms: informa, no decide.
+    const bien = juzgarF([fase4([12, 900, 999])], [fase4([9, 300, 1000]), fase4([8.9, 200, 300])]);
+    expect(bien.pasa).toBe(true);
+    expect(bien.filas.map((f) => [f.id, f.deciden, f.informan])).toEqual([
+      ["F1", [9, 8.9], [12]],
+      ["F2", [900, 300, 200], []],
+      ["F3", [999, 1000, 300], []],
+    ]);
+    // F2 frío de 1000,1: no pasa (decide en todas). F1 caliente de 9,1: no pasa.
+    expect(juzgarF([fase4([1, 1000.1, 1])], [fase4([1, 1, 1])]).filas.map((f) => f.pasa)).toEqual([true, false, true]);
+    expect(juzgarF([fase4([1, 1, 1])], [fase4([9.1, 1, 1])]).pasa).toBe(false);
+  });
+
+  it("un texto de la fase 3b no tiene F: falla en vez de dar «pasa»", () => {
+    expect(() => juzgarF([tabla(BASE)], [tabla(BASE)])).toThrow(/F1/);
+  });
+
+  it("las frías fuera del rango de las calientes, más 1 ms; los lentos no cuentan", () => {
+    const con = (b1: string, b3: string) => tabla({ ...BASE, B1: b1, B3: b3 });
+    const calientes = [con("45,0 / 50,0 ms", "0 por gesto (0 en total); máx. 9,0 ms"), con("47,0 / 52,0 ms", "0 por gesto (0 en total); máx. 10,0 ms")];
+    const frias = [con("48,0 / 53,0 ms", "1 por gesto (1 en total); máx. 11,0 ms"), con("48,1 / 50,0 ms", "0 por gesto (0 en total); máx. 11,1 ms")];
+    expect(friasFuera(frias, calientes)).toEqual([
+      { id: "B1", nombre: "1.º", fuera: [48.1], min: 45, max: 47 },
+      { id: "B3", nombre: "máx.", fuera: [11.1], min: 9, max: 10 },
+    ]);
   });
 });

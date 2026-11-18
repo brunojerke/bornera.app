@@ -56,8 +56,15 @@ export async function medirFase3b(progreso: (escenario: string) => void = () => 
   return medidas;
 }
 
-/** Corre los escenarios y devuelve la tabla para copiar. */
-export async function probarFase3b(progreso: (escenario: string) => void = () => {}): Promise<string> {
+/**
+ * B1–B16, con la pasada de calentamiento si es la 1.ª vez que se usa
+ * «Probar» desde que se abrió la app (la de la fase 3b o la de la fase 4).
+ * Devuelve lo medido, el texto del calentamiento para el encabezado («» si no
+ * hubo) y el tamaño del lienzo del banco.
+ */
+export async function medirConCalentamiento(
+  progreso: (escenario: string) => void = () => {},
+): Promise<{ medidas: MedidaFase3b[]; calentamiento: string; ancho: number; alto: number }> {
   const inicio = performance.now();
   // La 1.ª corrida tras abrir la app es una pasada entera sin medir (T20,
   // docs/plan-fase4.md): en frío, el getImageData con el lienzo en GPU sumaba
@@ -71,10 +78,19 @@ export async function probarFase3b(progreso: (escenario: string) => void = () =>
   }
   const medidas = await medirFase3b(progreso);
   const banco = await cargarBanco();
+  return { medidas, calentamiento, ancho: banco.ANCHO, alto: banco.ALTO };
+}
+
+/** La fecha y hora del encabezado de «Copiar». */
+export const fechaCorta = () => new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+
+/** Corre los escenarios y devuelve la tabla para copiar. */
+export async function probarFase3b(progreso: (escenario: string) => void = () => {}): Promise<string> {
+  const inicio = performance.now();
+  const { medidas, calentamiento, ancho, alto } = await medirConCalentamiento(progreso);
   const segundos = Math.round((performance.now() - inicio) / 1000);
-  const fecha = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
   const encabezado =
-    `Probar la fase 3b · Bornera ${VERSION} · ${fecha} · ${motor()} · ${calentamiento}` +
-    `lienzo ${banco.ANCHO}×${banco.ALTO} fuera de pantalla · ${segundos} s`;
+    `Probar la fase 3b · Bornera ${VERSION} · ${fechaCorta()} · ${motor()} · ${calentamiento}` +
+    `lienzo ${ancho}×${alto} fuera de pantalla · ${segundos} s`;
   return textoParaCopiar(evaluar(medidas), encabezado);
 }

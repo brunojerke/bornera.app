@@ -5,10 +5,14 @@
   // app se llevaría los cambios. Probar igual / Cancelar; el foco arranca en
   // Cancelar y Esc es Cancelar. Es modal (aria-modal), así `hayModal()` frena
   // los atajos del editor mientras está abierto.
+  // También antes de «Probar la fase 4» (C1), con su título.
   let {
+    titulo = "Probar la fase 3b",
     nombre,
     onresponder,
   }: {
+    /** El nombre de la prueba. */
+    titulo?: string;
     /** Nombre del documento (el del título de la ventana). */
     nombre: string;
     /** true: probar igual; false: cancelar. */
@@ -39,7 +43,7 @@
     aria-labelledby="dialogo-probar-titulo"
     aria-describedby="dialogo-probar-texto"
   >
-    <h2 id="dialogo-probar-titulo">Probar la fase 3b</h2>
+    <h2 id="dialogo-probar-titulo">{titulo}</h2>
     <p id="dialogo-probar-texto">
       «{nombre}» tiene cambios sin guardar. La prueba no toca tu hoja: arma sus propias escenas aparte. Pero tarda un
       rato y usa memoria; si la app se cerrara, perderías los cambios. Conviene guardar antes.
