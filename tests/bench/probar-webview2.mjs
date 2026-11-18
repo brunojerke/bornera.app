@@ -62,6 +62,8 @@ async function main() {
   if (process.platform !== "win32") throw new Error("Solo Windows (WebView2).");
   if (exes.length !== 2) throw new Error("Hace falta --exe=A,B (A = la que se prueba, B = la base).");
   for (const exe of exes) if (!existsSync(exe)) throw new Error(`No existe ${exe}.`);
+  if (corridas < 2) throw new Error("Hace falta --corridas=2 o más: la 1.ª es fría y el juicio usa las calientes.");
+  if (bloques < 1) throw new Error("Hace falta --bloques=1 o más.");
   const orden = [];
   for (let b = 0; b < bloques; b++) orden.push(0, 1, 1, 0);
   const aperturas = [];

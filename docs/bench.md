@@ -43,6 +43,50 @@ En Node, escena 2000 + 3030 cables, `Editor` real. Cada vuelta hace Mover 1, des
 - **Juicio (opción A de Bruno):** D1 se juzga con `alCambiar` sola, contra los topes fijados de 0,1 ms (mediana) y 1 ms (máx.): **pasa**. Detalle en `docs/plan-T23.md`, etapa 5.
 - **Banco en Chrome** (`npm run bench`, informativo): F1 = 2,8 ms, mediana 2,5 ms, 10 pasos por copia; salida de emergencia (3 de una vez), máx. 16,9 ms.
 
+## Copia de recuperación y ABBA en WebView2 (fase 4, T23 etapa 5) — 2026-11-18
+
+PC enchufada, en «Mejor rendimiento», sin otras apps abiertas. WebView2 Edg/157, exes de release en la misma sesión: HEAD `fb11f65`, la 1b `85cd377` y la base `32c32b4` (antes de T23).
+
+**F1 final** (`f1-webview2.mjs --exe=<1b>,<HEAD> --procesos=3`, intercalados, 20 copias por proceso con 2000 + 3030 cables). F1 es el paso síncrono más largo de la copia:
+
+| Exe | Proceso | Mediana | Máx. | Primera | De una vez (aparte) |
+|---|---|---|---|---|---|
+| 1b | 1 | 2,8 | 3,0 | 2,8 | — |
+| HEAD | 2 | 2,6 | 2,8 | 2,6 | 3 veces, máx. 8,3 |
+| 1b | 3 | 2,6 | 3,1 | 2,8 | — |
+| HEAD | 4 | 2,7 | 3,1 | 2,8 | 3 veces, máx. 8,1 |
+| 1b | 5 | 2,6 | 2,9 | 2,7 | — |
+| HEAD | 6 | 2,6 | 2,9 | 2,6 | 3 veces, máx. 8,4 |
+
+- **F1 = 3,1 ms (el mayor de 60) en los dos exes, mediana 2,6 ms. Pasa (≤ 9 ms; objetivo ~3 ms).**
+- Se informa, no decide: 5 pasos por copia, duración total con mediana de 20,4 ms y máximo de 130 ms, 0 reinicios.
+- Salida de emergencia (D3-A, 3 copias forzadas de una vez por proceso, solo en HEAD): 9 veces, máx. 8,4 ms. Aparte; no decide. La 1b no las tiene.
+
+**ABBA de «Probar la fase 3b»** (`probar-webview2.mjs --exe=<HEAD>,<base>`, 3 bloques, 6 aperturas por exe, una fría y una caliente por apertura). Juicio con la regla D6b-C, sobre la mediana de las 6 calientes. En ms, salvo B9:
+
+| # | Métrica | Base | HEAD | Juicio |
+|---|---|---|---|---|
+| B1 | 1.º / 2.º | 45,8 / 50,2 | 44,5 / 48,3 | igual |
+| B2 | 1.º / 2.º | 9,0 / 10,2 | 8,9 / 10,1 | igual |
+| B3 | máx. | 9,7 | 9,8 | igual |
+| B4 | 1.º / 2.º | 4,8 / 6,8 | 4,8 / 6,9 | igual |
+| B5 | 1.º / 2.º | 1,5 / 2,4 | 1,4 / 1,7 | igual |
+| B6 | máx. | 8,3 | 7,2 | baja |
+| B7 | valor | 1,1 | 1,0 | igual |
+| B8 | máx. | 4,4 | 4,4 | igual |
+| B9 | N | 500 | 500 | igual (las 12 aperturas) |
+| B10 | valor | 20,4 | 20,4 | igual |
+| B11 | máx. | 9,0 | 9,1 | igual |
+| B12 | valor | 1,0 | 1,0 | igual |
+| B13 | 1.º / 2.º | 0,0 / 0,1 | 0,0 / 0,1 | igual |
+| B14 | máx. | 0,6 | 0,5 | igual |
+| B15 | máx. | 5,7 | 5,8 | igual |
+| B16 | por gesto | 8,8 | 8,6 | igual |
+
+- Los lentos dan 0 en todas las filas y en los dos exes. Los % y los cuadros de B8, B11 y B14 se informan: son iguales.
+- **Calientes: pasa, nada sube.** No hizo falta el desglose en Node.
+- La prueba corta previa (1 bloque, 2 calientes por exe) había marcado B2 1.º (+1,0 ms) y B6 máx. (+1,3 ms). Con las 6 calientes del ABBA ×3, ninguna de las dos sube: era ruido de pocas muestras.
+
 ## Línea base PC de «Probar la fase 3b» (fase 4, T20) — 2026-11-17
 
 **Regla escrita y commiteada antes de medir** (`ac3fded`, `docs/plan-fase4.md`, regla de D6b-C): piso de 1 ms, lentos ±1, B9 en el mismo escalón.

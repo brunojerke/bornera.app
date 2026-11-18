@@ -115,6 +115,8 @@ export function juzgar(tipo, base, head) {
  * @returns {{ filas: FilaComparada[], pasa: boolean }}
  */
 export function compararB(textosBase, textosHead) {
+  // Sin corridas no hay nada que comparar: no puede salir «pasa».
+  if (textosBase.length === 0 || textosHead.length === 0) throw new Error("No hay corridas para comparar (¿--corridas=1? Hacen falta al menos 2: la 1.ª es fría).");
   const base = textosBase.map(filasB);
   const head = textosHead.map(filasB);
   const ids = [...(base[0]?.keys() ?? [])];

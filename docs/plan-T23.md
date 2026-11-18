@@ -450,6 +450,10 @@ Cada etapa cierra con `npm test`, `npm run check` y un commit local. El humo ent
   - Si una fila sube: desglose en Node antes de concluir.
 - **D3-A, salida de emergencia en F1:** «Medir la copia (F1)» suma al final 3 copias forzadas de una vez (sin los reinicios), informadas aparte: veces y máximo. No entran en F1 ni deciden. `f1-webview2.mjs` las junta de todos los procesos.
 - **F1 final:** `f1-webview2.mjs --exe=<1b>,<HEAD>`, 3 + 3 procesos intercalados, con el código final. **Pasa si el paso más largo ≤ 9 ms** (sección 6).
+- **Resultado en WebView2 (2026-11-18, PC enchufada y en «Mejor rendimiento»; tablas en `docs/bench.md`):**
+  - **F1 = 3,1 ms en HEAD y en la 1b (el mayor de 60), mediana 2,6 ms. Pasa.** Salida de emergencia (solo HEAD): 9 veces, máx. 8,4 ms, aparte.
+  - **ABBA ×3 de HEAD contra `32c32b4`: pasa, nada sube** (B6 máx. baja de 8,3 a 7,2 ms; B9 queda en N = 500). No hizo falta el desglose en Node.
+  - Al probar las herramientas: con `--corridas=1` no quedaban calientes y `compararB` daba «pasa» sin comparar nada. Ahora falla: `probar-webview2.mjs` exige al menos 2 corridas, y `compararB` rechaza las listas vacías (con su test).
 - **Escenario F1 en el banco:** «Copia de recuperación con 2000 + 3030 cables» en `npm run bench`, con `medirCopias` sobre el IndexedDB del Chrome headless. Informativo; F1 se juzga en WebView2. C1 reusa `medirCopia.ts`.
 
 **Cierre:** skill `bornera-cierre` (Sonnet), con el humo entero y las líneas «Hecho» en `plan-fase4.md`.

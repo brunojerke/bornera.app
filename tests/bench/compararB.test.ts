@@ -58,4 +58,9 @@ describe("compararB (T23, etapa 5: regla D6b-C)", () => {
     expect(sube.filas.find((f) => f.id === "B10")).toMatchObject({ base: 22.6, head: 30, juicio: "sube" });
     expect(compararB(base, [tabla({ ...BASE, B9: "N = 400" })]).pasa).toBe(false);
   });
+
+  it("sin corridas de un lado no da «pasa»: falla", () => {
+    expect(() => compararB([], [tabla(BASE)])).toThrow(/corridas/);
+    expect(() => compararB([tabla(BASE)], [])).toThrow(/corridas/);
+  });
 });
