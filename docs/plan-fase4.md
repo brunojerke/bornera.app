@@ -109,6 +109,8 @@ El detalle de cada tarea (qué, pruebas, «Hecho», mediciones), el estado al ap
 1. Commit de versión `0.1.4`.
 2. **Con autorización escrita de Bruno**, push del tag `v0.1.4`. `release.yml` arma el borrador, que no es público.
 3. Se baja el instalador del borrador y se prueba en la netbook (fila 6).
+   - **Instalar encima de la alpha.2** (anotado en C3, 2026-11-18): el `.msi` de la 0.1.4 tiene que instalarse sobre la `0.1.4-alpha.2` (WiX `0.1.4.2`) y quedar una sola Bornera en «Aplicaciones instaladas», con la versión nueva.
+   - Por qué: Windows Installer compara solo los tres primeros números de la versión, así que `0.1.4.x` contra `0.1.4.2` cuenta como la misma versión. El cuarto número no ordena nada. Se cuenta con `allowDowngrades` (T20) para que reemplace igual. Anotar qué versión WiX lleva la 0.1.4 y el resultado.
 4. Si pasa, Bruno publica el borrador. Si falla, se borran el tag (local y remoto) y el borrador, con el OK de Bruno.
 
 ### C1. «Probar la fase 4» (Bruno, 2026-11-18)
