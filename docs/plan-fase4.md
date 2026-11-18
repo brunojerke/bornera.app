@@ -113,6 +113,17 @@ El detalle de cada tarea (qué, pruebas, «Hecho», mediciones), el estado al ap
    - Por qué: Windows Installer compara solo los tres primeros números de la versión, así que `0.1.4.x` contra `0.1.4.2` cuenta como la misma versión. El cuarto número no ordena nada. Se cuenta con `allowDowngrades` (T20) para que reemplace igual. Anotar qué versión WiX lleva la 0.1.4 y el resultado.
 4. Si pasa, Bruno publica el borrador. Si falla, se borran el tag (local y remoto) y el borrador, con el OK de Bruno.
 
+**Estado de C5 (2026-11-18), pasos 1 y 2 hechos:**
+- `git diff 33680e5..fef5ca9` solo toca docs: lo que probó la netbook es lo que se publica.
+- `00bcd3d`: README al día (estado 0.1.4, actualizar encima, `.brn` con doble clic, privacidad con la copia de recuperación y los recientes). `c48e4a6` «Versión 0.1.4»: los mismos 5 archivos que la alpha.2. **WiX `0.1.4.0`**, como la 0.1.3 (`0.1.3.0`).
+- 2149 tests, check sin errores, `cargo test` 7/7 y humo 893/893.
+- Push de `main` y tag `v0.1.4` (autorizados por Bruno): los dos en `c48e4a6`. «Release» y «Tests» en verde.
+- Borrador «Bornera v0.1.4»: draft, no prerelease, con `Bornera_0.1.4_x64_en-US.msi` (2.457.600 bytes), `.deb` y AppImage, y las notas en castellano ya cargadas.
+- **Falta:** la fila 6 en la netbook y en la PC (Bruno). Publicar solo con «Autorizo publicar 0.1.4».
+  - Si falla (dos Bornera o se pierden los recientes): no se publica, se revierte el párrafo del README sobre actualizar encima y se proponen opciones. También afecta a quien tenga la alpha.1 pública (WiX `0.1.4.1`).
+- Borrador de la alpha.2: propuesta dejarlo (es el `.msi` medido en C4; las alpha.9–11 de la 0.1.3 también quedaron como borrador). Decide Bruno; no se tocó.
+- Al cerrar C5: Bornera.md en Obsidian.
+
 ### C1. «Probar la fase 4» (Bruno, 2026-11-18)
 - **Qué hace:**
   - Es un ítem del menú de desarrollo. Ese menú sale en desarrollo y en las prereleases (`mostrarMenuDesarrollo`), así que va en el `.msi` de la alpha.N para la netbook.
