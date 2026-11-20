@@ -71,16 +71,17 @@ Topes de la netbook fijados acá, antes de medir. PC = netbook / K, con K1 = 3 y
 | D1 | D | K1 = 3 y K2 = 5,5 para los topes de la PC (sección 3) |
 | D2 | B, con aviso | De a una bobina, la de etiqueta menor primero (K1, K2, K10); las carreras se avisan (sección 2) |
 | D3 | A | Oscila o hay corto: se detiene en el último estado, marca y avisa; los pulsadores no responden hasta salir |
-| D4 | A | Solo los errores impiden entrar: F5 dice cuáles y queda en Editar. Los avisos (R1–R3, R5–R11 y R4 entre pulsadores) no. **Errores:** R4 cuando el grupo de la etiqueta repetida tiene una bobina, una lámpara o un símbolo desconocido. La fase 5 no suma errores (salvo D10-B) |
+| D4 | A | Solo los errores impiden entrar: F5 dice cuáles y queda en Editar. Los avisos (R1–R3, R5–R11 y R4 entre pulsadores) no. **Errores:** R4 cuando el grupo de la etiqueta repetida tiene una bobina, una lámpara o un símbolo desconocido. La fase 5 no suma errores (D10-A) |
 | D5 | B | Mantener el botón del mouse; vuelve al soltarlo en cualquier lado o al perder la ventana. Mayús+clic lo deja apretado hasta otro clic |
 | D6 | A | R11, aviso en vivo e incremental, como R1–R9 |
 | D7 | C | El símbolo da el papel y la etiqueta el nombre (sección 2). Una Fase «X» es otra fase: entre L y X una carga se enciende, y unirlas es corto |
 | D8 | A | Capa estática, invalidando solo la región que cambió |
 | D9 | B | Cables por potencial, cargas encendidas y contactos dibujados en su estado |
+| D10 | A | Corto por cables (sin contactos de por medio): lo detecta el motor al entrar a Simular, se detiene y avisa (D3). Sin costo mientras se edita |
 
 **Descartadas:** D1-A, el medido: flojo con dibujo (S1 de 111 ms en la PC ≈ 690 en la netbook). D2-A, oscilación falsa entre enclavadas; D2-C, dos caminos. D3-B y C, no se ve bien el estado. D4-B, un modo que no simula; D4-C, engaña. D5-A, no prueba dos a la vez; D5-C, es un interruptor. D6-B, queda viejo; D6-C, bloquea algo que simula. D7-A y B, otro nombre sin potencial o error. D8-B, repinta 3030 cables por cuadro; D8-C, memoria. D9-A y C, sin contactos o sin cables.
 
-**Abierta, D10 (antes de T29): corto por cables.** T19 dejó para la fase 5 su «R10»: Fase y Neutro, o dos fases, en la misma red por cables, sin contactos. R10 y R11 de este plan son números nuevos.
+**D10, corto por cables: elegida A (Bruno, 2026-11-20).** T19 dejó para la fase 5 su «R10»: Fase y Neutro, o dos fases, en la misma red por cables, sin contactos. R10 y R11 de este plan son números nuevos.
 - A. Solo al entrar: el motor lo ve en reposo, se detiene y avisa (D3) ★. Pro: sin costo al editar. Contra: se ve recién al simular.
 - B. Regla en vivo, error. Pro: se ve al cablear. Contra: `redes()` en cada comando de cable (1,1–1,6 ms con 2000 en la PC, T19).
 - C. Regla en vivo, aviso. Contra: el mismo costo, y al entrar igual se detiene.
