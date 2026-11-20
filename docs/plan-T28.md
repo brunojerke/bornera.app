@@ -36,6 +36,12 @@ T28 no tiene fila propia: la netlist es parte de S1, que se juzga en C1 y C3.
 - `node tests/bench/netlist-node.mjs` (`--procesos=N`, `--json`), con Vite como `abrir-node.mjs`. La PC se mide en T28; la netbook necesita Node y el repo (si no los tiene, se consulta).
 - B1–B16 y F1–F3 no cambian: T28 no toca editor, dibujo ni guardado. Sin ABBA.
 
+## Resultado (cierre, 2026-11-20)
+- **Hecho** (`ced57c7`): `netlist.ts`, 17 tests en `netlist.test.ts` (los 4 mínimos incluidos), 14 en `netlist-corpus.test.ts`, `prueba-netlist.ts` y `tests/bench/netlist-node.mjs`. Mutaciones: unir sin papel, 2 fallos; romper el orden, 2; las dos juntas, 4 (el «4» del primer informe sumaba las dos por error).
+- **PC, NO PASÓ:** máximo 5,64 ms (mediana 3,79) y, con la optimización, 6,71 ms (mediana 4,30). `redes()` sin cambios dio 2,49 y 3,89 ms de máximo: el ruido entre corridas es mayor que la parte propia. La optimización no mostró mejora medible y quedó en `git stash` («T28 optimizacion sin mejora medible»). No se cambia el tope ni se vuelve a medir.
+- **Netbook (27,5 ms): PENDIENTE**, no corrida.
+- **Sigue en T31:** la netlist se controla dentro de S1 con ABBA (`plan-fase5.md`, T31).
+
 ## Verificado y supuesto
 - **Verificado:** pasos 1 y 2. 8 símbolos; las fuentes salen con «L» y «N» y el editor no las deja vacías (en un archivo, sí: R9). No hay orden natural en `src/core`.
 - **Supuesto:** que la netlist de 2000 entra en 5 ms en la PC (T19 midió `redes()` en 1,1–1,6 ms).
