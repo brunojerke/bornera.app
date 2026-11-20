@@ -13,8 +13,8 @@ Una por sesión; cierran con `bornera-cierre` (y banco si tocan `sim/` o el dibu
 
 | Tarea | Qué | Opus |
 |---|---|---|
-| T28 | **Primero**, un test temporal pasa `problemasTrazado` y `problemasComponente` por el corpus `formato-v1/` y los `.brn` de referencia: si hay aparentes, se frena y se avisa a Bruno. Después, netlist en `src/core/sim/`: etiquetas de red, borne → red y potencial (D7) | xhigh |
-| T29 | R10 (L junto con L1, L2 o L3) y R11 (conexiones aparentes, D6), avisos | alto |
+| T28 | **Primero**, un test temporal pasa `problemasTrazado` y `problemasComponente` por el corpus `formato-v1/` y los `.brn` de referencia: si hay aparentes, se frena y se avisa a Bruno. Después, netlist en `src/core/sim/`: etiquetas de red, borne → red y potencial (D7). Plan aprobado: `docs/plan-T28.md` (≤ 5 ms PC, ≤ 27,5 ms netbook) | xhigh |
+| T29 | R10 (L junto con L1, L2 o L3) y R11 (conexiones aparentes, D6), avisos. **R11-A** (Bruno, 2026-11-20): R11 no avisa encimados entre cables que ya están en la misma red (`cables-t-libres`: w4 en T sobre w3 y encimado); el corpus no se toca | alto |
 | T30 | Motor en `src/core/sim/`: recálculo (D2), carreras, oscilación y corto (D3), cargas en serie. Tests del criterio; `serializar` igual antes y después de simular. `.brn` nuevos: oscilante, corto, carrera y cadena | xhigh |
 | T31 | Banco: escena de mando 2000, S1–S5, «Probar la fase 5» y `--fase5` en `probar-webview2.mjs` (S1 y S4 completas en T33) | alto |
 | T32 | Modo Simular: entrar (D4), pulsar y soltar (D5), bloqueos, salir y avisos. Humo `t32-simular.mjs` con el criterio y la prueba: abrir un `.brn`, entrar, pulsar, soltar y salir lo deja byte a byte igual, sin «•» | alto |
@@ -88,7 +88,8 @@ Topes de la netbook fijados acá, antes de medir. PC = netbook / K, con K1 = 3 y
 
 ## 6. Verificado, supuesto y riesgos
 - **Verificado (2026-11-20):** git y `v0.1.4`. `redes` ya une por nombre. 8 símbolos, sin interruptor, CC, térmico ni temporizador. Simular es una cáscara (F5, panel solo lectura, sin herramientas, deshacer ni Abrir). R4 es el único error. `src/core/sim/` vacío.
-- **Supuesto:** que la netlist y R11 de 2000 entran en sus topes; que corpus y referencias no tienen aparentes (T28 lo prueba primero).
+- **Verificado (T28, paso 1):** corpus `formato-v1/`, `marcha-parada.brn`, `inversion.brn`, `tildes.brn` y los generados (`marchaParada()` con y sin `dosNeutros` o `ramaNC`, `inversion()`): 0 aparentes entre redes distintas; 1 en la misma red (R11-A).
+- **Supuesto:** que la netlist y R11 de 2000 entran en sus topes.
 - **Riesgos:** S1 dominado por el redibujo (D8-A pinta solo lo que tiene tensión). R11 en vivo sube B1 o B4 (se consulta). Una carrera de tres bobinas puede escapar al criterio (`carrera.brn`). WebKitGTK, secundario.
 - **Sesiones:** 11 a 12 (T30 quizá 2).
 - **Con autorización de Bruno:** push, tags `v0.1.5-alpha.N` y `v0.1.5`, publicar y dependencias (ninguna prevista).
