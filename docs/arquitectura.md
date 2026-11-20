@@ -308,7 +308,15 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
      - Pasa cuando (confirmado por Bruno el 2026-11-13): se arma a mano una inversión de giro con enclavamiento entre K1 y K2, duplicando la rama de K1 con Ctrl+D, sin bobinas repetidas, con las referencias cruzadas correctas y nada en naranja. El `.brn` dibujado se compara por redes con el archivo congelado `tests/circuitos/inversion.brn` (`npm run circuito`), como en T15. Criterio completo en el plan.
 4. **Guardar y abrir:** formato `.brn`, validación, autoguardado.
    - Nota (2026-11-13): lo básico (formato `.brn` y validación) se adelantó en la fase 3 (T15a), con la fase 3 ya cerrada. En esta fase quedan el autoguardado, las migraciones y los circuitos de referencia (`tests/circuitos/marcha-parada.brn` es el primero). Nota (2026-11-16): el segundo es `tests/circuitos/inversion.brn`, del cierre de la fase 3b; `npm run circuito` elige la base con `BORNERA_BASE`.
-   - Plan aprobado el 2026-11-17: `docs/plan-fase4.md` (T20 a T26).
+   - Plan aprobado el 2026-11-17: `docs/plan-fase4.md` (T20 a T27).
+   - **Fase 4 cerrada el 2026-11-20** con `0.1.4` publicada (WiX `0.1.4.0`, instalada encima de la `0.1.4-alpha.2` sin desinstalar). Qué trae y dónde vive cada parte:
+     - T20, banco listo para la netbook: `tests/bench/` y «Probar la fase 4» en el menú de desarrollo (`docs/bench.md`).
+     - T21, exportar `.brn.json`: sección «Formato de archivo propio» (exportación de respaldo).
+     - T22, migraciones y corpus congelado: `tests/circuitos/formato-v1/` (sección «Formato de archivo propio»).
+     - T23, autoguardado y recuperación: sección «Formato de archivo propio» (autoguardado); humo `t23-autoguardado.mjs`.
+     - T24, alcance de archivos y Abrir reciente; T25, asociación de `.brn` en Windows: sección «Formato de archivo propio».
+     - T26, borrar en cascada los cables en T; T27, pulsadores NC desde S0 y NA desde S1: sección «Editor e interfaz» (etiquetado, T17 y nota de T27).
+     - **Factores medidos (C4, 2026-11-18):** K1 = 2,94 (pasos sin dibujo) y K2 = 2,70 (gestos con dibujo), netbook / PC, con el grupo fijado en C1. Notas: B10 ×6,2 real (Rehacer con referencias, caro en la netbook) y B14 ×8,7 por resolución (PC 0,6 ms). Son datos para la fase 5: **elegir A (el medido) o D (el mayor, 3 y 5,5) para los topes queda como decisión de Bruno en el plan de la fase 5**.
      - **Alcance (D1-C):** autoguardado y recuperación, migraciones con corpus congelado, exportar `.brn.json`, abrir recientes, asociar `.brn` en Windows y borrar en cascada los cables en T.
      - **Para la fase 5, antes de simular:** conexiones aparentes, etiquetas de red en la netlist y aviso de L con L1, L2 o L3.
    - ~~Pasa cuando: guardar → cerrar → abrir deja el circuito idéntico (test automático).~~ Ya lo cumplía T15a.

@@ -21,6 +21,22 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 - **Relación:** salió del desglose del cierre de la fase 3b, etapa 3 (`docs/bench.md`). El paso se informa y no juzga: lo que juzga es el por gesto, que sube por los contornos de aviso.
 - **Cuándo:** sin fecha. Si en la netbook un paso de borrar o deshacer se nota, antes.
 
+## Optimizar B10 (Rehacer con referencias) para la netbook
+- **Qué:** B10 da 118–139 ms en la netbook, ×6,2 contra la PC (C4, fase 4). Es informativa, no juzga. Va junto con la entrada de arriba: las dos son el costo de `referencias.reflejar`.
+- **Cuándo:** sin fecha; antes si en la fase 5 se nota al rehacer.
+
+## `tests/bench/correr.mjs` espera 10 min si Vite falla
+- **Qué:** cuando Vite falla al transformar la página del banco, `correr.mjs` espera el límite de 10 min en vez de cortar con el primer error. En un worktree nuevo hace falta `npx svelte-kit sync` antes de medir (T27).
+- **Cuándo:** tarea chica, sin fecha.
+
+## Ícono propio de la app
+- **Qué:** un ícono propio para Bornera (el instalador y la ventana).
+- **Cuándo:** tarea aparte, sin fecha (pedido de Bruno, 2026-11-20).
+
+## Seguimiento de las frías B1 y B3
+- **Qué:** B1 frío queda fuera del rango en todas las mediciones de la fase 4. B3 máx. frío vuelve en la netbook (21,7 ms en C4). Informan; no juzgan (regla de las frías de C4).
+- **Cuándo:** se vuelve a mirar en las mediciones de la fase 5.
+
 ## Hoja 2 de la inversión: aclarar el paso 7
 - **Qué:** en el paso 7 de la hoja 2 (`docs/netbook-fase3b.md`), la primera selección tomó la N (el neutro) en vez de lo que se quería. Aclarar ese paso.
 - **Cuándo:** si se vuelve a usar la hoja 2. La checklist más simple, el banco con `willReadFrequently`, el factor real de la netbook y `0.1.4` encima de la alpha pasaron a `docs/plan-fase4.md` (T20, D6 y cierre).

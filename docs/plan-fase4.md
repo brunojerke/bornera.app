@@ -120,9 +120,19 @@ El detalle de cada tarea (qué, pruebas, «Hecho», mediciones), el estado al ap
 - Push de `main` y tag `v0.1.4` (autorizados por Bruno): los dos en `c48e4a6`. «Release» y «Tests» en verde.
 - Borrador «Bornera v0.1.4»: draft, no prerelease, con `Bornera_0.1.4_x64_en-US.msi` (2.457.600 bytes), `.deb` y AppImage, y las notas en castellano ya cargadas.
 - **Fila 6 (Bruno, 2026-11-20): pasa en la netbook y en la PC.** El `.msi` del borrador (WiX `0.1.4.0`) se instaló encima de la alpha.2 (WiX `0.1.4.2`) sin desinstalar. Quedó una sola Bornera con la 0.1.4 y siguen los recientes. `allowDowngrades` cumple su función.
-- **Falta:** publicar el borrador, solo con «Autorizo publicar 0.1.4», y el push de `main`.
-- Borrador de la alpha.2: propuesta dejarlo (es el `.msi` medido en C4; las alpha.9–11 de la 0.1.3 también quedaron como borrador). Decide Bruno; no se tocó.
+- **Publicada:** `v0.1.4` salió el 2026-11-20 y `main` está en `origin/main` (`6d6d898`). No falta nada de C5.
+- Borrador de la alpha.2: **cerrado, se deja** (decidido por Bruno, 2026-11-20). Es el `.msi` medido en C4; las alpha.9–11 de la 0.1.3 también quedaron como borrador.
 - Al cerrar C5: Bornera.md en Obsidian.
+
+### C6. Docs y Obsidian
+**Hecho (2026-11-20):** solo docs.
+- `docs/arquitectura.md`: fase 4 cerrada, con qué trae T20–T27 y dónde vive cada parte, y los K medidos.
+- **K para la fase 5 (dato):** K1 = 2,94 y K2 = 2,70. B10 ×6,2 real y B14 ×8,7 por resolución (PC 0,6 ms). **La elección A (el medido) o D (el mayor, 3 y 5,5) no se tomó: es decisión de Bruno en el plan de la fase 5.**
+- `docs/ideas.md`: optimizar B10, `correr.mjs` espera 10 min si Vite falla, ícono propio (tarea aparte) y seguimiento de las frías B1 y B3.
+- Borrador de la alpha.2 anotado como cerrado (se deja).
+- Obsidian: `Bornera.md` al día.
+
+**Fase 4: CERRADA (2026-11-20, `0.1.4`).**
 
 ### C1. «Probar la fase 4» (Bruno, 2026-11-18)
 - **Qué hace:**
