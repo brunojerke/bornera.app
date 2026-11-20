@@ -119,8 +119,8 @@ El detalle de cada tarea (qué, pruebas, «Hecho», mediciones), el estado al ap
 - 2149 tests, check sin errores, `cargo test` 7/7 y humo 893/893.
 - Push de `main` y tag `v0.1.4` (autorizados por Bruno): los dos en `c48e4a6`. «Release» y «Tests» en verde.
 - Borrador «Bornera v0.1.4»: draft, no prerelease, con `Bornera_0.1.4_x64_en-US.msi` (2.457.600 bytes), `.deb` y AppImage, y las notas en castellano ya cargadas.
-- **Falta:** la fila 6 en la netbook y en la PC (Bruno). Publicar solo con «Autorizo publicar 0.1.4».
-  - Si falla (dos Bornera o se pierden los recientes): no se publica, se revierte el párrafo del README sobre actualizar encima y se proponen opciones. También afecta a quien tenga la alpha.1 pública (WiX `0.1.4.1`).
+- **Fila 6 (Bruno, 2026-11-20): pasa en la netbook y en la PC.** El `.msi` del borrador (WiX `0.1.4.0`) se instaló encima de la alpha.2 (WiX `0.1.4.2`) sin desinstalar. Quedó una sola Bornera con la 0.1.4 y siguen los recientes. `allowDowngrades` cumple su función.
+- **Falta:** publicar el borrador, solo con «Autorizo publicar 0.1.4», y el push de `main`.
 - Borrador de la alpha.2: propuesta dejarlo (es el `.msi` medido en C4; las alpha.9–11 de la 0.1.3 también quedaron como borrador). Decide Bruno; no se tocó.
 - Al cerrar C5: Bornera.md en Obsidian.
 
