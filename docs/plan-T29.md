@@ -35,3 +35,18 @@ Aprobado por Bruno el 2026-11-20 con I-A, M-A, L-A, T-A y H-A, más 5 ajustes. M
 ## Riesgos
 - B1 (duplicar 2000) y B4 (pegar 500) hacen trabajo nuevo proporcional al cambio.
 - Una red muy grande hace caro el recorrido de R11-A, pero solo cuando hay un encimado cable–cable.
+
+## Cambios desde el plan aprobado (Bruno, 2026-11-21)
+- **D6-A:** R11 en vivo solo hasta 100 elementos en el cambio (`UMBRAL_R11_EN_VIVO`). Arriba de eso, y al abrir, en reposo: el mismo cálculo por partes (generadores), en tramos programados con `setTimeout(0)` que cortan a los 2 ms (tope 4, margen 2). Los avisos aparecen al terminar; un comando en el medio se suma a lo pendiente y el cálculo vuelve a empezar.
+- **F1–F4** (después del primer ABBA): lo pendiente cuesta lo del cambio y no guarda ids si ya es la hoja entera; sin vecinos de R11-A mientras hay reposo pendiente (se arman por partes al arrancar); cortes en los bucles iniciales; menos basura por par.
+- **Paso que no cedía:** el bucle de pares nuevos saltaba los ya guardados sin contar para el corte; después de duplicar, decenas de miles seguidos (2,3 ms sin ceder). Ahora cada vuelta cuenta.
+- **Cambio de regla (autorizado por Bruno):** el test «ningún tramo pasa de 4 ms» con reloj real se reemplazó por uno con reloj inyectable falso (cada tramo corta al llegar a 2 ms; igual al cálculo lento al abrir, pegar 500 y duplicar todo). La GC de Node llega a 7,7 ms en un solo paso. El reloj real queda en `tests/bench/r11-tramos-node.mjs` (informa).
+- **ABBA:** con la versión `0.1.4` no hay menú de desarrollo; los exes de A y B se compilaron con `0.1.4-t29.0` solo en `package.json` (local, sin tag ni commit) y se revirtió.
+- R11 no lleva contorno: se ve en el panel, en la cuenta y en el anillo de la selección.
+
+## Resultados (cierre, 2026-11-21)
+- **Hecho** (`14da3c9`, `a6519f6`): `aparentes.ts` (R11 de la hoja, R11-A con `redes()` una vez), R10 en `validaciones.ts`, R11 incremental y en reposo en `avisosHoja.ts`, anillo en el editor. Humo `t29-avisos.mjs` (19) con `datos/t29-aparentes.brn`.
+- **Tests:** 2226 en verde (1 saltado), check limpio, humo 912/912. Corpus y referencias: 0 R11; `cables-t-libres`, 0 por R11-A. Recorridos al azar iguales al cálculo lento, en vivo y por partes; pruebas a propósito (sin cercanos, sin R11-A, sin poner al día, perdiendo afectados al reiniciar) detectadas.
+- **Banco:** el primer ABBA oficial (`14da3c9`) **no pasó** B2 máx. (9,3 → 11,1) ni B4 máx. (7,0 → 8,6). El ABBA oficial de `a6519f6` contra `b6dbeee` **pasa**: nada sube con T-A (tabla en `docs/bench.md`).
+- **Node (informa):** la escena oficial tiene 10 250 conexiones aparentes (13 394 avisos R11). Reloj real: tramo más largo 5,57 ms; los de más de 4 ms, todos con GC.
+- **Pendiente:** netbook (no corrida); `codosBanco` con la regla de W; sacar el `Conflicto` intermedio de `problemasTrazado`/`problemasComponente`.

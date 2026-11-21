@@ -19,6 +19,45 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Avisos R10 y R11 (fase 5, T29) — 2026-11-21
+
+**Criterio escrito antes de medir** (`docs/plan-T29.md`, T-A): ABBA en WebView2 (`probar-webview2.mjs --exe=A,B`, 3 bloques, 6 aperturas por exe, una fría y una caliente por apertura) contra `b6dbeee`, en la misma sesión. En las calientes, A − B ≤ máx(1 ms, 10 %) en mediana y máximo de B1, B2, B4, B5, B10, B12, B13 y B16; cuadros (B3, B6, B11, B14), lentos ±1; B9, mismo escalón. B7, B8, B9 y B15 son de control: si una sale de la regla, se repite el ABBA entero una sola vez.
+
+**Cómo se midió:**
+- Enchufada, en «Mejor rendimiento» (`ded574b5…`), sin otra Bornera. Administrador de tareas cerrado; Configuración, suspendida (sin CPU). LegionSpace y el overlay de NVIDIA no se pueden cerrar y estuvieron en todos los ABBA: son parte de la base.
+- Los dos exes salen de `tauri build --no-bundle` con la versión `0.1.4-t29.0` solo en `package.json` (local, revertida, sin tag): con `0.1.4` no hay menú de desarrollo. La base, de un worktree temporal en `b6dbeee` con `npm ci` y `svelte-kit sync`, ya borrado. Edge 157.
+
+**Primer ABBA oficial (`14da3c9`): no pasa B2 máx. ni B4 máx.** (calientes, ms):
+
+| Fila | B (`b6dbeee`) | A (`14da3c9`) | Juicio |
+|---|---|---|---|
+| B2 máx. | 9,3 | 11,1 | sube |
+| B4 máx. | 7,0 | 8,6 | sube |
+
+El diagnóstico (traza de CDP en WebView2) descartó tramos de R11 dentro de los pasos: el banco corre cada escenario sin ceder el hilo, así que el reposo no corre en el medio. La suba venía del trabajo síncrono por comando (juntar lo pendiente, poner al día los vecinos de R11-A) y de una GC mayor en un pegado. Arreglos F1–F4 en `a6519f6`.
+
+**ABBA oficial de `a6519f6` contra `b6dbeee`: pasa, nada sube.** Medianas de las calientes, en ms:
+
+| Fila | Métrica | B (`b6dbeee`) | A (`a6519f6`) | Rango de A | Juicio |
+|---|---|---|---|---|---|
+| B1 | mediana / máx. | 45,0 / 51,5 | 43,8 / 47,7 | 41,7–45,1 / 44,2–48,5 | igual |
+| B2 | mediana / máx. | 8,9 / 11,3 | 9,2 / 10,8 | 8,9–9,6 / 9,1–**17,4** | igual |
+| B3 | lentos / máx. | 0 / 9,6 | 0 / 9,8 | | igual |
+| B4 | mediana / máx. | 5,0 / 6,7 | 5,0 / 7,0 | 4,9–5,1 / 6,8–7,5 | igual |
+| B5 | mediana / máx. | 1,4 / 1,6 | 1,5 / 2,3 | 1,5 / 1,5–3,2 | igual |
+| B6 | lentos / máx. | 0 / 8,1 | 0 / 8,1 | | igual |
+| B10 | valor | 20,9 | 20,1 | | igual |
+| B11 | máx. / lentos | 9,7 / 0 | 9,1 / 0 | | igual |
+| B12 | valor | 1,0 | 1,0 | | igual |
+| B13 | mediana / máx. | 0,0 / 0,1 | 0,0 / 0,0 | | igual |
+| B14 | máx. / lentos | 0,5 / 0 | 0,5 / 0 | | igual |
+| B16 | lentos / por gesto | 0 / 8,4 | 0 / 8,2 | | igual |
+| B7, B8, B9, B15 | control | | | | iguales |
+
+- **Picos sueltos de A:** B2 máx. 17,4 ms (una vez en 6 calientes), B5 máx. 3,2 ms. No mueven la mediana.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 13 en A y 8 en B (B1, B3, B10 y B11 en A).
+- **Node (informa, `tests/bench/r11-tramos-node.mjs`):** la escena oficial tiene 10 250 conexiones aparentes (13 394 avisos R11, cables de `codosBanco` que entran por el cuerpo). Con reloj real, el tramo más largo fue de 5,57 ms, y los 6 de más de 4 ms tuvieron una GC adentro. En `npm test`, el corte a 2 ms se prueba con un reloj falso (cambio de regla de Bruno).
+
 ## Netbook y PC el mismo día, K1 y K2 (fase 4, C4) — 2026-11-18
 
 **Cómo se midió:**
