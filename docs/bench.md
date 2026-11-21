@@ -19,6 +19,27 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Modo Simular (fase 5, T32) — 2026-11-21
+
+**Criterio escrito antes de medir** (`docs/plan-T32.md`): ABBA en WebView2 (`probar-webview2.mjs --base-fase5`: A y B corren «Probar la fase 5», 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `93eb13e`. B1–B16 con D6b-C; F1–F3 con sus topes de la PC. S1, S2, S3 y S5: tope (ajuste 1 de T31) y no regresión (mediana de A ≤ la de B + máx(1 ms, 10 %)). **Ajuste 1 de T32:** S5 solo sobre el tope y sin regresión cierra como «no pasa, causa conocida»; cualquier otra falla frena y se consulta, sin volver a medir.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera. Dos exes `tauri build --no-bundle` con `0.1.4-t32.0` solo en `package.json` (local, revertida); la base, de un worktree temporal en `93eb13e` con `npm ci` (ya borrado). Edge 157.
+
+**Resultado:** S, F y 15 de las 16 B pasan. **B2 2.º (máx. de deshacer): no pasa, causa conocida** (Bruno, 2026-11-21).
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | Límite (B + máx(1, 10 %)) | Juicio |
+|---|---|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 18,8 | 19,7 | 17,9 | 19,6 | pasa |
+| S2 | mediana | 1,7 | 0,1 | 0,2 | 0,2 | 1,2 | pasa |
+| S2 | máx. | 5,3 | 0,3 | 0,4 | 0,3 | 1,3 | pasa |
+| S3 | máx. | 16,7 | 3,0 | 3,4 | 3,2 | 4,2 | pasa |
+| S5 | máx. | 100,0 | 95,5 | 99,0 | 92,2 | 101,4 | pasa |
+
+- Cierre de S (ajuste 1): **pasa**. S1, desglose (mediana): R4 0,4 · netlist 4,0 · iniciar 0,6 · cuadro 14,8; ahora por `Editor.entrarSimulacion`, la entrada de F5 (S-A). S5 de pared (informa): 319,9 ms. Frías de S5 de A hasta 103,5 (informan).
+- F1 2,8–3,0 ms (≤ 9); F2 y F3 ≤ 72,7 ms (≤ 1 s).
+- **B2 2.º: 9,6 → 10,8 ms (+1,2 ms, +12,5 %), sube por D6b-C.** Calientes de B: 9,7 · 9,2 · 11,9 · 9,6 · 9,5 · 10,2; de A: 9,1 · 11,7 · 9,3 · 9,9 · 11,8 · 11,6. En los dos exes el máximo cae en dos grupos (cerca de 9 y de 11,7 ms): A tuvo 3 de 6 en el alto y B 1. Los rangos se pisan (B 9,2–11,9 · A 9,1–11,8) y la mediana de B2 (1.º) no sube (9,3 → 9,1). El mismo síntoma apareció en T29 (B2 máx. 9,3 → 11,1). El camino de deshacer no pasa por el código de T32 (lectura del diff). **Decisión de Bruno: «no pasa, causa conocida»; no es un cambio de regla y no se volvió a medir.** Pendiente para C1: decidir, antes de medir, si B2 se juzga por la mediana.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 12 en A y 12 en B.
+
 ## Banco de mando, «Probar la fase 5» (fase 5, T31) — 2026-11-21
 
 **Criterio escrito antes de medir** (`docs/plan-T31.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5`, 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `6a4a7dd` (AB-A). B1–B16 con D6b-C; F1–F3 con sus topes de la PC. **S (ajuste 1, cambio de regla autorizado por Bruno):** mediana de las calientes ≤ tope y máximo ≤ tope + máx(1 ms, 10 %); las frías informan.

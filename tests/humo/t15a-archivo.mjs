@@ -5,7 +5,7 @@
 // el foco en el campo del panel guarda lo escrito; la tecla mantenida guarda
 // una sola vez; con un modal abierto no guarda; D22-B no escribe un documento
 // que no abriría; el título lleva el nombre y la marca de cambios; Simular
-// guarda; una escena del banco se guarda sin tocar el documento, y una escena
+// no guarda (T32, ajuste 3); una escena del banco se guarda sin tocar el documento, y una escena
 // sin editor no se guarda. `beforeunload` pregunta solo con cambios.
 //
 // Abrir y Nuevo (etapa 3b): el selector de archivos se intercepta por CDP y
@@ -197,11 +197,11 @@ async function probarGuardar(p, comprobar, h) {
   await tecla(Z, CTRL);
   comprobar("deshacer lo de afuera del rango: vuelve a lo guardado", (await titulo()) === "Sin título.brn — Bornera", await titulo());
 
-  // ── Simular: Guardar anda ──
+  // ── Simular: Guardar y Guardar como no andan (T32, ajuste 3) ──
   await tecla(F5);
+  comprobar("en Simular, Guardar y Guardar como están desactivados", !(await activado("Guardar")) && !(await activado("Guardar como")));
   await tecla(S, CTRL);
-  d = await descarga();
-  comprobar("en Simular, Ctrl+S guarda", d?.nombre === "Sin título.brn");
+  comprobar("en Simular, Ctrl+S no guarda", await ninguna());
   await tecla(F5);
 
   // ── Escena del banco: guarda la escena, sin tocar el documento ──

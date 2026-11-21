@@ -778,6 +778,16 @@ export class EscenaEditable implements Contenido {
     // Primero los cables, con la tolerancia acotada (TOPE_TOLERANCIA_CABLE).
     const cable = this.cables.enPunto(x, y, tolerancia);
     if (cable !== null) return cable;
+    return this.componenteEnPunto(x, y, tolerancia);
+  }
+
+  /**
+   * El componente que elige un clic en (x, y), sin mirar los cables: el que
+   * tiene una zona a menos de `tolerancia` del punto, el de arriba si hay
+   * varios. Es la parte de componentes de `idEnPunto`; en Simular (T32, P-A)
+   * pulsa el pulsador aunque un cable llegue a su borne.
+   */
+  componenteEnPunto(x: number, y: number, tolerancia = 0): string | null {
     // La caja de dibujo contiene a las zonas: con la tolerancia, no se pierde ninguno.
     const candidatos = this.indice.enCaja({ x: x - tolerancia, y: y - tolerancia, ancho: 2 * tolerancia, alto: 2 * tolerancia });
     // Vienen de menor a mayor lugar, que es el orden de dibujo: se recorre al revés.

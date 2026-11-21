@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { textoFase4 } from "../../src/ui/fase4";
 import { filasS as filasDeApp, K_S, notasS, TOPES_S_NETBOOK, type MuestrasS } from "../../src/ui/fase5";
-import { AVISO_S1_PC_MS, conMargen, desgloseS1, filasS, juzgarS, paredS5, TOPES_S_PC } from "./compararB.mjs";
+import { AVISO_S1_PC_MS, cierreS, conMargen, desgloseS1, filasS, juzgarS, noRegresionS, paredS5, TOPES_S_PC } from "./compararB.mjs";
 
 /** Un texto de «Probar la fase 5» como lo arma la app, con S1 total `s1`, S2 `s2` (mediana y máx.), S3 `s3` y S5 `s5`. */
 function texto(s1: number, s2: [number, number], s3: number, s5: number): string {
@@ -90,5 +90,42 @@ describe("juzgarS (ajuste 1 de T31)", () => {
   it("sin calientes no pasa, y sin filas S tira", () => {
     expect(juzgarS([], []).pasa).toBe(false);
     expect(() => juzgarS([], ["Probar la fase 4 · sin S"])).toThrow(/Falta S1/);
+  });
+});
+
+describe("noRegresionS y cierreS (T32, fijados antes de medir)", () => {
+  const b = [texto(18, [0.2, 0.3], 3, 95), texto(19, [0.2, 0.4], 4, 99)];
+
+  it("A pasa si su mediana ≤ la de B + máx(1 ms, 10 %)", () => {
+    const igual = noRegresionS(b, [texto(19.5, [1.2, 1.3], 4.4, 106)]);
+    expect(igual.pasa).toBe(true);
+    expect(igual.filas.map((f) => [f.id, f.nombre, f.base, Math.round(f.limite * 100) / 100])).toEqual([
+      ["S1", "máx.", 18.5, 20.35],
+      ["S2", "mediana", 0.2, 1.2],
+      ["S2", "máx.", 0.35, 1.35],
+      ["S3", "máx.", 3.5, 4.5],
+      ["S5", "máx.", 97, 106.7],
+    ]);
+    const sube = noRegresionS(b, [texto(20.6, [0.2, 0.3], 3, 95)]);
+    expect(sube.filas.filter((f) => !f.pasa).map((f) => f.id)).toEqual(["S1"]);
+  });
+
+  it("sin corridas o con una base de la fase 4 (sin S), no hay juicio", () => {
+    expect(() => noRegresionS([], b)).toThrow(/No hay corridas/);
+    expect(() => noRegresionS(["| B1 | x | x | x | 1 ms | |"], b)).toThrow(/Probar la fase 5/);
+  });
+
+  it("ajuste 1: solo S5 sobre el tope sin regresión es «causa conocida»; lo demás frena", () => {
+    const bien = texto(40, [0.5, 2], 8, 90);
+    const s5Alto = texto(40, [0.5, 2], 8, 104);
+    expect(cierreS(juzgarS([], [bien]), noRegresionS([bien], [bien]))).toBe("pasa");
+    expect(cierreS(juzgarS([], [s5Alto]), noRegresionS([s5Alto], [s5Alto]))).toBe("causa conocida");
+    // S5 sobre el tope y además sube contra B: frena.
+    expect(cierreS(juzgarS([], [s5Alto]), noRegresionS([bien], [s5Alto]))).toBe("frena");
+    // S1 sobre el tope: frena aunque no suba.
+    const s1Alto = texto(60, [0.5, 2], 8, 90);
+    expect(cierreS(juzgarS([], [s1Alto]), noRegresionS([s1Alto], [s1Alto]))).toBe("frena");
+    // Todo bajo el tope pero S3 sube contra B: frena.
+    expect(cierreS(juzgarS([], [texto(40, [0.5, 2], 12, 90)]), noRegresionS([bien], [texto(40, [0.5, 2], 12, 90)]))).toBe("frena");
   });
 });

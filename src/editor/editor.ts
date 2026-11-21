@@ -136,7 +136,8 @@ import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
 import { HerramientaCable } from "./herramientas/cable";
 import { HerramientaColocar, type ModoColocar, type Previa } from "./herramientas/colocar";
-import { HerramientaSeleccionar, radioExtremo, type ExtremoAgarrable } from "./herramientas/seleccionar";
+import { HerramientaSeleccionar, radioExtremo, TOLERANCIA_PX, type ExtremoAgarrable } from "./herramientas/seleccionar";
+import { SesionSimulacion } from "./simulacion";
 import { objetivoEn, radioBorne, type Objetivo } from "./objetivo";
 import type { Herramienta, Resultado } from "./herramientas/tipos";
 
@@ -460,6 +461,10 @@ export class Editor {
   readonly avisos: AvisosHoja;
   /** Se avisa cuando cambia la cuenta de errores y avisos (para la barra de estado). */
   alCambiarAvisos: (() => void) | null = null;
+  /** La sesión de Simular (T32); null en Editar. */
+  private _simulacion: SesionSimulacion | null = null;
+  /** Se avisa cuando cambia la simulación: entrar, salir, pulsar o soltar (para la barra de estado). */
+  alCambiarSimulacion: (() => void) | null = null;
   /** Anillos de la selección única (R7, R8 y R11): x, y seguidos, y de qué cambio y selección son. */
   private anillos: { clave: string; puntos: number[] } = { clave: "", puntos: [] };
   /** La nota del último renombrado, con el id del componente; se borra con el próximo cambio o selección. */
@@ -682,9 +687,80 @@ export class Editor {
     return n;
   }
 
+  // ── Simular (T32, E-A) ────────────────────────────────────────────────────
+  // La sesión no es documento: entrar, pulsar, soltar y salir no ejecutan
+  // Comandos ni tocan el historial (sin «•» ni copia de recuperación).
+
+  /** La sesión de Simular; null en Editar. */
+  get simulacion(): SesionSimulacion | null {
+    return this._simulacion;
+  }
+
+  /**
+   * Entra a Simular (F5, D4-A): termina la herramienta activa y arma la sesión
+   * sobre la hoja. Con errores no entra y los devuelve; si entra, null. Es la
+   * entrada que mide S1 (S-A); `marcar`, como en `entrarSimulacion`.
+   */
+  entrarSimulacion(marcar?: () => void): readonly Aviso[] | null {
+    this.cancelarHerramienta();
+    const r = SesionSimulacion.entrar(this.documento.hojas[this.hoja] ?? { nombre: "", componentes: [], cables: [] }, {}, marcar);
+    if (!r.ok) return r.errores;
+    this._simulacion = r.sesion;
+    this.alCambiarSimulacion?.();
+    return null;
+  }
+
+  /** Vuelve a Editar: la sesión se descarta, también con algo apretado. */
+  salirSimulacion(): void {
+    if (!this._simulacion) return;
+    this._simulacion = null;
+    this.alCambiarSimulacion?.();
+  }
+
+  /** El pulsador bajo (x, y) en Simular, con la tolerancia del clic de Editar (P-A); null si no hay. */
+  private pulsadorEn(x: number, y: number, escala: number): string | null {
+    const s = this._simulacion;
+    if (!s) return null;
+    const id = this.escena.componenteEnPunto(x, y, TOLERANCIA_PX / escala);
+    return id !== null && s.esPulsable(id) ? id : null;
+  }
+
+  /** Hay un pulsador bajo (x, y) en Simular (cursor de mano). */
+  sobrePulsador(x: number, y: number, escala: number): boolean {
+    return this.pulsadorEn(x, y, escala) !== null;
+  }
+
+  /**
+   * El botón se aprieta en (x, y) en Simular (D5-B): el pulsador de ahí se
+   * mantiene o, con Mayús, se fija; uno fijado se suelta. Devuelve si cambió
+   * algo. No es un gesto: F5 sale aunque haya algo apretado (ajuste 4).
+   */
+  presionarSimulacion(x: number, y: number, escala: number, mayus: boolean): boolean {
+    const s = this._simulacion;
+    const id = this.pulsadorEn(x, y, escala);
+    if (!s || id === null || !s.presionar(id, mayus)) return false;
+    this.alCambiarSimulacion?.();
+    return true;
+  }
+
+  /** Se soltó el botón (en cualquier lado) o se cortó el puntero: vuelve el mantenido. */
+  soltarSimulacion(): boolean {
+    if (!this._simulacion?.soltarBoton()) return false;
+    this.alCambiarSimulacion?.();
+    return true;
+  }
+
+  /** La ventana perdió el foco (M-A): se suelta el mantenido; los fijados siguen. */
+  perderVentanaSimulacion(): boolean {
+    if (!this._simulacion?.perderVentana()) return false;
+    this.alCambiarSimulacion?.();
+    return true;
+  }
+
   /**
    * Hay un gesto del puntero en curso: rectángulo o arrastre de la selección,
-   * o un arrastre desde la paleta. F5 no cambia de modo en el medio.
+   * o un arrastre desde la paleta. F5 no cambia de modo en el medio. Un
+   * pulsador mantenido en Simular no es un gesto (ajuste 4 de T32).
    */
   get enGesto(): boolean {
     return this.seleccionar.enGesto || this.arrastre !== null || this.colocar?.modo === "arrastre" || (this.cable?.enGesto ?? false);

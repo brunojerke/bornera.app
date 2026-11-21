@@ -1,6 +1,7 @@
 // Modo Simular: las herramientas de edición no reciben el puntero. Clic,
 // rectángulo y arrastre no cambian la selección ni el documento; la rueda y
-// el botón del medio siguen moviendo la vista.
+// el botón del medio siguen moviendo la vista. Desde T32 el clic sobre un
+// pulsador lo aprieta (t32-simular.mjs); sobre una bobina no hace nada.
 
 import { esperar } from "./cdp.mjs";
 

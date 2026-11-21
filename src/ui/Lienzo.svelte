@@ -15,6 +15,7 @@
   import { MedidorRendimiento, type Resumen } from "../render/rendimiento";
   import { ESCENA_PRUEBA } from "../render/escenaPrueba";
   import { Editor, SIN_SELECCION, type DiagnosticoArrastre, type ResumenSeleccion } from "../editor/editor";
+  import { textoNoSimula } from "../editor/simulacion";
   import { probarArrastre, type OpcionesDiagnostico } from "./diagnosticoArrastre";
   import { ARRASTRADOS_DIAGNOSTICO, DURACION_DIAGNOSTICO_MS, tablaDiagnostico } from "./diagnostico";
   import { VERSION } from "./version";
@@ -36,6 +37,7 @@
     modificado = $bindable(false),
     tituloDocumento = $bindable(""),
     cuentaAvisos = $bindable(null),
+    estadoSimulacion = $bindable(null),
     activo = $bindable(null),
     modo = "editar",
     escena = "documento",
@@ -72,6 +74,11 @@
      * las escenas que no se editan. Solo lectura desde afuera.
      */
     cuentaAvisos?: { errores: number; avisos: number } | null;
+    /**
+     * En Simular (T32, AV-A y ajuste 2), el texto fijo de la barra: la
+     * detención y los pulsadores fijados; null si no hay. Solo lectura desde afuera.
+     */
+    estadoSimulacion?: string | null;
     /** Editor de lo que se muestra (null en las escenas que no se editan). Solo lectura desde afuera. */
     activo?: Editor | null;
     /** Modo de trabajo: en Simular, los atajos de edición no actúan. */
@@ -121,6 +128,9 @@
     herramientas?.desconectar();
     herramientas = null;
     if (editor && editor !== ed) {
+      // No pasa (Abrir, Nuevo y las escenas no andan en Simular), pero una sesión no sigue en un editor que no se ve.
+      editor.salirSimulacion();
+      editor.alCambiarSimulacion = null;
       editor.vista = null;
       editor.alCambiarHerramienta = null;
       editor.alCambiarSeleccion = null;
@@ -148,8 +158,16 @@
     };
     historial();
     cuentaAvisos = ed?.avisos.cuenta ?? null;
+    estadoSimulacion = ed?.simulacion?.textoEstado() ?? null;
     if (!ed) return;
     ed.alCambiarAvisos = () => (cuentaAvisos = ed.avisos.cuenta);
+    // Simular (T32): el texto fijo de la barra y los avisos nuevos de cada operación (AV-A).
+    ed.alCambiarSimulacion = () => {
+      estadoSimulacion = ed.simulacion?.textoEstado() ?? null;
+      const nuevos = ed.simulacion?.textoNuevos() ?? null;
+      if (nuevos) onaviso?.(nuevos);
+      herramientas?.refrescar();
+    };
     ed.vista = v;
     ed.alCambiarHerramienta = () => {
       colocando = ed.colocar?.def.tipo ?? null;
@@ -185,6 +203,8 @@
       comandos,
       cables,
       activo: () => editor,
+      /** La sesión de Simular del editor a la vista (T32, V-A); null en Editar. */
+      simulacion: () => editor?.simulacion ?? null,
       diagnosticarArrastre,
     };
   }
@@ -247,6 +267,21 @@
   /** Botón de la paleta: lo mismo que W. */
   export function alternarCable() {
     if (modo === "editar") editor?.accion("cable");
+  }
+
+  /**
+   * F5 o «Simular» (T32, D4-A): entra a Simular con el editor a la vista. Con
+   * errores no entra y devuelve el texto para la barra; si entra, null. En
+   * las escenas sin editor no hay nada que simular: entra sin sesión.
+   */
+  export function entrarSimulacion(): string | null {
+    const errores = editor?.entrarSimulacion() ?? null;
+    return errores ? textoNoSimula(errores) : null;
+  }
+
+  /** Vuelve a Editar: la sesión se descarta, también con algo apretado. */
+  export function salirSimulacion() {
+    editor?.salirSimulacion();
   }
 
   /** Hay un gesto del puntero en curso en el editor a la vista (F5 no cambia de modo). */

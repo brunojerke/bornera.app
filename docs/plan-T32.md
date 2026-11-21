@@ -36,3 +36,8 @@ Aprobado por Bruno el 2026-11-21 con E-A, P-A, V-A, S-A, M-A y AV-A, más 4 ajus
 ## Riesgos
 - S5 en el borde (99,8 ms en T31): lo cubre el ajuste 1.
 - Sin dibujo del estado, los pasos 2 y 3 de la netbook esperan a T33.
+
+## Resultado (cierre, 2026-11-21)
+- **Hecho:** `src/editor/simulacion.ts` (`SesionSimulacion`, `textoNoSimula`) con 14 tests sin DOM; Editor (`entrarSimulacion`, `salirSimulacion`, `presionarSimulacion`, `soltarSimulacion`, `perderVentanaSimulacion`, `sobrePulsador`); `componenteEnPunto` en la escena; puntero, F5 y barra en `punteros.ts`, `Lienzo.svelte`, `Ventana.svelte` y `BarraSuperior.svelte` (la barra de estado recibe el texto por `pista`); menú de desarrollo desactivado en Simular. En el núcleo, `pulsables()` y `marcar` en `entrarSimulacion` (S-A). `compararB.mjs`: `noRegresionS` y `cierreS`; `probar-webview2.mjs --base-fase5`. Humo `t32-simular.mjs` (31); `t15a` cambia «en Simular, Ctrl+S guarda» por el ajuste 3.
+- **ABBA contra `93eb13e`:** S pasa (cierre «pasa»), F pasa, B1–B16 iguales salvo **B2 2.º 9,6 → 10,8 ms: no pasa, causa conocida** (decisión de Bruno; no es cambio de regla, no se volvió a medir). Detalle en `docs/bench.md`.
+- **Pendiente:** C1 decide antes de medir si B2 se juzga por la mediana. El dibujo del estado (T33); netbook (C3).

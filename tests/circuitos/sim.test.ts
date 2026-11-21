@@ -11,6 +11,7 @@ import { validarHoja } from "../../src/core/model/cables";
 import { validar } from "../../src/core/model/validaciones";
 import { entrarSimulacion, pulsar, soltar, textoAvisoSim, type Simulacion } from "../../src/core/sim/motor";
 import { desempaquetar } from "../../src/ui/brn";
+import { SesionSimulacion } from "../../src/editor/simulacion";
 
 // Lo mismo que exporta sim.mjs: importarlo traería sus módulos de Node al chequeo de tipos.
 const REGENERAR = "node tests/circuitos/sim.mjs";
@@ -77,5 +78,59 @@ describe("tests/circuitos: los .brn de la simulación", () => {
     expect(conTension(s)).toEqual(Array.from({ length: BOBINAS_CADENA }, (_, i) => `K${i + 1}`));
     s = soltar(s, comp["s1"]!);
     expect([conTension(s), s.avisos]).toEqual([[], []]);
+  });
+});
+
+// «Pasa cuando» de la fase 5 (T32, paso 7): el núcleo pulsa y suelta sobre los
+// `.brn` de referencia, por la sesión que usa F5, y mira bobinas y lámparas.
+// El documento queda igual: serializar da el mismo texto que el archivo.
+describe("tests/circuitos: marcha-parada.brn e inversion.brn en Simular", () => {
+  async function abrirReferencia(nombre: "marcha-parada" | "inversion") {
+    const bytes = new Uint8Array(readFileSync(new URL(`./${nombre}.brn`, import.meta.url)));
+    const abierto = await desempaquetar(bytes);
+    if (!abierto.ok) throw new Error(`${nombre}: no se pudo descomprimir: ${abierto.error}`);
+    const r = deserializar(abierto.texto);
+    if (!r.ok) throw new Error(`${nombre}: no abre: ${JSON.stringify(r.errores)}`);
+    const hoja = r.documento.hojas[0]!;
+    const e = SesionSimulacion.entrar(hoja);
+    if (!e.ok) throw new Error(`${nombre}: no entra: ${JSON.stringify(e.errores)}`);
+    /** El id del componente de esa etiqueta y ese tipo. */
+    const id = (etiqueta: string, tipo: string) => {
+      const c = hoja.componentes.find((x) => x.etiqueta === etiqueta && x.tipo === tipo);
+      if (!c) throw new Error(`${nombre}: sin ${tipo} ${etiqueta}`);
+      return c.id;
+    };
+    const s = e.sesion;
+    const prendida = (etiqueta: string) => s.sim.encendidas[s.sim.netlist.cargas.findIndex((c) => c.comp === id(etiqueta, "senalizacion.lampara"))]!;
+    const pulsarYSoltar = (etiqueta: string, tipo: string) => {
+      s.presionar(id(etiqueta, tipo), false);
+      s.soltarBoton();
+    };
+    return { doc: r.documento, texto: abierto.texto, s, id, prendida, pulsarYSoltar };
+  }
+
+  it("marcha-parada.brn: con S1 entran K1 y H1 y siguen al soltar; con S0 se apagan y siguen así", async () => {
+    const { doc, texto, s, id, prendida, pulsarYSoltar } = await abrirReferencia("marcha-parada");
+    expect([conTension(s.sim), prendida("H1")]).toEqual([[], false]);
+    s.presionar(id("S1", "pulsador.na"), false);
+    expect([conTension(s.sim), prendida("H1")]).toEqual([["K1"], true]);
+    s.soltarBoton();
+    expect([conTension(s.sim), prendida("H1")]).toEqual([["K1"], true]);
+    pulsarYSoltar("S0", "pulsador.nc");
+    expect([conTension(s.sim), prendida("H1"), s.sim.avisos]).toEqual([[], false, []]);
+    expect(serializar(doc)).toBe(texto);
+  });
+
+  it("inversion.brn: K1 entra; con K1, K2 no entra; S0 apaga; con S2 entra K2 y K1 no", async () => {
+    const { doc, texto, s, prendida, pulsarYSoltar } = await abrirReferencia("inversion");
+    pulsarYSoltar("S1", "pulsador.na");
+    expect([conTension(s.sim), prendida("H1"), prendida("H2")]).toEqual([["K1"], true, false]);
+    pulsarYSoltar("S2", "pulsador.na");
+    expect(conTension(s.sim)).toEqual(["K1"]);
+    pulsarYSoltar("S0", "pulsador.nc");
+    expect([conTension(s.sim), prendida("H1")]).toEqual([[], false]);
+    pulsarYSoltar("S2", "pulsador.na");
+    expect([conTension(s.sim), prendida("H1"), prendida("H2"), s.sim.avisos]).toEqual([["K2"], false, true, []]);
+    expect(serializar(doc)).toBe(texto);
   });
 });

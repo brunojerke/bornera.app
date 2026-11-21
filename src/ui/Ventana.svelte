@@ -81,6 +81,8 @@
   let tituloDocumento = $state("");
   /** Errores y avisos de las validaciones (T19) del editor a la vista; null en las escenas que no se editan. */
   let cuentaAvisos = $state.raw<{ errores: number; avisos: number } | null>(null);
+  /** En Simular (T32), la detención y los fijados para la barra; null si no hay. */
+  let estadoSimulacion = $state<string | null>(null);
   /** Nombre del archivo actual; null en un documento que nunca se guardó. */
   let archivoActual = $state<string | null>(null);
   /** Diálogo de archivo abierto ("No se puede guardar"…); null si no hay. */
@@ -147,6 +149,8 @@
   operaciones.alCambiar = () => (archivoActual = operaciones.nombreVisible);
 
   function accionArchivo(a: AccionArchivo) {
+    // En Simular solo se exporta (T32, ajuste 3): Guardar, Guardar como, Abrir y Nuevo no andan.
+    if (modo === "simular" && a !== "exportar") return;
     if (a === "guardar") void operaciones.guardar();
     else if (a === "guardarComo") void operaciones.guardar(true);
     else if (a === "exportar") void operaciones.exportar();
@@ -423,7 +427,8 @@
   let prueba = $state<{ titulo: string; corriendo: boolean; texto: string } | null>(null);
 
   async function probarArrastre() {
-    if (prueba?.corriendo) return;
+    // Cambia de escena: no en Simular (T32).
+    if (prueba?.corriendo || modo === "simular") return;
     const titulo = "Diagnóstico del arrastre";
     prueba = { titulo, corriendo: true, texto: "Abriendo la escena de 2000 con cables…" };
     try {
@@ -468,7 +473,8 @@
   const probarFase5 = () => probarFase("Probar la fase 5", correrFase5);
 
   async function probarFase(titulo: string, correr: (progreso: (t: string) => void) => Promise<string>) {
-    if (prueba?.corriendo || avisoProbar) return;
+    // No en Simular (T32, paso 5).
+    if (prueba?.corriendo || avisoProbar || modo === "simular") return;
     if (modificado) {
       const nombre = nombreDocumento(archivoActual, tituloDocumento);
       const probar = await new Promise<boolean>((responder) => (avisoProbar = { titulo, nombre, responder }));
@@ -521,15 +527,31 @@
     untrack(() => panel?.confirmar());
   });
 
+  /**
+   * Cambia de modo (F5 o los botones). Entrar a Simular (T32, D4-A) arma la
+   * sesión del editor a la vista: con errores avisa cuáles y queda en Editar.
+   * Salir la descarta, también con algo apretado; el documento queda igual.
+   */
+  function cambiarModo(m: Modo) {
+    if (m === modo) return;
+    panel?.confirmar();
+    if (m === "simular") {
+      const noEntra = lienzo.entrarSimulacion();
+      if (noEntra) {
+        avisar(noEntra);
+        return;
+      }
+    } else lienzo.salirSimulacion();
+    modo = m;
+  }
+
   function alTecla(e: KeyboardEvent) {
     // F5: alterna Editar/Simular, también con el foco en el campo del panel.
     // La tecla es siempre nuestra: sin esto, el WebView recarga y se pierde el documento.
+    // Un pulsador mantenido en Simular no es un gesto: F5 sale igual (ajuste 4 de T32).
     if (esAtajoModo(e)) {
       e.preventDefault();
-      if (f5CambiaModo({ repetida: e.repeat, modal: hayModal(), gesto: lienzo?.enGesto() ?? false })) {
-        panel?.confirmar();
-        modo = otroModo(modo);
-      }
+      if (f5CambiaModo({ repetida: e.repeat, modal: hayModal(), gesto: lienzo?.enGesto() ?? false })) cambiarModo(otroModo(modo));
       return;
     }
     // Ctrl+S, Ctrl+Mayús+S, Ctrl+O y Ctrl+N: también con el foco en el campo
@@ -554,10 +576,10 @@
     }
     // Ctrl+Shift+B (oculto, también en la versión compilada): siguiente escena
     // del banco de pruebas. Se anula el atajo del WebView (barra de favoritos).
-    // Con un diálogo modal abierto no cambia (como los demás atajos).
+    // Con un diálogo modal abierto no cambia (como los demás atajos), ni en Simular (T32).
     if (esAtajoBanco(e)) {
       e.preventDefault();
-      if (!e.repeat && !hayModal()) {
+      if (!e.repeat && !hayModal() && modo === "editar") {
         panel?.confirmar();
         escena = siguienteEscenaBanco(escena);
       }
@@ -583,9 +605,11 @@
 
 <div class="ventana">
   <BarraSuperior
-    bind:modo
+    {modo}
+    oncambiarmodo={cambiarModo}
     {zoom}
-    puedeGuardar={editorActivo !== null}
+    puedeGuardar={editorActivo !== null && modo === "editar"}
+    puedeExportar={editorActivo !== null}
     {puedeAbrir}
     onnuevo={() => accionArchivo("nuevo")}
     onabrir={() => accionArchivo("abrir")}
@@ -635,6 +659,7 @@
       bind:modificado
       bind:tituloDocumento
       bind:cuentaAvisos
+      bind:estadoSimulacion
       bind:activo={editorActivo}
       {modo}
       {escena}
@@ -654,7 +679,7 @@
       onalternar={(abierto) => (propiedadesPlegadoPorUsuario = !abierto)}
     />
   </main>
-  <BarraEstado {modo} {zoom} {cursor} {aviso} {pista} {cuentaAvisos} />
+  <BarraEstado {modo} {zoom} {cursor} {aviso} pista={modo === "simular" ? estadoSimulacion : pista} {cuentaAvisos} />
 </div>
 
 {#if prueba}

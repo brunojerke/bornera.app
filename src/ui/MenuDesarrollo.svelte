@@ -12,6 +12,7 @@
   import type { EscenaDesarrollo } from "./tipos";
 
   let {
+    simulando = false,
     escena = $bindable("documento"),
     rendimiento = $bindable(false),
     opciones = $bindable(),
@@ -23,6 +24,8 @@
     onmedircopia,
     oncopias,
   }: {
+    /** En Simular (T32): no se cambia de escena ni corren las pruebas que la cambian o usan el banco. */
+    simulando?: boolean;
     escena?: EscenaDesarrollo;
     rendimiento?: boolean;
     opciones: OpcionesCapas;
@@ -136,7 +139,7 @@
     <div class="lista" role="menu" aria-label="Desarrollo">
       <div class="titulo">Escena</div>
       {#each ESCENAS as e (e.valor)}
-        <button role="menuitemradio" aria-checked={escena === e.valor} onclick={() => elegir(e.valor)}>
+        <button role="menuitemradio" aria-checked={escena === e.valor} disabled={simulando} onclick={() => elegir(e.valor)}>
           <span class="marca">{#if escena === e.valor}<Check size={14} />{/if}</span>
           {e.texto}
         </button>
@@ -186,22 +189,22 @@
         <span class="marca">{#if diagnostico.sonda}<Check size={14} />{/if}</span>
         Medir la dinámica (sonda)
       </button>
-      <button role="menuitem" onclick={probar}>
+      <button role="menuitem" disabled={simulando} onclick={probar}>
         <span class="marca"></span>
         Prueba automática…
       </button>
 
       <div class="separador"></div>
       <div class="titulo">Cierre de fase</div>
-      <button role="menuitem" onclick={probarFase3b}>
+      <button role="menuitem" disabled={simulando} onclick={probarFase3b}>
         <span class="marca"></span>
         Probar la fase 3b…
       </button>
-      <button role="menuitem" onclick={probarFase4}>
+      <button role="menuitem" disabled={simulando} onclick={probarFase4}>
         <span class="marca"></span>
         Probar la fase 4…
       </button>
-      <button role="menuitem" onclick={probarFase5}>
+      <button role="menuitem" disabled={simulando} onclick={probarFase5}>
         <span class="marca"></span>
         Probar la fase 5…
       </button>
@@ -265,8 +268,13 @@
     cursor: pointer;
   }
 
-  .lista button:hover {
+  .lista button:hover:not(:disabled) {
     background: var(--hover);
+  }
+
+  .lista button:disabled {
+    color: var(--texto-suave);
+    cursor: default;
   }
 
   .marca {

@@ -395,17 +395,29 @@ export function soltar(sim: Simulacion, ...comps: string[]): Simulacion {
   return resolver(sim, quedan, sim.tension);
 }
 
+/** Los pulsadores de la netlist (contactos a mano): los únicos que `pulsar` aprieta. */
+export function pulsables(n: Netlist): ReadonlySet<string> {
+  return preparar(n).pulsables;
+}
+
 export type Entrada = { readonly ok: true; readonly sim: Simulacion } | { readonly ok: false; readonly errores: readonly Aviso[] };
 
 /**
  * Entrar a Simular con una hoja (D4-A): solo los errores lo impiden (hoy, R4
  * con una bobina, una lámpara o un símbolo desconocido) y se devuelven. Si no,
  * arma la netlist y arranca. No cambia la hoja.
+ *
+ * `marcar` (T32, S-A) se llama al terminar R4 y al terminar la netlist: así
+ * S1 mide cada parte de esta misma entrada (la de F5) sin que el motor lea
+ * el reloj.
  */
-export function entrarSimulacion(hoja: Hoja, opciones: OpcionesSimulacion = {}): Entrada {
+export function entrarSimulacion(hoja: Hoja, opciones: OpcionesSimulacion = {}, marcar?: () => void): Entrada {
   const errores = validar(hoja, ["R4"]).filter((a) => a.severidad === "error");
+  marcar?.();
   if (errores.length > 0) return { ok: false, errores };
-  return { ok: true, sim: iniciar(armarNetlist(hoja), opciones) };
+  const n = armarNetlist(hoja);
+  marcar?.();
+  return { ok: true, sim: iniciar(n, opciones) };
 }
 
 /** El texto de la barra para un aviso de la simulación. */

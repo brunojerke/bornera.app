@@ -23,9 +23,11 @@
   import { mostrarMenuDesarrollo, VERSION } from "./version";
 
   let {
-    modo = $bindable("editar"),
+    modo = "editar",
+    oncambiarmodo,
     zoom = 1,
     puedeGuardar = false,
+    puedeExportar = false,
     puedeAbrir = false,
     onnuevo,
     onabrir,
@@ -54,10 +56,14 @@
     oncopias,
   }: {
     modo?: Modo;
+    /** Se pidió otro modo (los botones; Ventana decide si entra a Simular, T32). */
+    oncambiarmodo?: (m: Modo) => void;
     /** Zoom actual (1 = 100 %). */
     zoom?: number;
-    /** Lo que se ve se puede guardar (no en las escenas sin editor). */
+    /** Guardar y Guardar como andan: lo que se ve tiene editor y no se simula (T32, ajuste 3). */
     puedeGuardar?: boolean;
+    /** Exportar anda: lo que se ve tiene editor (también en Simular). */
+    puedeExportar?: boolean;
     /** Nuevo y Abrir andan (D17: no en Simular ni en una escena del banco). */
     puedeAbrir?: boolean;
     onnuevo?: () => void;
@@ -129,7 +135,7 @@
       class="boton-icono"
       title="Exportar sin comprimir (.brn.json)…"
       aria-label="Exportar sin comprimir (.brn.json)"
-      disabled={!puedeGuardar}
+      disabled={!puedeExportar}
       onclick={onexportar}
     >
       <FileBraces size={TAM} />
@@ -159,19 +165,19 @@
 
   {#if mostrarMenuDesarrollo(VERSION, import.meta.env.DEV)}
     <div class="grupo-final">
-      <MenuDesarrollo bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} {onprobarfase4} {onprobarfase5} {onmedircopia} {oncopias} />
+      <MenuDesarrollo simulando={modo === "simular"} bind:escena bind:rendimiento bind:opciones bind:diagnostico {onprobararrastre} {onprobarfase3b} {onprobarfase4} {onprobarfase5} {onmedircopia} {oncopias} />
     </div>
   {/if}
 
   <div class="modo" role="group" aria-label="Modo (F5)" title="Alternar modo (F5)">
-    <button class:activo={modo === "editar"} aria-pressed={modo === "editar"} onclick={() => (modo = "editar")}>
+    <button class:activo={modo === "editar"} aria-pressed={modo === "editar"} onclick={() => oncambiarmodo?.("editar")}>
       <Pencil size={16} /> Editar
     </button>
     <button
       class="simular"
       class:activo={modo === "simular"}
       aria-pressed={modo === "simular"}
-      onclick={() => (modo = "simular")}
+      onclick={() => oncambiarmodo?.("simular")}
     >
       <Play size={16} /> Simular
     </button>

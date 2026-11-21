@@ -22,6 +22,12 @@
 // `atajosActivos` dice que no (modo Simular). Hay un solo listener por
 // lienzo: `desconectar` lo quita, y Lienzo desconecta antes de conectar otro
 // editor (escenas del banco), así una tecla nunca actúa dos veces.
+//
+// Simular (T32, D5-B): con la sesión del Editor abierta, el botón izquierdo
+// sobre un pulsador lo aprieta (con Mayús lo fija) y el puntero se captura:
+// soltar el botón en cualquier lado lo suelta, y también perder la captura,
+// pointercancel o la ventana (M-A: los fijados siguen). Sobre un pulsador, el
+// cursor es la mano. Las herramientas no reciben nada.
 
 import type { DefinicionSimbolo } from "../core/symbols";
 import type { Camara } from "../render/camara";
@@ -65,8 +71,9 @@ export interface Herramientas {
   /** Empieza a colocar `def` desde un pointerdown en la paleta. */
   desdePaleta(def: DefinicionSimbolo, e: PointerEvent): void;
   /**
-   * La cámara cambió (rueda, desplazar, encuadrar, botones de zoom): la
-   * herramienta vuelve a mirar qué hay bajo el cursor, que quedó quieto.
+   * La cámara cambió (rueda, desplazar, encuadrar, botones de zoom), o se
+   * entró o salió de Simular: la herramienta (o la mano de Simular) vuelve a
+   * mirar qué hay bajo el cursor, que quedó quieto.
    */
   refrescar(): void;
   desconectar(): void;
@@ -82,6 +89,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   let ultimo: { clientX: number; clientY: number; buttons: number } | null = null;
 
   const editando = () => op.atajosActivos?.() !== false;
+  /** Hay una sesión de Simular abierta (T32): el puntero va a ella y no a las herramientas. */
+  const simulando = () => editor.simulacion !== null;
+  /** En Simular, el cursor sobre un pulsador (mano); "" si no hay. */
+  let cursorSimulacion = "";
 
   const evento = (e: Pick<PointerEvent, "clientX" | "clientY" | "button" | "buttons" | "shiftKey" | "ctrlKey">): EventoHerramienta => {
     const r = canvas.getBoundingClientRect();
@@ -108,7 +119,9 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   let cursor = "";
   const actualizarCursor = () => {
     // Reconectar (T14c): cruz mientras se arrastra el extremo; mano sobre un extremo libre que se puede agarrar.
-    const nuevo = editor.cable
+    const nuevo = simulando()
+      ? cursorSimulacion
+      : editor.cable
       ? "crosshair"
       : editor.herramienta
         ? "copy"
@@ -129,6 +142,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   const alMover = (e: PointerEvent) => {
     ultimo = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
+    if (!arrastrando && simulando()) {
+      cursorDeSimulacion();
+      return;
+    }
     if (arrastrando || !editando()) return;
     // Un botón que se aprieta con otro ya apretado (en acorde) no da
     // pointerdown sino pointermove con ese `button`: el derecho con el
@@ -144,6 +161,12 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   const alPresionar = (e: PointerEvent) => {
     soltarFocoDeCampo();
+    if (!arrastrando && !e.defaultPrevented && e.button === 0 && simulando()) {
+      e.preventDefault();
+      const ev = evento(e);
+      if (editor.presionarSimulacion(ev.x, ev.y, ev.escala, ev.mayus)) canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     if (arrastrando || e.defaultPrevented || e.button === 1 || !editando()) return;
     e.preventDefault();
     if (e.button === 0) canvas.setPointerCapture(e.pointerId);
@@ -152,6 +175,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
 
   const alSoltar = (e: PointerEvent) => {
     // El arrastre desde la paleta se suelta por su cuenta (en window).
+    if (!arrastrando && e.button === 0 && simulando()) {
+      editor.soltarSimulacion();
+      return;
+    }
     if (arrastrando || e.button !== 0 || !editando()) return;
     // Con el puntero capturado, el soltar llega aunque sea afuera: la herramienta cable no fija nada ahí.
     editor.aplicar(editor.activa.soltar({ ...evento(e), fuera: !sobreLienzo(e) }));
@@ -159,6 +186,10 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   };
 
   const alCortar = () => {
+    if (!arrastrando && simulando()) {
+      editor.soltarSimulacion();
+      return;
+    }
     if (arrastrando || !editando()) return;
     editor.aplicar(editor.activa.soltar(null));
     actualizarCursor();
@@ -167,7 +198,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   // La captura se pierde también después de un pointerup normal: ahí ya no
   // hay gesto y no se hace nada.
   const alPerderCaptura = () => {
-    if (editor.enGesto) alCortar();
+    if (simulando()) editor.soltarSimulacion();
+    else if (editor.enGesto) alCortar();
   };
 
   // La ventana pierde el foco (Alt+Tab, otra app) con el botón apretado: el
@@ -180,11 +212,16 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
       actualizarCursor();
       return;
     }
-    if (editor.enGesto) alCortar();
+    if (simulando()) editor.perderVentanaSimulacion();
+    else if (editor.enGesto) alCortar();
   };
 
   const alSalir = () => {
     ultimo = null;
+    if (cursorSimulacion) {
+      cursorSimulacion = "";
+      actualizarCursor();
+    }
     if (!arrastrando && editando()) editor.aplicar(editor.activa.salir());
   };
 
@@ -224,6 +261,17 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
     if (editor.pegando && editor.pegando !== habiaPrevia) alPuntoActual();
     actualizarCursor();
   };
+
+  /** En Simular, la mano sobre un pulsador en el último punto del mouse; fuera de Simular, nada. */
+  function cursorDeSimulacion() {
+    let nuevo = "";
+    if (simulando() && ultimo) {
+      const ev = evento({ ...ultimo, button: 0, shiftKey: false, ctrlKey: false });
+      if (editor.sobrePulsador(ev.x, ev.y, ev.escala)) nuevo = "pointer";
+    }
+    cursorSimulacion = nuevo;
+    actualizarCursor();
+  }
 
   /** Le pasa a la herramienta activa el último punto del mouse sobre el lienzo, si lo hay. */
   function alPuntoActual() {
@@ -301,6 +349,8 @@ export function conectarHerramientas(canvas: HTMLCanvasElement, op: OpcionesHerr
   return {
     desdePaleta,
     refrescar() {
+      // Entrar o salir de Simular, o la cámara: la mano vuelve a mirar qué hay bajo el cursor.
+      if (simulando() || cursorSimulacion) cursorDeSimulacion();
       if (editor.cable || editor.pegando) alPuntoActual();
     },
     desconectar() {

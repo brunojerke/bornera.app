@@ -257,6 +257,50 @@ export function juzgarS(frias, calientes) {
 }
 
 /**
+ * La no regresión de S (T32, fijada antes de medir): con A y B en «Probar la
+ * fase 5», cada número de `TOPES_S_PC` pasa si la mediana de las calientes de
+ * A ≤ la de B + máx(1 ms, 10 % de la de B).
+ * @param {readonly string[]} base calientes de B
+ * @param {readonly string[]} head calientes de A
+ */
+export function noRegresionS(base, head) {
+  if (base.length === 0 || head.length === 0) throw new Error("No hay corridas para comparar S.");
+  const med = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
+    mediana(
+      textos.map((t) => {
+        const f = filasS(t).get(id);
+        if (!f) throw new Error(`Falta ${id} en una corrida (¿la base corre «Probar la fase 5»?).`);
+        return f[i] ?? NaN;
+      }),
+    );
+  const filas = Object.entries(TOPES_S_PC).flatMap(([id, numeros]) =>
+    numeros.map(({ nombre, indice }) => {
+      const b = med(base, id, indice);
+      const h = med(head, id, indice);
+      const limite = conMargen(b);
+      return { id, nombre, base: b, head: h, limite, pasa: h <= limite };
+    }),
+  );
+  return { filas, pasa: filas.every((f) => f.pasa) };
+}
+
+/**
+ * El cierre de S de T32 (ajuste 1, fijado antes de medir): «pasa» si pasan el
+ * tope y la no regresión; «causa conocida» si solo S5 no pasa el tope y su no
+ * regresión pasa (aparentes de la escena del banco, pendiente `codosBanco`);
+ * «frena» en cualquier otro caso (se consulta sin volver a medir).
+ * @param {{ filas: { id: string, pasa: boolean }[] }} tope el de `juzgarS`
+ * @param {{ filas: { id: string, pasa: boolean }[] }} regresion el de `noRegresionS`
+ * @returns {"pasa" | "causa conocida" | "frena"}
+ */
+export function cierreS(tope, regresion) {
+  if (regresion.filas.some((f) => !f.pasa)) return "frena";
+  const fallan = tope.filas.filter((f) => !f.pasa);
+  if (fallan.length === 0) return "pasa";
+  return fallan.every((f) => f.id === "S5") ? "causa conocida" : "frena";
+}
+
+/**
  * El desglose de S1 de un texto (la nota «S1, desglose …»): parte → ms.
  * @param {string} texto
  * @returns {Map<string, number>}

@@ -120,6 +120,7 @@ Simulación **lógica por conectividad**, no analógica: alcanza para automatism
 - **Tensión incorrecta** (bobina de 24 V conectada a 220 V): se deja para una fase posterior, como advertencia.
 - **Temporizadores** (fase posterior): se agregan como una cola de eventos con tiempo simulado; un timer que vence dispara un recálculo.
 - **Interacción:** en modo simulación, mantener apretado un pulsador lo acciona; un clic en el térmico lo dispara o lo rearma.
+  > Nota (2026-11-21, T32): en la app, F5 entra a Simular por `Editor.entrarSimulacion` (`src/editor/simulacion.ts`), que no es documento: sin Comandos, historial, «•» ni copia de recuperación. Solo R4 impide entrar (D4-A). Mantener el botón sobre un pulsador lo aprieta hasta soltarlo en cualquier lado o perder la ventana; Mayús+clic lo fija hasta otro clic (D5-B, M-A). En Simular no andan herramientas, panel, deshacer, Nuevo, Abrir, Guardar ni Guardar como, ni las escenas del banco; Exportar sí. Hasta T33 el estado no se dibuja: la barra muestra los avisos, la detención y los fijados. Plan en `docs/plan-T32.md`.
 - **Visual:** los conductores con tensión se pintan de un color por potencial (fase, neutro, CC); las lámparas se encienden y los motores muestran el giro con una flecha animada.
 
 ## Editor e interfaz

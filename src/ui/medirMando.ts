@@ -4,7 +4,8 @@
 // de calentamiento sin medir y después las de `VUELTAS_S`.
 //
 // - S1 (S1-A): entrar a Simular sobre la escena de mando 2000 (R4, netlist e
-//   iniciar, lo mismo que `entrarSimulacion`) y un repintado completo de la
+//   iniciar) por la misma entrada que F5, `Editor.entrarSimulacion` (T32,
+//   S-A), y un repintado completo de la
 //   capa estática al 31 % hasta nítido, como sustituto del dibujo de T33. Se
 //   toma cada parte por separado (N-A: la netlist sola informa).
 // - S2: pulsar y soltar la marcha de una marcha-parada; la parada la vuelve
@@ -16,9 +17,7 @@
 //   los tramos), y el tiempo de pared informa.
 
 import type { Documento } from "../core/model/documento";
-import { validar } from "../core/model/validaciones";
-import { iniciar, pulsar, soltar, type Simulacion } from "../core/sim/motor";
-import { armarNetlist } from "../core/sim/netlist";
+import { entrarSimulacion, pulsar, soltar, type Simulacion } from "../core/sim/motor";
 import { bancoMando, type BancoMando } from "../editor/bancoMando";
 import { Editor } from "../editor/editor";
 import { Camara } from "../render/camara";
@@ -54,17 +53,20 @@ function lienzoAl31(ed: Editor, ancho: number, alto: number) {
   return { ctx, capas, camara };
 }
 
-/** Entra a Simular como `entrarSimulacion`, con el tiempo de cada parte. */
-function entrarMedido(hoja: Documento["hojas"][number], marcas: number[]): Simulacion {
+/** Entra a Simular por F5 (`Editor.entrarSimulacion`, S-A), con el tiempo de cada parte: inicio, R4, netlist y fin. */
+function entrarMedido(ed: Editor, marcas: number[]): void {
+  ed.salirSimulacion();
   marcas.push(performance.now());
-  const errores = validar(hoja, ["R4"]).filter((a) => a.severidad === "error");
-  if (errores.length > 0) throw new Error(`La escena de mando no entra a Simular: ${errores.map((a) => a.regla).join(", ")}.`);
+  const errores = ed.entrarSimulacion(() => marcas.push(performance.now()));
   marcas.push(performance.now());
-  const n = armarNetlist(hoja);
-  marcas.push(performance.now());
-  const sim = iniciar(n);
-  marcas.push(performance.now());
-  return sim;
+  if (errores) throw new Error(`La escena de mando no entra a Simular: ${errores.map((a) => a.regla).join(", ")}.`);
+}
+
+/** Una simulación de la escena para S2 y S3 (sin medir la entrada). */
+function simulacionDe(hoja: Documento["hojas"][number]): Simulacion {
+  const e = entrarSimulacion(hoja);
+  if (!e.ok) throw new Error(`La escena de mando no entra a Simular: ${e.errores.map((a) => a.regla).join(", ")}.`);
+  return e.sim;
 }
 
 /** S1, con su vuelta de calentamiento. */
@@ -73,12 +75,11 @@ async function medirS1(banco: BancoMando, ancho: number, alto: number): Promise<
   await esperarR11(ed);
   const { ctx, capas, camara } = lienzoAl31(ed, ancho, alto);
   capas.dibujar(camara, ancho, alto, 1);
-  const hoja = banco.doc.hojas[0]!;
   const muestras: MuestraS1[] = [];
   for (let i = 0; i <= VUELTAS_S.S1; i++) {
     await respirar();
     const marcas: number[] = [];
-    entrarMedido(hoja, marcas);
+    entrarMedido(ed, marcas);
     capas.invalidarEstatica();
     let cuadros = 0;
     for (;;) {
@@ -97,7 +98,7 @@ async function medirS1(banco: BancoMando, ancho: number, alto: number): Promise<
 
 /** S2 y S3, sobre una simulación de la escena de mando. */
 async function medirS2S3(banco: BancoMando): Promise<{ s2: number[]; s3: number[] }> {
-  let sim = entrarMedido(banco.doc.hojas[0]!, []);
+  let sim = simulacionDe(banco.doc.hojas[0]!);
   const m = banco.marchas[0]!;
   const s2: number[] = [];
   for (let i = 0; i <= VUELTAS_S.S2; i++) {
