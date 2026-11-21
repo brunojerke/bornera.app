@@ -34,3 +34,9 @@ Aprobado por Bruno el 2026-11-21 con E-A, S1-A, S4-A, S5-A, AB-A y N-A, más 3 a
 - S3: 100 recálculos de cero con una clave de 300 bobinas. Si falla, se frena; la salida sería un recálculo incremental (cambio en `sim/`, otra tarea).
 - S1: el cuadro pesa más que el resto (B10 ≈ 20 ms en la PC).
 - Netbook fuera de T31 (C3).
+
+## Resultado (cierre, 2026-11-21)
+- **Hecho:** `src/editor/bancoMando.ts` (la escena, en un archivo propio en vez de `banco.ts`) con 7 tests; `src/ui/fase5.ts` (6), `medirMando.ts`, `probarFase5.ts` (`medirFase4` sale de `probarFase4.ts`, mismo texto); menú «Probar la fase 5…»; `compararB.mjs` (`filasS`, `juzgarS`, `desgloseS1`, `paredS5`) con `compararS.test.ts` (9); `probar-webview2.mjs --fase5`; humo `t31-probar-fase5.mjs` (13).
+- **ABBA contra `6a4a7dd`: pasa todo** (`docs/bench.md`). B1–B16 nada sube; F1–F3 pasan. S1 18,4 / 19,6 ms (mediana / máx.; desglose: R4 0,4 · netlist 1,8 · iniciar 0,5 · cuadro 15,3); S2 0,2 / 0,3; S3 3,1 / 5,9; S5 93,4 / **99,8** (en el borde de 100).
+- **Riesgo para C1 y C3:** S5 en el borde. El stash de T28 no aplica (la netlist no es lo que pesa).
+- Netbook: fuera de T31 (C3).

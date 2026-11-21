@@ -19,6 +19,29 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Banco de mando, «Probar la fase 5» (fase 5, T31) — 2026-11-21
+
+**Criterio escrito antes de medir** (`docs/plan-T31.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5`, 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `6a4a7dd` (AB-A). B1–B16 con D6b-C; F1–F3 con sus topes de la PC. **S (ajuste 1, cambio de regla autorizado por Bruno):** mediana de las calientes ≤ tope y máximo ≤ tope + máx(1 ms, 10 %); las frías informan.
+
+**Cómo se midió:** enchufada, «Mejor rendimiento» (`ded574b5…`), Opera y Perplexity cerrados, sin otra Bornera. Dos exes `tauri build --no-bundle` con `0.1.4-t31.0` solo en `package.json` (local, revertida); la base, de un worktree temporal en `6a4a7dd` con `npm ci` (ya borrado). Edge 157. Escena de mando 2000: 2000 componentes + 2200 cables, 300 bobinas (E-A). S5: escena de F1–F3 (2000 + 3030), 44 tramos y 13 394 avisos R11 por vuelta.
+
+**Resultado: pasa todo.** B1–B16, nada sube; F1 2,8–3,1 ms (≤ 9), F2 y F3 ≤ 77,4 ms (≤ 1 s).
+
+| Fila | Número | Tope PC | Máx. permitido | Mediana calientes | Máx. calientes | Calientes | Juicio |
+|---|---|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 60,0 | 18,4 | 19,6 | 18,3 · 16,7 · 17,4 · 18,7 · 19,6 · 18,4 | pasa |
+| S2 | mediana | 1,7 | 2,7 | 0,2 | 0,2 | 0,2 (las 6) | pasa |
+| S2 | máx. | 5,3 | 6,3 | 0,3 | 0,3 | 0,3 (las 6) | pasa |
+| S3 | máx. | 16,7 | 18,4 | 3,1 | 5,9 | 3,2 · 3,1 · 5,9 · 3,1 · 2,9 · 3,1 | pasa |
+| S4 | — | 6,0 / 18,2 | | | | se mide en T33 (S4-A) | |
+| S5 | máx. | 100,0 | 110,0 | 93,4 | **99,8** | 88,4 · 95,4 · 91,7 · 99,8 · 95,1 · 91,3 | pasa |
+
+- **S1, desglose** (mediana de las calientes, ms): R4 0,4 · netlist 1,8 · iniciar 0,5 · cuadro 15,3. La netlist sola (N-A, informa): 1,7–4,3 ms. S1 queda lejos del aviso de 48 ms.
+- **S5 está en el borde:** máx. 99,8 contra 100 (frías hasta 101,8). Es R11 de la escena con 10 250 aparentes (pendiente de `codosBanco`, plan de fase).
+- **S5 de pared** (informa): 292–335 ms desde abrir hasta los avisos: cada `setTimeout(0)` encadenado espera ≥ 4 ms en Chromium (44 tramos).
+- Frías fuera del rango de sus calientes (+1 ms, informan): 12 en A (B1, B10, B11) y 10 en B.
+- Chrome headless (humo, informa): S1 36,3, S2 0,6, S3 4,0, S5 112,6 ms de máximo.
+
 ## Avisos R10 y R11 (fase 5, T29) — 2026-11-21
 
 **Criterio escrito antes de medir** (`docs/plan-T29.md`, T-A): ABBA en WebView2 (`probar-webview2.mjs --exe=A,B`, 3 bloques, 6 aperturas por exe, una fría y una caliente por apertura) contra `b6dbeee`, en la misma sesión. En las calientes, A − B ≤ máx(1 ms, 10 %) en mediana y máximo de B1, B2, B4, B5, B10, B12, B13 y B16; cuadros (B3, B6, B11, B14), lentos ±1; B9, mismo escalón. B7, B8, B9 y B15 son de control: si una sale de la regla, se repite el ABBA entero una sola vez.
