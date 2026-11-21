@@ -22,9 +22,9 @@ Una por sesión; cierran con `bornera-cierre` (y banco si tocan `sim/` o el dibu
 
 **Pendiente (Bruno, 2026-11-21, de T29):** `codosBanco` con la regla de W. La escena oficial del banco (2000 + 3030) tiene unas 10 250 conexiones aparentes (13 394 avisos R11) imposibles de dibujar en el editor: sus cables entran a los bornes por el cuerpo, se tocan y se enciman. Sin aparentes, R11 cuesta en Node la mitad o menos al abrir y casi nada en B2 y B16 (tabla en `docs/plan-T29.md`).
 
-**Pendiente para C1 (Bruno, 2026-11-21, de T32):** decidir, antes de medir, si B2 se juzga por la mediana (su máximo cae en dos grupos, cerca de 9 y de 11,7 ms, en los dos exes; subió en T29 y T32 sin cambio en su camino).
+**Decidido para C1 (Bruno, 2026-11-21, de T32): B-A.** B2 se juzga por la mediana: B2 1.º decide y B2 2.º informa (su máximo cae en dos grupos, cerca de 9 y de 11,7 ms, en los dos exes; subió en T29 y T32 sin cambio en su camino). **W-A:** `codosBanco` va después de C1, como tarea propia (cambia la escena de B2, B16, F y S5).
 
-**Cierre:** C1 «Probar la fase 5» en la PC, ABBA contra `7ed51e4` (Opus alto). C2 `0.1.5-alpha.N` y `docs/netbook-fase5.md` (Opus alto). C3 netbook y PC el mismo día (Sonnet). C4 `0.1.5` y fila 6 (Opus alto). C5 docs y Obsidian (Sonnet).
+**Cierre:** C1 «Probar la fase 5» en la PC, ABBA contra `7ed51e4` (Opus alto). **C1 hecha** (2026-11-21): `--conflicto` pasa a fucsia (K-A: `#701a75` claro, `#c026d3` oscuro; el rojo de antes se confundía con `--sim-fase`). ABBA `--fase5` de `4e3632e` contra `7ed51e4`: S1–S5 pasan por tope (S1 18,9 / 19,6, S4 2,1 / 2,2 y 2,4 / 2,6, S5 86,0 / 100,0), F pasa, B2 pasa; **B1 2.º 50,0 → 55,3 no pasa, causa conocida: GC** (trazas de CDP: el paso más largo es el de más GC; mismo código en los dos; `docs/bench.md`). Arrastres de `npm run bench` sin resultado claro: **pendiente para C3**. C2 `0.1.5-alpha.N` y `docs/netbook-fase5.md` (Opus alto). C3 netbook y PC el mismo día (Sonnet). C4 `0.1.5` y fila 6 (Opus alto). C5 docs y Obsidian (Sonnet).
 
 ## 2. Modelo de simulación
 - **Entrar:** la netlist se arma una vez: redes por cables más etiquetas de red. Arranca en reposo.

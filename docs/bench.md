@@ -19,6 +19,36 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Cierre de la fase 5 en la PC (C1) — 2026-11-21
+
+**Criterio escrito antes de medir** (Bruno, plan de C1): ABBA en WebView2 (`probar-webview2.mjs --fase5`: A corre «Probar la fase 5» y B «Probar la fase 4», 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `7ed51e4` (cierre de la fase 4). B1–B16 con D6b-C, salvo **B2, que se juzga por la mediana (B-A, Bruno, antes de medir)**: B2 1.º decide y B2 2.º informa. F1–F3 con los topes de la PC. S1–S5 solo por tope (la base no tiene «Probar la fase 5»): mediana de las calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %). Si una fila falla, se frena y se consulta, sin volver a medir. `codosBanco` va después de C1 (W-A): cambiaría la escena de B2, B16, F y S5.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera. Dos exes `tauri build --no-bundle` con `0.1.4-c1.0` solo en `package.json` (local, revertida; sin el guion, la base no tiene menú de desarrollo): A = `4e3632e` (HEAD con `--conflicto` en fucsia); B = `7ed51e4`, de un worktree temporal con `npm ci` y `svelte-kit sync` (ya borrado). Edge 157.
+
+**Resultado: no pasa por B1 2.º, causa conocida: GC.** S, F y B2 pasan; B1–B16 iguales salvo **B1 2.º 50,0 → 55,3** (tope 55,0).
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Juicio |
+|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 18,9 | 19,6 | pasa |
+| S2 | mediana | 1,7 | 0,1 | 0,1 | pasa |
+| S2 | máx. | 5,3 | 0,3 | 0,3 | pasa |
+| S3 | máx. | 16,7 | 2,9 | 3,0 | pasa |
+| S4 | cuadro | 6,0 | 2,1 | 2,2 | pasa |
+| S4 | gesto | 18,2 | 2,4 | 2,6 | pasa |
+| S5 | máx. | 100,0 | 86,0 | 100,0 | pasa (máx. ≤ 110) |
+
+- S1, desglose (mediana): R4 0,4 · netlist 4,0 · iniciar 1,1 · cuadro 13,7. S5 de pared (informa): 285,9 ms. Cadena de 100 de S4 (informa): 5,1 / 12,6 ms.
+- F1 2,8–3,1 ms (≤ 9); F2 y F3 ≤ 80,4 ms (≤ 1 s).
+- B1 (Duplicar todo 2000, paso): 1.º 45,7 → 48,5 (igual), **2.º 50,0 → 55,3 (sube)**; rangos de las calientes 45,5–56,5 (B) y 47,3–62,3 (A). B2 1.º 9,1 → 9,4 y 2.º 9,3 → 9,9: pasa con B-A y con la regla vieja.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 6 en A y 4 en B.
+
+**Diagnóstico de B1 2.º (R2, reglas de Bruno antes de diagnosticar: ≤ 3 trazas por exe, sin repetir el ABBA ni volver a juzgar).** Trazas de CDP en WebView2 de «Probar la fase 4» (GC y muestras de CPU cada ~0,5 ms, mapeadas con los sourcemaps del mismo código), 2 por exe: una fría y una caliente. Los pasos de duplicar se separan por las muestras con `duplicarYDeshacer` en la pila.
+- En la caliente de A, los 4 pasos medidos tardan 53,4, 49,7, 51,0 y 52,5 ms, con MinorGC de 5,1, 1,6, 5,2 y 4,6 ms: el más largo es el de más GC, y lo que va del más corto al más largo (3,7 ms) es lo que va de la GC (3,6). En B pasa lo mismo (más una MajorGC de 5,1 ms en un paso de calentamiento).
+- Las dos versiones recorren las mismas funciones con el mismo reparto (uniones, cables, índice espacial, mosaicos); A no suma trabajo nuevo en el paso (los avisos, R11 incluida, ~1 ms en las dos).
+- **Veredicto: el máximo de B1 lo pone la GC que cae dentro del paso.** C1 cierra «no pasa, causa conocida: GC», sin tarea nueva (regla de Bruno).
+
+**`npm run bench`, arrastres (Edge headless, 3 corridas por lado intercaladas, `d16e96a` contra `946589a`): sin resultado claro, pendiente para C3.** Ningún número sube en las 3 corridas. Arrastre con todo seleccionado de 100, por gesto: A 54,6 / 98,8 / 108,2 ms, B 65,3 / 49,0 / 65,3 ms (dos grupos, cerca de 50–65 y de 100, en los dos). De 500: A 71,4 / 93,9 / 117,0, B 85,8 / 75,7 / 116,0. «Mover todo» de 2000, máx.: A 9,6 / 10,1 / 10,0, B 11,0 / 10,4 / 10,0. Los máximos por cuadro no cambian (≤ 3 ms en 100). Decide el ABBA, que no ve nada en B3, B6 ni B16.
+
 ## Dibujo del estado (fase 5, T33) — 2026-11-21
 
 **Criterio escrito antes de medir** (`docs/plan-T33.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`: A y B corren «Probar la fase 5», 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `946589a`. B1–B16 con D6b-C; F1–F3 con sus topes de la PC. Tope de S1–S5: mediana de las calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %); S1 54,5 ms, S4 6,0 / 18,2 ms (cuadro / gesto; máx. 7,0 / 20,0). No regresión de S2, S3 y S5 como en T32 (S5 sobre el tope y sin regresión: «no pasa, causa conocida»). **R-A:** S1 y S4 solo por tope; su no regresión informa (S1 cambia de definición: la base mide el sustituto sin estado; S4 no tiene base). La cadena de 100 de S4 informa y no frena (S4-B). `npm run bench` informa. Si una fila falla en la PC (S4 incluida), se frena y se consulta, sin volver a medir; S1 > 48 ms se avisa; B2 2.º con la regla vigente.
