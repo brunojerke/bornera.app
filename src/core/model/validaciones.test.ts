@@ -451,6 +451,67 @@ describe("R9: alimentación sin nombre", () => {
   });
 });
 
+describe("R10: fase L junto con L1, L2 o L3 (T29)", () => {
+  const r10 = (h: Hoja) => validar(h).filter((x) => x.regla === "R10");
+
+  it("la marcha-parada (una Fase «L»): sin R10", () => {
+    const { a } = desdeMarchaParada();
+    expect(r10(a.h)).toEqual([]);
+  });
+
+  it("una Fase «L1» junto a la «L»: R10 en la «L», no en la «L1»", () => {
+    const { a, comp } = desdeMarchaParada();
+    a.poner(FASE, 40, 0, "L1");
+    expect(r10(a.h)).toEqual([{ regla: "R10", severidad: "aviso", id: comp.fase, otras: "L1" }]);
+  });
+
+  it("compara etiquetas normalizadas: «l1 » cuenta como «L1» y « l » como «L»", () => {
+    const { a, comp } = desdeMarchaParada();
+    a.hacer(new CambiarEtiqueta(comp.fase, " l "));
+    a.poner(FASE, 40, 0, "l1 ");
+    expect(r10(a.h)).toEqual([{ regla: "R10", severidad: "aviso", id: comp.fase, otras: "L1" }]);
+  });
+
+  it("varias numeradas: «L1 y L3», y marca cada Fase «L»", () => {
+    const { a, comp } = desdeMarchaParada();
+    a.poner(FASE, 40, 0, "L3");
+    a.poner(FASE, 50, 0, "L1");
+    const otraL = a.poner(FASE, 60, 0, "L");
+    expect(r10(a.h)).toEqual([
+      { regla: "R10", severidad: "aviso", id: comp.fase, otras: "L1 y L3" },
+      { regla: "R10", severidad: "aviso", id: otraL, otras: "L1 y L3" },
+    ]);
+    a.poner(FASE, 70, 0, "L2");
+    expect(r10(a.h).map((x) => (x as Extract<Aviso, { regla: "R10" }>).otras)).toEqual(["L1, L2 y L3", "L1, L2 y L3"]);
+  });
+
+  it("solo fases: un Neutro «L1» o «L», o una Fase «L4» o «L12», no cuentan", () => {
+    const { a, comp } = desdeMarchaParada();
+    a.poner(NEUTRO, 40, 0, "L1");
+    a.poner(FASE, 50, 0, "L4");
+    a.poner(FASE, 60, 0, "L12");
+    expect(r10(a.h)).toEqual([]);
+    a.hacer(new CambiarEtiqueta(comp.fase, "L2"));
+    a.poner(NEUTRO, 70, 0, "L");
+    expect(r10(a.h)).toEqual([]);
+  });
+
+  it("L1, L2 y L3 sin ninguna «L»: sin R10", () => {
+    const { a, comp } = desdeMarchaParada();
+    a.hacer(new CambiarEtiqueta(comp.fase, "L1"));
+    a.poner(FASE, 40, 0, "L2");
+    a.poner(FASE, 50, 0, "L3");
+    expect(r10(a.h)).toEqual([]);
+  });
+
+  it("es un aviso: el texto dice cuáles y que son fases distintas", () => {
+    const { a } = desdeMarchaParada();
+    a.poner(FASE, 40, 0, "L2");
+    expect(r10(a.h).map(textoAviso)).toEqual(["Fase L junto con L2: para Bornera son fases distintas."]);
+    expect(contarAvisos(r10(a.h))).toEqual({ errores: 0, avisos: 1 });
+  });
+});
+
 // ── Orden, subconjuntos, textos y cuentas ──────────────────────────────────
 
 describe("orden y subconjuntos", () => {
@@ -670,6 +731,10 @@ function validarLento(h: Hoja): Aviso[] {
       if (!conectado) salida.push({ regla: "R7", severidad: "aviso", id: c.id, borne: bb.nombre });
     }
     if (lento.fuente(def) && e === "") salida.push({ regla: "R9", severidad: "aviso", id: c.id });
+    if (c.tipo === FASE && e === "L") {
+      const otras = ["L1", "L2", "L3"].filter((n) => todos.some((o) => o.c.tipo === FASE && o.e === n));
+      if (otras.length > 0) salida.push({ regla: "R10", severidad: "aviso", id: c.id, otras: otras.length === 1 ? otras[0]! : `${otras.slice(0, -1).join(", ")} y ${otras.at(-1)}` });
+    }
   }
   for (const w of h.cables) if (w.desde.tipo === "libre" || w.hasta.tipo === "libre") salida.push({ regla: "R8", severidad: "aviso", id: w.id });
   return salida;
@@ -700,14 +765,17 @@ interface Recorrido {
  * cablear de borne a borne, a un extremo libre o en T, copiar, pegar,
  * duplicar, deshacer y rehacer) con un `Historial`. Después de cada paso
  * compara `calcular` con el cálculo lento. La secuencia depende solo de la
- * semilla: el resultado de `calcular` no decide nada.
+ * semilla: el resultado de `calcular` no decide nada. Con `conFaseL1`, arranca
+ * con una segunda Fase «l1» (R10).
  */
-function recorrer(calcular: (h: Hoja) => Aviso[], completo = false): Recorrido {
+function recorrer(calcular: (h: Hoja) => Aviso[], completo = false, conFaseL1 = false): Recorrido {
   const azar = generador(SEMILLA);
   const entero = (min: number, max: number) => min + Math.floor(azar() * (max - min + 1));
   const elegir = <T>(lista: readonly T[]): T => lista[Math.floor(azar() * lista.length)]!;
 
   const { doc, historial } = marchaParada({ ramaNC: true });
+  // R10 (T29): una segunda Fase «l1» junto a la «L» de la marcha-parada; sin ella, el recorrido casi nunca tiene dos fases.
+  if (conFaseL1) historial.ejecutar(colocar(doc, { tipo: FASE, x: -10, y: 0, rot: 0, espejado: false, etiqueta: "l1", params: {} }));
   const h = doc.hojas[0]!;
   let portapapeles: Recorte | null = null;
   let rechazados = 0;
@@ -920,9 +988,19 @@ describe("al azar, con semilla fija, contra el cálculo lento", { timeout: 30_00
     expect(r.diferencias).toBe(0);
     expect(r.subconjuntoDistinto, "validar(h, [regla]) no es el filtro del completo").toBe(0);
     for (const [operacion, n] of Object.entries(r.hechas)) expect(n, operacion).toBeGreaterThan(0);
-    for (const [situacion, n] of Object.entries(r.situaciones)) expect(n, situacion).toBeGreaterThan(0);
+    // R10 casi nunca sale con una sola Fase: lo prueba el recorrido siguiente, con dos.
+    for (const [situacion, n] of Object.entries(r.situaciones)) if (situacion !== "R10") expect(n, situacion).toBeGreaterThan(0);
     // Reglas anuladas a propósito: sin cualquiera de ellas, el recorrido da distinto.
-    for (const [regla, n] of Object.entries(r.conReglaAnulada)) expect(n, `sin ${regla}`).toBeGreaterThan(0);
+    for (const [regla, n] of Object.entries(r.conReglaAnulada)) if (regla !== "R10") expect(n, `sin ${regla}`).toBeGreaterThan(0);
+  });
+
+  it(`R10: el mismo recorrido con una segunda Fase «l1» desde el principio; R10 sale, igual que el lento, y anulada se nota`, () => {
+    const r = recorrer((h) => validar(h), true, true);
+    expect(r.primeras, `${r.diferencias} pasos con diferencias`).toEqual([]);
+    expect(r.diferencias).toBe(0);
+    expect(r.subconjuntoDistinto, "validar(h, [regla]) no es el filtro del completo").toBe(0);
+    expect(r.situaciones.R10).toBeGreaterThan(0);
+    expect(r.conReglaAnulada.R10).toBeGreaterThan(0);
   });
 
   it("con la normalización anulada a propósito, el mismo recorrido encuentra diferencias", async () => {

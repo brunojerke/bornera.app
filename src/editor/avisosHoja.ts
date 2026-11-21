@@ -19,6 +19,23 @@
 // - R7 y R8, incremental: los bornes de los componentes agregados, borrados o
 //   de otro tipo, los de los cables cuyos extremos cambiaron y esos cables.
 //   Sale de `BornesConCable`, que el editor pone al día antes.
+// - R10 (T29), por el mismo camino que las etiquetas: con cada Fase que llega,
+//   se va o cambia de etiqueta, se recalculan las Fases «L» (pocas).
+// - R11 (T29, I-A), aparte y después de la escena (`reflejarR11`: necesita el
+//   índice espacial al día). Se revisan los componentes y cables del cambio y
+//   lo que la consulta tiene cerca de ellos, nunca todos contra todos; los
+//   pares con algo del cambio se rehacen y los demás quedan. R11-A: un
+//   encimado entre cables de la misma red no avisa; la misma red se ve
+//   recorriendo solo la red de uno de los dos cables, con los vecinos de R6
+//   (sin `redes()`), y se vuelve a mirar con cada cambio mientras haya
+//   encimados entre cables. Si lo del cambio que sigue en la hoja es más de
+//   tres cuartos de ella, la hoja entera.
+//   D6-A (Bruno, 2026-11-21): en vivo hasta `UMBRAL_R11_EN_VIVO` (100)
+//   elementos en el cambio; arriba de eso, y al abrir, en reposo: el mismo
+//   cálculo, por partes, en tramos de `MS_TRAMO_R11` (4 ms) como máximo entre
+//   cuadros. Los avisos aparecen al terminar (`alTerminarR11`). Si llega otro
+//   comando en el medio, se suma a lo pendiente y el cálculo vuelve a empezar
+//   con todo lo acumulado.
 //
 // Devuelve qué cambió: los componentes cuyo contorno de aviso aparece o se va
 // (la escena los rehace), los ids cuyos avisos cambiaron (panel y anillo) y
@@ -27,10 +44,13 @@
 // No depende de la vista. Un documento nuevo es un editor nuevo, con su
 // propio caché.
 
+import { aparentesDeCable, aparentesDeComponente, avisosR11De, cercanos, type Aparente } from "../core/model/aparentes";
+import type { IndiceHoja } from "../core/model/cables";
 import type { Cable, Componente, Documento, Extremo, Hoja } from "../core/model/documento";
+import type { ConsultaTrazado } from "../core/model/trazado";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { nombreDeFuente } from "../core/model/redes";
-import { contarAvisos, esAuxiliarNC, validar, type Aviso, type Regla } from "../core/model/validaciones";
+import { contarAvisos, esAuxiliarNC, esFaseL, esFaseNumerada, otrasFasesR10, validar, type Aviso, type Regla } from "../core/model/validaciones";
 import { buscarSimbolo, esBobina, type DefinicionSimbolo } from "../core/symbols";
 import type { BornesConCable } from "./bornesConCable";
 
@@ -42,7 +62,7 @@ const NINGUNO: readonly Aviso[] = [];
 
 /** Qué cambió con un comando. */
 export interface CambioAvisos {
-  /** Componentes cuyo contorno (R1 a R6 y R9) apareció o se fue: la escena los rehace. */
+  /** Componentes cuyo contorno (R1 a R6, R9 y R10) apareció o se fue: la escena los rehace. */
   contornos: ReadonlySet<string>;
   /** Componentes y cables cuyos avisos cambiaron (para el panel y el anillo). */
   ids: ReadonlySet<string>;
@@ -51,6 +71,23 @@ export interface CambioAvisos {
 }
 
 const SIN_CAMBIOS: CambioAvisos = { contornos: new Set(), ids: new Set(), cuenta: false };
+
+/** Hasta cuántos elementos (componentes y cables) del cambio R11 va en vivo; arriba, en reposo (T29, D6-A). */
+export const UMBRAL_R11_EN_VIVO = 100;
+/** Lo más que dura un tramo de R11 en reposo, en ms: no bloquea el dibujo. */
+export const MS_TRAMO_R11 = 4;
+
+/** Cómo va R11 en reposo. Los tests cambian el umbral, quién programa los tramos y su largo. */
+export interface OpcionesR11 {
+  /** Por defecto, `UMBRAL_R11_EN_VIVO`. */
+  umbral?: number;
+  /** Programa el próximo tramo; por defecto, `setTimeout(tramo, 0)`: después del dibujo pendiente. */
+  programar?: (tramo: () => void) => void;
+  /** Por defecto, `MS_TRAMO_R11`. */
+  msTramo?: number;
+  /** Para los tests: pasos por tramo en vez de ms (el corte queda fijo). */
+  pasosTramo?: number;
+}
 
 // Lo guardado del último cálculo se compara campo por campo, sin armar un
 // texto por componente o por cable (etapa 3b, arreglo 1): mover, girar o
@@ -187,6 +224,12 @@ function mismoAviso(x: Aviso, y: Aviso): boolean {
     }
     case "R7":
       return x.borne === (y as typeof x).borne;
+    case "R10":
+      return x.otras === (y as typeof x).otras;
+    case "R11": {
+      const z = y as typeof x;
+      return x.tipo === z.tipo && x.x === z.x && x.y === z.y;
+    }
     default:
       return true;
   }
@@ -236,6 +279,20 @@ export class AvisosHoja {
   private readonly r7 = new Map<string, Aviso[]>();
   /** R8 por cable. */
   private readonly r8 = new Map<string, Aviso>();
+  /** R10 por Fase «L». */
+  private readonly r10 = new Map<string, Aviso>();
+  /** Las Fases «L» de la hoja (R10). */
+  private readonly fasesL = new Set<string>();
+  /** Cuántas Fases hay con cada etiqueta L1, L2 y L3 (R10). */
+  private readonly numeradas = new Map<string, number>();
+  /** R11 por componente o cable, visibles (sin los que calla R11-A). */
+  private readonly r11 = new Map<string, readonly Aviso[]>();
+  /** Las conexiones aparentes de la hoja, por `Aparente.k`; `oculto`: la calla R11-A. */
+  private readonly pares = new Map<string, { ap: Aparente; oculto: boolean }>();
+  /** Las claves de los pares de cada elemento. */
+  private readonly paresDe = new Map<string, Set<string>>();
+  /** Las claves de los encimados entre cables (R11-A los vuelve a mirar con cada cambio). */
+  private readonly entreCables = new Set<string>();
   /** Tipo y etiqueta de cada componente en el último cálculo. */
   private readonly comps = new Map<string, DatosComp>();
   /** A qué llega cada cable en el último cálculo. */
@@ -256,18 +313,57 @@ export class AvisosHoja {
   private _msUltimaR6 = 0;
   private _bornesRevisados = 0;
   private _bornesR6 = 0;
+  private _revisadosR11 = 0;
+  private _pasadasR11Hoja = 0;
+  private _msUltimaR11 = 0;
+  /** El último `reflejar` cambió lo que une la hoja (extremos de cables, o bornes de un componente): R11-A mira las redes tocadas. */
+  private uneR11 = false;
+  /** R11 en reposo (T29, D6-A): lo acumulado desde que empezó, o null si no hay nada pendiente. */
+  private pendienteR11: {
+    componentes: Set<string>;
+    cables: Set<string>;
+    /** La hoja entera (al abrir, o si lo acumulado es más de tres cuartos de ella). */
+    hoja: boolean;
+    /** Algún cambio acumulado cambió lo que une la hoja (R11-A mira todas las redes). */
+    une: boolean;
+    indice: IndiceHoja;
+    consulta: ConsultaTrazado;
+  } | null = null;
+  /** El cálculo en curso; null para empezarlo de nuevo en el próximo tramo. */
+  private trabajoR11: Generator<void, void, void> | null = null;
+  /** Ids con pares que cambiaron y avisos sin rehacer; siguen si el cálculo vuelve a empezar. */
+  private readonly afectadosR11 = new Set<string>();
+  /** Ids cuyo R11 cambió en el cálculo en reposo, para avisar al terminar. */
+  private readonly cambiadosR11 = new Set<string>();
+  /** La cuenta antes del cálculo en reposo (para `CambioAvisos.cuenta`). */
+  private cuentaAntesR11: { errores: number; avisos: number } | null = null;
+  private tramoProgramadoR11 = false;
+  private _tramosR11 = 0;
+  private _msTrabajoR11 = 0;
+  private readonly umbralR11: number;
+  private readonly programarR11: (tramo: () => void) => void;
+  private readonly msTramoR11: number;
+  private readonly pasosTramoR11: number | undefined;
+  /** Lo llama el cálculo de R11 en reposo al terminar, con lo que cambió. */
+  alTerminarR11: ((cambio: CambioAvisos) => void) | null = null;
 
   constructor(
     private readonly doc: Documento,
     private readonly hoja: number,
     private readonly bornesConCable: BornesConCable,
+    opciones: OpcionesR11 = {},
   ) {
+    this.umbralR11 = opciones.umbral ?? UMBRAL_R11_EN_VIVO;
+    this.programarR11 = opciones.programar ?? ((tramo) => setTimeout(tramo, 0));
+    this.msTramoR11 = opciones.msTramo ?? MS_TRAMO_R11;
+    this.pasosTramoR11 = opciones.pasosTramo;
     const h = this.hojaActual();
     if (!h) return;
     for (const c of h.componentes) {
       const g = datosComp(c);
       this.comps.set(c.id, g);
       this.ponerEnGrupo(c.id, g);
+      this.ponerFase(c.id, g);
       this.ponerR7(c.id, c);
     }
     for (const w of h.cables) {
@@ -275,6 +371,7 @@ export class AvisosHoja {
       if (w.desde.tipo === "libre" || w.hasta.tipo === "libre") this.ponerR8(w.id, true);
     }
     this.calcularEtiquetas(h);
+    this.calcularR10();
     this.ajustarVecinos();
     this.calcularR6(h);
     this.conContornoAntes.clear();
@@ -325,10 +422,26 @@ export class AvisosHoja {
     return v;
   }
 
-  /** El índice de vecinos existe solo mientras hay candidatos de R6. */
+  /** El índice de vecinos existe solo mientras hay candidatos de R6 o encimados entre cables (R11-A). */
   private ajustarVecinos(): void {
     if (this.candidatosR6) this.vecinos ??= this.armarVecinos();
-    else this.vecinos = null;
+    else if (this.entreCables.size === 0) this.vecinos = null;
+  }
+
+  /** Suma la Fase a las cuentas de R10 (si es «L» o L1 a L3). */
+  private ponerFase(id: string, g: DatosComp): void {
+    if (esFaseL(g.tipo, g.e)) this.fasesL.add(id);
+    else if (esFaseNumerada(g.tipo, g.e)) this.numeradas.set(g.e, (this.numeradas.get(g.e) ?? 0) + 1);
+  }
+
+  /** Saca la Fase de las cuentas de R10. */
+  private sacarFase(id: string, g: DatosComp): void {
+    if (esFaseL(g.tipo, g.e)) this.fasesL.delete(id);
+    else if (esFaseNumerada(g.tipo, g.e)) {
+      const n = (this.numeradas.get(g.e) ?? 0) - 1;
+      if (n > 0) this.numeradas.set(g.e, n);
+      else this.numeradas.delete(g.e);
+    }
   }
 
   // ── Consultas ──────────────────────────────────────────────────────────
@@ -377,9 +490,36 @@ export class AvisosHoja {
     return this._bornesRevisados;
   }
 
-  /** True si el componente lleva el contorno de aviso (R1 a R6 o R9). */
+  /** Elementos revisados por R11 (para el test de que el cruce no recorre la hoja). */
+  get revisadosR11(): number {
+    return this._revisadosR11;
+  }
+
+  /** Veces que R11 se calculó en la hoja entera. */
+  get pasadasR11Hoja(): number {
+    return this._pasadasR11Hoja;
+  }
+
+  /** ms de la última pasada de R11 en vivo, 0 si nunca corrió. */
+  get msUltimaR11(): number {
+    return this._msUltimaR11;
+  }
+
+  /** ms de trabajo de R11 en reposo, sumados desde que se abrió (sin las esperas entre tramos). */
+  get msTrabajoR11(): number {
+    return this._msTrabajoR11;
+  }
+
+  /** True si el componente lleva el contorno de aviso (R1 a R6, R9 o R10). */
   conContorno(id: string): boolean {
-    return this.etiqueta.has(id) || this.r6.has(id);
+    return this.etiqueta.has(id) || this.r6.has(id) || this.r10.has(id);
+  }
+
+  /** Dónde se marcan los R11 del elemento: x, y seguidos (para el anillo). */
+  puntosR11(id: string): number[] {
+    const salida: number[] = [];
+    for (const a of this.r11.get(id) ?? NINGUNO) if (a.regla === "R11") salida.push(a.x, a.y);
+    return salida;
   }
 
   /** Los bornes sin cable del componente (R7), en el orden de su definición. */
@@ -388,14 +528,19 @@ export class AvisosHoja {
     return l ? l.map((a) => (a as Extract<Aviso, { regla: "R7" }>).borne) : [];
   }
 
-  /** Los avisos de un componente o un cable, en el orden de `validar`. */
+  /** Los avisos de un componente o un cable, en el orden de `validar` y después R11. */
   de(id: string): readonly Aviso[] {
-    const w = this.r8.get(id);
-    if (w) return [w];
+    const r11 = this.r11.get(id);
+    if (this.cables.has(id)) {
+      const w = this.r8.get(id);
+      if (!r11) return w ? [w] : NINGUNO;
+      return w ? [w, ...r11] : r11;
+    }
     const etiqueta = this.etiqueta.get(id);
     const r6 = this.r6.get(id);
     const r7 = this.r7.get(id);
-    if (!etiqueta && !r6 && !r7) return NINGUNO;
+    const r10 = this.r10.get(id);
+    if (!etiqueta && !r6 && !r7 && !r10 && !r11) return NINGUNO;
     const salida: Aviso[] = [];
     let r9: Aviso | undefined;
     for (const a of etiqueta ?? NINGUNO) {
@@ -405,6 +550,8 @@ export class AvisosHoja {
     if (r6) salida.push(r6);
     if (r7) salida.push(...r7);
     if (r9) salida.push(r9);
+    if (r10) salida.push(r10);
+    if (r11) salida.push(...r11);
     return salida;
   }
 
@@ -414,10 +561,7 @@ export class AvisosHoja {
     if (!h) return [];
     const salida: Aviso[] = [];
     for (const c of h.componentes) salida.push(...this.de(c.id));
-    for (const w of h.cables) {
-      const a = this.r8.get(w.id);
-      if (a) salida.push(a);
-    }
+    for (const w of h.cables) salida.push(...this.de(w.id));
     return salida;
   }
 
@@ -448,6 +592,7 @@ export class AvisosHoja {
       etiquetas = true;
       if (g) {
         this.sacarDeGrupo(id, g);
+        this.sacarFase(id, g);
         if (g.e !== "") tocadas.add(g.e);
       }
       // Los bornes de otro tipo, o de un componente que llega o se va.
@@ -473,9 +618,13 @@ export class AvisosHoja {
         }
       }
       this.ponerEnGrupo(id, n);
+      this.ponerFase(id, n);
       if (n.e !== "") tocadas.add(n.e);
       recalcular.add(id);
     }
+
+    // Los componentes con otros bornes (llegan, se van o cambian de tipo): sus cables cambian de red (R11-A).
+    const conOtrosBornes = [...r7];
 
     // Cables: agregados, borrados o con otros extremos. Con candidatos de R6,
     // el índice de vecinos sigue a cada cable y se juntan las semillas.
@@ -510,6 +659,9 @@ export class AvisosHoja {
       const libre = w !== undefined && (w.desde.tipo === "libre" || w.hasta.tipo === "libre");
       if (this.ponerR8(id, libre)) ids.add(id);
     }
+    // R11-A: los cables de los componentes con otros bornes también siembran.
+    if (v) for (const id of conOtrosBornes) for (const k of v.porComp.get(id) ?? []) this.semillasCables.push(k);
+    this.uneR11 = une || conOtrosBornes.length > 0;
     // Los que cuelgan en T de un cable del cambio, cada uno por su lado (si el anfitrión ya no está, no los une).
     if (v) {
       for (let i = 0, n = this.semillasCables.length; i < n; i++) {
@@ -524,6 +676,10 @@ export class AvisosHoja {
 
     if (etiquetas) {
       for (const id of this.etiquetasDe(h, recalcular, tocadas, quitados, cambio.componente)) {
+        ids.add(id);
+        contornos.add(id);
+      }
+      for (const id of this.calcularR10()) {
         ids.add(id);
         contornos.add(id);
       }
@@ -603,7 +759,7 @@ export class AvisosHoja {
   private ponerEtiqueta(id: string, actuales: readonly Aviso[]): boolean {
     const viejos = this.etiqueta.get(id) ?? NINGUNO;
     if (mismos(viejos, actuales)) return false;
-    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, viejos.length > 0 || this.r6.has(id));
+    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, this.conContorno(id));
     this.contar(viejos, -1);
     this.contar(actuales, 1);
     if (actuales.length > 0) this.etiqueta.set(id, actuales);
@@ -676,11 +832,442 @@ export class AvisosHoja {
     return cambiados;
   }
 
+  // ── R10 ────────────────────────────────────────────────────────────────
+
+  /** R10 de las Fases «L» (pocas): todas, con cada cambio de etiquetas. Devuelve los ids cuyo R10 cambió. */
+  private calcularR10(): Set<string> {
+    const otras = otrasFasesR10((n) => this.numeradas.has(n));
+    const cambiados = new Set<string>();
+    for (const id of [...this.r10.keys()]) if (!this.fasesL.has(id) && this.ponerR10(id, undefined)) cambiados.add(id);
+    for (const id of this.fasesL) {
+      if (this.ponerR10(id, otras === "" ? undefined : { regla: "R10", severidad: "aviso", id, otras })) cambiados.add(id);
+    }
+    return cambiados;
+  }
+
+  /** R10 de una Fase (undefined: no la marca). Devuelve true si cambió. */
+  private ponerR10(id: string, actual: Aviso | undefined): boolean {
+    const viejo = this.r10.get(id);
+    if (viejo === undefined ? actual === undefined : actual !== undefined && mismoAviso(viejo, actual)) return false;
+    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, this.conContorno(id));
+    if (viejo) this.contar([viejo], -1);
+    if (actual) {
+      this.contar([actual], 1);
+      this.r10.set(id, actual);
+    } else {
+      this.r10.delete(id);
+    }
+    return true;
+  }
+
+  // ── R11 ────────────────────────────────────────────────────────────────
+
+  /**
+   * R11 en la hoja entera al abrir (H-A), en reposo: el editor la llama cuando
+   * la escena ya tiene todo (la consulta es su índice espacial). Los avisos
+   * aparecen al terminar (`alTerminarR11`).
+   */
+  iniciarR11(indice: IndiceHoja, consulta: ConsultaTrazado): void {
+    if (!this.hojaActual()) return;
+    this.acumularR11(new Set(), new Set(), indice, consulta, true);
+  }
+
+  /**
+   * R11 después de un comando, con la escena ya al día: `componentes` y
+   * `cables` son los ids del cambio (estén o no en la hoja). Hasta
+   * `UMBRAL_R11_EN_VIVO` elementos, y sin un cálculo en reposo pendiente, en
+   * vivo (I-A): devuelve qué cambió. Si no, se suma a lo pendiente, el cálculo
+   * vuelve a empezar con todo lo acumulado y esto devuelve nada; los avisos
+   * llegan al terminar (`alTerminarR11`). Sin contornos: R11 se ve en el
+   * panel, en la cuenta y en el anillo de la selección.
+   */
+  reflejarR11(componentes: ReadonlySet<string>, cables: ReadonlySet<string>, indice: IndiceHoja, consulta: ConsultaTrazado): CambioAvisos {
+    const h = this.hojaActual();
+    if (!h || (componentes.size === 0 && cables.size === 0)) return SIN_CAMBIOS;
+    if (this.pendienteR11 || componentes.size + cables.size > this.umbralR11) {
+      this.acumularR11(componentes, cables, indice, consulta, false);
+      return SIN_CAMBIOS;
+    }
+    const antes = { errores: this._errores, avisos: this._avisos };
+    const t0 = performance.now();
+    const afectados = new Set<string>();
+    const ids = new Set<string>();
+    const hoja = this.presentesR11(componentes, cables, indice) * 4 > (h.componentes.length + h.cables.length) * 3;
+    const partes = hoja
+      ? this.r11HojaPorPartes(h, indice, consulta, afectados, ids)
+      : this.r11LocalPorPartes(componentes, cables, indice, consulta, this.uneR11 ? "tocadas" : "ninguna", afectados, ids);
+    while (!partes.next().done);
+    this._msUltimaR11 = performance.now() - t0;
+    this.ajustarVecinos();
+    const cuenta = antes.errores !== this._errores || antes.avisos !== this._avisos;
+    if (ids.size === 0 && !cuenta) return SIN_CAMBIOS;
+    return { contornos: new Set(), ids, cuenta };
+  }
+
+  /** True mientras hay un cálculo de R11 en reposo sin terminar. */
+  get enReposoR11(): boolean {
+    return this.pendienteR11 !== null;
+  }
+
+  /** Tramos corridos por el cálculo en reposo (para los tests). */
+  get tramosR11(): number {
+    return this._tramosR11;
+  }
+
+  /** Termina ya, sin tramos, el cálculo en reposo pendiente (tests y humo). */
+  terminarR11(): void {
+    while (this.pendienteR11) this.correrTramoR11(false);
+  }
+
+  /** Lo del cambio que sigue en la hoja (lo que se va solo saca sus pares). */
+  private presentesR11(componentes: ReadonlySet<string>, cables: ReadonlySet<string>, indice: IndiceHoja): number {
+    let n = 0;
+    for (const id of componentes) if (indice.componentes.has(id)) n++;
+    for (const id of cables) if (indice.cables.has(id)) n++;
+    return n;
+  }
+
+  /** Suma el cambio a lo pendiente y vuelve a empezar el cálculo en reposo (con todo lo acumulado). */
+  private acumularR11(componentes: ReadonlySet<string>, cables: ReadonlySet<string>, indice: IndiceHoja, consulta: ConsultaTrazado, hoja: boolean): void {
+    const h = this.hojaActual()!;
+    const p = (this.pendienteR11 ??= { componentes: new Set(), cables: new Set(), hoja: false, une: false, indice, consulta });
+    if (!this.cuentaAntesR11) this.cuentaAntesR11 = { errores: this._errores, avisos: this._avisos };
+    for (const id of componentes) p.componentes.add(id);
+    for (const id of cables) p.cables.add(id);
+    p.indice = indice;
+    p.consulta = consulta;
+    p.une ||= this.uneR11 || hoja;
+    p.hoja ||= hoja || this.presentesR11(p.componentes, p.cables, indice) * 4 > (h.componentes.length + h.cables.length) * 3;
+    this.trabajoR11 = null;
+    this.programarTramoR11();
+  }
+
+  private programarTramoR11(): void {
+    if (this.tramoProgramadoR11) return;
+    this.tramoProgramadoR11 = true;
+    this.programarR11(() => {
+      this.tramoProgramadoR11 = false;
+      this.correrTramoR11(true);
+    });
+  }
+
+  /**
+   * Un tramo del cálculo en reposo: hasta `msTramoR11` ms (o `pasosTramoR11`
+   * pasos, en los tests); con `limitado` en false, hasta el final. Si lo
+   * termina, avisa al editor; si no, programa el siguiente.
+   */
+  private correrTramoR11(limitado: boolean): void {
+    const p = this.pendienteR11;
+    const h = this.hojaActual();
+    if (!p || !h) {
+      this.pendienteR11 = null;
+      return;
+    }
+    this._tramosR11++;
+    this.trabajoR11 ??= p.hoja
+      ? this.r11HojaPorPartes(h, p.indice, p.consulta, this.afectadosR11, this.cambiadosR11)
+      : this.r11LocalPorPartes(p.componentes, p.cables, p.indice, p.consulta, p.une ? "todas" : "ninguna", this.afectadosR11, this.cambiadosR11);
+    const t0 = performance.now();
+    let pasos = 0;
+    for (;;) {
+      if (this.trabajoR11.next().done) break;
+      pasos++;
+      if (!limitado) continue;
+      if (this.pasosTramoR11 !== undefined ? pasos >= this.pasosTramoR11 : performance.now() - t0 >= this.msTramoR11) {
+        this._msTrabajoR11 += performance.now() - t0;
+        this.programarTramoR11();
+        return;
+      }
+    }
+    this._msTrabajoR11 += performance.now() - t0;
+    // Terminado: lo acumulado ya está, y los avisos aparecen ahora.
+    this.pendienteR11 = null;
+    this.trabajoR11 = null;
+    this.ajustarVecinos();
+    const antes = this.cuentaAntesR11!;
+    this.cuentaAntesR11 = null;
+    const ids = new Set(this.cambiadosR11);
+    this.cambiadosR11.clear();
+    this.afectadosR11.clear();
+    const cuenta = antes.errores !== this._errores || antes.avisos !== this._avisos;
+    if (ids.size > 0 || cuenta) this.alTerminarR11?.({ contornos: new Set(), ids, cuenta });
+  }
+
+  /**
+   * R11 en la hoja entera, desde cada elemento, por partes (un paso por
+   * elemento o por 64 pares). Suma a `cambiados` los ids cuyo R11 cambió.
+   */
+  private *r11HojaPorPartes(h: Hoja, indice: IndiceHoja, consulta: ConsultaTrazado, afectados: Set<string>, cambiados: Set<string>): Generator<void, void, void> {
+    this._pasadasR11Hoja++;
+    for (const id of this.r11.keys()) afectados.add(id);
+    this.pares.clear();
+    this.paresDe.clear();
+    this.entreCables.clear();
+    const comps = [...h.componentes];
+    const cabs = [...h.cables];
+    const lista: Aparente[] = [];
+    for (const c of comps) {
+      this._revisadosR11++;
+      aparentesDeComponente(c, consulta, lista);
+      yield;
+    }
+    for (const w of cabs) {
+      this._revisadosR11++;
+      aparentesDeCable(w, indice, consulta, lista);
+      yield;
+    }
+    const mismaRed = this.mismaRed();
+    let n = 0;
+    for (const ap of lista) {
+      if (this.pares.has(ap.k)) continue;
+      this.ponerPar(ap, afectados, mismaRed);
+      if (++n % 64 === 0) yield;
+    }
+    // Los encimados entre cables se vuelven a mirar con los cambios: hacen falta los vecinos.
+    if (this.entreCables.size > 0) this.vecinos ??= this.armarVecinos();
+    yield* this.ponerAfectadosPorPartes(afectados, cambiados);
+  }
+
+  /**
+   * R11 de lo que cambió, por partes: se sacan los pares con algo del cambio
+   * y se buscan de nuevo desde lo del cambio y desde lo que la consulta tiene
+   * cerca (un par puede verse solo desde el otro lado). Los pares sin nada del
+   * cambio no se mueven: su geometría y sus extremos son los de antes. R11-A
+   * vuelve a mirar los encimados entre cables que quedan: en las redes
+   * tocadas por el último `reflejar` (en vivo), en todas (en reposo, con
+   * varios cambios acumulados) o en ninguna (no cambió lo que une la hoja).
+   */
+  private *r11LocalPorPartes(
+    componentes: ReadonlySet<string>,
+    cables: ReadonlySet<string>,
+    indice: IndiceHoja,
+    consulta: ConsultaTrazado,
+    redes: "tocadas" | "todas" | "ninguna",
+    afectados: Set<string>,
+    cambiados: Set<string>,
+  ): Generator<void, void, void> {
+    const delCambio = new Set<string>([...componentes, ...cables]);
+    let n = 0;
+    for (const id of delCambio) {
+      const ks = this.paresDe.get(id);
+      if (!ks) continue;
+      for (const k of [...ks]) {
+        this.quitarPar(k, afectados);
+        if (++n % 64 === 0) yield;
+      }
+    }
+    const revisar = new Set<string>();
+    for (const id of componentes) if (indice.componentes.has(id)) revisar.add(id);
+    for (const id of cables) if (indice.cables.has(id)) revisar.add(id);
+    for (const id of [...revisar]) {
+      this.sumarCercanos(id, indice, consulta, revisar);
+      if (++n % 16 === 0) yield;
+    }
+    const lista: Aparente[] = [];
+    for (const id of revisar) {
+      this._revisadosR11++;
+      const c = indice.componentes.get(id);
+      if (c) aparentesDeComponente(c, consulta, lista);
+      else {
+        const w = indice.cables.get(id);
+        if (w) aparentesDeCable(w, indice, consulta, lista);
+      }
+      yield;
+    }
+    const mismaRed = this.mismaRed();
+    const nuevos = new Set<string>();
+    for (const ap of lista) {
+      if (!(delCambio.has(ap.a) || delCambio.has(ap.b)) || this.pares.has(ap.k)) continue;
+      this.ponerPar(ap, afectados, mismaRed);
+      nuevos.add(ap.k);
+      if (++n % 64 === 0) yield;
+    }
+    if (redes !== "ninguna" && this.entreCables.size > 0) {
+      const tocados = redes === "tocadas" ? this.cablesTocados() : null;
+      for (const k of [...this.entreCables]) {
+        if (nuevos.has(k)) continue;
+        const p = this.pares.get(k)!;
+        if (tocados && !tocados.has(p.ap.a) && !tocados.has(p.ap.b)) continue;
+        const oculto = mismaRed(p.ap.a, p.ap.b);
+        if (oculto !== p.oculto) {
+          p.oculto = oculto;
+          afectados.add(p.ap.a);
+          afectados.add(p.ap.b);
+        }
+        if (++n % 64 === 0) yield;
+      }
+    }
+    yield* this.ponerAfectadosPorPartes(afectados, cambiados);
+  }
+
+  /** Suma a `revisar` lo que la consulta tiene cerca de un elemento del cambio (con el índice espacial, nunca la hoja entera). */
+  private sumarCercanos(id: string, indice: IndiceHoja, consulta: ConsultaTrazado, revisar: Set<string>): void {
+    const c = indice.componentes.get(id);
+    if (c) {
+      cercanos({ componente: c }, consulta, revisar);
+      return;
+    }
+    const w = indice.cables.get(id);
+    if (w) cercanos({ cable: w, indice }, consulta, revisar);
+  }
+
+  private ponerPar(ap: Aparente, afectados: Set<string>, mismaRed: (a: string, b: string) => boolean): void {
+    const oculto = ap.entreCables && mismaRed(ap.a, ap.b);
+    this.pares.set(ap.k, { ap, oculto });
+    sumarA(this.paresDe, ap.a, ap.k);
+    sumarA(this.paresDe, ap.b, ap.k);
+    if (ap.entreCables) this.entreCables.add(ap.k);
+    afectados.add(ap.a);
+    afectados.add(ap.b);
+  }
+
+  private quitarPar(k: string, afectados: Set<string>): void {
+    const p = this.pares.get(k);
+    if (!p) return;
+    this.pares.delete(k);
+    sacarDe(this.paresDe, p.ap.a, k);
+    sacarDe(this.paresDe, p.ap.b, k);
+    this.entreCables.delete(k);
+    afectados.add(p.ap.a);
+    afectados.add(p.ap.b);
+  }
+
+  /**
+   * Rehace los avisos R11 de cada id afectado con sus pares visibles, de a
+   * 64, y lo saca de `afectados` (si el cálculo vuelve a empezar, los que
+   * faltan siguen ahí). Suma a `cambiados` los que cambiaron.
+   */
+  private *ponerAfectadosPorPartes(afectados: Set<string>, cambiados: Set<string>): Generator<void, void, void> {
+    let n = 0;
+    for (const id of afectados) {
+      const visibles: Aparente[] = [];
+      for (const k of this.paresDe.get(id) ?? []) {
+        const p = this.pares.get(k)!;
+        if (!p.oculto) visibles.push(p.ap);
+      }
+      if (this.ponerR11(id, visibles.length > 0 ? avisosR11De(id, visibles) : NINGUNO)) cambiados.add(id);
+      afectados.delete(id);
+      if (++n % 64 === 0) yield;
+    }
+  }
+
+  /** R11 de un elemento. Devuelve true si cambió. */
+  private ponerR11(id: string, nuevos: readonly Aviso[]): boolean {
+    const viejos = this.r11.get(id) ?? NINGUNO;
+    if (mismos(viejos, nuevos)) return false;
+    this.contar(viejos, -1);
+    this.contar(nuevos, 1);
+    if (nuevos.length > 0) this.r11.set(id, nuevos);
+    else this.r11.delete(id);
+    return true;
+  }
+
+  /**
+   * R11-A sin `redes()` de la hoja: si dos cables están en la misma red. La
+   * primera vez que se pregunta por un cable se recorre solo su red, como
+   * `redes()` sin unir por nombre (un extremo libre o hacia algo que no está
+   * no une; la geometría no cuenta), y todos sus cables quedan con el mismo
+   * número: cada red se recorre a lo sumo una vez por cálculo (si la hoja
+   * cambia en el medio, el cálculo vuelve a empezar). Usa los vecinos de R6
+   * (los arma si no están). El costo es el de las redes preguntadas.
+   */
+  private mismaRed(): (a: string, b: string) => boolean {
+    const red = new Map<string, number>();
+    let n = 0;
+    return (a, b) => {
+      if (a === b) return true;
+      let x = red.get(a);
+      if (x === undefined) {
+        const vistos = new Set<string>();
+        this.recorrerCables([a], [null], null, vistos);
+        x = n++;
+        red.set(a, x);
+        for (const id of vistos) red.set(id, x);
+      }
+      return red.get(b) === x;
+    };
+  }
+
+  /**
+   * Los cables de las redes tocadas por el último `reflejar` (sus semillas,
+   * las de R6): toda red que cambió contiene alguna. Para R11-A.
+   */
+  private cablesTocados(): Set<string> {
+    const colaA: string[] = [];
+    const colaB: (string | null)[] = [];
+    const sb = this.semillasBornes;
+    for (let i = 0; i < sb.length; i += 2) {
+      colaA.push(sb[i]!);
+      colaB.push(sb[i + 1]!);
+    }
+    for (const id of this.semillasCables) {
+      colaA.push(id);
+      colaB.push(null);
+    }
+    const vistos = new Set<string>();
+    this.recorrerCables(colaA, colaB, null, vistos);
+    return vistos;
+  }
+
+  /**
+   * Recorre las redes desde la cola (cables, o bornes de componente) como
+   * `redes()` sin unir por nombre, sumando los cables a `cablesVistos`. Con
+   * `objetivo`, corta y da true al llegar a ese cable.
+   */
+  private recorrerCables(colaA: string[], colaB: (string | null)[], objetivo: string | null, cablesVistos: Set<string>): boolean {
+    const v = (this.vecinos ??= this.armarVecinos());
+    const bornesVistos = new Set<string>();
+    while (colaA.length > 0) {
+      const x = colaA.pop()!;
+      const y = colaB.pop()!;
+      if (y === null) {
+        if (x === objetivo) return true;
+        if (cablesVistos.has(x)) continue;
+        const g = this.cables.get(x);
+        if (!g) continue;
+        cablesVistos.add(x);
+        if (g.dTipo !== "libre") {
+          colaA.push(g.dA);
+          colaB.push(g.dTipo === "borne" ? g.dB : null);
+        }
+        if (g.hTipo !== "libre") {
+          colaA.push(g.hA);
+          colaB.push(g.hTipo === "borne" ? g.hB : null);
+        }
+        const hijos = v.colgados.get(x);
+        if (hijos) {
+          for (const k of hijos) {
+            colaA.push(k);
+            colaB.push(null);
+          }
+        }
+        continue;
+      }
+      const clave = `${x}\u0000${y}`;
+      if (bornesVistos.has(clave)) continue;
+      bornesVistos.add(clave);
+      const def = this.comps.get(x)?.def;
+      if (!def || !def.bornes.some((k) => k.nombre === y)) continue;
+      const cables = v.porComp.get(x);
+      if (!cables) continue;
+      for (const k of cables) {
+        const g = this.cables.get(k)!;
+        if ((g.dTipo === "borne" && g.dA === x && g.dB === y) || (g.hTipo === "borne" && g.hA === x && g.hB === y)) {
+          colaA.push(k);
+          colaB.push(null);
+        }
+      }
+    }
+    return false;
+  }
+
+  // ── R6 ─────────────────────────────────────────────────────────────────
+
   /** R6 de un NC (undefined: no lo marca). Devuelve true si cambió. */
   private ponerR6(id: string, actual: Aviso | undefined): boolean {
     const viejo = this.r6.get(id);
     if (viejo === undefined ? actual === undefined : actual !== undefined && mismoAviso(viejo, actual)) return false;
-    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, viejo !== undefined || this.etiqueta.has(id));
+    if (!this.conContornoAntes.has(id)) this.conContornoAntes.set(id, this.conContorno(id));
     if (viejo) this.contar([viejo], -1);
     if (actual) {
       this.contar([actual], 1);

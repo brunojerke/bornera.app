@@ -130,7 +130,7 @@ import { HerramientaPegar } from "./herramientas/pegar";
 import { EtiquetasHoja } from "./armarEtiquetas";
 import { ReferenciasHoja } from "./referenciasHoja";
 import { BornesConCable } from "./bornesConCable";
-import { AvisosHoja } from "./avisosHoja";
+import { AvisosHoja, type CambioAvisos, type OpcionesR11 } from "./avisosHoja";
 import type { Aviso } from "../core/model/validaciones";
 import { Uniones } from "./uniones";
 import { ConsultaEscena } from "./consultaEscena";
@@ -460,7 +460,7 @@ export class Editor {
   readonly avisos: AvisosHoja;
   /** Se avisa cuando cambia la cuenta de errores y avisos (para la barra de estado). */
   alCambiarAvisos: (() => void) | null = null;
-  /** Anillos de la selección única (R7 y R8): x, y seguidos, y de qué cambio y selección son. */
+  /** Anillos de la selección única (R7, R8 y R11): x, y seguidos, y de qué cambio y selección son. */
   private anillos: { clave: string; puntos: number[] } = { clave: "", puntos: [] };
   /** La nota del último renombrado, con el id del componente; se borra con el próximo cambio o selección. */
   private notaRenombre: { id: string; nota: NotaRenombre } | null = null;
@@ -471,8 +471,11 @@ export class Editor {
     readonly documento: Documento = documentoNuevo(),
     /** Índice de la hoja que se dibuja. */
     readonly hoja = 0,
-    /** `modificado`: una copia recuperada, con cambios sin guardar y sin nada que deshacer (T23, D7). */
-    opciones: OpcionesHistorial = {},
+    /**
+     * `modificado`: una copia recuperada, con cambios sin guardar y sin nada que deshacer (T23, D7).
+     * `r11`: cómo va R11 en reposo (los tests cambian el umbral y quién programa los tramos).
+     */
+    opciones: OpcionesHistorial & { r11?: OpcionesR11 } = {},
   ) {
     this.historial = new Historial(documento, opciones);
     this.etiquetas = new EtiquetasHoja(documento, hoja);
@@ -480,7 +483,7 @@ export class Editor {
     const h = documento.hojas[hoja];
     this.bornesConCable = new BornesConCable(h?.cables ?? []);
     // Antes de la escena: `aEscena` toma de acá qué componentes llevan contorno.
-    this.avisos = new AvisosHoja(documento, hoja, this.bornesConCable);
+    this.avisos = new AvisosHoja(documento, hoja, this.bornesConCable, opciones.r11);
     for (const c of this.componentesHoja()) this.escena.agregar(c.id, this.aEscena(c));
     const indice = h ? indexarHoja(h) : { componentes: new Map<string, Componente>(), cables: new Map<string, Cable>() };
     this.indiceHoja = { componentes: new Map(indice.componentes), cables: new Map(indice.cables) };
@@ -493,6 +496,9 @@ export class Editor {
       }
     }
     for (const u of this.uniones.todas()) this.escena.ponerUnion(u);
+    // R11 (T29): con la escena armada, la hoja entera por su índice espacial, en reposo (D6-A). Sin contornos que rehacer.
+    this.avisos.alTerminarR11 = (c) => this.alTerminarR11(c);
+    this.avisos.iniciarR11(this.indiceHoja, this.consulta);
     this.seleccionar = new HerramientaSeleccionar(
       this.escena,
       () => this._seleccion,
@@ -1668,6 +1674,8 @@ export class Editor {
         for (const b of bornesColocados(c.def.bornes, c.x, c.y, c)) if (sueltos.includes(b.nombre)) puntos.push(b.x, b.y);
       }
     }
+    // R11 (T29): un anillo en cada conexión aparente del elemento.
+    puntos.push(...this.avisos.puntosR11(id));
     this.anillos = { clave, puntos };
     return puntos;
   }
@@ -1824,6 +1832,8 @@ export class Editor {
         }
       }
     }
+    // R11 (T29, I-A): con la escena y su índice ya al día, lo del cambio contra lo que tiene cerca.
+    const r11 = this.avisos.reflejarR11(ids, idsCables, this.indiceHoja, this.consulta);
     // Lo seleccionado que ya no está (se borró, o se deshizo su Colocar) sale de la selección.
     if (quitados) {
       const nueva = new Set(this._seleccion);
@@ -1833,13 +1843,29 @@ export class Editor {
     // Los avisos de algo seleccionado cambiaron sin que el cambio lo nombre (cablear la bobina seleccionada):
     // el panel muestra las notas nuevas y el anillo se rehace.
     if (!tocaSeleccion) for (const id of avisos.ids) if (this._seleccion.has(id)) tocaSeleccion = true;
+    if (!tocaSeleccion) for (const id of r11.ids) if (this._seleccion.has(id)) tocaSeleccion = true;
     if (tocaSeleccion) {
       this.alCambiarSeleccion?.();
       // El resaltado se mueve con el componente, aunque su región no esté en pantalla.
       this.vista?.invalidar();
     }
-    if (avisos.cuenta) this.alCambiarAvisos?.();
+    if (avisos.cuenta || r11.cuenta) this.alCambiarAvisos?.();
     return this.trasReflejar(cambio);
+  }
+
+  /**
+   * Terminó R11 en reposo (T29, D6-A): los avisos aparecen ahora. Si tocan lo
+   * seleccionado, el panel y el anillo se rehacen; si cambió la cuenta, la barra.
+   */
+  private alTerminarR11(c: CambioAvisos): void {
+    let tocaSeleccion = false;
+    for (const id of c.ids) if (this._seleccion.has(id)) tocaSeleccion = true;
+    if (tocaSeleccion) {
+      this.anillos = { clave: "", puntos: [] };
+      this.alCambiarSeleccion?.();
+      this.vista?.invalidar();
+    }
+    if (c.cuenta) this.alCambiarAvisos?.();
   }
 
   /** Después de un cambio, la herramienta cable vuelve a mirar qué hay bajo el cursor. */

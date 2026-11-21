@@ -25,6 +25,11 @@
 // - R7. Borne de un símbolo conocido sin ningún extremo de cable.
 // - R8. Cable con algún extremo libre.
 // - R9. Fuente sin etiqueta: no da nombre de red.
+// - R10 (T29). Fase «L» en una hoja con alguna Fase «L1», «L2» o «L3», por
+//   etiqueta normalizada («l1» cuenta como «L1»). Para Bornera son fases
+//   distintas (D7). Marca cada Fase «L».
+// - R11 (T29). Conexión aparente que ya está en la hoja. Necesita la
+//   geometría: no la da `validar` sino `avisosR11` (src/core/model/aparentes.ts).
 //
 // `validar(hoja, reglas)` con un subconjunto da lo mismo que filtrar el
 // resultado completo: cada regla se decide sola (R5 mira la condición de R4
@@ -38,10 +43,10 @@ import { redes } from "./redes";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 
-export type Regla = "R1" | "R2" | "R3" | "R4" | "R5" | "R6" | "R7" | "R8" | "R9";
+export type Regla = "R1" | "R2" | "R3" | "R4" | "R5" | "R6" | "R7" | "R8" | "R9" | "R10" | "R11";
 
-/** Todas las reglas, en su orden. */
-export const TODAS: readonly Regla[] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"];
+/** Las reglas de `validar`, en su orden. R11 va aparte (`avisosR11`): necesita la geometría. */
+export const TODAS: readonly Regla[] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"];
 
 export type Severidad = "error" | "aviso";
 
@@ -61,7 +66,14 @@ export type Aviso =
   | { readonly regla: "R6"; readonly severidad: "aviso"; readonly id: string; readonly etiqueta: string }
   | { readonly regla: "R7"; readonly severidad: "aviso"; readonly id: string; readonly borne: string }
   | { readonly regla: "R8"; readonly severidad: "aviso"; readonly id: string }
-  | { readonly regla: "R9"; readonly severidad: "aviso"; readonly id: string };
+  | { readonly regla: "R9"; readonly severidad: "aviso"; readonly id: string }
+  /** `otras`: las fases L1, L2 o L3 de la hoja, como se muestran ("L1 y L3"). */
+  | { readonly regla: "R10"; readonly severidad: "aviso"; readonly id: string; readonly otras: string }
+  /** `tipo`: el del conflicto (`TipoAparente`); `x`, `y`: dónde se marca. */
+  | { readonly regla: "R11"; readonly severidad: "aviso"; readonly id: string; readonly tipo: TipoAparente; readonly x: number; readonly y: number };
+
+/** Los conflictos de `problemasTrazado` y `problemasComponente` que son conexiones aparentes (R11). */
+export type TipoAparente = "borne" | "borneBorne" | "borneSuelto" | "cruce" | "cuerpo" | "cuerpoCuerpo" | "encimado" | "suelto" | "toca";
 
 /** Nombre de un símbolo que no está en la biblioteca: el mismo que dibuja el editor (`SIMBOLO_DESCONOCIDO`). */
 const NOMBRE_DESCONOCIDO = "Símbolo desconocido";
@@ -106,6 +118,36 @@ const DUENOS_PREFIJO: ReadonlyMap<string, string> = (() => {
   }
   return m;
 })();
+
+/** El tipo de la Fase (R10). */
+const FASE = "fuente.fase";
+
+/** Las fases numeradas de R10. */
+const FASES_NUMERADAS: readonly string[] = ["L1", "L2", "L3"];
+
+/** "L1", "L1 y L2", "L1, L2 y L3". */
+export function listaY(nombres: readonly string[]): string {
+  if (nombres.length <= 1) return nombres.join("");
+  return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
+
+/**
+ * R10: el texto de las fases numeradas de la hoja ("L1 y L3"), o "" si no hay
+ * ninguna. `presentes` son etiquetas normalizadas de fases.
+ */
+export function otrasFasesR10(presentes: (nombre: string) => boolean): string {
+  return listaY(FASES_NUMERADAS.filter(presentes));
+}
+
+/** True si el componente es una Fase con etiqueta normalizada `e` igual a «L» (la que marca R10). */
+export function esFaseL(tipo: string, e: string): boolean {
+  return tipo === FASE && e === "L";
+}
+
+/** True si es una Fase L1, L2 o L3 (las que hacen saltar R10). */
+export function esFaseNumerada(tipo: string, e: string): boolean {
+  return tipo === FASE && FASES_NUMERADAS.includes(e);
+}
 
 /** Etiqueta numerada: letras y número ("K01" es K y 1). La misma forma que numera T17. */
 const NUMERADA = /^([A-Z]+)(\d+)$/;
@@ -155,6 +197,12 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
   // R4 (y la condición de R5): se decide por grupo.
   const repetidas = activas.has("R4") || activas.has("R5") ? titularesRepetidos(datos, titulares) : new Map<number, Repetida>();
   const marcadosR6 = activas.has("R6") ? ncEnSuRama(hoja, datos, etiquetasBobina) : new Set<string>();
+  let otrasR10 = "";
+  if (activas.has("R10")) {
+    const numeradas = new Set<string>();
+    for (const { c, e } of datos) if (esFaseNumerada(c.tipo, e)) numeradas.add(e);
+    otrasR10 = otrasFasesR10((n) => numeradas.has(n));
+  }
 
   let conCable: Set<string> | null = null;
   if (activas.has("R7")) {
@@ -184,6 +232,7 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
       for (const b of def.bornes) if (!conCable.has(clave(id, b.nombre))) avisos.push({ regla: "R7", severidad: "aviso", id, borne: b.nombre });
     }
     if (activas.has("R9") && def !== undefined && esFuente(def) && e === "") avisos.push({ regla: "R9", severidad: "aviso", id });
+    if (otrasR10 !== "" && esFaseL(c.tipo, e)) avisos.push({ regla: "R10", severidad: "aviso", id, otras: otrasR10 });
   }
 
   if (activas.has("R8")) {
@@ -289,6 +338,19 @@ export function textoRepetida(nombreOtro: string, etiqueta: string): string {
   return `${esFemenino(nombreOtro) ? "Otra" : "Otro"} ${enMinuscula(nombreOtro)} ya se llama ${etiqueta}.`;
 }
 
+/** R11: qué se ve, en presente (los mensajes de la previa van en condicional). */
+const TEXTO_APARENTE: Readonly<Record<TipoAparente, string>> = {
+  borne: "Conexión aparente: un cable pasa sobre un borne sin conectarse.",
+  borneBorne: "Conexión aparente: dos bornes encimados sin conectarse.",
+  borneSuelto: "Conexión aparente: un borne sobre el extremo suelto de un cable.",
+  cruce: "Conexión aparente: dos cables se cruzan en una T sin unirse.",
+  cuerpo: "Conexión aparente: un cable atraviesa el cuerpo de un símbolo.",
+  cuerpoCuerpo: "Conexión aparente: dos símbolos encimados.",
+  encimado: "Conexión aparente: dos cables encimados.",
+  suelto: "Conexión aparente: un cable pasa por el extremo suelto de otro.",
+  toca: "Conexión aparente: un cable toca otro sin conectarse.",
+};
+
 /** La línea que se muestra de un aviso (en la barra o en el panel). */
 export function textoAviso(a: Aviso): string {
   switch (a.regla) {
@@ -310,6 +372,10 @@ export function textoAviso(a: Aviso): string {
       return "Cable con un extremo suelto.";
     case "R9":
       return "Alimentación sin nombre de red.";
+    case "R10":
+      return `Fase L junto con ${a.otras}: para Bornera son fases distintas.`;
+    case "R11":
+      return TEXTO_APARENTE[a.tipo];
   }
 }
 

@@ -10,7 +10,8 @@ import { indexarHoja, puntoExtremo, recorridoCable } from "../core/model/cables"
 import { Borrar, CambiarEtiqueta, CambiarExtremo, cablear, colocar, Espejar, Grupo, Mover, Rotar, type Comando } from "../core/model/comandos";
 import type { Componente, Documento, Extremo, Hoja } from "../core/model/documento";
 import type { Historial } from "../core/model/historial";
-import { recortar } from "../core/model/portapapeles";
+import { pegar, recortar } from "../core/model/portapapeles";
+import { aparentesHoja, avisosR11, juntarConR11, mismaRedPorRedes } from "../core/model/aparentes";
 import { contarAvisos, validar, type Aviso } from "../core/model/validaciones";
 import { buscarSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
@@ -18,7 +19,7 @@ import type { Colores } from "../render/capas";
 import { RADIO_ANILLO } from "../render/resaltado";
 import type { Renderer } from "../render/renderer";
 import { cajaDibujo } from "../render/simbolo";
-import { AvisosHoja } from "./avisosHoja";
+import { AvisosHoja, MS_TRAMO_R11, type OpcionesR11 } from "./avisosHoja";
 import { documentoBanco, documentoBancoCables } from "./banco";
 import { documentoNuevo, Editor, type DestinoVista } from "./editor";
 import type { EventoHerramienta } from "./herramientas/tipos";
@@ -65,8 +66,13 @@ const MEDIR = (dibujar: () => void): number => {
 };
 const TODO: Caja = { x: -1e6, y: -1e6, ancho: 2e6, alto: 2e6 };
 
-function armar(doc: Documento = documentoNuevo()) {
-  const editor = new Editor(doc);
+/**
+ * Un editor de prueba. R11 en reposo (T29, D6-A) no se programa solo: al
+ * abrir se termina acá, y cada test que lo prueba corre sus tramos a mano.
+ */
+function armar(doc: Documento = documentoNuevo(), r11: OpcionesR11 = { programar: () => {} }) {
+  const editor = new Editor(doc, 0, { r11 });
+  editor.avisos.terminarR11();
   const vista = new VistaFalsa();
   editor.vista = vista;
   const h = editor.documento.hojas[0]!;
@@ -87,8 +93,19 @@ function armar(doc: Documento = documentoNuevo()) {
 const b = (comp: string, borne: string): Extremo => ({ tipo: "borne", comp, borne });
 const libre = (x: number, y: number): Extremo => ({ tipo: "libre", x, y });
 
-/** Lleva contorno: algún aviso de etiqueta (R1 a R6 o R9). */
-const deContorno = (a: Aviso) => a.regla !== "R7" && a.regla !== "R8";
+/** Lleva contorno: algún aviso de etiqueta (R1 a R6, R9 o R10). */
+const deContorno = (a: Aviso) => a.regla !== "R7" && a.regla !== "R8" && a.regla !== "R11";
+
+/**
+ * Lo que tiene que mostrar el editor, desde cero: `validar` y R11 (T29), en su
+ * orden. R11 desde cero mira desde cada elemento; con la consulta lineal (la
+ * de las hojas chicas, aparte del editor) es cuadrático, así que las hojas
+ * grandes (2000) usan el índice espacial del editor.
+ */
+function todoDesdeCero(h: Hoja, editor: Editor): Aviso[] {
+  const grande = h.componentes.length + h.cables.length > 300;
+  return juntarConR11(h, validar(h), grande ? avisosR11(h, indexarHoja(h), editor.consulta) : avisosR11(h));
+}
 
 /** La caja de dibujo de un componente, como la tiene la escena. */
 function cajaDe(c: Componente): Caja {
@@ -103,7 +120,7 @@ function cubre(regiones: readonly Caja[], k: Caja): boolean {
 /** Lo que dice el editor (caché, cuenta y escena) contra `validar` desde cero. Devuelve las diferencias. */
 function diferencias(editor: Editor, h: Hoja): string[] {
   const salida: string[] = [];
-  const esperado = validar(h);
+  const esperado = todoDesdeCero(h, editor);
   if (JSON.stringify(editor.avisos.lista()) !== JSON.stringify(esperado)) salida.push("lista");
   if (JSON.stringify(editor.avisos.cuenta) !== JSON.stringify(contarAvisos(esperado))) salida.push("cuenta");
   const conContorno = new Set(esperado.filter(deContorno).map((a) => a.id));
@@ -902,6 +919,317 @@ describe("al azar, con semilla fija, a través del editor (T19)", { timeout: 30_
     let malos = 0;
     recorrer(editor, () => {
       if (diferencias(editor, h).length > 0) malos++;
+    });
+    expect(malos).toBeGreaterThan(0);
+  });
+});
+
+// ── R10 y R11 (T29) ────────────────────────────────────────────────────────
+
+describe("R10 y R11 en el editor (T29)", () => {
+  const r11De = (editor: Editor, id: string) => editor.avisos.de(id).filter((a) => a.regla === "R11");
+
+  /** Dónde queda un borne de un componente de la hoja. */
+  const borneDe = (h: Hoja, comp: string, borne: string) => {
+    const c = h.componentes.find((k) => k.id === comp)!;
+    const d = buscarSimbolo(c.tipo)!.bornes.find((x) => x.nombre === borne)!;
+    return { x: c.x + d.x, y: c.y + d.y };
+  };
+
+  it("R10: una Fase «l1» junto a la «L» marca la «L» con contorno; renombrarla a «N2» lo saca", () => {
+    const mp = marchaParada();
+    const { editor, h, poner } = armar(mp.doc);
+    const otra = poner(FASE, 40, 0, "l1");
+    expect(editor.avisos.de(mp.comp.fase).map((a) => a.regla)).toEqual(["R10"]);
+    expect(editor.escena.obtener(mp.comp.fase)?.conAviso).toBe(true);
+    expect(diferencias(editor, h)).toEqual([]);
+    editor.ejecutar(new CambiarEtiqueta(otra, "N2"));
+    expect(editor.avisos.de(mp.comp.fase)).toEqual([]);
+    expect(editor.escena.obtener(mp.comp.fase)?.conAviso === true).toBe(false);
+    editor.deshacer();
+    expect(editor.avisos.de(mp.comp.fase).map((a) => a.regla)).toEqual(["R10"]);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("R11: al abrir, un cable sobre un borne marca los dos; sacarlo con Mover lo quita, deshacer lo muestra y rehacer lo saca", () => {
+    const a = armar();
+    const l = a.poner(LAMPARA, 0, 0, "H1");
+    const p = borneDe(a.h, l, "X1");
+    a.tender(libre(p.x - 4, p.y), libre(p.x + 4, p.y));
+    // Abrir: un editor nuevo con el mismo documento.
+    const { editor, h } = armar(a.editor.documento);
+    const w = h.cables[0]!.id;
+    expect(r11De(editor, l).map((x) => (x.regla === "R11" ? x.tipo : ""))).toEqual(["borne"]);
+    expect(r11De(editor, w)).toHaveLength(1);
+    expect(diferencias(editor, h)).toEqual([]);
+    let cuentas = 0;
+    editor.alCambiarAvisos = () => cuentas++;
+    editor.ejecutar(new Mover([l], 0, 10));
+    expect(r11De(editor, l)).toEqual([]);
+    expect(r11De(editor, w)).toEqual([]);
+    expect(diferencias(editor, h)).toEqual([]);
+    editor.deshacer();
+    expect(r11De(editor, l)).toHaveLength(1);
+    expect(r11De(editor, w)).toHaveLength(1);
+    expect(diferencias(editor, h)).toEqual([]);
+    editor.rehacer();
+    expect(r11De(editor, l)).toEqual([]);
+    expect(diferencias(editor, h)).toEqual([]);
+    expect(cuentas).toBe(3);
+    expect(editor.avisos.pasadasR11Hoja).toBe(1);
+  });
+
+  it("R11: el panel dice la conexión aparente y el anillo se pone en el borne", () => {
+    const a = armar();
+    const l = a.poner(LAMPARA, 0, 0, "H1");
+    const p = borneDe(a.h, l, "X1");
+    const w = a.tender(libre(p.x - 4, p.y), libre(p.x + 4, p.y));
+    const { editor } = armar(a.editor.documento);
+    editor.seleccionarIds([w]);
+    expect(editor.resumenSeleccion().cable!.avisos.map((x) => x.regla)).toEqual(["R8", "R11"]);
+    const f = rendererFalso();
+    editor.dibujarDinamico(f.r, { escala: 20, colores: COLORES, medir: MEDIR, visible: TODO });
+    const anillos = f.llamadas.filter((x) => x[0] === "circulo" && x[3] === RADIO_ANILLO).map((x) => [x[1], x[2]]);
+    expect(anillos).toContainEqual([p.x, p.y]);
+  });
+
+  it("R11-A: dos cables encimados de redes distintas avisan; un tercer cable que los une (sin tocarlos a ellos) los calla, y deshacer lo vuelve", () => {
+    const { editor, h, tender } = armar();
+    const w1 = tender(libre(0, 50), libre(10, 50));
+    const w2 = tender(libre(5, 50), libre(15, 50));
+    const encimado = (id: string) => r11De(editor, id).some((x) => x.regla === "R11" && x.tipo === "encimado");
+    expect(encimado(w1) && encimado(w2)).toBe(true);
+    // De una T en el extremo izquierdo de w1 (0, 50) baja y va a una T en el extremo derecho de w2 (15, 50).
+    tender({ tipo: "cable", cable: w1, x: 0, y: 50 }, { tipo: "cable", cable: w2, x: 15, y: 50 }, [
+      [0, 60],
+      [15, 60],
+    ]);
+    expect(encimado(w1) || encimado(w2)).toBe(false);
+    expect(diferencias(editor, h)).toEqual([]);
+    editor.deshacer();
+    expect(encimado(w1) && encimado(w2)).toBe(true);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("I-A: mover un componente en 2000 + cables cruza con el índice lo que tiene cerca, no la hoja", () => {
+    const { editor, h } = armar(documentoBancoCables(2000));
+    const a = editor.avisos;
+    expect(a.pasadasR11Hoja).toBe(1);
+    const antes = a.revisadosR11;
+    const total = h.componentes.length + h.cables.length;
+    editor.ejecutar(new Mover([h.componentes[7]!.id], 0, 1));
+    expect(a.pasadasR11Hoja).toBe(1);
+    const revisados = a.revisadosR11 - antes;
+    expect(revisados).toBeGreaterThan(0);
+    expect(revisados).toBeLessThan(total / 50);
+  });
+
+  it(`al azar (semilla ${SEMILLA}): R11 sale y cambia; R11-A calla algún encimado de la misma red`, () => {
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let conR11 = 0;
+    let cambia = 0;
+    let callados = 0;
+    let previo = JSON.stringify(avisosR11(h));
+    recorrer(editor, () => {
+      const ahora = JSON.stringify(avisosR11(h));
+      if (ahora !== "[]") conR11++;
+      if (ahora !== previo) cambia++;
+      previo = ahora;
+      const mismaRed = mismaRedPorRedes(h);
+      if (aparentesHoja(h).some((x) => x.entreCables && mismaRed(x.a, x.b))) callados++;
+    });
+    // Con la semilla de hoy: conR11, cambia y callados en el mensaje si falla.
+    expect({ conR11: conR11 > 50, cambia: cambia > 20, callados: callados > 0 }, JSON.stringify({ conR11, cambia, callados })).toEqual({
+      conR11: true,
+      cambia: true,
+      callados: true,
+    });
+  });
+
+  it("a propósito: si R11 no cruza con lo que está cerca (solo desde lo del cambio), el recorrido lo nota", () => {
+    const proto = AvisosHoja.prototype as unknown as { sumarCercanos: () => void };
+    vi.spyOn(proto, "sumarCercanos").mockImplementation(() => {});
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let malos = 0;
+    recorrer(editor, () => {
+      if (diferencias(editor, h).length > 0) malos++;
+    });
+    expect(malos).toBeGreaterThan(0);
+  });
+
+  it("a propósito: sin R11-A (la misma red nunca), el recorrido lo nota", () => {
+    const proto = AvisosHoja.prototype as unknown as { mismaRed: () => (a: string, b: string) => boolean };
+    vi.spyOn(proto, "mismaRed").mockReturnValue(() => false);
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let malos = 0;
+    recorrer(editor, () => {
+      if (diferencias(editor, h).length > 0) malos++;
+    });
+    expect(malos).toBeGreaterThan(0);
+  });
+
+  it("a propósito: con R11 sin poner al día después de cada comando, el recorrido lo nota", () => {
+    vi.spyOn(AvisosHoja.prototype, "reflejarR11").mockReturnValue({ contornos: new Set(), ids: new Set(), cuenta: false });
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h } = armar(mp.doc);
+    let malos = 0;
+    recorrer(editor, () => {
+      if (diferencias(editor, h).length > 0) malos++;
+    });
+    expect(malos).toBeGreaterThan(0);
+  });
+});
+
+// ── R11 en reposo (T29, D6-A) ──────────────────────────────────────────────
+
+describe("R11 en reposo: arriba de 100 elementos y al abrir, por tramos (T29, D6-A)", () => {
+  /** Un editor con los tramos en una cola que el test corre a mano. */
+  function conCola(doc: Documento, r11: OpcionesR11 = {}) {
+    const cola: (() => void)[] = [];
+    const { editor, h } = armar(doc, { ...r11, programar: (f) => cola.push(f) });
+    const correr = (n = Infinity) => {
+      for (let i = 0; i < n && cola.length > 0; i++) cola.shift()!();
+    };
+    return { editor, h, cola, correr };
+  }
+
+  /** Una hoja con `n` lámparas en fila, cada una con un cable suelto que pasa sobre su X1 (R11 en los dos). */
+  function filaConAparentes(n: number): Documento {
+    const { editor, poner, tender } = armar();
+    const x1 = buscarSimbolo(LAMPARA)!.bornes.find((k) => k.nombre === "X1")!;
+    for (let i = 0; i < n; i++) {
+      poner(LAMPARA, i * 10, 0, "");
+      tender(libre(i * 10 + x1.x - 2, x1.y), libre(i * 10 + x1.x + 2, x1.y));
+    }
+    return editor.documento;
+  }
+
+  const r11 = (editor: Editor) => editor.avisos.lista().filter((a) => a.regla === "R11");
+
+  it("al abrir: nada hasta terminar los tramos; después, los avisos y la cuenta, y se avisa una vez", () => {
+    const doc = filaConAparentes(60);
+    const cola: (() => void)[] = [];
+    const editor = new Editor(doc, 0, { r11: { programar: (f) => cola.push(f), pasosTramo: 10 } });
+    const h = editor.documento.hojas[0]!;
+    let avisos = 0;
+    editor.alCambiarAvisos = () => avisos++;
+    expect(editor.avisos.enReposoR11).toBe(true);
+    expect(r11(editor)).toEqual([]);
+    let tramos = 0;
+    while (cola.length > 0) {
+      cola.shift()!();
+      tramos++;
+    }
+    expect(tramos).toBeGreaterThan(5);
+    expect(editor.avisos.enReposoR11).toBe(false);
+    expect(avisos).toBe(1);
+    expect(r11(editor)).toHaveLength(120);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("hasta 100 elementos, en vivo; con 101 o más, en reposo hasta terminar", () => {
+    const h0 = filaConAparentes(60).hojas[0]!;
+    const { editor, h, correr } = conCola(documentoNuevo());
+    const ids = (n: number) => [...h0.componentes.slice(0, n).map((c) => c.id), ...h0.cables.slice(0, n).map((w) => w.id)];
+    // 50 lámparas + 50 cables = 100: en vivo.
+    editor.ejecutar(pegar(editor.documento, recortar(h0, ids(50)), 0, 0));
+    expect(editor.avisos.enReposoR11).toBe(false);
+    expect(r11(editor)).toHaveLength(100);
+    // 51 + 51 = 102: en reposo; los avisos llegan al terminar.
+    editor.ejecutar(pegar(editor.documento, recortar(h0, ids(51)), 0, 50));
+    expect(editor.avisos.enReposoR11).toBe(true);
+    expect(r11(editor)).toHaveLength(100);
+    correr();
+    expect(editor.avisos.enReposoR11).toBe(false);
+    expect(r11(editor)).toHaveLength(202);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("un comando en el medio: se suma a lo pendiente y el cálculo vuelve a empezar con todo lo acumulado", () => {
+    const h0 = filaConAparentes(60).hojas[0]!;
+    const { editor, h, correr } = conCola(documentoNuevo(), { pasosTramo: 5 });
+    editor.ejecutar(pegar(editor.documento, recortar(h0, [...h0.componentes.map((c) => c.id), ...h0.cables.map((w) => w.id)]), 0, 0));
+    correr(3);
+    expect(editor.avisos.enReposoR11).toBe(true);
+    // Un cambio chico, que solo iría en vivo: se suma a lo pendiente.
+    editor.ejecutar(new Mover([h.componentes[0]!.id], 0, 10));
+    expect(editor.avisos.enReposoR11).toBe(true);
+    correr(4);
+    editor.deshacer();
+    correr();
+    expect(editor.avisos.enReposoR11).toBe(false);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("los tramos duran hasta 4 ms: abrir 2000 + 3030 cables lleva muchos tramos, y ninguno se pasa de largo", () => {
+    const duraciones: number[] = [];
+    const cola: (() => void)[] = [];
+    const editor = new Editor(documentoBancoCables(2000), 0, { r11: { programar: (f) => cola.push(f) } });
+    while (cola.length > 0) {
+      const t0 = performance.now();
+      cola.shift()!();
+      duraciones.push(performance.now() - t0);
+    }
+    expect(editor.avisos.enReposoR11).toBe(false);
+    expect(MS_TRAMO_R11).toBe(4);
+    expect(duraciones.length).toBeGreaterThan(10);
+    // Un tramo corta en el primer paso después de 4 ms; un paso es un elemento o 64 pares (margen holgado para una máquina cargada).
+    expect(Math.max(...duraciones)).toBeLessThan(MS_TRAMO_R11 + 6);
+  });
+
+  it(`al azar (semilla ${SEMILLA}), todo en reposo (umbral 0) y cortado en tramos de 3 pasos: cuando termina, lo mismo que el cálculo lento; los comandos llegan en el medio`, () => {
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h, cola, correr } = conCola(mp.doc, { umbral: 0, pasosTramo: 3 });
+    const azar = generador(SEMILLA + 29);
+    const malos: string[] = [];
+    let comparados = 0;
+    let enElMedio = 0;
+    let conR11 = 0;
+    const hechas = recorrer(editor, (paso) => {
+      // Entre comandos corre 0 a 3 tramos: muchas veces el próximo comando llega con el cálculo a medias.
+      correr(Math.floor(azar() * 4));
+      if (editor.avisos.enReposoR11) {
+        enElMedio++;
+        // Cada tanto, se deja terminar.
+        if (azar() < 0.15) correr();
+      }
+      if (!editor.avisos.enReposoR11) {
+        comparados++;
+        const d = diferencias(editor, h);
+        if (d.length > 0 && malos.length < 3) malos.push(`paso ${paso}: ${d.join(", ")}`);
+        if (r11(editor).length > 0) conR11++;
+      }
+    });
+    correr();
+    expect(cola).toEqual([]);
+    expect(diferencias(editor, h)).toEqual([]);
+    expect(malos).toEqual([]);
+    for (const [operacion, n] of Object.entries(hechas)) expect(n, operacion).toBeGreaterThan(0);
+    expect({ comparados: comparados > 50, enElMedio: enElMedio > 50, conR11: conR11 > 20 }, JSON.stringify({ comparados, enElMedio, conR11 })).toEqual({
+      comparados: true,
+      enElMedio: true,
+      conR11: true,
+    });
+  });
+
+  it("a propósito: si al volver a empezar se pierden los afectados del cálculo cortado, el recorrido por partes lo nota", () => {
+    const proto = AvisosHoja.prototype as unknown as { acumularR11: (...a: unknown[]) => void };
+    const real = proto.acumularR11;
+    vi.spyOn(proto, "acumularR11").mockImplementation(function (this: { afectadosR11: Set<string> }, ...a: unknown[]) {
+      this.afectadosR11.clear();
+      return real.apply(this, a);
+    });
+    const mp = marchaParada({ ramaNC: true });
+    const { editor, h, correr } = conCola(mp.doc, { umbral: 0, pasosTramo: 3 });
+    const azar = generador(SEMILLA + 29);
+    let malos = 0;
+    recorrer(editor, () => {
+      correr(Math.floor(azar() * 4));
+      if (editor.avisos.enReposoR11 && azar() < 0.15) correr();
+      if (!editor.avisos.enReposoR11 && diferencias(editor, h).length > 0) malos++;
     });
     expect(malos).toBeGreaterThan(0);
   });

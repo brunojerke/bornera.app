@@ -20,6 +20,8 @@ Una por sesión; cierran con `bornera-cierre` (y banco si tocan `sim/` o el dibu
 | T32 | Modo Simular: entrar (D4), pulsar y soltar (D5), bloqueos, salir y avisos. Humo `t32-simular.mjs` con el criterio y la prueba: abrir un `.brn`, entrar, pulsar, soltar y salir lo deja byte a byte igual, sin «•» | alto |
 | T33 | Dibujo del estado (D8, D9). Humo con capturas; S1 y S4 en la PC | alto |
 
+**Pendiente (Bruno, 2026-11-21, de T29):** `codosBanco` con la regla de W. La escena oficial del banco (2000 + 3030) tiene unas 10 250 conexiones aparentes (13 394 avisos R11) imposibles de dibujar en el editor: sus cables entran a los bornes por el cuerpo, se tocan y se enciman. Sin aparentes, R11 cuesta en Node la mitad o menos al abrir y casi nada en B2 y B16 (tabla en `docs/plan-T29.md`).
+
 **Cierre:** C1 «Probar la fase 5» en la PC, ABBA contra `7ed51e4` (Opus alto). C2 `0.1.5-alpha.N` y `docs/netbook-fase5.md` (Opus alto). C3 netbook y PC el mismo día (Sonnet). C4 `0.1.5` y fila 6 (Opus alto). C5 docs y Obsidian (Sonnet).
 
 ## 2. Modelo de simulación
@@ -73,7 +75,7 @@ Topes de la netbook fijados acá, antes de medir. PC = netbook / K, con K1 = 3 y
 | D3 | A | Oscila o hay corto: se detiene en el último estado, marca y avisa; los pulsadores no responden hasta salir |
 | D4 | A | Solo los errores impiden entrar: F5 dice cuáles y queda en Editar. Los avisos (R1–R3, R5–R11 y R4 entre pulsadores) no. **Errores:** R4 cuando el grupo de la etiqueta repetida tiene una bobina, una lámpara o un símbolo desconocido. La fase 5 no suma errores (D10-A) |
 | D5 | B | Mantener el botón del mouse; vuelve al soltarlo en cualquier lado o al perder la ventana. Mayús+clic lo deja apretado hasta otro clic |
-| D6 | A | R11, aviso en vivo e incremental, como R1–R9 |
+| D6 | A | R11, aviso incremental como R1–R9: **en vivo hasta 100 elementos; arriba de eso, en reposo** (Bruno, 2026-11-21). En reposo: al abrir y con cambios de más de 100 elementos, en tramos de 4 ms como máximo, sin bloquear el dibujo; los avisos aparecen al terminar; si llega otro comando en el medio, vuelve a empezar con lo acumulado |
 | D7 | C | El símbolo da el papel y la etiqueta el nombre (sección 2). Una Fase «X» es otra fase: entre L y X una carga se enciende, y unirlas es corto |
 | D8 | A | Capa estática, invalidando solo la región que cambió |
 | D9 | B | Cables por potencial, cargas encendidas y contactos dibujados en su estado |
