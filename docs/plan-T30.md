@@ -43,3 +43,11 @@ Aprobado por Bruno el 2026-11-21 con M1-B, M2-A, M3-A, M4-A y M5-A, más 7 ajust
 ## Riesgos
 - El criterio de carrera también avisa cuando solo una bobina enclava a la otra.
 - Costo con 2000 símbolos: iteraciones × redes. Se mide en S1–S5 (T31).
+
+## Resultado (cierre, 2026-11-21)
+- Hecho como el plan: `motor.ts`, `prueba-motor.ts` (cálculo lento), `motor.test.ts` (35), `motor-azar.test.ts` (200 circuitos, semilla 30; cubre estable, carrera, serie, oscila, tope y corto), `src/core/circuitos/sim.ts`, `tests/circuitos/sim.mjs`, los cuatro `.brn` y `sim.test.ts` (8), humo `t30-brn-sim.mjs` (17 comprobaciones).
+- Los casos A y B de tres bobinas dan lo escrito arriba antes de programar.
+- Al azar no sale el caso «otro borne en la red del medio» de las cargas en serie (una mutación que lo ignora pasa el lote): lo cubre un test directo.
+- Precisión de criterio: dos neutros de distinto nombre no encienden una carga, pero unirlos es corto, como en la netlist de T28. Se consulta a Bruno si eso debe cambiar.
+- Build (ajuste 6): `npm run build` de T30 y de `195ea55` (worktree temporal), los 15 archivos iguales después de normalizar el id de build de SvelteKit (`__sveltekit_…`, la versión y los nombres con hash). El motor no está en el build: sin ABBA.
+- Pendiente: costo con 2000 (S1–S5, T31); netbook, fuera de T30.

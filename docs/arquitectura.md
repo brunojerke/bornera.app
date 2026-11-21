@@ -111,6 +111,7 @@ Simulación **lógica por conectividad**, no analógica: alcanza para automatism
 5. **Evaluar cargas:** una bobina o lámpara se energiza si un borne está en fase y el otro en neutro (o + y −). Un motor trifásico gira si U, V y W reciben las tres fases; el sentido sale de la paridad de la secuencia (L1-L2-L3 vs L1-L3-L2).
 6. **Actualizar contactos:** las bobinas energizadas cambian sus contactos asociados.
 7. **Repetir hasta estabilizar:** se vuelve al paso 2 hasta que nada cambie. Si tras 50 iteraciones sigue cambiando, es un circuito oscilante (un relé que se corta a sí mismo): se avisa en vez de colgar el programa.
+   > Nota (2026-11-21, T30): el motor está en `src/core/sim/motor.ts` sobre la netlist de T28 (`netlist.ts`), con el criterio de `docs/plan-fase5.md` y `docs/plan-T30.md`. Difiere de este esquema: cambia una bobina por iteración (la de etiqueta menor, D2-B) y avisa carreras; un estado de bobinas repetido es oscilación; el tope es 2 × bobinas + 50 cambios («No se estabilizó en N pasos»); corto u oscilación detienen la simulación (D3-A), sin fusibles por ahora. Una carga se enciende con potenciales distintos y al menos uno fase. La app lo usa desde T32.
 
 **Detalles importantes:**
 
