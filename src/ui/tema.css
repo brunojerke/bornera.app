@@ -25,6 +25,10 @@
   /* Lo que no se puede hacer: previas en conflicto, con su ✕. Más oscuro que --aviso: se distingue también en grises. */
   --conflicto: #881337;
   --simular: #15803d;
+  /* Simular (T33, C-A): redes con fase, con neutro (sin potencial, --simbolo) y lo encendido. El corto va en --conflicto. */
+  --sim-fase: #dc2626;
+  --sim-neutro: #0284c7;
+  --sim-encendida: #facc15;
 
   --alto-barra: 40px;
   --alto-estado: 24px;
@@ -58,6 +62,9 @@
     --aviso: #fb923c;
     --conflicto: #e11d48;
     --simular: #4ade80;
+    --sim-fase: #f87171;
+    --sim-neutro: #38bdf8;
+    --sim-encendida: #ca8a04;
   }
 }
 

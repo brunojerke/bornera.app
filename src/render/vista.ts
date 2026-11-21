@@ -106,6 +106,17 @@ export class Vista {
   }
 
   /**
+   * Cambió el estado de la simulación dentro de `cajas` (T33, D8-A): rehacer
+   * solo esa parte y descartar los mosaicos de otros niveles de zoom, que lo
+   * mostrarían viejo (ajuste 2).
+   */
+  invalidarEstado(cajas: readonly Caja[]): void {
+    let cuadro = this.capas.descartarOtrosNiveles();
+    for (const k of cajas) cuadro = this.capas.invalidarRegion(k) || cuadro;
+    if (cuadro) this.invalidar();
+  }
+
+  /**
    * Pide un redibujo para el próximo cuadro (si no hay uno ya pedido). Si solo
    * se movió la cámara o cambió la capa dinámica, la estática se reusa.
    */
@@ -243,6 +254,9 @@ export class Vista {
       acento: leer("--acento", antes.acento),
       aviso: leer("--aviso", antes.aviso ?? antes.borne),
       conflicto: leer("--conflicto", antes.conflicto ?? antes.borne),
+      fase: leer("--sim-fase", antes.fase ?? antes.simbolo),
+      neutro: leer("--sim-neutro", antes.neutro ?? antes.simbolo),
+      encendida: leer("--sim-encendida", antes.encendida ?? antes.borne),
     };
   }
 }

@@ -19,6 +19,30 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 
+## Dibujo del estado (fase 5, T33) — 2026-11-21
+
+**Criterio escrito antes de medir** (`docs/plan-T33.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`: A y B corren «Probar la fase 5», 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `946589a`. B1–B16 con D6b-C; F1–F3 con sus topes de la PC. Tope de S1–S5: mediana de las calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %); S1 54,5 ms, S4 6,0 / 18,2 ms (cuadro / gesto; máx. 7,0 / 20,0). No regresión de S2, S3 y S5 como en T32 (S5 sobre el tope y sin regresión: «no pasa, causa conocida»). **R-A:** S1 y S4 solo por tope; su no regresión informa (S1 cambia de definición: la base mide el sustituto sin estado; S4 no tiene base). La cadena de 100 de S4 informa y no frena (S4-B). `npm run bench` informa. Si una fila falla en la PC (S4 incluida), se frena y se consulta, sin volver a medir; S1 > 48 ms se avisa; B2 2.º con la regla vigente.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera. Dos exes `tauri build --no-bundle` con `0.1.4-t33.0` solo en `package.json` (local, revertida); la base, de un worktree temporal en `946589a` con `npm ci` y `svelte-kit sync` (ya borrado). Edge 157.
+
+**Resultado: pasa todo.** B1–B16 nada sube (B2 2.º 11,6 → 9,5, baja); F pasa; cierre de S: **pasa**.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 19,2 | 21,8 | 19,4 | informa (R-A) |
+| S2 | mediana | 1,7 | 0,1 | 0,2 | 0,2 | pasa (≤ 1,2) |
+| S2 | máx. | 5,3 | 0,3 | 0,3 | 0,3 | pasa (≤ 1,3) |
+| S3 | máx. | 16,7 | 2,9 | 3,4 | 3,3 | pasa (≤ 4,3) |
+| S4 | cuadro | 6,0 | 2,1 | 2,4 | — | informa (R-A, sin base) |
+| S4 | gesto | 18,2 | 2,3 | 2,8 | — | informa (R-A, sin base) |
+| S5 | máx. | 100,0 | 95,3 | 98,1 | 94,7 | pasa (≤ 104,1) |
+
+- S1, desglose (mediana): R4 0,4 · netlist 2,2 · iniciar 1,1 (con el dibujo del estado) · cuadro 14,0. S1 completa queda igual que el sustituto de T32 (19,4 en B). S5 de pared (informa): 323,9 ms.
+- S4 cadena de 100 (informa, no frena): cuadro máx. 5,2 · gesto máx. 12,8 ms (medianas de las calientes).
+- F1 2,8–3,9 ms (≤ 9); F2 y F3 ≤ 79,9 ms (≤ 1 s).
+- Frías fuera del rango de sus calientes (+1 ms, informan): 3 en A y 9 en B.
+- **`npm run bench` (Edge headless, una corrida de HEAD y una de la base, informa):** ningún cuadro lento en ninguna de las dos. Contra la base, 25 de 225 números suben más de máx(1 ms, 10 %), casi todos en el gesto de los arrastres de 100 y 500 símbolos (p. ej. arrastre con todo seleccionado de 100: 33,6 → 76,6 ms por gesto) y «Mover todo» de 2000 máx. 10,3 → 12,7. El ABBA en WebView2, que decide, no ve ninguna subida en B1–B16.
+
 ## Modo Simular (fase 5, T32) — 2026-11-21
 
 **Criterio escrito antes de medir** (`docs/plan-T32.md`): ABBA en WebView2 (`probar-webview2.mjs --base-fase5`: A y B corren «Probar la fase 5», 3 bloques, 6 aperturas por exe, una fría y una caliente) contra `93eb13e`. B1–B16 con D6b-C; F1–F3 con sus topes de la PC. S1, S2, S3 y S5: tope (ajuste 1 de T31) y no regresión (mediana de A ≤ la de B + máx(1 ms, 10 %)). **Ajuste 1 de T32:** S5 solo sobre el tope y sin regresión cierra como «no pasa, causa conocida»; cualquier otra falla frena y se consulta, sin volver a medir.

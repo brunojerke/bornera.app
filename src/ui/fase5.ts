@@ -31,8 +31,12 @@ export const TOPES_S_NETBOOK = {
 /** El K de cada fila S (D1-D: K1 = 3, K2 = 5,5), para los topes de la PC. */
 export const K_S = { S1: "K2", S2: "K1", S3: "K1", S4: "K2", S5: "K1" } as const;
 
-/** Vueltas medidas de cada S (más una de calentamiento sin medir). */
-export const VUELTAS_S = { S1: 5, S2: 20, S3: 5, S5: 5 } as const;
+/**
+ * Vueltas medidas de cada S (más una de calentamiento sin medir). En S4
+ * (T33, S4-B) cada vuelta son dos gestos medidos, pulsar y soltar: 20 vueltas
+ * de la marcha y 5 de la cadena (informa).
+ */
+export const VUELTAS_S = { S1: 5, S2: 20, S3: 5, S4: 20, S4Cadena: 5, S5: 5 } as const;
 
 /** Una vuelta de S1 (ms): las partes de entrar y el cuadro, y el total. */
 export interface MuestraS1 {
@@ -41,6 +45,16 @@ export interface MuestraS1 {
   iniciar: number;
   cuadro: number;
   total: number;
+  /** Cuadros hasta quedar nítido. */
+  cuadros: number;
+}
+
+/** Un gesto de S4 (T33, S4-B): desde el clic hasta nítido (ms). */
+export interface MuestraS4 {
+  /** El cuadro más largo del gesto. */
+  cuadro: number;
+  /** El gesto entero: motor, dibujo del estado y cuadros seguidos hasta nítido. */
+  gesto: number;
   /** Cuadros hasta quedar nítido. */
   cuadros: number;
 }
@@ -61,6 +75,10 @@ export interface MuestrasS {
   s2: number[];
   /** S3: de pulsar a que entran los 100, por vuelta. */
   s3: number[];
+  /** S4: cada gesto sobre la marcha (pulsar y soltar). */
+  s4: MuestraS4[];
+  /** S4 sobre la cadena de 100: informa, no decide. */
+  s4Cadena: MuestraS4[];
   s5: MuestraS5[];
 }
 
@@ -77,6 +95,8 @@ const maximo = (xs: readonly number[]) => (xs.length ? Math.max(...xs) : 0);
 export function filasS(m: MuestrasS): FilaEvaluada[] {
   const t = TOPES_S_NETBOOK;
   const s1 = m.s1.map((x) => x.total);
+  const s4c = m.s4.map((x) => x.cuadro);
+  const s4g = m.s4.map((x) => x.gesto);
   const s5 = m.s5.map((x) => x.trabajo);
   const maxMed = (xs: readonly number[]) => `${v(maximo(xs))} / ${v(mediana(xs))} ms`;
   return [
@@ -106,11 +126,11 @@ export function filasS(m: MuestrasS): FilaEvaluada[] {
     },
     {
       id: "S4",
-      escenario: "Pulsar con dibujo al 31 %",
-      medida: "máx. de cuadro / por gesto",
+      escenario: "Pulsar y soltar una marcha (mando 2000) con dibujo al 31 %, hasta nítido",
+      medida: `máx. de cuadro / por gesto de ${m.s4.length}`,
       tope: `≤ ${e(t.S4[0])} / ${e(t.S4[1])} ms`,
-      valor: "se mide en T33",
-      resultado: "se anota",
+      valor: `${v(maximo(s4c))} / ${v(maximo(s4g))} ms`,
+      resultado: pasa(m.s4.length > 0 && maximo(s4c) <= t.S4[0] && maximo(s4g) <= t.S4[1]),
     },
     {
       id: "S5",
@@ -127,16 +147,21 @@ export function filasS(m: MuestrasS): FilaEvaluada[] {
 export const NOTA_DESGLOSE_S1 = "S1, desglose (máx. de cada parte, ms):";
 /** Prefijo de la nota del tiempo de pared de S5. */
 export const NOTA_PARED_S5 = "S5, de abrir a los avisos (informa, ms):";
+/** Prefijo de la nota de S4 sobre la cadena de 100 (T33, S4-B: informa, no frena). */
+export const NOTA_CADENA_S4 = "S4, cadena de 100 (informa, ms):";
 
-/** Las notas de S para debajo de la tabla: desglose de S1 (N-A: la netlist informa) y S5. */
+/** Las notas de S para debajo de la tabla: desglose de S1 (N-A: la netlist informa), S4 y S5. */
 export function notasS(m: MuestrasS, escena: { componentes: number; cables: number; bobinas: number }): string[] {
   const parte = (k: keyof MuestraS1) => v(maximo(m.s1.map((x) => x[k])));
   const s5 = m.s5[0];
+  const cuadros = (xs: readonly MuestraS4[]) => e(maximo(xs.map((x) => x.cuadros)));
   return [
-    `S1–S3: escena de mando de ${escena.componentes} componentes + ${escena.cables} cables (${escena.bobinas} bobinas). Cada S con una vuelta de calentamiento sin medir.`,
-    `${NOTA_DESGLOSE_S1} R4 ${parte("r4")} · netlist ${parte("netlist")} · iniciar ${parte("iniciar")} · cuadro ${parte("cuadro")} (${e(maximo(m.s1.map((x) => x.cuadros)))} cuadros como máximo).`,
+    `S1–S4: escena de mando de ${escena.componentes} componentes + ${escena.cables} cables (${escena.bobinas} bobinas). Cada S con una vuelta de calentamiento sin medir.`,
+    `${NOTA_DESGLOSE_S1} R4 ${parte("r4")} · netlist ${parte("netlist")} · iniciar ${parte("iniciar")} · cuadro ${parte("cuadro")} (${e(maximo(m.s1.map((x) => x.cuadros)))} cuadros como máximo). «iniciar» incluye armar el dibujo del estado (T33).`,
+    `S4: la marcha de S2 centrada en la pantalla; cada gesto (pulsar, soltar) desde el clic hasta nítido, en cuadros seguidos; presupuesto de mosaicos de Simular (P-B); hasta ${cuadros(m.s4)} cuadros por gesto.`,
+    `${NOTA_CADENA_S4} cuadro máx. ${v(maximo(m.s4Cadena.map((x) => x.cuadro)))} · gesto máx. ${v(maximo(m.s4Cadena.map((x) => x.gesto)))} / mediana ${v(mediana(m.s4Cadena.map((x) => x.gesto)))} · ${cuadros(m.s4Cadena)} cuadros como máximo, ${e(m.s4Cadena.length)} gestos.`,
     `${NOTA_PARED_S5} máx. ${v(maximo(m.s5.map((x) => x.pared)))} / mediana ${v(mediana(m.s5.map((x) => x.pared)))}` +
       (s5 ? ` · ${e(s5.tramos)} tramos y ${e(s5.avisos)} avisos R11 por vuelta.` : "."),
-    "S4 se mide en T33 (S4-A). Los topes de la PC y el juicio de S los aplica tests/bench/probar-webview2.mjs --fase5.",
+    "Los topes de la PC y el juicio de S los aplica tests/bench/probar-webview2.mjs --fase5.",
   ];
 }

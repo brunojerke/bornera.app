@@ -1,7 +1,7 @@
 // «Probar la fase 5» del menú de desarrollo (T31; docs/plan-T31.md): lo de
 // «Probar la fase 4» (B1–B16 con su calentamiento la 1.ª vez, F1, F2 y F3) y
-// después S1–S5 (medirMando.ts), con la tabla para copiar. S4 se mide en T33
-// (S4-A). No toca la hoja ni su copia de recuperación, los recientes, el
+// después S1–S5 (medirMando.ts), con la tabla para copiar. S1 completa y S4
+// desde T33. No toca la hoja ni su copia de recuperación, los recientes, el
 // título ni «modificado».
 //
 // El juicio de la PC (topes = netbook / K; mediana de las calientes y máximo

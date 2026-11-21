@@ -168,6 +168,31 @@ export function formaCable(c: CableEscena): FormaEleccion {
 const tramos: number[] = [];
 
 /**
+ * Clase de un cable en Simular (T33, D9-B y C-A), por el potencial de su red:
+ * 0 como en Editar (también una red sin potencial, ajuste 3), 1 una fase, 2
+ * el neutro y 3 la red en corto (M-A).
+ */
+export type ClaseCable = 0 | 1 | 2 | 3;
+export const CLASE_EDITAR = 0;
+export const CLASE_FASE = 1;
+export const CLASE_NEUTRO = 2;
+export const CLASE_CORTO = 3;
+const CLASES = 4;
+
+/** El color de cada clase. */
+function colorClase(clase: number, colores: InfoDibujo["colores"]): string {
+  if (clase === CLASE_FASE) return colores.fase ?? colores.simbolo;
+  if (clase === CLASE_NEUTRO) return colores.neutro ?? colores.simbolo;
+  if (clase === CLASE_CORTO) return colores.conflicto ?? colores.borne;
+  return colores.simbolo;
+}
+
+/** Tramos y centros por clase del cuadro en curso (se reusan, como `tramos`). */
+const tramosPorClase: number[][] = Array.from({ length: CLASES }, () => []);
+const centrosPorClase: number[][] = Array.from({ length: CLASES }, () => []);
+const cuentas: number[] = new Array<number>(CLASES).fill(0);
+
+/**
  * Anota en `salida`, desde `n`, los tramos de `c` que tocan `v` (con el margen
  * del trazo). Devuelve el nuevo total. Corridos (dx, dy).
  */
@@ -207,9 +232,34 @@ class Cables {
   readonly visibles: number[] = [];
   /** Lugares que la capa estática no dibuja (se arrastran, T14a). */
   readonly ocultos = new Set<number>();
+  /** Clase de cada lugar en Simular (T33); sin valor, `CLASE_EDITAR`. */
+  readonly clases: ClaseCable[] = [];
+  /** Lugares con una clase que no es la de Editar: sin ninguno, se dibuja como en Editar. */
+  readonly conClase = new Set<number>();
 
   get cantidad(): number {
     return this.lugarDe.size;
+  }
+
+  /** La clase del lugar `n`. */
+  clase(n: number): ClaseCable {
+    return this.clases[n] ?? CLASE_EDITAR;
+  }
+
+  /** Cambia la clase del cable; devuelve sus cajas si cambió (ninguna si no está, es la misma o está oculto). */
+  ponerClase(id: string, clase: ClaseCable): Caja[] {
+    const n = this.lugarDe.get(id);
+    if (n === undefined || this.clase(n) === clase) return [];
+    this.clases[n] = clase;
+    if (clase === CLASE_EDITAR) this.conClase.delete(n);
+    else this.conClase.add(n);
+    return this.ocultos.has(n) ? [] : this.cajas[n]!;
+  }
+
+  /** Todos vuelven a la clase de Editar. */
+  limpiarClases(): void {
+    for (const n of this.conClase) this.clases[n] = CLASE_EDITAR;
+    this.conClase.clear();
   }
 
   /** Agrega o cambia; devuelve las cajas a rehacer (las viejas y las nuevas; ninguna si está oculto). */
@@ -242,6 +292,7 @@ class Cables {
     this.ids[n] = null;
     this.lugarDe.delete(id);
     this.libres.push(n);
+    if (this.conClase.delete(n)) this.clases[n] = CLASE_EDITAR;
     return k;
   }
 
@@ -289,12 +340,27 @@ class Cables {
       visibles.length = j;
     }
     if (visibles.length === 0) return;
-    let n = 0;
-    for (const lugar of visibles) n = anotarTramos(this.lugares[lugar]!, v, tramos, n);
     const g = grosorLinea(info.escala);
-    if (n > 0) {
-      r.estilo({ trazo: info.colores.simbolo, relleno: info.colores.simbolo, grosor: g });
-      r.lineas(tramos, n);
+    if (this.conClase.size === 0) {
+      let n = 0;
+      for (const lugar of visibles) n = anotarTramos(this.lugares[lugar]!, v, tramos, n);
+      if (n > 0) {
+        r.estilo({ trazo: info.colores.simbolo, relleno: info.colores.simbolo, grosor: g });
+        r.lineas(tramos, n);
+      }
+    } else {
+      // En Simular (T33, D9-B): un trazo por clase, cada uno con su color.
+      cuentas.fill(0);
+      for (const lugar of visibles) {
+        const k = this.clase(lugar);
+        cuentas[k] = anotarTramos(this.lugares[lugar]!, v, tramosPorClase[k]!, cuentas[k]!);
+      }
+      for (let k = 0; k < CLASES; k++) {
+        if (cuentas[k] === 0) continue;
+        const color = colorClase(k, info.colores);
+        r.estilo({ trazo: color, relleno: color, grosor: g });
+        r.lineas(tramosPorClase[k]!, cuentas[k]!);
+      }
     }
     if (!info.detalle.bornes) return;
     let estilo = false;
@@ -461,11 +527,34 @@ class PuntosUnion {
   /**
    * Dibuja las uniones que tocan `info.visible`, todas en un solo relleno, con
    * el grosor de los cables (el centro cae en el del cable). `oculta`: true si
-   * la unión toca algo que la capa estática no dibuja.
+   * la unión toca algo que la capa estática no dibuja. `clase` (Simular, T33):
+   * la de la unión, para pintarla con el color de su red; sin ella, todas con
+   * el de Editar.
    */
-  dibujar(r: Renderer, info: InfoDibujo, oculta: ((u: UnionEscena) => boolean) | null): void {
+  dibujar(r: Renderer, info: InfoDibujo, oculta: ((u: UnionEscena) => boolean) | null, clase: ((u: UnionEscena) => number) | null = null): void {
     if (this.lugarDe.size === 0 || !info.detalle.bornes) return;
     const visibles = this.indice.enCaja(info.visible, this.visibles);
+    const g = grosorLinea(info.escala);
+    if (clase) {
+      cuentas.fill(0);
+      for (const lugar of visibles) {
+        const u = this.lugares[lugar]!;
+        if (oculta && oculta(u)) continue;
+        const k = clase(u);
+        const c = centrosPorClase[k]!;
+        const i = cuentas[k]!;
+        c[2 * i] = u.x;
+        c[2 * i + 1] = u.y;
+        cuentas[k] = i + 1;
+      }
+      for (let k = 0; k < CLASES; k++) {
+        if (cuentas[k] === 0) continue;
+        const color = colorClase(k, info.colores);
+        r.estilo({ trazo: color, relleno: color, grosor: g });
+        r.puntos(centrosPorClase[k]!, cuentas[k]!, DIAMETRO_UNION);
+      }
+      return;
+    }
     let n = 0;
     for (const lugar of visibles) {
       const u = this.lugares[lugar]!;
@@ -475,7 +564,7 @@ class PuntosUnion {
       n++;
     }
     if (n === 0) return;
-    r.estilo({ trazo: info.colores.simbolo, relleno: info.colores.simbolo, grosor: grosorLinea(info.escala) });
+    r.estilo({ trazo: info.colores.simbolo, relleno: info.colores.simbolo, grosor: g });
     r.puntos(centros, n, DIAMETRO_UNION);
   }
 
@@ -513,6 +602,15 @@ export class EscenaEditable implements Contenido {
    * estática.
    */
   mostrarUniones = true;
+  /**
+   * Se dibuja el estado de una simulación (T33): lo prende y lo apaga el
+   * editor al entrar y salir de Simular (`Contenido.simulando`).
+   */
+  simulando = false;
+  /** Lugares de los componentes con estado de simulación (accionado, encendido o marcado). */
+  private readonly conEstado = new Set<number>();
+  /** Lugares con la marca de la detención (M-A): sin ninguno, los contornos de la marca no se buscan. */
+  private readonly conMarca = new Set<number>();
 
   constructor(componentes: Iterable<[string, ComponenteEscena]> = [], opciones: OpcionesEscena = {}) {
     this.marcarBornes = opciones.marcarBornes ?? true;
@@ -641,6 +739,79 @@ export class EscenaEditable implements Contenido {
     return this.uniones.cajasDe(ids);
   }
 
+  // ── Estado de la simulación (T33, D8-A y D9-B) ────────────────────────────
+  // Lo resuelve el editor desde la simulación; la escena solo lo guarda y lo
+  // dibuja. Cada cambio devuelve las cajas a rehacer: solo la región que
+  // cambió (D8-A). La caja de dibujo no cambia con el estado (el dibujo
+  // accionado queda dentro de la caja del símbolo).
+
+  /**
+   * Cambia la clase del cable (color por potencial). Devuelve las cajas a
+   * rehacer: sus tramos y las uniones donde está; ninguna si no cambió.
+   */
+  claseCable(id: string, clase: ClaseCable): readonly Caja[] {
+    const cajas = this.cables.ponerClase(id, clase);
+    if (cajas.length === 0) return cajas;
+    return [...cajas, ...this.uniones.cajasDe([id])];
+  }
+
+  /** La clase de un cable (`CLASE_EDITAR` si no está). */
+  claseDeCable(id: string): ClaseCable {
+    const n = this.cables.lugarDe.get(id);
+    return n === undefined ? CLASE_EDITAR : this.cables.clase(n);
+  }
+
+  /**
+   * Cambia el estado de un componente. Devuelve su caja de dibujo si cambió;
+   * ninguna si no está, es el mismo o está oculto.
+   */
+  estadoComponente(id: string, e: { accionado: boolean; encendido: boolean; marcado: boolean }): readonly Caja[] {
+    const n = this.lugarDe.get(id);
+    if (n === undefined) return [];
+    const c = this.lugares[n]!;
+    if ((c.accionado === true) === e.accionado && (c.encendido === true) === e.encendido && (c.marcado === true) === e.marcado) return [];
+    const { accionado: _a, encendido: _e, marcado: _m, ...resto } = c;
+    const nuevo: ComponenteEscena = resto;
+    if (e.accionado) nuevo.accionado = true;
+    if (e.encendido) nuevo.encendido = true;
+    if (e.marcado) nuevo.marcado = true;
+    this.lugares[n] = nuevo;
+    this.anotarEstado(n, nuevo);
+    return this.ocultos.has(n) ? [] : [this.cajas[n]!];
+  }
+
+  /** Vuelve todo al dibujo de Editar (al salir de Simular). Quien llama rehace la capa estática. */
+  limpiarEstado(): void {
+    this.cables.limpiarClases();
+    for (const n of this.conEstado) {
+      const { accionado: _a, encendido: _e, marcado: _m, ...resto } = this.lugares[n]!;
+      this.lugares[n] = resto;
+    }
+    this.conEstado.clear();
+    this.conMarca.clear();
+  }
+
+  /** True si algún cable o componente tiene estado de simulación. */
+  get conEstadoSimulacion(): boolean {
+    return this.conEstado.size > 0 || this.cables.conClase.size > 0;
+  }
+
+  /** Anota si el lugar `n` tiene estado (y marca) según su componente. */
+  private anotarEstado(n: number, c: ComponenteEscena | null): void {
+    if (c && (c.accionado === true || c.encendido === true || c.marcado === true)) this.conEstado.add(n);
+    else this.conEstado.delete(n);
+    if (c?.marcado === true) this.conMarca.add(n);
+    else this.conMarca.delete(n);
+  }
+
+  /** La clase de una unión: la de su primer cable (todos los de una unión están en la misma red). */
+  private claseUnion = (u: UnionEscena): number => {
+    const id = u.cables[0];
+    if (id === undefined) return CLASE_EDITAR;
+    const n = this.cables.lugarDe.get(id);
+    return n === undefined ? CLASE_EDITAR : this.cables.clase(n);
+  };
+
   /** True si la unión toca un cable o un componente que la capa estática no dibuja. */
   private unionOculta = (u: UnionEscena): boolean => {
     for (const id of u.cables) if (this.cableOculto(id)) return true;
@@ -665,6 +836,7 @@ export class EscenaEditable implements Contenido {
     this.ids[n] = id;
     this.lugarDe.set(id, n);
     this.indice.insertar(n, k);
+    this.anotarEstado(n, c);
     if (this.cajaTotal !== undefined) this.cajaTotal = this.cajaTotal ? unirCajas(this.cajaTotal, k) : k;
     return k;
   }
@@ -684,6 +856,7 @@ export class EscenaEditable implements Contenido {
     this.ids[n] = null;
     this.lugarDe.delete(id);
     this.libres.push(n);
+    this.anotarEstado(n, null);
     this.cajaTotal = undefined;
     return k;
   }
@@ -702,6 +875,7 @@ export class EscenaEditable implements Contenido {
     this.cajas[n] = nueva;
     this.formas[n] = formaComponente(c);
     this.indice.mover(n, nueva);
+    this.anotarEstado(n, c);
     this.cajaTotal = undefined;
     if (this.ocultos.has(n)) return [];
     if (cubreCasi(vieja, nueva)) return [vieja];
@@ -840,11 +1014,11 @@ export class EscenaEditable implements Contenido {
       for (const n of visibles) if (!this.ocultos.has(n)) visibles[j++] = n;
       visibles.length = j;
     }
-    dibujarComponentes(r, info, this.lugares, visibles, visibles.length, this.marcarBornes);
+    dibujarComponentes(r, info, this.lugares, visibles, visibles.length, this.marcarBornes, this.conMarca.size > 0);
     // Después de los componentes (D5-B): en un borne, el punto tapa la marca.
     if (this.mostrarUniones) {
       const hayOcultos = this.ocultos.size > 0 || this.cables.ocultos.size > 0;
-      this.uniones.dibujar(r, info, hayOcultos ? this.unionOculta : null);
+      this.uniones.dibujar(r, info, hayOcultos ? this.unionOculta : null, this.cables.conClase.size > 0 ? this.claseUnion : null);
     }
     return visibles.length;
   }

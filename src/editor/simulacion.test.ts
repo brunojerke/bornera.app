@@ -66,17 +66,17 @@ describe("SesionSimulacion: pulsar y soltar (D5-B)", () => {
     expect([s.mantenido, s.fijados, s.sim.pulsados.size]).toEqual([null, [], 0]);
   });
 
-  it("Mayús+clic fija hasta otro clic, con Mayús o sin ella; la barra dice «Fijados» (ajuste 2)", () => {
+  it("Mayús+clic fija hasta otro clic, con Mayús o sin ella; la barra ya no dice «Fijados» (T33, F-A)", () => {
     const { doc, comp } = marchaParada();
     const s = sesion(doc.hojas[0]!);
     s.presionar(comp.s0, true);
-    expect([s.fijados, s.mantenido, s.textoEstado()]).toEqual([[comp.s0], null, "Fijados: S0"]);
+    expect([s.fijados, s.mantenido, s.textoEstado()]).toEqual([[comp.s0], null, null]);
     expect(s.soltarBoton()).toBe(false);
     s.presionar(comp.s1, false);
     expect(tension(s.sim, "K1")).toBe(false); // S0 fijado corta la marcha
     s.soltarBoton();
     s.presionar(comp.s1, true);
-    expect(s.textoEstado()).toBe("Fijados: S0 y S1");
+    expect([s.fijados, s.textoEstado()]).toEqual([[comp.s0, comp.s1], null]);
     s.presionar(comp.s0, false); // otro clic sobre el fijado lo suelta
     expect([s.fijados, s.mantenido, tension(s.sim, "K1")]).toEqual([[comp.s1], null, true]);
     s.presionar(comp.s1, true);

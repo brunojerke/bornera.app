@@ -166,6 +166,28 @@ describe("validarDefinicion: primer número (T27)", () => {
   });
 });
 
+describe("validarDefinicion: dibujo accionado (T33)", () => {
+  const cuchilla = { forma: "linea", x1: 0, y1: 1, x2: 0, y2: -1 } as const;
+
+  it("acepta un contacto con su dibujo accionado dentro de la caja", () => {
+    expect(validarDefinicion({ ...PULSADOR, primitivasAccionado: [cuchilla] })).toEqual([]);
+  });
+
+  it("solo un contacto lo lleva", () => {
+    const bobina = { ...PULSADOR, elemento: "bobina", accionamiento: undefined } as const;
+    expect(validarDefinicion({ ...bobina, primitivasAccionado: [cuchilla] })).toEqual(["Solo un contacto lleva dibujo accionado."]);
+  });
+
+  it("rechaza textos y lo que sale de la caja", () => {
+    const texto = { forma: "texto", x: 0, y: 0, texto: "A", alto: 1 } as const;
+    const afuera = { forma: "circulo", cx: 0, cy: 0, r: 1.5 } as const;
+    expect(validarDefinicion({ ...PULSADOR, primitivasAccionado: [texto, afuera] })).toEqual([
+      "El dibujo accionado no lleva textos.",
+      "El dibujo accionado sale de la caja del símbolo (circulo).",
+    ]);
+  });
+});
+
 // Chequeos de tipos: no corren en Vitest, los verifica `npm run check:core`.
 // Si algún @ts-expect-error deja de ser un error, el chequeo de tipos falla.
 export const comprobacionesDeTipos: DefinicionSimbolo[] = [

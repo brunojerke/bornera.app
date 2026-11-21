@@ -191,7 +191,8 @@ export function juzgarF(frias, calientes) {
 /**
  * Topes de S en la PC (ms): netbook / K (D1-D, K1 = 3 y K2 = 5,5), con un
  * decimal (docs/plan-fase5.md, sección 3). Por fila, los números que se
- * juzgan de la celda, en orden, con su nombre. S4 se mide en T33 (S4-A).
+ * juzgan de la celda, en orden, con su nombre. S4 desde T33: el máximo de
+ * cuadro y el del gesto.
  */
 export const TOPES_S_PC = {
   S1: [{ nombre: "máx.", indice: 0, tope: 54.5 }],
@@ -200,8 +201,19 @@ export const TOPES_S_PC = {
     { nombre: "máx.", indice: 1, tope: 5.3 },
   ],
   S3: [{ nombre: "máx.", indice: 0, tope: 16.7 }],
+  S4: [
+    { nombre: "cuadro", indice: 0, tope: 6 },
+    { nombre: "gesto", indice: 1, tope: 18.2 },
+  ],
   S5: [{ nombre: "máx.", indice: 0, tope: 100 }],
 };
+
+/**
+ * Filas S que se juzgan solo por su tope (T33, R-A, fijado antes de medir):
+ * su no regresión informa. S1 cambió de definición en T33 (la base mide el
+ * sustituto sin el estado) y S4 no tiene base.
+ */
+export const S_SOLO_TOPE = ["S1", "S4"];
 
 /** Si S1 pasa de esto en la PC, se avisa antes de la netbook (300 / 6,2, por el ×6,2 de B10). */
 export const AVISO_S1_PC_MS = 48;
@@ -214,7 +226,7 @@ export const conMargen = (tope) => tope + Math.max(PISO_MS, TOLERANCIA * tope);
 
 /**
  * Las filas S de un texto de «Probar la fase 5»: id → los dos números de la
- * celda («X / Y ms»). S4 («se mide en T33») no tiene números y no sale.
+ * celda («X / Y ms»). Antes de T33, S4 («se mide en T33») no tiene números y no sale.
  * @param {string} texto
  * @returns {Map<string, number[]>}
  */
@@ -234,17 +246,21 @@ export function filasS(texto) {
  * El juicio de S en la PC (ajuste 1 de T31, fijado antes de medir): cada
  * número pasa si la mediana de las corridas calientes ≤ tope y el máximo ≤
  * tope + máx(1 ms, 10 %). Las frías se informan y no deciden.
+ * Con `omitirFaltantes` (la base de T33, que no tiene S4), una fila que no
+ * está en ninguna caliente no sale; si no, tira.
  * @param {readonly string[]} frias
  * @param {readonly string[]} calientes
+ * @param {boolean} [omitirFaltantes]
  */
-export function juzgarS(frias, calientes) {
+export function juzgarS(frias, calientes, omitirFaltantes = false) {
   const valores = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
     textos.map((t) => {
       const f = filasS(t).get(id);
       if (!f) throw new Error(`Falta ${id} en una corrida (¿es de «Probar la fase 5»?).`);
       return f[i] ?? NaN;
     });
-  const filas = Object.entries(TOPES_S_PC).flatMap(([id, numeros]) =>
+  const presentes = Object.entries(TOPES_S_PC).filter(([id]) => !omitirFaltantes || calientes.some((t) => filasS(t).has(id)));
+  const filas = presentes.flatMap(([id, numeros]) =>
     numeros.map(({ nombre, indice, tope }) => {
       const deciden = valores(calientes, id, indice);
       const med = mediana(deciden);
@@ -259,26 +275,33 @@ export function juzgarS(frias, calientes) {
 /**
  * La no regresión de S (T32, fijada antes de medir): con A y B en «Probar la
  * fase 5», cada número de `TOPES_S_PC` pasa si la mediana de las calientes de
- * A ≤ la de B + máx(1 ms, 10 % de la de B).
+ * A ≤ la de B + máx(1 ms, 10 % de la de B). Las filas de `soloTope` (T33,
+ * R-A: S1 y S4) informan: siempre pasan, y una que falta en la base sale con
+ * base NaN.
  * @param {readonly string[]} base calientes de B
  * @param {readonly string[]} head calientes de A
+ * @param {readonly string[]} [soloTope]
  */
-export function noRegresionS(base, head) {
+export function noRegresionS(base, head, soloTope = S_SOLO_TOPE) {
   if (base.length === 0 || head.length === 0) throw new Error("No hay corridas para comparar S.");
-  const med = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
+  const med = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i, /** @type {boolean} */ puedeFaltar) =>
     mediana(
       textos.map((t) => {
         const f = filasS(t).get(id);
-        if (!f) throw new Error(`Falta ${id} en una corrida (¿la base corre «Probar la fase 5»?).`);
+        if (!f) {
+          if (puedeFaltar) return NaN;
+          throw new Error(`Falta ${id} en una corrida (¿la base corre «Probar la fase 5»?).`);
+        }
         return f[i] ?? NaN;
       }),
     );
   const filas = Object.entries(TOPES_S_PC).flatMap(([id, numeros]) =>
     numeros.map(({ nombre, indice }) => {
-      const b = med(base, id, indice);
-      const h = med(head, id, indice);
+      const informa = soloTope.includes(id);
+      const b = med(base, id, indice, informa);
+      const h = med(head, id, indice, false);
       const limite = conMargen(b);
-      return { id, nombre, base: b, head: h, limite, pasa: h <= limite };
+      return { id, nombre, base: b, head: h, limite, informa, pasa: informa || h <= limite };
     }),
   );
   return { filas, pasa: filas.every((f) => f.pasa) };
@@ -312,6 +335,19 @@ export function desgloseS1(texto) {
   if (!l) return partes;
   for (const m of l.matchAll(/(R4|netlist|iniciar|cuadro) ([\d,]+)/g)) partes.set(m[1] ?? "", num(m[2] ?? ""));
   return partes;
+}
+
+/**
+ * S4 sobre la cadena de 100 de un texto (la nota «S4, cadena de 100 …», T33:
+ * informa): el máximo de cuadro y el de gesto; NaN si no está.
+ * @param {string} texto
+ * @returns {{ cuadro: number, gesto: number }}
+ */
+export function cadenaS4(texto) {
+  const l = texto.split(/\r?\n/).find((x) => x.startsWith("S4, cadena de 100"));
+  const c = l ? /cuadro máx\. ([\d,]+)/.exec(l) : null;
+  const g = l ? /gesto máx\. ([\d,]+)/.exec(l) : null;
+  return { cuadro: c ? num(c[1] ?? "") : NaN, gesto: g ? num(g[1] ?? "") : NaN };
 }
 
 /**

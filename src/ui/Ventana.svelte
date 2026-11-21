@@ -81,7 +81,7 @@
   let tituloDocumento = $state("");
   /** Errores y avisos de las validaciones (T19) del editor a la vista; null en las escenas que no se editan. */
   let cuentaAvisos = $state.raw<{ errores: number; avisos: number } | null>(null);
-  /** En Simular (T32), la detención y los fijados para la barra; null si no hay. */
+  /** En Simular (T32), la detención para la barra; null si no hay (los fijados se ven en el lienzo, T33). */
   let estadoSimulacion = $state<string | null>(null);
   /** Nombre del archivo actual; null en un documento que nunca se guardó. */
   let archivoActual = $state<string | null>(null);

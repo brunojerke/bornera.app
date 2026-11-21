@@ -138,6 +138,7 @@ import { HerramientaCable } from "./herramientas/cable";
 import { HerramientaColocar, type ModoColocar, type Previa } from "./herramientas/colocar";
 import { HerramientaSeleccionar, radioExtremo, TOLERANCIA_PX, type ExtremoAgarrable } from "./herramientas/seleccionar";
 import { SesionSimulacion } from "./simulacion";
+import { aplicarDibujo, dibujoDe, type DibujoSimulacion } from "./dibujoSimulacion";
 import { objetivoEn, radioBorne, type Objetivo } from "./objetivo";
 import type { Herramienta, Resultado } from "./herramientas/tipos";
 
@@ -166,6 +167,12 @@ export interface DestinoVista {
   invalidarRegion(caja: Caja): void;
   /** Pedir un cuadro: cambió solo la capa dinámica. */
   invalidar(): void;
+  /**
+   * Cambió el estado de la simulación dentro de `cajas` (T33, D8-A): como
+   * `invalidarRegion` en cada una, y además se descartan los mosaicos de
+   * otros niveles de zoom (ajuste 2). Sin él, se usa `invalidarRegion`.
+   */
+  invalidarEstado?(cajas: readonly Caja[]): void;
 }
 
 /** Un extremo de cable, para mostrar en el panel. */
@@ -463,6 +470,8 @@ export class Editor {
   alCambiarAvisos: (() => void) | null = null;
   /** La sesión de Simular (T32); null en Editar. */
   private _simulacion: SesionSimulacion | null = null;
+  /** Lo que la escena dibuja de la simulación (T33); null en Editar. */
+  private dibujoSim: DibujoSimulacion | null = null;
   /** Se avisa cuando cambia la simulación: entrar, salir, pulsar o soltar (para la barra de estado). */
   alCambiarSimulacion: (() => void) | null = null;
   /** Anillos de la selección única (R7, R8 y R11): x, y seguidos, y de qué cambio y selección son. */
@@ -706,6 +715,12 @@ export class Editor {
     const r = SesionSimulacion.entrar(this.documento.hojas[this.hoja] ?? { nombre: "", componentes: [], cables: [] }, {}, marcar);
     if (!r.ok) return r.errores;
     this._simulacion = r.sesion;
+    // T33 (I-A): el estado se dibuja y se rehace la escena entera.
+    const d = dibujoDe(r.sesion.sim);
+    aplicarDibujo(this.escena, null, d);
+    this.dibujoSim = d;
+    this.escena.simulando = true;
+    this.invalidarEscenaEntera();
     this.alCambiarSimulacion?.();
     return null;
   }
@@ -714,7 +729,36 @@ export class Editor {
   salirSimulacion(): void {
     if (!this._simulacion) return;
     this._simulacion = null;
+    // T33 (I-A): vuelve el dibujo de Editar, en la escena entera.
+    this.escena.limpiarEstado();
+    this.escena.simulando = false;
+    this.dibujoSim = null;
+    this.invalidarEscenaEntera();
     this.alCambiarSimulacion?.();
+  }
+
+  /** Rehace la escena entera por un cambio de estado de la simulación (I-A). */
+  private invalidarEscenaEntera(): void {
+    const k = this.escena.caja;
+    this.invalidarEstado(k ? [k] : []);
+  }
+
+  /** Cambió el estado de la simulación en `cajas` (D8-A): solo esa parte, sin mosaicos de otro zoom (ajuste 2). */
+  private invalidarEstado(cajas: readonly Caja[]): void {
+    const v = this.vista;
+    if (!v) return;
+    if (v.invalidarEstado) v.invalidarEstado(cajas);
+    else for (const k of cajas) v.invalidarRegion(k);
+  }
+
+  /** Después de pulsar o soltar: dibuja solo lo que cambió (D8-A). */
+  private actualizarDibujoSim(): void {
+    const s = this._simulacion;
+    if (!s) return;
+    const d = dibujoDe(s.sim);
+    const cajas = aplicarDibujo(this.escena, this.dibujoSim, d);
+    this.dibujoSim = d;
+    this.invalidarEstado(cajas);
   }
 
   /** El pulsador bajo (x, y) en Simular, con la tolerancia del clic de Editar (P-A); null si no hay. */
@@ -739,6 +783,7 @@ export class Editor {
     const s = this._simulacion;
     const id = this.pulsadorEn(x, y, escala);
     if (!s || id === null || !s.presionar(id, mayus)) return false;
+    this.actualizarDibujoSim();
     this.alCambiarSimulacion?.();
     return true;
   }
@@ -746,6 +791,7 @@ export class Editor {
   /** Se soltó el botón (en cualquier lado) o se cortó el puntero: vuelve el mantenido. */
   soltarSimulacion(): boolean {
     if (!this._simulacion?.soltarBoton()) return false;
+    this.actualizarDibujoSim();
     this.alCambiarSimulacion?.();
     return true;
   }
@@ -753,6 +799,19 @@ export class Editor {
   /** La ventana perdió el foco (M-A): se suelta el mantenido; los fijados siguen. */
   perderVentanaSimulacion(): boolean {
     if (!this._simulacion?.perderVentana()) return false;
+    this.actualizarDibujoSim();
+    this.alCambiarSimulacion?.();
+    return true;
+  }
+
+  /**
+   * Pulsa o suelta el pulsador `id` como un clic sobre él (D5-B), sin buscarlo
+   * por el punto: para el banco (S4) y el humo. Devuelve si cambió algo.
+   */
+  presionarPulsador(id: string, mayus = false): boolean {
+    const s = this._simulacion;
+    if (!s || !s.presionar(id, mayus)) return false;
+    this.actualizarDibujoSim();
     this.alCambiarSimulacion?.();
     return true;
   }

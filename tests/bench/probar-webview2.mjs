@@ -20,7 +20,9 @@
 //                   lo de --fase4 y además S1–S5 de A con los topes de la PC
 //   --base-fase5    con --fase5, B también corre «Probar la fase 5» (T32): se
 //                   suma la no regresión de S (mediana de A ≤ la de B +
-//                   máx(1 ms, 10 %)) y el cierre del ajuste 1 de T32
+//                   máx(1 ms, 10 %)) y el cierre del ajuste 1 de T32. Desde
+//                   T33 (R-A), S1 y S4 solo por tope: su no regresión informa,
+//                   y una base sin S4 (anterior a T33) no la tiene
 //   --bloques=N     bloques ABBA (por defecto 3: 6 aperturas por exe)
 //   --corridas=N    corridas por apertura (por defecto 2: fría y caliente)
 //   --puerto=N      puerto de depuración (por defecto 9333)
@@ -31,7 +33,7 @@
 // toca la hoja ni hace copias de recuperación. No agrega dependencias.
 
 import { existsSync, writeFileSync } from "node:fs";
-import { AVISO_S1_PC_MS, cierreS, compararB, desgloseS1, filasB, filasF, friasFuera, juzgarF, juzgarS, mediana, metricas, noRegresionS, paredS5 } from "./compararB.mjs";
+import { AVISO_S1_PC_MS, cadenaS4, cierreS, compararB, desgloseS1, filasB, filasF, friasFuera, juzgarF, juzgarS, mediana, metricas, noRegresionS, paredS5 } from "./compararB.mjs";
 import { valoresK } from "./factores.mjs";
 import { argumentos, cerrarResultado, conLaApp, esperar, textoResultado, tocarMenu, unDecimal } from "./webview2.mjs";
 
@@ -111,7 +113,7 @@ async function main() {
   const fuera = { A: friasFuera(deFrias.A, de("A", false)), B: friasFuera(deFrias.B, de("B", false)) };
   const f = fase4 ? juzgarF(deFrias.A, de("A", false)) : null;
   const s = fase5 ? juzgarS(deFrias.A, de("A", false)) : null;
-  const sB = baseFase5 ? juzgarS(deFrias.B, de("B", false)) : null;
+  const sB = baseFase5 ? juzgarS(deFrias.B, de("B", false), true) : null;
   const regresion = baseFase5 ? noRegresionS(de("B", false), de("A", false)) : null;
   const cierre = s && regresion ? cierreS(s, regresion) : null;
   if (s && !bandera("json")) {
@@ -121,9 +123,16 @@ async function main() {
     const cal = de("A", false);
     console.log("Desglose S1 (mediana): " + ["R4", "netlist", "iniciar", "cuadro"].map((p) => `${p} ${fmt(mediana(cal.map((t) => desgloseS1(t).get(p) ?? NaN)))}`).join(" · "));
     console.log(`Pared S5 (informa): ${fmt(mediana(cal.map(paredS5)))} ms`);
+    const cad = cal.map(cadenaS4);
+    if (cad.some((c) => !Number.isNaN(c.gesto))) {
+      console.log(`S4 cadena de 100 (informa, no frena): cuadro máx. mediana ${fmt(mediana(cad.map((c) => c.cuadro)))} · gesto máx. mediana ${fmt(mediana(cad.map((c) => c.gesto)))} ms`);
+    }
     if (sB) for (const x of sB.filas) console.log(`S de B ${x.id} ${x.nombre} (informa): mediana ${fmt(x.mediana)} · máx. ${fmt(x.maximo)}`);
     if (regresion) {
-      for (const x of regresion.filas) console.log(`No regresión ${x.id} ${x.nombre}: B ${fmt(x.base)} · A ${fmt(x.head)} · límite ${fmt(x.limite)} · ${x.pasa ? "pasa" : "NO pasa"}`);
+      for (const x of regresion.filas) {
+        const juicio = x.informa ? "informa (R-A)" : x.pasa ? "pasa" : "NO pasa";
+        console.log(`No regresión ${x.id} ${x.nombre}: B ${fmt(x.base)} · A ${fmt(x.head)} · límite ${fmt(x.limite)} · ${juicio}`);
+      }
       console.log(`Cierre de S (ajuste 1 de T32): ${cierre}`);
     }
   }

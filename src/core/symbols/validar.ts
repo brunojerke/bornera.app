@@ -1,10 +1,25 @@
 // Chequeos de una definición de símbolo que el sistema de tipos no puede hacer.
 // Cada símbolo nuevo debe pasar `validarDefinicion` en su test de bornes.
 
-import { esFuente, esSeguidor, type DefinicionSimbolo, type Direccion } from "./tipos";
+import { esFuente, esSeguidor, type DefinicionSimbolo, type Direccion, type Primitiva } from "./tipos";
 
 /** Prefijo de etiqueta válido: solo letras mayúsculas. */
 const PREFIJO_VALIDO = /^[A-Z]+$/;
+
+/** La primitiva (sin textos) cabe en la caja de `ancho` × `alto` centrada en el origen. */
+function primitivaEnCaja(p: Exclude<Primitiva, { forma: "texto" }>, ancho: number, alto: number): boolean {
+  const e = 1e-9;
+  const adentro = (x: number, y: number) => Math.abs(x) <= ancho / 2 + e && Math.abs(y) <= alto / 2 + e;
+  switch (p.forma) {
+    case "linea":
+      return adentro(p.x1, p.y1) && adentro(p.x2, p.y2);
+    case "arco":
+    case "circulo":
+      return adentro(p.cx - p.r, p.cy - p.r) && adentro(p.cx + p.r, p.cy + p.r);
+    case "rectangulo":
+      return adentro(p.x, p.y) && adentro(p.x + p.ancho, p.y + p.alto);
+  }
+}
 
 /**
  * Hacia dónde queda afuera desde un punto del borde de una caja de
@@ -49,6 +64,16 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     if (prefijo === undefined) errores.push(`El primer número va solo con prefijo de etiqueta (es ${primero}).`);
     else if (!Number.isSafeInteger(primero) || primero < 0) {
       errores.push(`El primer número tiene que ser un entero ≥ 0 (es ${primero}).`);
+    }
+  }
+
+  // Dibujo accionado (T33): solo contactos, sin textos y dentro de la caja.
+  const accionado = def.primitivasAccionado;
+  if (accionado !== undefined) {
+    if (def.elemento !== "contacto_na" && def.elemento !== "contacto_nc") errores.push("Solo un contacto lleva dibujo accionado.");
+    for (const p of accionado) {
+      if (p.forma === "texto") errores.push("El dibujo accionado no lleva textos.");
+      else if (!primitivaEnCaja(p, ancho, alto)) errores.push(`El dibujo accionado sale de la caja del símbolo (${p.forma}).`);
     }
   }
 

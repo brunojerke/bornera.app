@@ -41,12 +41,6 @@ export interface Colores extends ColoresGrilla, ColoresContenido {
   origen: string;
   /** Lo que se está editando en la capa dinámica (vista previa al colocar). */
   acento: string;
-  /**
-   * Lo que no se puede hacer (T19, D-color A): la previa de Colocar o de
-   * Pegar en conflicto, un cable en curso inválido y un arrastre con
-   * conflicto, siempre con su ✕. Opcional: sin él, el de los bornes.
-   */
-  conflicto?: string;
 }
 
 /**
@@ -54,6 +48,13 @@ export interface Colores extends ColoresGrilla, ColoresContenido {
  * copiarlos a la pantalla, el cuadro entero no debería pasar de 16 ms.
  */
 export const PRESUPUESTO_MS = 8;
+
+/**
+ * El mismo tiempo en Simular (T33, P-B): cada pulsar cambia unos pocos
+ * mosaicos y el cuadro tiene que quedar bajo (S4: 6 ms en la PC); si son
+ * más, se rehacen en más cuadros.
+ */
+export const PRESUPUESTO_SIMULAR_MS = 4;
 
 /**
  * Lo que puede tardar un cuadro entero, en ms (un poco menos de 16, por las
@@ -169,6 +170,9 @@ export class Capas {
     acento: "#06f",
     aviso: "#c40",
     conflicto: "#a12",
+    fase: "#d22",
+    neutro: "#08c",
+    encendida: "#fc1",
   };
 
   private _opciones: OpcionesCapas = { ...OPCIONES_OPTIMIZADAS };
@@ -272,6 +276,18 @@ export class Capas {
     // alcanza siempre (con el zoom mínimo, 1 unidad = 2 px: uno del suavizado
     // y uno de alinear un trazo de 1 px, que ahí no engorda).
     n += mos.descartarViejosEn(ampliarCaja(caja, 1));
+    return n > 0;
+  }
+
+  /**
+   * Cambió el estado de la simulación (T33, ajuste 2): se descartan todos los
+   * mosaicos guardados de otros niveles de zoom, así nunca se muestra uno con
+   * un estado viejo. Lo que cambió se invalida aparte, con `invalidarRegion`.
+   * Devuelve true si descartó alguno (hace falta un cuadro).
+   */
+  descartarOtrosNiveles(): boolean {
+    const n = this.mosaicos.viejos.length;
+    if (n > 0) this.mosaicos.soltarViejos();
     return n > 0;
   }
 
@@ -466,7 +482,8 @@ export class Capas {
     if (pendientes.length === 0) return 0;
     pendientes.sort((a, b) => a.prioridad - b.prioridad);
 
-    const presupuesto = Math.min(PRESUPUESTO_MS, OBJETIVO_CUADRO_MS - this.estimadoComposicion - this.estimadoDinamico);
+    const base = this.contenido?.simulando === true ? PRESUPUESTO_SIMULAR_MS : PRESUPUESTO_MS;
+    const presupuesto = Math.min(base, OBJETIVO_CUADRO_MS - this.estimadoComposicion - this.estimadoDinamico);
     const t0 = this.reloj();
     let hechos = 0;
     for (const p of pendientes) {
@@ -556,11 +573,14 @@ export class Capas {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     if (k !== mos.k) {
-      if (!this.cubreLaPantalla(camara, k, W, H)) {
+      // En Simular, durante el zoom los actuales también son de otro nivel: los
+      // sucios tienen un estado viejo y no se muestran (ajuste 2 de T33).
+      const sinSucios = this.contenido?.simulando === true && this.haySucios();
+      if (sinSucios || !this.cubreLaPantalla(camara, k, W, H)) {
         this.pintarVacio(ox, oy, W, H, k, dpr);
         this.dibujarEscalados(mos.viejos, camara, k, W, H);
       }
-      this.dibujarEscalados(mos.actuales.values(), camara, k, W, H);
+      this.dibujarEscalados(sinSucios ? this.limpios() : mos.actuales.values(), camara, k, W, H);
       return;
     }
 
@@ -618,6 +638,17 @@ export class Capas {
       m.usado = this.cuadro;
     }
     ctx.imageSmoothingEnabled = true;
+  }
+
+  /** Hay mosaicos sucios en el nivel actual. */
+  private haySucios(): boolean {
+    for (const m of this.mosaicos.actuales.values()) if (m.sucio) return true;
+    return false;
+  }
+
+  /** Los mosaicos del nivel actual que no están sucios. */
+  private *limpios(): Iterable<Mosaico> {
+    for (const m of this.mosaicos.actuales.values()) if (!m.sucio) yield m;
   }
 
   /** True si los mosaicos del nivel actual cubren toda la pantalla vista con zoom k. */

@@ -38,3 +38,8 @@ Aprobado por Bruno el 2026-11-21 con I-A, S4-B, R-A, C-A, M-A, F-A y P-B, más 3
 - S1 sube por el mapa cable → red y los trazos por color (margen amplio contra 54,5).
 - S4 cuadro con 4 ms de presupuesto más la copia a pantalla.
 - B2 2.º puede repetir T32.
+
+## Resultado (cierre, 2026-11-21)
+- **Hecho:** `primitivasAccionado` en los 4 contactos (NA cerrado, NC abierto; el "[" del pulsador queda y los trazos siguen a la cuchilla) con su validación. En la escena, clase por cable (`claseCable`), estado por componente (`estadoComponente`: accionado, encendido, marcado) y `simulando`; un trazo por clase, uniones con el color de su red, relleno de lámpara y bobina, contorno de la marca en `--conflicto`. `src/editor/dibujoSimulacion.ts` (`dibujoDe`, `aplicarDibujo`) y el Editor (entrar y salir: caja entera; cada gesto: solo lo que cambió; `presionarPulsador` para el banco). `DestinoVista.invalidarEstado` y `Vista.invalidarEstado` (ajuste 2), `Capas.descartarOtrosNiveles`, `PRESUPUESTO_SIMULAR_MS` (P-B). Tema: `--sim-fase`, `--sim-neutro`, `--sim-encendida`. Banco: S1 completa, S4 y la cadena; `TOPES_S_PC.S4`, `S_SOLO_TOPE`, `cadenaS4`. Tests nuevos: `estadoSimulacion.test.ts` (9), `dibujoSimulacion.test.ts` (7), capas (3), núcleo (validación y contactos accionados), Exportar en Simular (ajuste 1), fase5 y compararS. Humo `t33-dibujo-estado.mjs` (15) con capturas; `t31` y `t32` siguen a S4 y a F-A. Humo 989/989.
+- **ABBA contra `946589a`: pasa todo** (`docs/bench.md`). B1–B16 nada sube; F pasa; S1 19,2 / 21,8 ms; S4 2,1 / 2,4 (cuadro) y 2,3 / 2,8 (gesto) contra 6,0 / 18,2; S5 95,3 / 98,1; cadena 5,2 / 12,8 (informa).
+- **Pendiente:** netbook (C3). El banco de Chrome (informa) mostró subidas en gestos chicos de arrastre que el ABBA no ve: se mira en C1.

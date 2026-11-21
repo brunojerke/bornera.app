@@ -1,7 +1,8 @@
 // T32: modo Simular en la app real a 1024×600 (docs/plan-T32.md).
 //  1. marcha-parada.brn: F5 entra; mantener S1 arranca K1 y H1 y siguen al
-//     soltar (afuera del pulsador); S0 los apaga. Mayús+clic fija («Fijados»
-//     en la barra) hasta otro clic. Con S1 mantenido, F5 sale igual (ajuste 4).
+//     soltar (afuera del pulsador); S0 los apaga. Mayús+clic fija hasta otro
+//     clic (desde T33, F-A, se ve accionado y la barra ya no dice «Fijados»).
+//     Con S1 mantenido, F5 sale igual (ajuste 4).
 //  2. Bloqueos en Simular: Guardar, Guardar como, Abrir y Nuevo (botones y
 //     Ctrl+S, ajuste 3), Ctrl+Mayús+B y «Probar la fase N»; Exportar sigue.
 //  3. Abrir, entrar, pulsar, soltar y salir deja el archivo byte a byte igual
@@ -115,12 +116,15 @@ async function probar(p, comprobar, carpeta) {
   comprobar("S0: K1 y H1 se apagan y siguen así", (await conTension()) === "[]" && !(await prendida("H1")));
   comprobar("el documento no cambió: sin «•»", !(await titulo()).includes("•"), await titulo());
 
+  const s0Accionado = () =>
+    p.evaluar(`(() => { const ed = bornera.editor; const c = ed.documento.hojas[0].componentes.find((x) => x.etiqueta === "S0");
+      return ed.escena.obtener(c.id).accionado === true; })()`);
   await pulsarYSoltar("S0", "pulsador.nc", MAYUS);
-  comprobar("Mayús+clic fija S0: la barra dice «Fijados: S0»", (await estado()) === "Fijados: S0", await estado());
+  comprobar("Mayús+clic fija S0: se ve accionado y la barra no dice «Fijados» (T33, F-A)", (await s0Accionado()) && (await estado()) === "", await estado());
   await pulsarYSoltar("S1", "pulsador.na");
   comprobar("con S0 fijado, S1 no arranca", (await conTension()) === "[]");
   await pulsarYSoltar("S0", "pulsador.nc");
-  comprobar("otro clic suelta S0 y la barra ya no lo dice", (await estado()) === "" && (await p.evaluar("bornera.simulacion().fijados.length")) === 0, await estado());
+  comprobar("otro clic suelta S0: vuelve a reposo", !(await s0Accionado()) && (await p.evaluar("bornera.simulacion().fijados.length")) === 0, await estado());
   comprobar("el cursor es la mano sobre un pulsador", (await p.evaluar(`document.querySelector("canvas").parentElement.style.cursor`)) === "pointer");
 
   // ── 2. Bloqueos en Simular ──

@@ -109,6 +109,13 @@ export type DefinicionSimbolo = Comportamiento & {
   /** Caja del símbolo, centrada en el origen (0,0), que también es el pivote de rotación. */
   tamano: { ancho: number; alto: number };
   primitivas: Primitiva[];
+  /**
+   * Dibujo del contacto accionado (T33, D9-B): el NA cerrado y el NC abierto.
+   * El lienzo lo usa en Simular mientras el contacto está accionado; si no,
+   * `primitivas`. Solo en contactos, sin textos y dentro de `tamano`, así la
+   * caja de dibujo es la misma en los dos estados (`validarDefinicion`).
+   */
+  primitivasAccionado?: Primitiva[];
   bornes: Borne[];
   /**
    * De qué lado de las conexiones van los nombres de los bornes, en coordenadas

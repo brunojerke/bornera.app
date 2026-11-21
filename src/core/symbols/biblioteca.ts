@@ -76,12 +76,35 @@ function contactoNC(): Primitiva[] {
   return [...conexiones(1), linea(0, -1, 0.9, -1), linea(0, BISAGRA_Y, PUNTA_NC.x, PUNTA_NC.y)];
 }
 
+// ── Contactos accionados (T33, D9-B) ───────────────────────────────────────
+// En Simular, un contacto accionado se dibuja en su estado: el NA cerrado (la
+// cuchilla derecha, del contacto fijo de abajo al de arriba) y el NC abierto
+// (la cuchilla inclinada a la izquierda, como la del NA en reposo, lejos del
+// tope). Todo queda dentro de la caja del símbolo: la caja de dibujo no cambia.
+
+/** Punta de la cuchilla del NA cerrado: sobre el contacto fijo de arriba. */
+const PUNTA_NA_CERRADO = { x: 0, y: -1 };
+
+/** NA accionado: cerrado, la cuchilla une los dos contactos fijos. */
+function contactoNACerrado(): Primitiva[] {
+  return [...conexiones(1), linea(0, BISAGRA_Y, PUNTA_NA_CERRADO.x, PUNTA_NA_CERRADO.y)];
+}
+
+/** NC accionado: abierto, la cuchilla se aparta del tope (la del NA en reposo). */
+function contactoNCAbierto(): Primitiva[] {
+  return [...conexiones(1), linea(0, -1, 0.9, -1), linea(0, BISAGRA_Y, PUNTA_NA.x, PUNTA_NA.y)];
+}
+
 // ── Accionamiento por pulsación (IEC 60617-02-13-05) ───────────────────────
 
 /** X del accionador "[" a la izquierda del contacto. */
 const ACCIONADOR_X = -1.75;
 
-/** Accionador manual por pulsación, unido con trazos a la cuchilla en y = 0. */
+/**
+ * Accionador manual por pulsación, unido con trazos a la cuchilla en y = 0.
+ * Accionado (T33), el "[" queda donde está y los trazos siguen a la cuchilla:
+ * así no sale de la caja del símbolo.
+ */
 function pulsacion(xCuchilla: number): Primitiva[] {
   return [
     ...discontinua(xCuchilla, 0, ACCIONADOR_X, 0),
@@ -103,6 +126,7 @@ export const PULSADOR_NA: DefinicionSimbolo = {
   prefijoEtiqueta: "S",
   tamano: { ancho: 4, alto: 4 },
   primitivas: [...contactoNA(), ...pulsacion(xEnCentro(PUNTA_NA, BISAGRA_Y))],
+  primitivasAccionado: [...contactoNACerrado(), ...pulsacion(xEnCentro(PUNTA_NA_CERRADO, BISAGRA_Y))],
   // La cuchilla se inclina a la izquierda: los nombres, del otro lado.
   ladoNombresBornes: "derecha",
   bornes: [
@@ -123,6 +147,7 @@ export const PULSADOR_NC: DefinicionSimbolo = {
   primerNumero: 0,
   tamano: { ancho: 4, alto: 4 },
   primitivas: [...contactoNC(),...pulsacion(xEnCentro(PUNTA_NC, BISAGRA_Y))],
+  primitivasAccionado: [...contactoNCAbierto(), ...pulsacion(xEnCentro(PUNTA_NA, BISAGRA_Y))],
   // El tope del contacto está a la derecha: los nombres, del otro lado.
   ladoNombresBornes: "izquierda",
   bornes: [
@@ -155,6 +180,7 @@ export const CONTACTO_AUXILIAR_NA: DefinicionSimbolo = {
   accionamiento: "bobina",
   tamano: { ancho: 2, alto: 4 },
   primitivas: contactoNA(),
+  primitivasAccionado: contactoNACerrado(),
   // La cuchilla se inclina a la izquierda: los nombres, del otro lado.
   ladoNombresBornes: "derecha",
   bornes: [
@@ -176,6 +202,7 @@ export const CONTACTO_AUXILIAR_NC: DefinicionSimbolo = {
   accionamiento: "bobina",
   tamano: { ancho: 2, alto: 4 },
   primitivas: contactoNC(),
+  primitivasAccionado: contactoNCAbierto(),
   // El tope del contacto está a la derecha: los nombres, del otro lado.
   ladoNombresBornes: "izquierda",
   bornes: [

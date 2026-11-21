@@ -127,6 +127,56 @@ describe("biblioteca de símbolos", () => {
   });
 });
 
+describe("contactos accionados (T33, D9-B)", () => {
+  const CONTACTOS = [PULSADOR_NA, PULSADOR_NC, CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC];
+  /** La cuchilla: la línea que sale de la bisagra (0, 1) hacia arriba. */
+  const cuchilla = (ps: readonly Primitiva[]) => ps.find((p) => p.forma === "linea" && p.x1 === 0 && p.y1 === 1 && p.y2 < 1);
+
+  it("los cuatro contactos tienen dibujo accionado; los demás símbolos no", () => {
+    for (const s of SIMBOLOS) expect(s.primitivasAccionado !== undefined, s.tipo).toBe(CONTACTOS.includes(s));
+  });
+
+  it.each(CONTACTOS.map((s) => [s.tipo, s] as const))("%s accionado: dentro de su caja, sin textos y con una línea hasta cada borne", (_, s) => {
+    const a = s.primitivasAccionado!;
+    const { ancho, alto } = s.tamano;
+    for (const p of a) {
+      expect(p.forma).not.toBe("texto");
+      for (const [x, y] of extremos(p)) {
+        expect(Math.abs(x)).toBeLessThanOrEqual(ancho / 2 + 1e-9);
+        expect(Math.abs(y)).toBeLessThanOrEqual(alto / 2 + 1e-9);
+      }
+    }
+    for (const b of s.bornes) {
+      expect(a.some((p) => p.forma === "linea" && ((p.x1 === b.x && p.y1 === b.y) || (p.x2 === b.x && p.y2 === b.y))), b.nombre).toBe(true);
+    }
+  });
+
+  it.each([PULSADOR_NA, CONTACTO_AUXILIAR_NA].map((s) => [s.tipo, s] as const))("%s accionado está cerrado: la cuchilla llega al contacto fijo de arriba", (_, s) => {
+    expect(cuchilla(s.primitivasAccionado!)).toMatchObject({ x2: 0, y2: -1 });
+    expect(cuchilla(s.primitivas)).not.toMatchObject({ x2: 0, y2: -1 });
+  });
+
+  it.each([PULSADOR_NC, CONTACTO_AUXILIAR_NC].map((s) => [s.tipo, s] as const))("%s accionado está abierto: la cuchilla se aparta del tope", (_, s) => {
+    const reposo = cuchilla(s.primitivas) as Extract<Primitiva, { forma: "linea" }>;
+    const accionada = cuchilla(s.primitivasAccionado!) as Extract<Primitiva, { forma: "linea" }>;
+    // En reposo cruza el tope (x de 0 a 0,9 en y = −1); accionada queda a la izquierda.
+    expect(reposo.x2).toBeGreaterThan(0);
+    expect(accionada.x2).toBeLessThan(0);
+    expect(s.primitivasAccionado).toContainEqual({ forma: "linea", x1: 0, y1: -1, x2: 0.9, y2: -1 });
+  });
+
+  it("el pulsador accionado deja el accionador donde está y los trazos llegan a la cuchilla", () => {
+    for (const s of [PULSADOR_NA, PULSADOR_NC]) {
+      const corchete = (ps: readonly Primitiva[]) => ps.filter((p) => p.forma === "linea" && p.x1 === -1.75);
+      expect(corchete(s.primitivasAccionado!)).toEqual(corchete(s.primitivas));
+      const c = cuchilla(s.primitivasAccionado!) as Extract<Primitiva, { forma: "linea" }>;
+      const xEnCero = (c.x2 * 1) / (1 - c.y2);
+      const trazos = s.primitivasAccionado!.filter((p) => p.forma === "linea" && p.y1 === 0 && p.y2 === 0);
+      expect(Math.max(...trazos.map((p) => (p as Extract<Primitiva, { forma: "linea" }>).x1))).toBeCloseTo(xEnCero, 9);
+    }
+  });
+});
+
 describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
   it.each(SIMBOLOS.map((s) => [s.tipo, s] as const))("%s es fuente, seguidor o tiene prefijo, y no dos a la vez", (_, s) => {
     const clases = [esFuente(s), esSeguidor(s), s.prefijoEtiqueta !== undefined].filter(Boolean);

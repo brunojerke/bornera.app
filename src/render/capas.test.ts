@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Camara } from "./camara";
-import { Capas, ESPERA_ZOOM_MS, MARGEN_PX, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, PRESUPUESTO_MS } from "./capas";
+import { Capas, ESPERA_ZOOM_MS, MARGEN_PX, OPCIONES_OPTIMIZADAS, OPCIONES_SIN_OPTIMIZAR, PRESUPUESTO_MS, PRESUPUESTO_SIMULAR_MS } from "./capas";
 import type { Contenido, InfoDibujo } from "./escena";
 import { contextoFalso, fabricaFalsa, llamadasA, Path2DFalso } from "./falsos";
 import { BYTES_MOSAICO, RESERVA_LIBRES, TAM_MOSAICO } from "./mosaicos";
@@ -568,5 +568,71 @@ describe("Capas: mosaicos", () => {
     expect(m.mosaicos).toBe(0);
     expect(m.pendiente).toBe(false);
     expect(contenido.infos).toHaveLength(0);
+  });
+});
+
+describe("Capas en Simular (T33)", () => {
+  beforeEach(() => vi.stubGlobal("Path2D", Path2DFalso));
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Copias escaladas a la pantalla (las de otro nivel o de un zoom en curso). */
+  const escaladas = (llamadas: unknown[][]) => copias(llamadas).filter((c) => c[3] !== undefined);
+
+  it("P-B: el presupuesto para rehacer mosaicos baja a 4 ms; en Editar sigue en 8", () => {
+    const porCuadro = (simulando: boolean) => {
+      const { capas, contenido, dibujar, terminar } = armar(1);
+      Object.assign(contenido, { simulando });
+      terminar();
+      capas.invalidarEstatica();
+      const m = dibujar();
+      expect(m.estatica).toBeLessThanOrEqual((simulando ? PRESUPUESTO_SIMULAR_MS : PRESUPUESTO_MS) + 1);
+      return m.mosaicos;
+    };
+    expect(PRESUPUESTO_SIMULAR_MS).toBe(4);
+    const simular = porCuadro(true);
+    const editar = porCuadro(false);
+    expect(simular).toBeGreaterThanOrEqual(PRESUPUESTO_SIMULAR_MS - 1);
+    expect(simular).toBeLessThanOrEqual(PRESUPUESTO_SIMULAR_MS + 1);
+    expect(editar).toBeGreaterThan(simular);
+  });
+
+  it("ajuste 2: al cambiar el estado se descartan los mosaicos de otros niveles de zoom", () => {
+    const { principal, capas, camara, dibujar, avanzar, terminar } = armar(10);
+    terminar();
+    camara.zoomEn(2, W / 2, H / 2);
+    dibujar();
+    avanzar(ESPERA_ZOOM_MS);
+    dibujar(); // pasa al nivel nuevo: los de antes quedan como viejos y se ven escalados donde falta
+    principal.llamadas.length = 0;
+    avanzar(16);
+    dibujar();
+    expect(escaladas(principal.llamadas).length).toBeGreaterThan(0);
+    // Cambió el estado: ningún mosaico de otro nivel se vuelve a mostrar.
+    expect(capas.descartarOtrosNiveles()).toBe(true);
+    expect(capas.descartarOtrosNiveles()).toBe(false);
+    principal.llamadas.length = 0;
+    avanzar(16);
+    dibujar();
+    expect(escaladas(principal.llamadas)).toEqual([]);
+  });
+
+  it("ajuste 2: en Simular, durante el zoom no se ven escalados los mosaicos sucios (en Editar, sí)", () => {
+    const enZoom = (simulando: boolean) => {
+      const { principal, capas, contenido, camara, dibujar, terminar } = armar();
+      Object.assign(contenido, { simulando });
+      terminar();
+      // Cambia el estado dentro del mosaico (0, 0), y enseguida empieza un zoom.
+      capas.invalidarRegion({ x: 2, y: 2, ancho: 3, alto: 3 });
+      principal.llamadas.length = 0;
+      camara.zoomEn(2, W / 2, H / 2);
+      const m = dibujar();
+      expect(m.esperar).toBe(ESPERA_ZOOM_MS);
+      return { escaladas: escaladas(principal.llamadas).length, fondo: llamadasA(principal.llamadas, "fillRect").length };
+    };
+    const editar = enZoom(false);
+    const simular = enZoom(true);
+    expect(simular.escaladas).toBe(editar.escaladas - 1);
+    // Donde estaba el sucio se ve la grilla vacía.
+    expect(simular.fondo).toBeGreaterThan(editar.fondo);
   });
 });

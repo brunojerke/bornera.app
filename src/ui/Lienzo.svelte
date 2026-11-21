@@ -75,8 +75,8 @@
      */
     cuentaAvisos?: { errores: number; avisos: number } | null;
     /**
-     * En Simular (T32, AV-A y ajuste 2), el texto fijo de la barra: la
-     * detención y los pulsadores fijados; null si no hay. Solo lectura desde afuera.
+     * En Simular (T32, AV-A), el texto fijo de la barra: la detención; null
+     * si no hay. Los fijados se ven en el lienzo desde T33 (F-A). Solo lectura desde afuera.
      */
     estadoSimulacion?: string | null;
     /** Editor de lo que se muestra (null en las escenas que no se editan). Solo lectura desde afuera. */

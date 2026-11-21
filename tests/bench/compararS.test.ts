@@ -5,17 +5,27 @@
 import { describe, expect, it } from "vitest";
 import { textoFase4 } from "../../src/ui/fase4";
 import { filasS as filasDeApp, K_S, notasS, TOPES_S_NETBOOK, type MuestrasS } from "../../src/ui/fase5";
-import { AVISO_S1_PC_MS, cierreS, conMargen, desgloseS1, filasS, juzgarS, noRegresionS, paredS5, TOPES_S_PC } from "./compararB.mjs";
+import { AVISO_S1_PC_MS, cadenaS4, cierreS, conMargen, desgloseS1, filasS, juzgarS, noRegresionS, paredS5, S_SOLO_TOPE, TOPES_S_PC } from "./compararB.mjs";
 
-/** Un texto de «Probar la fase 5» como lo arma la app, con S1 total `s1`, S2 `s2` (mediana y máx.), S3 `s3` y S5 `s5`. */
-function texto(s1: number, s2: [number, number], s3: number, s5: number): string {
+/**
+ * Un texto de «Probar la fase 5» como lo arma la app, con S1 total `s1`, S2
+ * `s2` (mediana y máx.), S3 `s3`, S5 `s5` y S4 `s4` (cuadro y gesto, T33).
+ */
+function texto(s1: number, s2: [number, number], s3: number, s5: number, s4: [number, number] = [3, 8]): string {
   const m: MuestrasS = {
     s1: [{ r4: 0.5, netlist: 4.25, iniciar: 1, cuadro: s1 - 5.75, total: s1, cuadros: 3 }],
     s2: [s2[0], s2[0], s2[1]],
     s3: [s3],
+    s4: [{ cuadro: s4[0], gesto: s4[1], cuadros: 2 }],
+    s4Cadena: [{ cuadro: 5, gesto: 40, cuadros: 12 }],
     s5: [{ trabajo: s5, pared: s5 * 2, tramos: 10, avisos: 5 }],
   };
   return textoFase4(filasDeApp(m), "Probar la fase 5 · prueba", notasS(m, { componentes: 2000, cables: 2200, bobinas: 300 }));
+}
+
+/** El texto de una base anterior a T33: la fila S4 dice «se mide en T33». */
+function sinS4(t: string): string {
+  return t.replace(/^\| S4 \|.*$/m, "| S4 | Pulsar con dibujo al 31 % | máx. de cuadro / por gesto | ≤ 33 / 100 ms | se mide en T33 | se anota | — |");
 }
 
 describe("topes de S en la PC", () => {
@@ -25,8 +35,14 @@ describe("topes de S en la PC", () => {
     expect(TOPES_S_PC.S1[0]!.tope).toBe(pc(TOPES_S_NETBOOK.S1, "S1"));
     expect(TOPES_S_PC.S2.map((x) => x.tope)).toEqual(TOPES_S_NETBOOK.S2.map((n) => pc(n, "S2")));
     expect(TOPES_S_PC.S3[0]!.tope).toBe(pc(TOPES_S_NETBOOK.S3, "S3"));
+    expect(TOPES_S_PC.S4.map((x) => x.tope)).toEqual(TOPES_S_NETBOOK.S4.map((n) => pc(n, "S4")));
+    expect(TOPES_S_PC.S4.map((x) => x.tope)).toEqual([6, 18.2]);
     expect(TOPES_S_PC.S5[0]!.tope).toBe(pc(TOPES_S_NETBOOK.S5, "S5"));
     expect(AVISO_S1_PC_MS).toBe(48);
+  });
+
+  it("S4: el máximo puede llegar a 7,0 / 20,0 (plan de T33)", () => {
+    expect(TOPES_S_PC.S4.map((x) => Math.round(conMargen(x.tope) * 100) / 100)).toEqual([7, 20.02]);
   });
 
   it("el margen del máximo es máx(1 ms, 10 %)", () => {
@@ -36,15 +52,19 @@ describe("topes de S en la PC", () => {
   });
 });
 
-describe("filasS, desgloseS1 y paredS5", () => {
-  it("leen el texto que arma la app; S4 (se mide en T33) no sale", () => {
+describe("filasS, desgloseS1, cadenaS4 y paredS5", () => {
+  it("leen el texto que arma la app; en una base anterior a T33, S4 (se mide en T33) no sale", () => {
     const t = texto(30, [0.5, 2], 8, 90);
     expect([...filasS(t).entries()]).toEqual([
       ["S1", [30, 30]],
       ["S2", [0.5, 2]],
       ["S3", [8, 8]],
+      ["S4", [3, 8]],
       ["S5", [90, 90]],
     ]);
+    expect(filasS(sinS4(t)).has("S4")).toBe(false);
+    expect(cadenaS4(t)).toEqual({ cuadro: 5, gesto: 40 });
+    expect(cadenaS4(sinS4("x"))).toEqual({ cuadro: NaN, gesto: NaN });
     expect([...desgloseS1(t).entries()]).toEqual([
       ["R4", 0.5],
       ["netlist", 4.3],
@@ -61,7 +81,21 @@ describe("juzgarS (ajuste 1 de T31)", () => {
   it("pasa con todo bajo el tope", () => {
     const j = juzgarS([], [bien, bien, bien]);
     expect(j.pasa).toBe(true);
-    expect(j.filas.map((f) => `${f.id} ${f.nombre}`)).toEqual(["S1 máx.", "S2 mediana", "S2 máx.", "S3 máx.", "S5 máx."]);
+    expect(j.filas.map((f) => `${f.id} ${f.nombre}`)).toEqual(["S1 máx.", "S2 mediana", "S2 máx.", "S3 máx.", "S4 cuadro", "S4 gesto", "S5 máx."]);
+  });
+
+  it("S4 (T33): el cuadro y el gesto, cada uno con su tope y su margen", () => {
+    expect(juzgarS([], [bien, bien, texto(40, [0.5, 2], 8, 90, [6.9, 19.9])]).pasa).toBe(true);
+    const cuadro = juzgarS([], [bien, bien, texto(40, [0.5, 2], 8, 90, [7.1, 8])]);
+    expect(cuadro.filas.filter((f) => !f.pasa).map((f) => `${f.id} ${f.nombre}`)).toEqual(["S4 cuadro"]);
+    const g = texto(40, [0.5, 2], 8, 90, [3, 18.5]);
+    expect(juzgarS([], [g, g, bien]).filas.filter((f) => !f.pasa).map((f) => `${f.id} ${f.nombre}`)).toEqual(["S4 gesto"]);
+  });
+
+  it("una base anterior a T33 (sin S4) se juzga sin S4 con omitirFaltantes; si no, tira", () => {
+    const viejo = sinS4(bien);
+    expect(() => juzgarS([], [viejo])).toThrow(/Falta S4/);
+    expect(juzgarS([], [viejo], true).filas.map((f) => f.id)).not.toContain("S4");
   });
 
   it("un máximo arriba del tope pero dentro del margen pasa, si la mediana está bajo el tope", () => {
@@ -96,18 +130,33 @@ describe("juzgarS (ajuste 1 de T31)", () => {
 describe("noRegresionS y cierreS (T32, fijados antes de medir)", () => {
   const b = [texto(18, [0.2, 0.3], 3, 95), texto(19, [0.2, 0.4], 4, 99)];
 
-  it("A pasa si su mediana ≤ la de B + máx(1 ms, 10 %)", () => {
-    const igual = noRegresionS(b, [texto(19.5, [1.2, 1.3], 4.4, 106)]);
+  it("A pasa si su mediana ≤ la de B + máx(1 ms, 10 %) (T32, con todas las filas decidiendo)", () => {
+    const igual = noRegresionS(b, [texto(19.5, [1.2, 1.3], 4.4, 106)], []);
     expect(igual.pasa).toBe(true);
     expect(igual.filas.map((f) => [f.id, f.nombre, f.base, Math.round(f.limite * 100) / 100])).toEqual([
       ["S1", "máx.", 18.5, 20.35],
       ["S2", "mediana", 0.2, 1.2],
       ["S2", "máx.", 0.35, 1.35],
       ["S3", "máx.", 3.5, 4.5],
+      ["S4", "cuadro", 3, 4],
+      ["S4", "gesto", 8, 9],
       ["S5", "máx.", 97, 106.7],
     ]);
-    const sube = noRegresionS(b, [texto(20.6, [0.2, 0.3], 3, 95)]);
+    const sube = noRegresionS(b, [texto(20.6, [0.2, 0.3], 3, 95)], []);
     expect(sube.filas.filter((f) => !f.pasa).map((f) => f.id)).toEqual(["S1"]);
+  });
+
+  it("T33, R-A: S1 y S4 solo por tope; su no regresión informa, y una base sin S4 vale", () => {
+    expect(S_SOLO_TOPE).toEqual(["S1", "S4"]);
+    const sube = noRegresionS(b, [texto(30, [0.2, 0.3], 3, 95, [5, 17])]);
+    expect(sube.pasa).toBe(true);
+    expect(sube.filas.filter((f) => f.informa).map((f) => `${f.id} ${f.nombre}`)).toEqual(["S1 máx.", "S4 cuadro", "S4 gesto"]);
+    const viejas = b.map(sinS4);
+    const r = noRegresionS(viejas, [texto(19, [0.2, 0.3], 3, 95)]);
+    expect(r.pasa).toBe(true);
+    expect(r.filas.find((f) => f.id === "S4")!.base).toBeNaN();
+    // Las demás siguen decidiendo: S3 sube y frena.
+    expect(noRegresionS(viejas, [texto(19, [0.2, 0.3], 9, 95)]).filas.filter((f) => !f.pasa).map((f) => f.id)).toEqual(["S3"]);
   });
 
   it("sin corridas o con una base de la fase 4 (sin S), no hay juicio", () => {
@@ -125,6 +174,9 @@ describe("noRegresionS y cierreS (T32, fijados antes de medir)", () => {
     // S1 sobre el tope: frena aunque no suba.
     const s1Alto = texto(60, [0.5, 2], 8, 90);
     expect(cierreS(juzgarS([], [s1Alto]), noRegresionS([s1Alto], [s1Alto]))).toBe("frena");
+    // S4 sobre el tope (T33): frena, sin volver a medir.
+    const s4Alto = texto(40, [0.5, 2], 8, 90, [7.5, 8]);
+    expect(cierreS(juzgarS([], [s4Alto]), noRegresionS([bien], [s4Alto]))).toBe("frena");
     // Todo bajo el tope pero S3 sube contra B: frena.
     expect(cierreS(juzgarS([], [texto(40, [0.5, 2], 12, 90)]), noRegresionS([bien], [texto(40, [0.5, 2], 12, 90)]))).toBe("frena");
   });

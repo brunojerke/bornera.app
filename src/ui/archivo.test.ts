@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { marchaParada } from "../core/circuitos/marchaParada";
 import { deserializar, serializar, serializarPorLineas, type ProblemaArchivo } from "../core/io";
 import { datos, docCables, docRotados, meta } from "../core/io/prueba-documentos";
 import { CambiarEtiqueta, colocar } from "../core/model/comandos";
@@ -515,6 +516,21 @@ describe("Exportar sin comprimir (T21)", () => {
     expect(await p.ops.exportar()).toBe(false);
     p.archivos.soltar();
     await guardando;
+  });
+
+  it("T33, ajuste 1: en Simular sale sin estado de simulación, igual que en Editar", async () => {
+    const p = preparar();
+    const { doc, comp } = marchaParada({ ramaNC: true });
+    p.editor = new Editor(doc);
+    p.mostrado = { editor: p.editor, esDocumento: true };
+    expect(await p.ops.exportar()).toBe(true);
+    const enEditar = p.archivos.escritos.at(-1)!.bytes;
+    expect(p.editor.entrarSimulacion()).toBeNull();
+    p.editor.presionarPulsador(comp.s1, true); // K1 entra y queda: contactos y lámparas cambian
+    expect(p.editor.escena.conEstadoSimulacion).toBe(true);
+    expect(await p.ops.exportar()).toBe(true);
+    expect(p.archivos.escritos.at(-1)!.bytes).toEqual(enEditar);
+    expect(p.editor.modificado).toBe(false);
   });
 
   it("D20: con medir, el aviso dice el tiempo", async () => {

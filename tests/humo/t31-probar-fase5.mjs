@@ -5,8 +5,9 @@
 //  - el botón está en el menú de desarrollo, después de «Probar la fase 4»;
 //  - corre (sin cambios sin guardar, sin aviso antes) y la tabla trae B1–B16,
 //    F1–F3 y S1–S5, con los topes de la netbook de S (sección 3 del plan de
-//    fase); S4 dice «se mide en T33»; las S no llevan K;
-//  - las notas traen el desglose de S1 y el tiempo de pared de S5;
+//    fase); desde T33, S4 también trae lo medido; las S no llevan K;
+//  - las notas traen el desglose de S1, la cadena de S4 (informa) y el tiempo
+//    de pared de S5;
 //  - la hoja queda igual: documento, historial y título sin «•».
 // Las líneas con «·» son lo medido (headless, por software): no son
 // comprobaciones.
@@ -83,8 +84,10 @@ export default async function (p, comprobar) {
     ),
     JSON.stringify(s.map((c) => [c[0], c[3]])),
   );
-  comprobar("S1, S2, S3 y S5 traen lo medido («X / Y ms») y «pasa» o «no pasa»", s.filter((c) => c[0] !== "S4").every((c) => /^\d+,\d \/ \d+,\d ms$/.test(c[4]) && ["pasa", "no pasa"].includes(c[5])), JSON.stringify(s.map((c) => c[4])));
-  comprobar("S4 dice «se mide en T33» y se anota", isDeepStrictEqual(s[3]?.slice(4, 6), ["se mide en T33", "se anota"]), JSON.stringify(s[3]));
+  comprobar("S1–S5 traen lo medido («X / Y ms») y «pasa» o «no pasa» (S4 desde T33)", s.every((c) => /^\d+,\d \/ \d+,\d ms$/.test(c[4]) && ["pasa", "no pasa"].includes(c[5])), JSON.stringify(s.map((c) => c[4])));
+  const cadena = texto.split("\n").find((l) => l.startsWith("S4, cadena de 100"));
+  comprobar("las notas traen S4 sobre la cadena de 100 (informa)", /cuadro máx\. \d+,\d · gesto máx\. \d+,\d/.test(cadena ?? ""), String(cadena));
+  if (cadena) info(cadena);
   comprobar("las S no llevan K", s.every((c) => c[6] === "—"));
   const desglose = texto.split("\n").find((l) => l.startsWith("S1, desglose"));
   comprobar("las notas traen el desglose de S1 (R4, netlist, iniciar, cuadro)", /R4 \d+,\d · netlist \d+,\d · iniciar \d+,\d · cuadro \d+,\d/.test(desglose ?? ""), String(desglose));

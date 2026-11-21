@@ -9,9 +9,10 @@
 //   Mayús+clic lo fija hasta otro clic sobre él. Al perder la ventana (M-A)
 //   se suelta el mantenido y los fijados siguen.
 // - Detenida (D3-A): los pulsadores no responden hasta salir.
-// - Lo que ve el usuario antes de T33 (V-A, AV-A, ajuste 2): los avisos nuevos
-//   de cada operación (`nuevos`) y un texto fijo con la detención y los
-//   fijados (`textoEstado`).
+// - Lo que ve el usuario (V-A, AV-A): los avisos nuevos de cada operación
+//   (`nuevos`) y un texto fijo con la detención (`textoEstado`). Desde T33
+//   (F-A) los fijados ya no van en la barra: el lienzo los dibuja accionados
+//   (`dibujoSimulacion.ts`).
 //
 // Sin DOM ni reloj: se prueba en Node.
 
@@ -40,8 +41,6 @@ export function textoNoSimula(errores: readonly Aviso[]): string {
 export class SesionSimulacion {
   private _sim: Simulacion;
   private readonly _pulsables: ReadonlySet<string>;
-  /** Etiqueta de cada pulsador ("" sin etiqueta), para la barra. */
-  private readonly etiquetaDe: ReadonlyMap<string, string>;
   /** El pulsador que tiene apretado el botón del mouse; null si ninguno. */
   private _mantenido: string | null = null;
   /** Los fijados con Mayús+clic, en el orden en que se fijaron. */
@@ -52,7 +51,6 @@ export class SesionSimulacion {
   private constructor(sim: Simulacion) {
     this._sim = sim;
     this._pulsables = pulsables(sim.netlist);
-    this.etiquetaDe = new Map(sim.netlist.contactos.filter((c) => this._pulsables.has(c.comp)).map((c) => [c.comp, c.etiqueta]));
     this._nuevos = [...sim.nuevos];
   }
 
@@ -130,15 +128,12 @@ export class SesionSimulacion {
   }
 
   /**
-   * Texto fijo de la barra (AV-A y ajuste 2): la detención y los fijados, o
-   * null si no hay ninguno de los dos.
+   * Texto fijo de la barra (AV-A): la detención, o null si no está detenida.
+   * Los fijados no van (T33, F-A): se ven accionados en el lienzo.
    */
   textoEstado(): string | null {
-    const partes: string[] = [];
     const d = this._sim.detenida;
-    if (d) partes.push(`Simulación detenida: ${textoAvisoSim(d)} · F5 vuelve a Editar`);
-    if (this._fijados.size > 0) partes.push(`Fijados: ${listaY(this.fijados.map((id) => this.etiquetaDe.get(id) || "sin etiqueta"))}`);
-    return partes.length > 0 ? partes.join(" · ") : null;
+    return d ? `Simulación detenida: ${textoAvisoSim(d)} · F5 vuelve a Editar` : null;
   }
 
   /** Los avisos nuevos de la última operación, en una línea para `avisar`; null si no hay. */

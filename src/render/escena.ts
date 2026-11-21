@@ -2,7 +2,7 @@
 // Las cajas de dibujo de cada componente se calculan una sola vez al armar la
 // escena; en cada redibujo solo se comparan con la parte visible.
 
-import type { DefinicionSimbolo } from "../core/symbols";
+import type { DefinicionSimbolo, Primitiva } from "../core/symbols";
 import { unirCajas, type Caja } from "./camara";
 import type { Detalle } from "./detalle";
 import type { Renderer } from "./renderer";
@@ -16,6 +16,19 @@ export interface ColoresContenido {
   borne: string;
   /** Validaciones (T19): contorno de etiqueta y anillos. Opcional: sin él, el de los bornes. */
   aviso?: string;
+  /**
+   * Lo que no se puede hacer (T19, D-color A): la previa de Colocar o de
+   * Pegar en conflicto, un cable en curso inválido y un arrastre con
+   * conflicto, siempre con su ✕. En Simular (T33, C-A y M-A), la red en corto
+   * y el contorno de las bobinas que oscilan. Opcional: sin él, el de los bornes.
+   */
+  conflicto?: string;
+  /** En Simular (T33, C-A): las redes con una fase (L, L1, L2…). Opcional: sin él, el de los símbolos. */
+  fase?: string;
+  /** En Simular: las redes con neutro. Opcional: sin él, el de los símbolos. */
+  neutro?: string;
+  /** En Simular: el relleno de una lámpara encendida o una bobina con tensión. Opcional: sin él, el de los bornes. */
+  encendida?: string;
 }
 
 /** Lo que el contenido necesita saber del cuadro que se está dibujando. */
@@ -39,6 +52,12 @@ export interface Contenido {
   dibujar(r: Renderer, info: InfoDibujo): number;
   /** Cuántos componentes tocan `vista` (para el contador de rendimiento). */
   contar(vista: Caja): number;
+  /**
+   * Se dibuja el estado de una simulación (T33): las capas rehacen los
+   * mosaicos con otro presupuesto (P-B) y no muestran mosaicos con un estado
+   * viejo (ajuste 2). Sin él, como en Editar.
+   */
+  readonly simulando?: boolean;
 }
 
 /** IEC 60617 pide líneas de 0,25 mm (0,1 unidad), pero en pantalla nunca menos de 1 px. */
@@ -58,6 +77,15 @@ export interface ComponenteEscena extends Colocacion {
    * R9), ya resuelto por el editor: el dibujo no sabe de reglas.
    */
   conAviso?: true;
+  /**
+   * En Simular (T33, D9-B): el contacto está accionado (el NA cerrado, el NC
+   * abierto) y se dibuja con `primitivasAccionado`. Lo resuelve el editor.
+   */
+  accionado?: true;
+  /** En Simular: la lámpara está encendida o la bobina tiene tensión; su cuerpo va relleno. */
+  encendido?: true;
+  /** En Simular, con la simulación detenida (D3-A, M-A): la bobina oscila; contorno a rayas en `conflicto`. */
+  marcado?: true;
 }
 
 export interface OpcionesEscena {
@@ -125,10 +153,49 @@ export class Escena implements Contenido {
   }
 }
 
+/** La definición con el dibujo accionado en lugar del de reposo (T33): una por definición, para que el Renderer la cachee. */
+const accionadas = new WeakMap<DefinicionSimbolo, DefinicionSimbolo>();
+
+/** La definición a dibujar con el contacto accionado: la misma si no tiene dibujo accionado. */
+export function definicionAccionada(def: DefinicionSimbolo): DefinicionSimbolo {
+  const p = def.primitivasAccionado;
+  if (!p) return def;
+  let d = accionadas.get(def);
+  if (!d) accionadas.set(def, (d = { ...def, primitivas: p }));
+  return d;
+}
+
+/** El cuerpo que se rellena de una carga encendida: su primer círculo o rectángulo; null si no tiene. */
+const cuerpos = new WeakMap<DefinicionSimbolo, Primitiva | null>();
+function cuerpoRelleno(def: DefinicionSimbolo): Primitiva | null {
+  let p = cuerpos.get(def);
+  if (p === undefined) cuerpos.set(def, (p = def.primitivas.find((q) => q.forma === "circulo" || q.forma === "rectangulo") ?? null));
+  return p;
+}
+
+/** Rellena el cuerpo de una carga encendida (T33), debajo de su trazo, con el color `color`. */
+function rellenarCuerpo(r: Renderer, c: ComponenteEscena, color: string): void {
+  const p = cuerpoRelleno(c.def);
+  if (!p) return;
+  r.guardar();
+  r.estilo({ relleno: color });
+  r.trasladar(c.x, c.y);
+  if (c.rotacion !== 0) r.rotar(c.rotacion);
+  if (c.espejado) r.escalar(-1, 1);
+  if (p.forma === "circulo") r.circulo(p.cx, p.cy, p.r, true);
+  else if (p.forma === "rectangulo") r.rectangulo(p.x, p.y, p.ancho, p.alto, true);
+  r.restaurar();
+}
+
 /**
  * Dibuja los componentes `componentes[indices[0..n)]`. Primero todos los
  * símbolos, después todas las marcas: así el estilo cambia dos veces por
  * cuadro y no dos veces por componente.
+ *
+ * En Simular (T33) cada componente puede venir con su estado: accionado (se
+ * dibuja su geometría accionada), encendido (el cuerpo relleno, debajo del
+ * trazo) o marcado (contorno a rayas en `conflicto`). Los marcados solo se
+ * buscan con `marcados`: en Editar no cuestan una lectura.
  */
 export function dibujarComponentes(
   r: Renderer,
@@ -137,12 +204,15 @@ export function dibujarComponentes(
   indices: ArrayLike<number>,
   n: number,
   marcarBornes: boolean,
+  marcados = false,
 ): void {
   const g = grosorLinea(escala);
   r.estilo({ trazo: colores.simbolo, relleno: colores.simbolo, grosor: g });
   for (let i = 0; i < n; i++) {
     const c = componentes[indices[i]!]!;
-    dibujarSimbolo(r, c.def, c, { etiqueta: c.etiqueta, textos: detalle.textos, referencias: c.referencias });
+    if (c.encendido === true) rellenarCuerpo(r, c, colores.encendida ?? colores.borne);
+    const def = c.accionado === true ? definicionAccionada(c.def) : c.def;
+    dibujarSimbolo(r, def, c, { etiqueta: c.etiqueta, textos: detalle.textos, referencias: c.referencias });
   }
 
   // El umbral antes que nada: debajo de él, marcas y contornos no cuestan ni una lectura (T19, agregado 1).
@@ -154,8 +224,12 @@ export function dibujarComponentes(
       dibujarMarcasBornes(r, c.def, c);
     }
   }
-  dibujarContornos(r, colores, g, componentes, indices, n);
+  dibujarContornos(r, colores.aviso ?? colores.borne, g, componentes, indices, n, conAviso);
+  if (marcados) dibujarContornos(r, colores.conflicto ?? colores.borne, g, componentes, indices, n, conMarca);
 }
+
+const conAviso = (c: ComponenteEscena) => c.conAviso === true;
+const conMarca = (c: ComponenteEscena) => c.marcado === true;
 
 /** Separación entre el cuerpo del símbolo y su contorno de aviso, en unidades. */
 export const MARGEN_CONTORNO = 0.25;
@@ -167,23 +241,24 @@ const rayasContorno: number[] = [];
 
 /**
  * Contorno a rayas sobre el cuerpo de cada componente con `conAviso` (T19,
- * opción P): todas las rayas en un solo trazo, en el color de aviso. Las
- * cuentas van en línea (sin cajas ni objetos por componente). Lo llama
- * `dibujarComponentes` solo con las marcas de bornes visibles. Devuelve
- * cuántas rayas dibujó.
+ * opción P), o con la marca de la detención (T33, M-A): todas las rayas en un
+ * solo trazo, en `color`. Las cuentas van en línea (sin cajas ni objetos por
+ * componente). Lo llama `dibujarComponentes` solo con las marcas de bornes
+ * visibles. Devuelve cuántas rayas dibujó.
  */
 function dibujarContornos(
   r: Renderer,
-  colores: ColoresContenido,
+  color: string,
   g: number,
   componentes: readonly (ComponenteEscena | null)[],
   indices: ArrayLike<number>,
   n: number,
+  lleva: (c: ComponenteEscena) => boolean,
 ): number {
   let t = 0;
   for (let i = 0; i < n; i++) {
     const c = componentes[indices[i]!]!;
-    if (c.conAviso !== true) continue;
+    if (!lleva(c)) continue;
     const girado = c.rotacion === 90 || c.rotacion === 270;
     const mx = (girado ? c.def.tamano.alto : c.def.tamano.ancho) / 2 + MARGEN_CONTORNO;
     const my = (girado ? c.def.tamano.ancho : c.def.tamano.alto) / 2 + MARGEN_CONTORNO;
@@ -197,7 +272,6 @@ function dibujarContornos(
     t = rayas(x1, y0, x1, y1, t);
   }
   if (t === 0) return 0;
-  const color = colores.aviso ?? colores.borne;
   r.estilo({ trazo: color, relleno: color, grosor: g });
   r.lineas(rayasContorno, t);
   return t;
