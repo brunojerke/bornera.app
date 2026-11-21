@@ -5,7 +5,7 @@
   // app se llevaría los cambios. Probar igual / Cancelar; el foco arranca en
   // Cancelar y Esc es Cancelar. Es modal (aria-modal), así `hayModal()` frena
   // los atajos del editor mientras está abierto.
-  // También antes de «Probar la fase 4» (C1), con su título.
+  // También antes de «Probar la fase 4» (C1) y «Probar la fase 5» (T31), con su título.
   let {
     titulo = "Probar la fase 3b",
     nombre,

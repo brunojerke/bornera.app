@@ -3,7 +3,7 @@
   // elegir la escena de prueba, ver el contador de rendimiento (F3), apagar
   // optimizaciones para comparar cuánto aporta cada una, diagnosticar el
   // arrastre (alpha.2), «Probar la fase 3b» (cierre 3b, etapa 4), «Probar la
-  // fase 4» (C1) y «Medir la copia (F1)» (T23).
+  // fase 4» (C1), «Probar la fase 5» (T31) y «Medir la copia (F1)» (T23).
   import Wrench from "@lucide/svelte/icons/wrench";
   import Check from "@lucide/svelte/icons/check";
   import { CANTIDADES_BANCO } from "../render/banco";
@@ -19,6 +19,7 @@
     onprobararrastre,
     onprobarfase3b,
     onprobarfase4,
+    onprobarfase5,
     onmedircopia,
     oncopias,
   }: {
@@ -32,6 +33,8 @@
     onprobarfase3b?: () => void;
     /** «Probar la fase 4»: lo de la fase 3b más F1, F2 y F3, sin tocar la hoja (C1). */
     onprobarfase4?: () => void;
+    /** «Probar la fase 5»: lo de la fase 4 más S1–S5, sin tocar la hoja (T31). */
+    onprobarfase5?: () => void;
     /** «Medir la copia (F1)»: la parte síncrona de la copia de recuperación con 2000 + cables (T23). */
     onmedircopia?: () => void;
     /** «Copias de recuperación»: las copias, de quién son y si abren (T23, S2 y S3 a mano). */
@@ -60,6 +63,11 @@
   function probarFase4() {
     abierto = false;
     onprobarfase4?.();
+  }
+
+  function probarFase5() {
+    abierto = false;
+    onprobarfase5?.();
   }
 
   function medirCopia() {
@@ -192,6 +200,10 @@
       <button role="menuitem" onclick={probarFase4}>
         <span class="marca"></span>
         Probar la fase 4…
+      </button>
+      <button role="menuitem" onclick={probarFase5}>
+        <span class="marca"></span>
+        Probar la fase 5…
       </button>
       <button role="menuitem" onclick={medirCopia}>
         <span class="marca"></span>

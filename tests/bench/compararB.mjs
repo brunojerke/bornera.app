@@ -186,6 +186,100 @@ export function juzgarF(frias, calientes) {
   return { filas, pasa: filas.every((f) => f.pasa) };
 }
 
+// ── «Probar la fase 5» (T31; docs/plan-T31.md) ─────────────────────────────
+
+/**
+ * Topes de S en la PC (ms): netbook / K (D1-D, K1 = 3 y K2 = 5,5), con un
+ * decimal (docs/plan-fase5.md, sección 3). Por fila, los números que se
+ * juzgan de la celda, en orden, con su nombre. S4 se mide en T33 (S4-A).
+ */
+export const TOPES_S_PC = {
+  S1: [{ nombre: "máx.", indice: 0, tope: 54.5 }],
+  S2: [
+    { nombre: "mediana", indice: 0, tope: 1.7 },
+    { nombre: "máx.", indice: 1, tope: 5.3 },
+  ],
+  S3: [{ nombre: "máx.", indice: 0, tope: 16.7 }],
+  S5: [{ nombre: "máx.", indice: 0, tope: 100 }],
+};
+
+/** Si S1 pasa de esto en la PC, se avisa antes de la netbook (300 / 6,2, por el ×6,2 de B10). */
+export const AVISO_S1_PC_MS = 48;
+
+/**
+ * El margen del máximo (ajuste 1 de T31): tope + máx(1 ms, 10 %).
+ * @param {number} tope
+ */
+export const conMargen = (tope) => tope + Math.max(PISO_MS, TOLERANCIA * tope);
+
+/**
+ * Las filas S de un texto de «Probar la fase 5»: id → los dos números de la
+ * celda («X / Y ms»). S4 («se mide en T33») no tiene números y no sale.
+ * @param {string} texto
+ * @returns {Map<string, number[]>}
+ */
+export function filasS(texto) {
+  /** @type {Map<string, number[]>} */
+  const filas = new Map();
+  for (const l of texto.split(/\r?\n/)) {
+    if (!/^\| S\d+ \|/.test(l)) continue;
+    const c = l.split("|").slice(1, -1).map((x) => x.trim());
+    const m = new RegExp(`^${N} / ${N} ms`).exec(c[4] ?? "");
+    if (m) filas.set(c[0] ?? "", [num(m[1] ?? ""), num(m[2] ?? "")]);
+  }
+  return filas;
+}
+
+/**
+ * El juicio de S en la PC (ajuste 1 de T31, fijado antes de medir): cada
+ * número pasa si la mediana de las corridas calientes ≤ tope y el máximo ≤
+ * tope + máx(1 ms, 10 %). Las frías se informan y no deciden.
+ * @param {readonly string[]} frias
+ * @param {readonly string[]} calientes
+ */
+export function juzgarS(frias, calientes) {
+  const valores = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
+    textos.map((t) => {
+      const f = filasS(t).get(id);
+      if (!f) throw new Error(`Falta ${id} en una corrida (¿es de «Probar la fase 5»?).`);
+      return f[i] ?? NaN;
+    });
+  const filas = Object.entries(TOPES_S_PC).flatMap(([id, numeros]) =>
+    numeros.map(({ nombre, indice, tope }) => {
+      const deciden = valores(calientes, id, indice);
+      const med = mediana(deciden);
+      const max = deciden.length ? Math.max(...deciden) : NaN;
+      const margen = conMargen(tope);
+      return { id, nombre, tope, margen, deciden, informan: valores(frias, id, indice), mediana: med, maximo: max, pasa: deciden.length > 0 && med <= tope && max <= margen };
+    }),
+  );
+  return { filas, pasa: filas.every((f) => f.pasa) };
+}
+
+/**
+ * El desglose de S1 de un texto (la nota «S1, desglose …»): parte → ms.
+ * @param {string} texto
+ * @returns {Map<string, number>}
+ */
+export function desgloseS1(texto) {
+  /** @type {Map<string, number>} */
+  const partes = new Map();
+  const l = texto.split(/\r?\n/).find((x) => x.startsWith("S1, desglose"));
+  if (!l) return partes;
+  for (const m of l.matchAll(/(R4|netlist|iniciar|cuadro) ([\d,]+)/g)) partes.set(m[1] ?? "", num(m[2] ?? ""));
+  return partes;
+}
+
+/**
+ * El tiempo de pared de S5 de un texto (la nota «S5, de abrir a los avisos …»): el máximo.
+ * @param {string} texto
+ */
+export function paredS5(texto) {
+  const l = texto.split(/\r?\n/).find((x) => x.startsWith("S5, de abrir a los avisos"));
+  const m = l ? /máx\. ([\d,]+)/.exec(l) : null;
+  return m ? num(m[1] ?? "") : NaN;
+}
+
 /**
  * Las frías con la regla de C4 (T20): cada valor en ms de una fría tiene que
  * quedar dentro del rango de las calientes del mismo exe, más un piso de

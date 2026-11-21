@@ -26,7 +26,7 @@
 // toca la hoja ni hace copias de recuperación. No agrega dependencias.
 
 import { existsSync, writeFileSync } from "node:fs";
-import { compararB, filasB, filasF, friasFuera, juzgarF, mediana, metricas } from "./compararB.mjs";
+import { AVISO_S1_PC_MS, compararB, desgloseS1, filasB, filasF, friasFuera, juzgarF, juzgarS, mediana, metricas, paredS5 } from "./compararB.mjs";
 import { valoresK } from "./factores.mjs";
 import { argumentos, cerrarResultado, conLaApp, esperar, textoResultado, tocarMenu, unDecimal } from "./webview2.mjs";
 
@@ -35,9 +35,12 @@ const exes = (opcion("exe") ?? "").split(",").filter(Boolean);
 const bloques = entero("bloques", 3);
 const corridas = entero("corridas", 2);
 const puerto = entero("puerto", 9333);
-const fase4 = bandera("fase4");
-/** El ítem del menú de cada exe: con --fase4, A corre la fase 4 y B la 3b. */
-const items = fase4 ? ["Probar la fase 4", "Probar la fase 3b"] : ["Probar la fase 3b", "Probar la fase 3b"];
+// --fase5 (T31): A corre «Probar la fase 5» y B «Probar la fase 4»; lo de
+// --fase4 y además S1–S5 de A con el ajuste 1 de T31 (compararB.mjs, juzgarS).
+const fase5 = bandera("fase5");
+const fase4 = bandera("fase4") || fase5;
+/** El ítem del menú de cada exe: con --fase4, A corre la fase 4 y B la 3b; con --fase5, A la 5 y B la 4. */
+const items = fase5 ? ["Probar la fase 5", "Probar la fase 4"] : fase4 ? ["Probar la fase 4", "Probar la fase 3b"] : ["Probar la fase 3b", "Probar la fase 3b"];
 /** Lo que puede tardar una corrida (con el calentamiento, en la PC, ~35 s). */
 const LIMITE_CORRIDA_MS = 240_000;
 
@@ -94,6 +97,15 @@ async function main() {
   const deFrias = { A: de("A", true), B: de("B", true) };
   const fuera = { A: friasFuera(deFrias.A, de("A", false)), B: friasFuera(deFrias.B, de("B", false)) };
   const f = fase4 ? juzgarF(deFrias.A, de("A", false)) : null;
+  const s = fase5 ? juzgarS(deFrias.A, de("A", false)) : null;
+  if (s && !bandera("json")) {
+    for (const x of s.filas) console.log(`S ${x.id} ${x.nombre}: tope ${fmt(x.tope)} (máx. ${fmt(x.margen)}) · mediana ${fmt(x.mediana)} · máx. ${fmt(x.maximo)} · ${x.pasa ? "pasa" : "NO pasa"} · frías ${x.informan.map(fmt).join(", ")}`);
+    const s1 = s.filas.find((x) => x.id === "S1");
+    if (s1 && s1.maximo > AVISO_S1_PC_MS) console.log(`AVISO: S1 pasa de ${AVISO_S1_PC_MS} ms en la PC.`);
+    const cal = de("A", false);
+    console.log("Desglose S1 (mediana): " + ["R4", "netlist", "iniciar", "cuadro"].map((p) => `${p} ${fmt(mediana(cal.map((t) => desgloseS1(t).get(p) ?? NaN)))}`).join(" · "));
+    console.log(`Pared S5 (informa): ${fmt(mediana(cal.map(paredS5)))} ms`);
+  }
   if (bandera("json")) {
     console.log(JSON.stringify({ exes, items, inicio, calientes, frias, fuera, f, aperturas }, null, 2));
     return;

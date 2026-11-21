@@ -23,7 +23,7 @@ import { Editor } from "../editor/editor";
 import { Camara } from "../render/camara";
 import { Capas } from "../render/capas";
 import { escribirSeguro, rutaTemporal } from "./archivos";
-import { evaluar } from "./fase3b";
+import { evaluar, type FilaEvaluada } from "./fase3b";
 import { filaF1, filasArchivo, TOPE_ARCHIVO_PC_MS, textoFase4, VUELTAS_ARCHIVO } from "./fase4";
 import { discoEnMemoria, medirArchivo, type DiscoMedicion } from "./medirArchivo";
 import { COPIAS_DE_UNA_VEZ, COPIAS_F1, medirCopias, motor, resumirF1, TOPE_F1_PC_MS } from "./medirCopia";
@@ -74,9 +74,28 @@ function dibujarAbierto(ancho: number, alto: number): (doc: Documento) => void {
   };
 }
 
+/** Lo medido por «Probar la fase 4», para su tabla y para la de la fase 5. */
+export interface MedidoFase4 {
+  filas: FilaEvaluada[];
+  notas: string[];
+  /** El encabezado sin el nombre de la prueba ni los segundos. */
+  condiciones: string;
+  /** La escena de F1–F3 (2000 + 3030 cables). */
+  doc: Documento;
+  ancho: number;
+  alto: number;
+}
+
 /** Corre B1–B16, F1, F2 y F3, y devuelve la tabla para copiar. */
 export async function probarFase4(progreso: (paso: string) => void = () => {}): Promise<string> {
   const inicio = performance.now();
+  const m = await medirFase4(progreso);
+  const segundos = Math.round((performance.now() - inicio) / 1000);
+  return textoFase4(m.filas, `Probar la fase 4 · ${m.condiciones} · ${segundos} s`, [...m.notas, ""]);
+}
+
+/** Corre B1–B16, F1, F2 y F3. */
+export async function medirFase4(progreso: (paso: string) => void = () => {}): Promise<MedidoFase4> {
   const b = await medirConCalentamiento(progreso);
 
   progreso("armando la escena de 2000 con cables");
@@ -97,10 +116,9 @@ export async function probarFase4(progreso: (paso: string) => void = () => {}): 
   const abrir = archivo.muestras.map((m) => m.abrir);
 
   const filas = [...evaluar(b.medidas), filaF1(copia.muestras), ...filasArchivo(archivo.muestras)];
-  const segundos = Math.round((performance.now() - inicio) / 1000);
-  const encabezado =
-    `Probar la fase 4 · Bornera ${VERSION} · ${fechaCorta()} · ${motor()} · ${b.calentamiento}` +
-    `lienzo ${b.ancho}×${b.alto} fuera de pantalla · ${disco.conDisco ? "con disco" : "sin disco"} · ${segundos} s`;
+  const condiciones =
+    `Bornera ${VERSION} · ${fechaCorta()} · ${motor()} · ${b.calentamiento}` +
+    `lienzo ${b.ancho}×${b.alto} fuera de pantalla · ${disco.conDisco ? "con disco" : "sin disco"}`;
   const notas = [
     `F1, F2 y F3: escena de ${SIMBOLOS_BANCO_CABLES} símbolos + ${cables} cables (texto de ${serializar(doc).length} caracteres).`,
     `F1: ${r1.copias} copias por partes; después, ${r1.emergencia.veces} de una vez (salida de emergencia, no decide: máx. ${ms(r1.emergencia.maximo)} ms). ` +
@@ -110,7 +128,6 @@ export async function probarFase4(progreso: (paso: string) => void = () => {}): 
       `De F3, hasta el documento (leer, desempaquetar, deserializar): máx. ${ms(Math.max(...abrir))} ms. ` +
       `Lo abierto ${archivo.igual ? "es igual al documento" : "NO es igual al documento (MAL)"}.`,
     `Topes en la PC (C1): F1 ≤ ${TOPE_F1_PC_MS} ms; F2 y F3 ≤ ${TOPE_ARCHIVO_PC_MS} ms.`,
-    "",
   ];
-  return textoFase4(filas, encabezado, notas);
+  return { filas, notas, condiciones, doc, ancho: b.ancho, alto: b.alto };
 }
