@@ -44,29 +44,35 @@ export interface Aparente {
 
 const TIPOS: ReadonlySet<string> = new Set<TipoAparente>(["borne", "borneBorne", "borneSuelto", "cruce", "cuerpo", "cuerpoCuerpo", "encimado", "suelto", "toca"]);
 
-/** El id de un elemento de clave: "cable:w5" da "w5"; "borne:c3:A1" y "cuerpo:c3", "c3". */
-function idDe(elemento: string): string {
-  const i = elemento.indexOf(":");
-  const resto = elemento.slice(i + 1);
-  if (elemento.startsWith("borne:")) return resto.slice(0, resto.lastIndexOf(":"));
-  return resto;
+/**
+ * El id del elemento de `clave` entre `desde` y `hasta`, sin cortar el texto
+ * en partes: "cable:w5" da "w5"; "borne:c3:A1" y "cuerpo:c3", "c3".
+ */
+function idDe(clave: string, desde: number, hasta: number): string {
+  const dos = clave.indexOf(":", desde);
+  if (clave.startsWith("borne:", desde)) return clave.slice(dos + 1, clave.lastIndexOf(":", hasta - 1));
+  return clave.slice(dos + 1, hasta);
 }
 
-/** La conexión aparente de un conflicto, o null si su tipo no es de R11. */
+/**
+ * La conexión aparente de un conflicto, o null si su tipo no es de R11. Lee
+ * la clave por posiciones, sin `split` (T29, A: menos basura por par).
+ */
 export function aparenteDe(k: Conflicto): Aparente | null {
-  const partes = k.clave.split("|");
-  const tipo = partes[0]!;
-  if (!TIPOS.has(tipo) || partes.length !== 3) return null;
-  const ea = partes[1]!;
-  const eb = partes[2]!;
+  const c = k.clave;
+  const i = c.indexOf("|");
+  const j = i < 0 ? -1 : c.indexOf("|", i + 1);
+  if (j < 0 || c.indexOf("|", j + 1) >= 0) return null;
+  const tipo = c.slice(0, i);
+  if (!TIPOS.has(tipo)) return null;
   return {
-    k: `${k.clave}|${k.x}|${k.y}`,
+    k: `${c}|${k.x}|${k.y}`,
     tipo: tipo as TipoAparente,
     x: k.x,
     y: k.y,
-    a: idDe(ea),
-    b: idDe(eb),
-    entreCables: tipo === "encimado" && ea.startsWith("cable:") && eb.startsWith("cable:"),
+    a: idDe(c, i + 1, j),
+    b: idDe(c, j + 1, c.length),
+    entreCables: tipo === "encimado" && c.startsWith("cable:", i + 1) && c.startsWith("cable:", j + 1),
   };
 }
 
@@ -81,11 +87,37 @@ export function aparentesDeComponente(c: Componente, consulta: ConsultaTrazado, 
   return salida;
 }
 
+/**
+ * La consulta sin un cable, una por consulta base y reusada (T29, A: un
+ * objeto y tres funciones menos por cable). Sirve porque `problemasTrazado`
+ * no vuelve a pedir otra mientras corre.
+ */
+const sinUnCable = new WeakMap<ConsultaTrazado, { id: string; consulta: ConsultaTrazado }>();
+function consultaSin(base: ConsultaTrazado, id: string): ConsultaTrazado {
+  let e = sinUnCable.get(base);
+  if (!e) {
+    const nueva = { id: "", consulta: consultaSinCable(base, "") };
+    nueva.consulta = {
+      bornesEn: (k) => base.bornesEn(k),
+      cuerposEn: (k) => base.cuerposEn(k),
+      cablesEn(k) {
+        const salida = [];
+        for (const w of base.cablesEn(k)) if (w.id !== nueva.id) salida.push(w);
+        return salida;
+      },
+    };
+    sinUnCable.set(base, nueva);
+    e = nueva;
+  }
+  e.id = id;
+  return e.consulta;
+}
+
 /** Las conexiones aparentes que ve un cable desde su recorrido (ninguna si no se resuelve). */
 export function aparentesDeCable(w: Cable, indice: IndiceHoja, consulta: ConsultaTrazado, salida: Aparente[] = []): Aparente[] {
   const puntos = recorridoCable(indice, w);
   if (!puntos) return salida;
-  for (const k of problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos }, consultaSinCable(consulta, w.id))) {
+  for (const k of problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos }, consultaSin(consulta, w.id))) {
     const a = aparenteDe(k);
     if (a) salida.push(a);
   }
@@ -162,15 +194,13 @@ function compararR11(p: Extract<Aviso, { regla: "R11" }>, q: Extract<Aviso, { re
  * punto dan uno), en el orden de `compararR11`.
  */
 export function avisosR11De(id: string, aparentes: Iterable<Aparente>): Extract<Aviso, { regla: "R11" }>[] {
-  const vistos = new Set<string>();
   const salida: Extract<Aviso, { regla: "R11" }>[] = [];
+  // Casi siempre son uno o pocos: se compara con los ya puestos, sin claves de texto (T29, A).
   for (const a of aparentes) {
-    const k = `${a.tipo}|${a.x}|${a.y}`;
-    if (vistos.has(k)) continue;
-    vistos.add(k);
+    if (salida.some((s) => s.tipo === a.tipo && s.x === a.x && s.y === a.y)) continue;
     salida.push({ regla: "R11", severidad: "aviso", id, tipo: a.tipo, x: a.x, y: a.y });
   }
-  return salida.sort(compararR11);
+  return salida.length > 1 ? salida.sort(compararR11) : salida;
 }
 
 /**

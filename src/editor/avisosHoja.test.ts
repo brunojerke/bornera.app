@@ -19,7 +19,7 @@ import type { Colores } from "../render/capas";
 import { RADIO_ANILLO } from "../render/resaltado";
 import type { Renderer } from "../render/renderer";
 import { cajaDibujo } from "../render/simbolo";
-import { AvisosHoja, MS_TRAMO_R11, type OpcionesR11 } from "./avisosHoja";
+import { AvisosHoja, MARGEN_TRAMO_R11, MS_TRAMO_R11, UMBRAL_R11_EN_VIVO, type OpcionesR11 } from "./avisosHoja";
 import { documentoBanco, documentoBancoCables } from "./banco";
 import { documentoNuevo, Editor, type DestinoVista } from "./editor";
 import type { EventoHerramienta } from "./herramientas/tipos";
@@ -1164,20 +1164,74 @@ describe("R11 en reposo: arriba de 100 elementos y al abrir, por tramos (T29, D6
     expect(diferencias(editor, h)).toEqual([]);
   });
 
-  it("los tramos duran hasta 4 ms: abrir 2000 + 3030 cables lleva muchos tramos, y ninguno se pasa de largo", () => {
-    const duraciones: number[] = [];
+  it("escena oficial (2000 + 3030 cables), con un reloj falso de 0,25 ms por paso: al abrir, pegar unos 500 y duplicar todo, cada tramo corta al llegar a 2 ms, y al terminar da lo mismo que el cálculo lento", () => {
+    // Cambio de regla (Bruno, 2026-11-21): reemplaza al test de «ningún tramo pasa de 4 ms» con reloj real,
+    // que dependía de la recolección de basura. Esa medición queda informativa en tests/bench/r11-tramos-node.mjs.
+    const PASO = 0.25;
+    let t = 0;
+    let lecturas = 0;
+    const reloj = () => {
+      lecturas++;
+      return (t += PASO);
+    };
+    const cola: (() => void)[] = [];
+    const editor = new Editor(documentoBancoCables(2000), 0, { r11: { programar: (f) => cola.push(f), reloj } });
+    const h = editor.documento.hojas[0]!;
+    const corte = MS_TRAMO_R11 - MARGEN_TRAMO_R11;
+    expect(corte).toBe(2);
+    // El tramo corta en el primer paso que lee ≥ 2 ms desde que empezó: 8 pasos de 0,25 ms.
+    const pasosPorTramo = Math.ceil(corte / PASO);
+    const terminar = (gesto: string) => {
+      const pasos: number[] = [];
+      while (cola.length > 0) {
+        const antes = lecturas;
+        cola.shift()!();
+        // Lecturas del reloj: una al empezar, una por paso (salvo el último del cálculo) y una al cortar o terminar.
+        pasos.push(lecturas - antes - 2);
+      }
+      expect(editor.avisos.enReposoR11, gesto).toBe(false);
+      expect(pasos.length, gesto).toBeGreaterThan(5);
+      expect(
+        pasos.slice(0, -1).every((n) => n === pasosPorTramo),
+        `${gesto}: todos menos el último cortan a los ${pasosPorTramo} pasos (${pasos.join(", ")})`,
+      ).toBe(true);
+      expect(pasos.at(-1)!, gesto).toBeLessThanOrEqual(pasosPorTramo);
+      expect(diferencias(editor, h), gesto).toEqual([]);
+    };
+    terminar("abrir");
+    const caja = editor.escena.caja!;
+    // Unos 500 elementos: los primeros componentes con los cables que quedan entre ellos.
+    let n = 1;
+    while (recortar(h, h.componentes.slice(0, n + 1).map((c) => c.id)).cables.length + n + 1 <= 500) n++;
+    const r500 = recortar(h, h.componentes.slice(0, n).map((c) => c.id));
+    expect(r500.componentes.length + r500.cables.length).toBeGreaterThan(UMBRAL_R11_EN_VIVO);
+    editor.ejecutar(pegar(editor.documento, r500, Math.ceil(caja.ancho) + 20, 0));
+    terminar("pegar unos 500");
+    const todos = recortar(h, [...h.componentes.map((c) => c.id), ...h.cables.map((w) => w.id)]);
+    editor.ejecutar(pegar(editor.documento, todos, 0, Math.ceil(caja.alto) + 20));
+    terminar("duplicar todo");
+  });
+
+  it("lo pendiente no crece cuando ya es la hoja entera: pegar 500 varias veces lo deja igual; sin hoja entera, crece con lo del cambio", () => {
+    // Fijado antes de medir (Bruno, 2026-11-21).
     const cola: (() => void)[] = [];
     const editor = new Editor(documentoBancoCables(2000), 0, { r11: { programar: (f) => cola.push(f) } });
-    while (cola.length > 0) {
-      const t0 = performance.now();
-      cola.shift()!();
-      duraciones.push(performance.now() - t0);
+    const h = editor.documento.hojas[0]!;
+    const caja = editor.escena.caja!;
+    const r = recortar(h, h.componentes.slice(0, 200).map((c) => c.id));
+    // Al abrir, sin correr ningún tramo: la hoja entera, sin ids.
+    const alAbrir = editor.avisos.pendienteR11Tamano;
+    expect(alAbrir).toEqual({ elementos: 0, hoja: true });
+    for (let i = 1; i <= 3; i++) {
+      editor.ejecutar(pegar(editor.documento, r, Math.ceil(caja.ancho) + 20, i * 60));
+      expect(editor.avisos.pendienteR11Tamano, `pegado ${i}`).toEqual(alAbrir);
     }
-    expect(editor.avisos.enReposoR11).toBe(false);
-    expect(MS_TRAMO_R11).toBe(4);
-    expect(duraciones.length).toBeGreaterThan(10);
-    // Un tramo corta en el primer paso después de 4 ms; un paso es un elemento o 64 pares (margen holgado para una máquina cargada).
-    expect(Math.max(...duraciones)).toBeLessThan(MS_TRAMO_R11 + 6);
+    // Ya terminado, un pegado de más de 100 sí acumula lo suyo (y nada más).
+    while (cola.length > 0) cola.shift()!();
+    expect(editor.avisos.pendienteR11Tamano).toBeNull();
+    editor.ejecutar(pegar(editor.documento, r, Math.ceil(caja.ancho) + 20, 300));
+    const cambio = r.componentes.length + r.cables.length;
+    expect(editor.avisos.pendienteR11Tamano).toEqual({ elementos: cambio, hoja: false });
   });
 
   it(`al azar (semilla ${SEMILLA}), todo en reposo (umbral 0) y cortado en tramos de 3 pasos: cuando termina, lo mismo que el cálculo lento; los comandos llegan en el medio`, () => {

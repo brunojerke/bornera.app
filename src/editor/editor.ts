@@ -1859,7 +1859,13 @@ export class Editor {
    */
   private alTerminarR11(c: CambioAvisos): void {
     let tocaSeleccion = false;
-    for (const id of c.ids) if (this._seleccion.has(id)) tocaSeleccion = true;
+    // Por el conjunto más chico: pueden ser miles de ids y un solo seleccionado.
+    const [chico, grande] = c.ids.size <= this._seleccion.size ? [c.ids, this._seleccion] : [this._seleccion, c.ids];
+    for (const id of chico) {
+      if (!grande.has(id)) continue;
+      tocaSeleccion = true;
+      break;
+    }
     if (tocaSeleccion) {
       this.anillos = { clave: "", puntos: [] };
       this.alCambiarSeleccion?.();

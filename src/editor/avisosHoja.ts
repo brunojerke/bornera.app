@@ -76,6 +76,13 @@ const SIN_CAMBIOS: CambioAvisos = { contornos: new Set(), ids: new Set(), cuenta
 export const UMBRAL_R11_EN_VIVO = 100;
 /** Lo más que dura un tramo de R11 en reposo, en ms: no bloquea el dibujo. */
 export const MS_TRAMO_R11 = 4;
+/**
+ * El tramo corta cuando le queda este margen (ms) para el tope, a los 2 ms:
+ * un paso del cálculo dura mucho menos (un elemento, unos pocos pares o 4
+ * cercanos), así el último no se pasa de `MS_TRAMO_R11`. Lo que no cubre es
+ * una pausa de recolección de basura dentro del paso (T29: hasta ~4 ms en Node).
+ */
+export const MARGEN_TRAMO_R11 = 2;
 
 /** Cómo va R11 en reposo. Los tests cambian el umbral, quién programa los tramos y su largo. */
 export interface OpcionesR11 {
@@ -87,6 +94,13 @@ export interface OpcionesR11 {
   msTramo?: number;
   /** Para los tests: pasos por tramo en vez de ms (el corte queda fijo). */
   pasosTramo?: number;
+  /**
+   * El reloj del corte de tramo, en ms; por defecto, `performance.now`. Los
+   * tests ponen uno falso que avanza un tiempo fijo por paso: así el corte a
+   * los 2 ms se prueba sin depender de la recolección de basura (Bruno,
+   * 2026-11-21, cambio de regla de T29).
+   */
+  reloj?: () => number;
 }
 
 // Lo guardado del último cálculo se compara campo por campo, sin armar un
@@ -334,7 +348,7 @@ export class AvisosHoja {
   /** Ids con pares que cambiaron y avisos sin rehacer; siguen si el cálculo vuelve a empezar. */
   private readonly afectadosR11 = new Set<string>();
   /** Ids cuyo R11 cambió en el cálculo en reposo, para avisar al terminar. */
-  private readonly cambiadosR11 = new Set<string>();
+  private cambiadosR11 = new Set<string>();
   /** La cuenta antes del cálculo en reposo (para `CambioAvisos.cuenta`). */
   private cuentaAntesR11: { errores: number; avisos: number } | null = null;
   private tramoProgramadoR11 = false;
@@ -344,6 +358,7 @@ export class AvisosHoja {
   private readonly programarR11: (tramo: () => void) => void;
   private readonly msTramoR11: number;
   private readonly pasosTramoR11: number | undefined;
+  private readonly relojR11: () => number;
   /** Lo llama el cálculo de R11 en reposo al terminar, con lo que cambió. */
   alTerminarR11: ((cambio: CambioAvisos) => void) | null = null;
 
@@ -357,6 +372,7 @@ export class AvisosHoja {
     this.programarR11 = opciones.programar ?? ((tramo) => setTimeout(tramo, 0));
     this.msTramoR11 = opciones.msTramo ?? MS_TRAMO_R11;
     this.pasosTramoR11 = opciones.pasosTramo;
+    this.relojR11 = opciones.reloj ?? (() => performance.now());
     const h = this.hojaActual();
     if (!h) return;
     for (const c of h.componentes) {
@@ -422,10 +438,15 @@ export class AvisosHoja {
     return v;
   }
 
-  /** El índice de vecinos existe solo mientras hay candidatos de R6 o encimados entre cables (R11-A). */
+  /**
+   * El índice de vecinos existe solo mientras hay candidatos de R6 o
+   * encimados entre cables (R11-A). Con R11 en reposo pendiente y sin
+   * candidatos de R6, no: cada comando se ahorra ponerlo al día, y el cálculo
+   * en reposo lo arma por partes al arrancar (F2).
+   */
   private ajustarVecinos(): void {
     if (this.candidatosR6) this.vecinos ??= this.armarVecinos();
-    else if (this.entreCables.size === 0) this.vecinos = null;
+    else if (this.entreCables.size === 0 || this.pendienteR11) this.vecinos = null;
   }
 
   /** Suma la Fase a las cuentas de R10 (si es «L» o L1 a L3). */
@@ -914,6 +935,12 @@ export class AvisosHoja {
     return this._tramosR11;
   }
 
+  /** Lo pendiente del reposo: los elementos acumulados y si es la hoja entera (null si no hay nada). */
+  get pendienteR11Tamano(): { elementos: number; hoja: boolean } | null {
+    const p = this.pendienteR11;
+    return p ? { elementos: p.componentes.size + p.cables.size, hoja: p.hoja } : null;
+  }
+
   /** Termina ya, sin tramos, el cálculo en reposo pendiente (tests y humo). */
   terminarR11(): void {
     while (this.pendienteR11) this.correrTramoR11(false);
@@ -927,18 +954,30 @@ export class AvisosHoja {
     return n;
   }
 
-  /** Suma el cambio a lo pendiente y vuelve a empezar el cálculo en reposo (con todo lo acumulado). */
+  /**
+   * Suma el cambio a lo pendiente y vuelve a empezar el cálculo en reposo
+   * (con todo lo acumulado). Cuesta lo del cambio (F1): si la hoja entera se
+   * va a revisar no guarda ids, y si lo acumulado pasa a ser hoja entera se
+   * decide al arrancar el cálculo, no en cada comando. Sin candidatos de R6,
+   * los vecinos se sueltan (F2).
+   */
   private acumularR11(componentes: ReadonlySet<string>, cables: ReadonlySet<string>, indice: IndiceHoja, consulta: ConsultaTrazado, hoja: boolean): void {
-    const h = this.hojaActual()!;
     const p = (this.pendienteR11 ??= { componentes: new Set(), cables: new Set(), hoja: false, une: false, indice, consulta });
     if (!this.cuentaAntesR11) this.cuentaAntesR11 = { errores: this._errores, avisos: this._avisos };
-    for (const id of componentes) p.componentes.add(id);
-    for (const id of cables) p.cables.add(id);
+    if (hoja && !p.hoja) {
+      p.hoja = true;
+      p.componentes.clear();
+      p.cables.clear();
+    }
+    if (!p.hoja) {
+      for (const id of componentes) p.componentes.add(id);
+      for (const id of cables) p.cables.add(id);
+    }
     p.indice = indice;
     p.consulta = consulta;
     p.une ||= this.uneR11 || hoja;
-    p.hoja ||= hoja || this.presentesR11(p.componentes, p.cables, indice) * 4 > (h.componentes.length + h.cables.length) * 3;
     this.trabajoR11 = null;
+    if (!this.candidatosR6) this.vecinos = null;
     this.programarTramoR11();
   }
 
@@ -964,64 +1003,109 @@ export class AvisosHoja {
       return;
     }
     this._tramosR11++;
-    this.trabajoR11 ??= p.hoja
-      ? this.r11HojaPorPartes(h, p.indice, p.consulta, this.afectadosR11, this.cambiadosR11)
-      : this.r11LocalPorPartes(p.componentes, p.cables, p.indice, p.consulta, p.une ? "todas" : "ninguna", this.afectadosR11, this.cambiadosR11);
-    const t0 = performance.now();
+    this.trabajoR11 ??= this.r11EnReposo(p, h);
+    const reloj = this.relojR11;
+    const t0 = reloj();
+    const corte = this.msTramoR11 - MARGEN_TRAMO_R11;
     let pasos = 0;
     for (;;) {
       if (this.trabajoR11.next().done) break;
       pasos++;
       if (!limitado) continue;
-      if (this.pasosTramoR11 !== undefined ? pasos >= this.pasosTramoR11 : performance.now() - t0 >= this.msTramoR11) {
-        this._msTrabajoR11 += performance.now() - t0;
+      if (this.pasosTramoR11 !== undefined ? pasos >= this.pasosTramoR11 : reloj() - t0 >= corte) {
+        this._msTrabajoR11 += reloj() - t0;
         this.programarTramoR11();
         return;
       }
     }
-    this._msTrabajoR11 += performance.now() - t0;
+    this._msTrabajoR11 += reloj() - t0;
     // Terminado: lo acumulado ya está, y los avisos aparecen ahora.
     this.pendienteR11 = null;
     this.trabajoR11 = null;
     this.ajustarVecinos();
     const antes = this.cuentaAntesR11!;
     this.cuentaAntesR11 = null;
-    const ids = new Set(this.cambiadosR11);
-    this.cambiadosR11.clear();
+    const ids = this.cambiadosR11;
+    this.cambiadosR11 = new Set();
     this.afectadosR11.clear();
     const cuenta = antes.errores !== this._errores || antes.avisos !== this._avisos;
     if (ids.size > 0 || cuenta) this.alTerminarR11?.({ contornos: new Set(), ids, cuenta });
   }
 
   /**
+   * El cálculo en reposo, por partes. Al arrancar decide si lo acumulado es
+   * más de tres cuartos de la hoja (F1) y arma los vecinos de R11-A si no
+   * están (F2): los dos, con cortes de tramo. Los vecinos se ponen recién
+   * completos: si llega un comando en el medio, el cálculo vuelve a empezar y
+   * lo armado a medias se tira.
+   */
+  private *r11EnReposo(p: NonNullable<AvisosHoja["pendienteR11"]>, h: Hoja): Generator<void, void, void> {
+    let n = 0;
+    if (!p.hoja) {
+      let presentes = 0;
+      for (const id of p.componentes) {
+        if (p.indice.componentes.has(id)) presentes++;
+        if (++n % 1024 === 0) yield;
+      }
+      for (const id of p.cables) {
+        if (p.indice.cables.has(id)) presentes++;
+        if (++n % 1024 === 0) yield;
+      }
+      if (presentes * 4 > (h.componentes.length + h.cables.length) * 3) {
+        p.hoja = true;
+        p.componentes.clear();
+        p.cables.clear();
+      }
+      yield;
+    }
+    if (!this.vecinos) {
+      const v: Vecinos = { porComp: new Map(), colgados: new Map() };
+      for (const [id, g] of this.cables) {
+        ponerVecinos(v, id, g);
+        if (++n % 512 === 0) yield;
+      }
+      this.vecinos = v;
+      yield;
+    }
+    if (p.hoja) yield* this.r11HojaPorPartes(h, p.indice, p.consulta, this.afectadosR11, this.cambiadosR11);
+    else yield* this.r11LocalPorPartes(p.componentes, p.cables, p.indice, p.consulta, p.une ? "todas" : "ninguna", this.afectadosR11, this.cambiadosR11);
+  }
+
+  /**
    * R11 en la hoja entera, desde cada elemento, por partes (un paso por
-   * elemento o por 64 pares). Suma a `cambiados` los ids cuyo R11 cambió.
+   * elemento, por 8 pares o por 64 ids). Suma a `cambiados` los ids cuyo R11
+   * cambió.
    */
   private *r11HojaPorPartes(h: Hoja, indice: IndiceHoja, consulta: ConsultaTrazado, afectados: Set<string>, cambiados: Set<string>): Generator<void, void, void> {
     this._pasadasR11Hoja++;
-    for (const id of this.r11.keys()) afectados.add(id);
+    let n = 0;
+    for (const id of this.r11.keys()) {
+      afectados.add(id);
+      if (++n % 1024 === 0) yield;
+    }
     this.pares.clear();
     this.paresDe.clear();
     this.entreCables.clear();
-    const comps = [...h.componentes];
-    const cabs = [...h.cables];
+    yield;
+    // Sin copiar las listas (F4): si la hoja cambia, el cálculo vuelve a empezar.
     const lista: Aparente[] = [];
-    for (const c of comps) {
+    for (let i = 0; i < h.componentes.length; i++) {
       this._revisadosR11++;
-      aparentesDeComponente(c, consulta, lista);
+      aparentesDeComponente(h.componentes[i]!, consulta, lista);
       yield;
     }
-    for (const w of cabs) {
+    for (let i = 0; i < h.cables.length; i++) {
       this._revisadosR11++;
-      aparentesDeCable(w, indice, consulta, lista);
+      aparentesDeCable(h.cables[i]!, indice, consulta, lista);
       yield;
     }
+    // Cada par puede recorrer una red (R11-A): de a 8.
+    // Cada vuelta cuenta para el corte, también las que se saltan (T29: miles seguidas no cedían).
     const mismaRed = this.mismaRed();
-    let n = 0;
     for (const ap of lista) {
+      if (++n % 8 === 0) yield;
       if (this.pares.has(ap.k)) continue;
       this.ponerPar(ap, afectados, mismaRed);
-      if (++n % 64 === 0) yield;
     }
     // Los encimados entre cables se vuelven a mirar con los cambios: hacen falta los vecinos.
     if (this.entreCables.size > 0) this.vecinos ??= this.armarVecinos();
@@ -1046,22 +1130,36 @@ export class AvisosHoja {
     afectados: Set<string>,
     cambiados: Set<string>,
   ): Generator<void, void, void> {
-    const delCambio = new Set<string>([...componentes, ...cables]);
+    // Sin juntar los dos conjuntos en uno nuevo (F4).
+    const delCambio = (id: string) => componentes.has(id) || cables.has(id);
     let n = 0;
-    for (const id of delCambio) {
-      const ks = this.paresDe.get(id);
-      if (!ks) continue;
-      for (const k of [...ks]) {
-        this.quitarPar(k, afectados);
-        if (++n % 64 === 0) yield;
+    for (const ids of [componentes, cables]) {
+      for (const id of ids) {
+        const ks = this.paresDe.get(id);
+        if (ks) {
+          // `quitarPar` lo vacía: se saca siempre el primero, sin copiar.
+          while (ks.size > 0) {
+            this.quitarPar(ks.values().next().value!, afectados);
+            if (++n % 64 === 0) yield;
+          }
+        }
+        if (++n % 512 === 0) yield;
       }
     }
     const revisar = new Set<string>();
-    for (const id of componentes) if (indice.componentes.has(id)) revisar.add(id);
-    for (const id of cables) if (indice.cables.has(id)) revisar.add(id);
-    for (const id of [...revisar]) {
-      this.sumarCercanos(id, indice, consulta, revisar);
-      if (++n % 16 === 0) yield;
+    for (const id of componentes) {
+      if (indice.componentes.has(id)) revisar.add(id);
+      if (++n % 512 === 0) yield;
+    }
+    for (const id of cables) {
+      if (indice.cables.has(id)) revisar.add(id);
+      if (++n % 512 === 0) yield;
+    }
+    for (const ids of [componentes, cables]) {
+      for (const id of ids) {
+        this.sumarCercanos(id, indice, consulta, revisar);
+        if (++n % 4 === 0) yield;
+      }
     }
     const lista: Aparente[] = [];
     for (const id of revisar) {
@@ -1074,17 +1172,22 @@ export class AvisosHoja {
       }
       yield;
     }
+    // Cada par puede recorrer una red (R11-A): de a 8.
     const mismaRed = this.mismaRed();
     const nuevos = new Set<string>();
+    // Cada vuelta cuenta para el corte, también las que se saltan: después de duplicar, la lista trae
+    // decenas de miles de pares de los vecinos que ya estaban (T29: 2,3 ms seguidos sin ceder).
     for (const ap of lista) {
-      if (!(delCambio.has(ap.a) || delCambio.has(ap.b)) || this.pares.has(ap.k)) continue;
+      if (++n % 8 === 0) yield;
+      if (!(delCambio(ap.a) || delCambio(ap.b)) || this.pares.has(ap.k)) continue;
       this.ponerPar(ap, afectados, mismaRed);
       nuevos.add(ap.k);
-      if (++n % 64 === 0) yield;
     }
     if (redes !== "ninguna" && this.entreCables.size > 0) {
       const tocados = redes === "tocadas" ? this.cablesTocados() : null;
-      for (const k of [...this.entreCables]) {
+      // Sin copiar (F4): acá solo cambia `oculto`, no el conjunto.
+      for (const k of this.entreCables) {
+        if (++n % 8 === 0) yield;
         if (nuevos.has(k)) continue;
         const p = this.pares.get(k)!;
         if (tocados && !tocados.has(p.ap.a) && !tocados.has(p.ap.b)) continue;
@@ -1094,7 +1197,6 @@ export class AvisosHoja {
           afectados.add(p.ap.a);
           afectados.add(p.ap.b);
         }
-        if (++n % 64 === 0) yield;
       }
     }
     yield* this.ponerAfectadosPorPartes(afectados, cambiados);
@@ -1139,8 +1241,10 @@ export class AvisosHoja {
    */
   private *ponerAfectadosPorPartes(afectados: Set<string>, cambiados: Set<string>): Generator<void, void, void> {
     let n = 0;
+    // Un solo arreglo de trabajo para todos los ids (menos basura, F4 y A).
+    const visibles: Aparente[] = [];
     for (const id of afectados) {
-      const visibles: Aparente[] = [];
+      visibles.length = 0;
       for (const k of this.paresDe.get(id) ?? []) {
         const p = this.pares.get(k)!;
         if (!p.oculto) visibles.push(p.ap);
