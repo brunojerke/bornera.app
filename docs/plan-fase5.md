@@ -22,9 +22,9 @@ Una por sesión; cierran con `bornera-cierre` (y banco si tocan `sim/` o el dibu
 
 **Pendiente (Bruno, 2026-11-21, de T29):** `codosBanco` con la regla de W. La escena oficial del banco (2000 + 3030) tiene unas 10 250 conexiones aparentes (13 394 avisos R11) imposibles de dibujar en el editor: sus cables entran a los bornes por el cuerpo, se tocan y se enciman. Sin aparentes, R11 cuesta en Node la mitad o menos al abrir y casi nada en B2 y B16 (tabla en `docs/plan-T29.md`).
 
-**Decidido para C1 (Bruno, 2026-11-21, de T32): B-A.** B2 se juzga por la mediana: B2 1.º decide y B2 2.º informa (su máximo cae en dos grupos, cerca de 9 y de 11,7 ms, en los dos exes; subió en T29 y T32 sin cambio en su camino). **W-A:** `codosBanco` va después de C1, como tarea propia (cambia la escena de B2, B16, F y S5).
+**Decidido para C1 (Bruno, 2026-11-21, de T32): B-A.** B2 se juzga por la mediana: B2 1.º decide y B2 2.º informa (su máximo cae en dos grupos, cerca de 9 y de 11,7 ms, en los dos exes; subió en T29 y T32 sin cambio en su camino). **W-A:** `codosBanco` va después de C1, como tarea propia (**antes de C3**, Bruno, 2026-11-22) (cambia la escena de B2, B16, F y S5).
 
-**Cierre:** C1 «Probar la fase 5» en la PC, ABBA contra `7ed51e4` (Opus alto). **C1 hecha** (2026-11-21): `--conflicto` pasa a fucsia (K-A: `#701a75` claro, `#c026d3` oscuro; el rojo de antes se confundía con `--sim-fase`). ABBA `--fase5` de `4e3632e` contra `7ed51e4`: S1–S5 pasan por tope (S1 18,9 / 19,6, S4 2,1 / 2,2 y 2,4 / 2,6, S5 86,0 / 100,0), F pasa, B2 pasa; **B1 2.º 50,0 → 55,3 no pasa, causa conocida: GC** (trazas de CDP: el paso más largo es el de más GC; mismo código en los dos; `docs/bench.md`). Arrastres de `npm run bench` sin resultado claro: **pendiente para C3**. C2 `0.1.5-alpha.N` y `docs/netbook-fase5.md` (Opus alto). C3 netbook y PC el mismo día (Sonnet). C4 `0.1.5` y fila 6 (Opus alto). C5 docs y Obsidian (Sonnet).
+**Cierre:** C1 «Probar la fase 5» en la PC, ABBA contra `7ed51e4` (Opus alto). **C1 hecha** (2026-11-21): `--conflicto` pasa a fucsia (K-A: `#701a75` claro, `#c026d3` oscuro; el rojo de antes se confundía con `--sim-fase`). ABBA `--fase5` de `4e3632e` contra `7ed51e4`: S1–S5 pasan por tope (S1 18,9 / 19,6, S4 2,1 / 2,2 y 2,4 / 2,6, S5 86,0 / 100,0), F pasa, B2 pasa; **B1 2.º 50,0 → 55,3 no pasa, causa conocida: GC** (trazas de CDP: el paso más largo es el de más GC; mismo código en los dos; `docs/bench.md`). Arrastres de `npm run bench` sin resultado claro: **pendiente para C3**. C2 `0.1.5-alpha.N` y `docs/netbook-fase5.md` (Opus alto). **C2 hecha** (2026-11-22): hoja `docs/netbook-fase5.md` (fila 2b nueva: Alt+Tab con un pulsador fijado y otro mantenido; S5 con su tope normal) y versión `0.1.5-alpha.1` (WiX `0.1.5.1`); `t29-aparentes.brn` pasa a `tests/circuitos/avisos-fase5.brn`. **Cambio (Bruno, 2026-11-22): `codosBanco` va antes de C3**, y el tag `v0.1.5-alpha.1` de C3 va sobre su commit. C3 netbook y PC el mismo día (Sonnet). C4 `0.1.5` y fila 6 (Opus alto). C5 docs y Obsidian (Sonnet).
 
 ## 2. Modelo de simulación
 - **Entrar:** la netlist se arma una vez: redes por cables más etiquetas de red. Arranca en reposo.
@@ -62,11 +62,12 @@ Topes de la netbook fijados acá, antes de medir. PC = netbook / K, con K1 = 3 y
 | # | Paso | Pasa si |
 |---|---|---|
 | 0 | Instalar el `.msi` de `0.1.5-alpha.N` encima de la 0.1.4 | Una sola «Bornera», alpha.N |
-| 1 | «Probar la fase 5»: 3 aperturas × (fría + caliente), «Copiar» cada vez; la PC el mismo día | S1–S5 ≤ tope en las 3 calientes; B y F, regla vigente |
+| 1 | «Probar la fase 5»: 3 aperturas × (fría + caliente), «Copiar» cada vez; la PC el mismo día | S1–S5: mediana de las 3 calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %) (sección 3); B y F, regla vigente |
 | 2 | Doble clic en `marcha-parada.brn`, F5. Mantener S1 y soltar; mantener S0 y soltar; F5 | Con S1 entran K1 y H1 y siguen al soltar; con S0 se apagan y siguen así. Sin «•» |
+| 2b | `marcha-parada.brn`, F5: Mayús+clic en S1; mantener S0 y, sin soltar, Alt+Tab (Bruno, 2026-11-22) | Se suelta el mantenido (K1 y H1 vuelven) y el fijado sigue accionado |
 | 3 | `inversion.brn`, F5: S1; mantener S2; S0; S2 | K1 entra; con K1, K2 no entra; S0 apaga; con S2 entra K2 y K1 no |
 | 4 | `oscilante.brn`, `corto.brn` y `carrera.brn` (T30), F5 y pulsar | Avisa en cada uno; los dos primeros se detienen; F5 sale |
-| 5 | `avisos-fase5.brn` (T29), F5 | El contador muestra R10 y R11, y F5 entra igual |
+| 5 | `tests/circuitos/avisos-fase5.brn` (el de T29), F5 | El contador muestra R10 y R11, y F5 entra igual |
 | 6 | `.msi` de `0.1.5` encima de la alpha | Una sola «Bornera», 0.1.5; recientes siguen |
 
 ## 5. Decisiones (Bruno, 2026-11-20)

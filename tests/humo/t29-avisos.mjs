@@ -1,5 +1,5 @@
 // T29: avisos R10 (Fase L junto con L1, L2 o L3) y R11 (conexiones aparentes
-// en la hoja), a 1024×600. Sobre tests/humo/datos/t29-aparentes.brn: 60
+// en la hoja), a 1024×600. Sobre tests/circuitos/avisos-fase5.brn: 60
 // lámparas, cada una con un cable suelto que pasa sobre su X1 (120 avisos
 // R11), y una Fase «L» con otra «l1» (R10 en la «L»).
 //  1. Abrir: R11 de la hoja entera va en reposo (D6-A) y aparece al terminar.
@@ -22,7 +22,7 @@ const Z = ["z", "KeyZ", 90];
 const Y = ["y", "KeyY", 89];
 const SUPR = ["Delete", "Delete", 46];
 const F5 = ["F5", "F5", 116];
-const ARCHIVO = resolve(dirname(fileURLToPath(import.meta.url)), "datos/t29-aparentes.brn");
+const ARCHIVO = resolve(dirname(fileURLToPath(import.meta.url)), "../circuitos/avisos-fase5.brn");
 
 export default async function (p, comprobar) {
   await p.interceptarSelector();
@@ -58,7 +58,7 @@ async function probar(p, comprobar) {
   const cable = abierta.cables.find((w) => w.desde.tipo === "libre" && w.desde.x === -2 && w.desde.y === -2);
   const faseL = abierta.componentes.find((c) => c.tipo === "fuente.fase" && c.etiqueta === "L");
   const faseL1 = abierta.componentes.find((c) => c.tipo === "fuente.fase" && c.etiqueta === "l1");
-  if (!lampara || !cable || !faseL || !faseL1) throw new Error("t29-aparentes.brn no es el de este humo.");
+  if (!lampara || !cable || !faseL || !faseL1) throw new Error("avisos-fase5.brn no es el de este humo.");
   comprobar("1. abrir: 62 componentes y 60 cables", abierta.componentes.length === 62 && abierta.cables.length === 60);
   comprobar("1. R11 de la hoja entera aparece al terminar el cálculo en reposo: 120 avisos (lámpara y cable de cada par)", (await r11()) === 120, String(await r11()));
   const deLampara = await reglasDe(lampara.id);
