@@ -5,6 +5,7 @@ import type { Cable, Componente, Extremo, Hoja } from "./documento";
 import { codos, opuesta, type ExtremoRuta } from "./ruteo";
 import {
   consultaHoja,
+  consultaSinCable,
   MENSAJE_CRUCE,
   MENSAJE_EXTREMO_SUELTO,
   MENSAJE_SIN_SALIDAS,
@@ -254,5 +255,40 @@ describe("prepararCable", () => {
     const r = prepararCable(indice, consultaHoja(hoja, indice), { desde: A1, hasta: A1, codos: [[0, -4], [2, -4], [2, -2]] });
     expect(r.puntos).toBeNull();
     expect(r.problemas.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Asimetría conocida de `problemasTrazado` (codosBanco, 2026-11-22): un tramo
+ * nuevo que pasa por el punto de una T existente no lo marca ahí; la T, vista
+ * desde ella, sí (un «cruce»). El par sale igual en otro punto (encimado). Es
+ * la causa de la excepción `cruceEnTExistente` del control de pegar
+ * (prueba-portapapeles.ts). Pendiente «problemasTrazado no marca el punto de
+ * T existente» (docs/ideas.md): cuando se arregle, el `it.fails` se pone rojo
+ * y hay que sacar la excepción.
+ */
+describe("tramo nuevo sobre el punto de una T existente (asimetría conocida)", () => {
+  const w1 = cable("w1", libre(0, 0), libre(10, 0));
+  const t1 = cable("t1", { tipo: "cable", cable: "w1", x: 5, y: 0 }, libre(5, -3));
+  const n1 = cable("n1", libre(4, -3), libre(4, 5), [
+    [5, -3],
+    [5, 5],
+  ]);
+  const nuevo: CableNuevo = { id: "n1", desde: n1.desde, hasta: n1.hasta, puntos: [4, -3, 5, -3, 5, 5, 4, 5] };
+  const enLaT = (k: { x: number; y: number; clave: string }) => k.x === 5 && k.y === 0 && k.clave.includes("cable:t1") && k.clave.includes("cable:n1");
+
+  it("la T, vista desde ella, marca un cruce en su punto sobre w1", () => {
+    const consulta = consultaSinCable(consultaHoja(hojaCon([], [w1, t1, n1])), "t1");
+    const desdeLaT = problemasTrazado({ id: "t1", desde: t1.desde, hasta: t1.hasta, puntos: [5, 0, 5, -3] }, consulta);
+    expect(desdeLaT.filter(enLaT).map((k) => k.clave.split("|")[0])).toEqual(["cruce"]);
+  });
+
+  it("el cable nuevo marca el par con la T, pero en otro punto", () => {
+    const desdeElNuevo = problemasTrazado(nuevo, consultaHoja(hojaCon([], [w1, t1])));
+    expect(desdeElNuevo.some((k) => k.clave.includes("cable:t1") && !enLaT(k))).toBe(true);
+  });
+
+  it.fails("el cable nuevo también lo marca en el punto de la T (pendiente «problemasTrazado no marca el punto de T existente»)", () => {
+    expect(problemasTrazado(nuevo, consultaHoja(hojaCon([], [w1, t1]))).some(enLaT)).toBe(true);
   });
 });

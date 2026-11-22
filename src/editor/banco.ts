@@ -6,10 +6,19 @@
 // que ya existe, por eso no pasa por comandos (no hay nada que deshacer).
 
 import { borneDe, indexarHoja, recorridoCable } from "../core/model/cables";
-import { crearDocumento, generarId, PREFIJO_CABLE, type Cable, type Componente, type Documento, type Extremo } from "../core/model/documento";
+import { crearDocumento, generarId, PREFIJO_CABLE, type Cable, type Componente, type Documento, type Extremo, type Hoja } from "../core/model/documento";
 import { codos, opuesta, type ExtremoRuta } from "../core/model/ruteo";
-import { consultaHoja, consultaSuperpuesta, problemasTrazado, type CableHoja } from "../core/model/trazado";
-import { buscarSimbolo, type Borne, type Direccion } from "../core/symbols";
+import {
+  consultaHoja,
+  consultaSuperpuesta,
+  geometriaComponente,
+  problemasTrazado,
+  type BorneHoja,
+  type CableHoja,
+  type ConsultaTrazado,
+  type CuerpoHoja,
+} from "../core/model/trazado";
+import { buscarSimbolo, type Direccion, type Rect } from "../core/symbols";
 import { azar, generarBanco, PASO_BANCO } from "../render/banco";
 
 export function documentoBanco(cantidad: number, semilla = 1): Documento {
@@ -75,47 +84,66 @@ const VECTOR: Record<Direccion, readonly [number, number]> = {
   arriba: [0, -1],
 };
 
+/** Lado de las celdas de `consultaGrilla`, en unidades de grilla (un paso del banco). */
+const CELDA = PASO_BANCO;
+
 /**
- * Recorrido ortogonal de `a` a `b`: sale una unidad en la dirección de cada
- * borne y los une con una L. Se sacan los puntos repetidos y los que quedan
- * en el medio de una recta (así no hay largo cero ni vueltas de 180°).
- * Devuelve los codos (sin los extremos). Solo para el banco: el ruteo de
- * verdad es de la herramienta cable (T13).
+ * Consulta de trazado por grilla, para tender la escena como W sin recorrer
+ * la hoja entera en cada prueba (con la consulta lineal, tender 3000 cables
+ * es cuadrático). Cada elemento va en las celdas que toca su caja; una
+ * consulta junta los de las celdas de la caja, sin repetir. Da candidatos de
+ * más: la regla compara exacto (`ConsultaTrazado`). `agregar` suma un cable
+ * recién tendido.
  */
-export function codosBanco(a: Borne, b: Borne): [number, number][] {
-  const [ax, ay] = VECTOR[a.direccion];
-  const [bx, by] = VECTOR[b.direccion];
-  const p: [number, number][] = [
-    [a.x, a.y],
-    [a.x + ax, a.y + ay],
-    [b.x + bx, a.y + ay],
-    [b.x + bx, b.y + by],
-    [b.x, b.y],
-  ];
-  let cambio = true;
-  while (cambio) {
-    cambio = false;
-    for (let i = 1; i < p.length; i++) {
-      if (p[i]![0] === p[i - 1]![0] && p[i]![1] === p[i - 1]![1]) {
-        // Repetido: se saca el de adentro (nunca un extremo).
-        p.splice(i === p.length - 1 ? i - 1 : i, 1);
-        cambio = true;
-        break;
-      }
+function consultaGrilla(hoja: Hoja): { consulta: ConsultaTrazado; agregar(w: CableHoja): void } {
+  const bornes = new Map<number, BorneHoja[]>();
+  const cuerpos = new Map<number, CuerpoHoja[]>();
+  const cables = new Map<number, CableHoja[]>();
+  // Clave numérica de la celda (i, j): el banco no pasa de ±8192 celdas.
+  const celdas = (k: Rect, f: (clave: number) => void) => {
+    for (let i = Math.floor(k.x / CELDA); i <= Math.floor((k.x + k.ancho) / CELDA); i++)
+      for (let j = Math.floor(k.y / CELDA); j <= Math.floor((k.y + k.alto) / CELDA); j++) f((i + 8192) * 16384 + (j + 8192));
+  };
+  const meter = <T>(m: Map<number, T[]>, k: Rect, v: T) =>
+    celdas(k, (clave) => {
+      const l = m.get(clave);
+      if (l) l.push(v);
+      else m.set(clave, [v]);
+    });
+  const juntar = <T>(m: Map<number, T[]>, k: Rect): T[] => {
+    const s = new Set<T>();
+    celdas(k, (clave) => {
+      for (const v of m.get(clave) ?? []) s.add(v);
+    });
+    return [...s];
+  };
+  const agregar = (w: CableHoja) => {
+    const p = w.puntos;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const x = Math.min(p[i]!, p[i + 2]!);
+      const y = Math.min(p[i + 1]!, p[i + 3]!);
+      meter(cables, { x, y, ancho: Math.abs(p[i + 2]! - p[i]!), alto: Math.abs(p[i + 3]! - p[i + 1]!) }, w);
     }
-    if (cambio) continue;
-    for (let i = 1; i + 1 < p.length; i++) {
-      const [x0, y0] = p[i - 1]!;
-      const [x1, y1] = p[i]!;
-      const [x2, y2] = p[i + 1]!;
-      if ((x0 === x1 && x1 === x2) || (y0 === y1 && y1 === y2)) {
-        p.splice(i, 1);
-        cambio = true;
-        break;
-      }
-    }
+  };
+  for (const c of hoja.componentes) {
+    const g = geometriaComponente(c);
+    if (!g) continue;
+    meter(cuerpos, g.cuerpo.caja, g.cuerpo);
+    for (const b of g.bornes) meter(bornes, { x: b.x, y: b.y, ancho: 0, alto: 0 }, b);
   }
-  return p.slice(1, -1);
+  const indice = indexarHoja(hoja);
+  for (const w of hoja.cables) {
+    const puntos = recorridoCable(indice, w);
+    if (puntos) agregar({ id: w.id, puntos, desde: w.desde, hasta: w.hasta });
+  }
+  return {
+    consulta: {
+      bornesEn: (k) => juntar(bornes, k).filter((b) => b.x >= k.x && b.x <= k.x + k.ancho && b.y >= k.y && b.y <= k.y + k.alto),
+      cuerposEn: (k) => juntar(cuerpos, k),
+      cablesEn: (k) => juntar(cables, k),
+    },
+    agregar,
+  };
 }
 
 /** Centro de la caja de posiciones de los componentes (el del banco). */
@@ -217,24 +245,24 @@ function rutaBorne(c: Componente, nombre: string): ExtremoRuta {
 /**
  * Tiende cables como la herramienta W: ruteo de T13 (`codos`) y
  * `problemasTrazado` contra todo lo que ya está (sin conexiones aparentes ni
- * entradas por el cuerpo). La consulta de la hoja se arma una vez y lo nuevo
- * va encima.
+ * entradas por el cuerpo). La consulta por grilla se arma una vez y cada
+ * cable tendido se le suma.
  */
 function tendedorW(doc: Documento) {
   const hoja = doc.hojas[0]!;
-  const base = consultaHoja(hoja, indexarHoja(hoja));
-  const puestos: CableHoja[] = [];
+  const { consulta, agregar } = consultaGrilla(hoja);
   const nombres = (c: Componente) => (buscarSimbolo(c.tipo)?.bornes ?? []).map((b) => b.nombre);
   return {
     /**
      * Prueba los pares de bornes de `a` y `b` y tiende el primero que vale;
      * false si ninguno. En orden desde `inicio` o, con `enfrentados`, primero
-     * los bornes que se miran (así la ruta va derecho de uno al otro).
+     * los bornes que se miran (así la ruta va derecho de uno al otro). Con
+     * `usados`, saltea los pares que ya tienen un cable y anota el nuevo (un
+     * borne puede tener varios cables, pero no el mismo par dos veces).
      */
-    tender(a: Componente, b: Componente, inicio = 0, enfrentados = false): boolean {
+    tender(a: Componente, b: Componente, inicio = 0, enfrentados = false, usados?: Set<string>): boolean {
       const na = nombres(a);
       const nb = nombres(b);
-      const consulta = puestos.length === 0 ? base : consultaSuperpuesta(base, { cables: puestos });
       const total = na.length * nb.length;
       const mira = (c: Componente, nombre: string, x: number, y: number) => {
         const q = borneDe(c, nombre)!;
@@ -249,13 +277,16 @@ function tendedorW(doc: Documento) {
       for (const k of orden) {
         const desde: Extremo = { tipo: "borne", comp: a.id, borne: na[Math.floor(k / nb.length)]! };
         const hasta: Extremo = { tipo: "borne", comp: b.id, borne: nb[k % nb.length]! };
+        const par = `${a.id}.${desde.borne}-${b.id}.${hasta.borne}`;
+        if (usados?.has(par)) continue;
         const r0 = rutaBorne(a, desde.borne);
         const r1 = rutaBorne(b, hasta.borne);
         const cs = codos(r0, r1, (c) => problemasTrazado({ desde, hasta, puntos: [r0.x, r0.y, ...c.flat(), r1.x, r1.y] }, consulta).length === 0);
         if (!cs) continue;
+        usados?.add(par);
         const id = generarId(doc, PREFIJO_CABLE);
         hoja.cables.push({ id, desde, hasta, codos: cs });
-        puestos.push({ id, desde, hasta, puntos: [r0.x, r0.y, ...cs.flat(), r1.x, r1.y] });
+        agregar({ id, desde, hasta, puntos: [r0.x, r0.y, ...cs.flat(), r1.x, r1.y] });
         return true;
       }
       return false;
@@ -264,20 +295,17 @@ function tendedorW(doc: Documento) {
 }
 
 /**
- * Los cables del grupo del centro, todos tendidos como W (el resto del banco
- * no: sus cables se arman con `codosBanco` y muchos entran a un borne por el
- * lado del cuerpo, algo que W no deja hacer y que después no se puede
- * acomodar). Primero los internos (entre vecinos del grupo), después los que
- * cruzan el anillo: de los del grupo (los de más afuera primero) a sus
- * vecinos de afuera más cercanos, hasta `cruces`. Devuelve los componentes de
- * afuera que recibieron un cruce.
+ * Los cables del grupo del centro, tendidos con `w` como el resto del banco.
+ * Primero los internos (entre vecinos del grupo), después los que cruzan el
+ * anillo: de los del grupo (los de más afuera primero) a sus vecinos de
+ * afuera más cercanos, hasta `cruces`. Devuelve los componentes de afuera que
+ * recibieron un cruce.
  */
-function cablearGrupo(doc: Documento, grupo: readonly Componente[], cruces: number, rnd: () => number): Set<string> {
+function cablearGrupo(doc: Documento, w: ReturnType<typeof tendedorW>, grupo: readonly Componente[], cruces: number, rnd: () => number): Set<string> {
   const hoja = doc.hojas[0]!;
   const { cx, cy } = centroPosiciones(hoja.componentes);
   const enGrupo = new Set(grupo.map((c) => c.id));
   const enPos = new Map(grupo.map((c) => [`${c.x},${c.y}`, c]));
-  const w = tendedorW(doc);
   for (const a of grupo)
     for (const [dx, dy] of [
       [PASO_BANCO, 0],
@@ -311,13 +339,18 @@ function cablearGrupo(doc: Documento, grupo: readonly Componente[], cruces: numb
   return destinos;
 }
 
+/** Pasadas del relleno de vecinos: en cada una, cada par de vecinos prueba otro par de bornes. */
+const PASADAS_VECINOS = 6;
+
 /**
  * El documento del banco con cables: CABLES_POR_COMPONENTE × `cantidad`
- * cables. Con `opciones.anillo`, el grupo del centro queda con un anillo
- * vacío alrededor y `opciones.cruces` cables lo cruzan (tendidos como W); el
- * resto, entre bornes de componentes vecinos (a la derecha y abajo), con 0 a
- * 3 codos. Después, las derivaciones en T de `opciones` (ver `derivar`).
- * Mismo azar con la misma semilla.
+ * cables, todos tendidos como W (`codosBanco`, 2026-11-22: sin conexiones
+ * aparentes ni cables que entran a un borne por el cuerpo). Con
+ * `opciones.anillo`, el grupo del centro queda con un anillo vacío alrededor
+ * y `opciones.cruces` cables lo cruzan; el resto, entre bornes de
+ * componentes vecinos (a la derecha y abajo), hasta PASADAS_VECINOS pasadas
+ * (un par de vecinos sin ruta se saltea). Después, las derivaciones en T de
+ * `opciones` (ver `derivar`). Mismo azar con la misma semilla.
  */
 export function documentoBancoCables(cantidad: number, semilla = 1, opciones: OpcionesBancoCables = BANCO_CABLES): Documento {
   const doc = documentoBanco(cantidad, semilla);
@@ -336,38 +369,27 @@ export function documentoBancoCables(cantidad: number, semilla = 1, opciones: Op
   const sinCables = new Set(masCercanos(comps, opciones.centroSinCables).map((c) => c.id));
 
   const objetivo = Math.round(cantidad * CABLES_POR_COMPONENTE);
-  const bornes = (c: Componente) => (buscarSimbolo(c.tipo)?.bornes ?? []).map((b) => borneDe(c, b.nombre)!);
+  const cantidadBornes = (c: Componente) => buscarSimbolo(c.tipo)?.bornes.length ?? 0;
+  const w = tendedorW(doc);
   const usados = new Set<string>();
-  /** Cables entre vecinos de la grilla hasta llegar a `hasta` (hasta tres pasadas: otro par de bornes de los mismos vecinos). */
+  /** Cables entre vecinos de la grilla hasta llegar a `hasta`; en cada pasada, cada par prueba sus pares de bornes desde uno al azar. */
   const vecinos = (hasta: number) => {
-    for (let pasada = 0; pasada < 3; pasada++) for (const a of comps) {
+    for (let pasada = 0; pasada < PASADAS_VECINOS; pasada++) for (const a of comps) {
       if (hoja.cables.length >= hasta) return;
       if (sinCables.has(a.id)) continue;
       for (const [dx, dy] of [[PASO_BANCO, 0], [0, PASO_BANCO]] as const) {
         if (hoja.cables.length >= hasta) return;
         const b = enPos.get(clave(a.x + dx, a.y + dy));
         if (!b || sinCables.has(b.id)) continue;
-        const ba = bornes(a);
-        const bb = bornes(b);
-        if (ba.length === 0 || bb.length === 0) continue;
-        const desde = ba[Math.floor(rnd() * ba.length)]!;
-        const hasta2 = bb[Math.floor(rnd() * bb.length)]!;
-        // Un borne puede tener varios cables, pero no el mismo par dos veces.
-        const par = `${a.id}.${desde.nombre}-${b.id}.${hasta2.nombre}`;
-        if (usados.has(par)) continue;
-        usados.add(par);
-        hoja.cables.push({
-          id: generarId(doc, PREFIJO_CABLE),
-          desde: { tipo: "borne", comp: a.id, borne: desde.nombre },
-          hasta: { tipo: "borne", comp: b.id, borne: hasta2.nombre },
-          codos: codosBanco(desde, hasta2),
-        });
+        const total = cantidadBornes(a) * cantidadBornes(b);
+        if (total === 0) continue;
+        w.tender(a, b, Math.floor(rnd() * total), false, usados);
       }
     }
   };
   const enGrupo = new Set(grupo.map((c) => c.id));
   if (opciones.anillo > 0) {
-    for (const id of cablearGrupo(doc, grupo, opciones.cruces, rnd)) sinCables.add(id);
+    for (const id of cablearGrupo(doc, w, grupo, opciones.cruces, rnd)) sinCables.add(id);
     for (const id of enGrupo) sinCables.add(id);
     // Banda limpia: los de la franja de afuera del anillo tampoco reciben
     // cables del relleno, así los cruces se acomodan sin chocar con cables

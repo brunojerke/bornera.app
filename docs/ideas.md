@@ -29,6 +29,11 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 - **Qué:** cuando Vite falla al transformar la página del banco, `correr.mjs` espera el límite de 10 min en vez de cortar con el primer error. En un worktree nuevo hace falta `npx svelte-kit sync` antes de medir (T27).
 - **Cuándo:** tarea chica, sin fecha.
 
+## `problemasTrazado` no marca el punto de T existente
+- **Qué:** un tramo nuevo que pasa por el punto de una T que ya está (su extremo sobre otro cable) no lo marca ahí; la T, vista desde ella, sí («cruce»). El par sale igual en otro punto, encimado con la T o con su anfitrión, así que W lo rechaza igual y la previa de pegar marca el par; falta solo la marca en ese punto.
+- **Relación:** apareció en `codosBanco` (2026-11-22), en el pegado al azar de `tests/portapapeles-banco.test.ts` con la escena nueva. El control de pegar tiene la excepción `cruceEnTExistente` (`src/core/model/prueba-portapapeles.ts`) y `trazado.test.ts` un `it.fails` que se pone rojo cuando se arregle: entonces se saca la excepción.
+- **Cuándo:** tarea aparte, con su ABBA (toca W, la previa de pegar y R11 en vivo).
+
 ## Ícono propio de la app
 - **Qué:** un ícono propio para Bornera (el instalador y la ventana).
 - **Cuándo:** tarea aparte, sin fecha (pedido de Bruno, 2026-11-20).

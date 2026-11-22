@@ -18,6 +18,32 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - `npm run bench -- --comparar` mide además sin caché de textos y sin ninguna optimización.
 - `npm run bench -- --escena-012` arma las escenas de 100, 500 y 2000 con los 5 símbolos de 0.1.2 (ver T15 en `docs/archivo/bench-historial.md`). Las comparaciones contra 0.1.2 usan esta opción.
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
+- **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
+
+## Escena oficial con la regla de W (fase 5, `codosBanco`) — 2026-11-22
+
+**Criterio escrito antes de medir** (Bruno, J-A y ajustes del plan): ABBA `probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, 6 aperturas por exe (fría + caliente). A = esta tarea; B = `48c6048`. Controles (B15, S1–S4) con la regla de siempre; B1–B14, B16, F1–F3 y S5 solo por su tope en la PC (tabla en `docs/plan-codosBanco.md`; B9, B2 2.º y B16 por gesto informan). El ABBA se repite una vez solo si falla un control; si falla una fila con la escena, se frena sin repetir.
+
+**Cómo se midió:** enchufada, «Mejor rendimiento» (Bruno), sin Opera ni otra Bornera. Dos exes `tauri build --no-bundle` con `0.1.5-alpha.1` (tiene menú de desarrollo): B compilado de `48c6048` antes de tocar el código; A del árbol de la tarea. Edge 157.
+
+**Resultado: pasa.** Controles: B15 igual; S1 18,0 / 21,5, S2 0,2 / 0,3 y 0,3 / 0,3, S3 2,8 / 3,2, S4 2,3 / 2,6 y 2,5 / 2,8 (mediana / máx. de las calientes; todo bajo tope y sin regresión). Con la escena, todo bajo su tope:
+
+| Fila | Tope PC | Mediana A | Máx. A | B (informa) |
+|---|---|---|---|---|
+| S5 máx. | 100 | **48,5** | 49,4 | 93,3 |
+| B1 1.º / 2.º | 150 / 300 | 51,4 / 53,5 | 61,2 / 66,3 | 47,0 / 48,5 |
+| B2 1.º (2.º informa) | 40 | 10,8 (12,5) | 12,4 (16,9) | 9,3 (9,3) |
+| B4 1.º / 2.º | 40 / 80 | 5,8 / 7,9 | 6,1 / 8,3 | 5,2 / 8,6 |
+| B5 1.º / 2.º | 40 / 80 | 1,8 / 2,2 | 1,9 / 3,7 | 1,5 / 1,9 |
+| B7 | 5 | 0,9 | 1,5 | 0,9 |
+| B10 | 25 | 21,2 | 24,3 | 20,9 |
+| B12 | 1,8 | 1,6 | 2,2 (≤ 2,8) | 1,1 |
+| B13 p95 / máx. | 3 / 8 | 0,0 / 0,1 | 0,1 / 0,1 | 0,0 / 0,0 |
+
+- Cuadros: B3 y B6 sin lentos (máx. 9,9 y 12,4 ms); B8, B11 y B14 sin cuadros > 16,7 ms (máx. 4,3, 11,0 y 1,0); B16 sin lentos, por gesto 9,1 (B 9,5). B9 N = 500 en las dos.
+- F1 2,8–3,1 ms (≤ 9); F2 y F3 ≤ 73,3 ms (≤ 1 s). S5 de pared (informa): 164,4 ms (C1: 285,9). Cadena de 100 de S4: 5,1 / 12,5 ms.
+- A − B que sube (informa, no juzga en J-A): B1 47,0 → 51,4 y 48,5 → 53,5, B2 9,3 → 10,8, B12 1,1 → 1,6. La escena nueva tiene más codos (4702 contra 4430) y otras redes (579 contra 714, 51 en corto contra 31).
+- **Node (informa, antes → después):** `.brn` 653 364 → 655 938 caracteres; abrir (mediana) 23,6 → 23,6 ms; netlist mediana / máx. 4,19 / 5,99 → 5,58 / 11,37 ms (un proceso suelto; 2.ª corrida 4,88 / 6,63); R11 en reposo al abrir 167–176 → 97–189 ms en total, tramo más largo 7,76 → 6,97 ms, todos los de > 4 ms con GC.
 
 ## Cierre de la fase 5 en la PC (C1) — 2026-11-21
 
@@ -112,7 +138,7 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 | S5 | máx. | 100,0 | 110,0 | 93,4 | **99,8** | 88,4 · 95,4 · 91,7 · 99,8 · 95,1 · 91,3 | pasa |
 
 - **S1, desglose** (mediana de las calientes, ms): R4 0,4 · netlist 1,8 · iniciar 0,5 · cuadro 15,3. La netlist sola (N-A, informa): 1,7–4,3 ms. S1 queda lejos del aviso de 48 ms.
-- **S5 está en el borde:** máx. 99,8 contra 100 (frías hasta 101,8). Es R11 de la escena con 10 250 aparentes (pendiente de `codosBanco`, plan de fase).
+- **S5 está en el borde:** máx. 99,8 contra 100 (frías hasta 101,8). Es R11 de la escena con 10 250 aparentes (resuelto en `codosBanco`: S5 48,5 / 49,4).
 - **S5 de pared** (informa): 292–335 ms desde abrir hasta los avisos: cada `setTimeout(0)` encadenado espera ≥ 4 ms en Chromium (44 tramos).
 - Frías fuera del rango de sus calientes (+1 ms, informan): 12 en A (B1, B10, B11) y 10 en B.
 - Chrome headless (humo, informa): S1 36,3, S2 0,6, S3 4,0, S5 112,6 ms de máximo.

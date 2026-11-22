@@ -110,19 +110,39 @@ interface Cruzado {
   y: number;
   /** El id de lo que ya estaba. */
   existente: string;
+  tipo: string;
+  /** El id del elemento desde el que se vio (el cable o componente revisado), si se sabe. */
+  vista?: string;
 }
 
 /** Lo que hay de cruzado (un lado en `nuevos` y el otro no) en una lista de conflictos. Sin "sinSalidas", que es regla de W. */
-function cruzadosDe(lista: readonly Conflicto[], nuevos: ReadonlySet<string>): Cruzado[] {
+function cruzadosDe(lista: readonly Conflicto[], nuevos: ReadonlySet<string>, vista?: string): Cruzado[] {
   const salida: Cruzado[] = [];
   for (const k of lista) {
     const [tipo, a, b] = k.clave.split("|") as [string, string, string];
     if (tipo === "sinSalidas") continue;
     const na = nuevos.has(elemento(a));
     if (na === nuevos.has(elemento(b))) continue;
-    salida.push({ par: `${a}|${b}`, x: k.x, y: k.y, existente: elemento(na ? b : a) });
+    salida.push({ par: `${a}|${b}`, x: k.x, y: k.y, existente: elemento(na ? b : a), tipo, vista });
   }
   return salida;
+}
+
+/**
+ * Excepción del control (codosBanco, 2026-11-22, con el OK de Bruno): un
+ * «cruce» visto desde una T que ya estaba, en el punto de su extremo sobre
+ * otro cable, cuando `problemasPegado` ya marcó el mismo par en otro punto.
+ * Causa: `problemasTrazado` no es simétrico; un cable nuevo cuyo tramo pasa
+ * por el punto de una T existente no lo marca ahí (la T, vista desde ella,
+ * sí). El par siempre sale igual, encimado con la T o con su anfitrión.
+ * Pendiente «problemasTrazado no marca el punto de T existente»
+ * (docs/ideas.md); el test con `it.fails` de trazado.test.ts se pone rojo
+ * cuando se arregle, y entonces esta excepción se saca.
+ */
+function cruceEnTExistente(k: Cruzado, hoja: Hoja, paresMarcados: ReadonlySet<string>): boolean {
+  if (k.tipo !== "cruce" || k.vista !== k.existente || !paresMarcados.has(k.par)) return false;
+  const t = hoja.cables.find((w) => w.id === k.existente);
+  return !!t && [t.desde, t.hasta].some((e) => e.tipo === "cable" && e.x === k.x && e.y === k.y);
 }
 
 /** Caja de una lista de puntos (x, y seguidos). */
@@ -162,11 +182,11 @@ export function cruzados(hoja: Hoja, nuevos: ReadonlySet<string>): Cruzado[] {
   const salida: Cruzado[] = [];
   for (const { w, puntos } of cables) {
     if (!puntos || (!nuevos.has(w.id) && !seTocan(cajaPuntos(puntos), nueva))) continue;
-    salida.push(...cruzadosDe(problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos }, consultaSinCable(consulta, w.id)), nuevos));
+    salida.push(...cruzadosDe(problemasTrazado({ id: w.id, desde: w.desde, hasta: w.hasta, puntos }, consultaSinCable(consulta, w.id)), nuevos, w.id));
   }
   for (const { c, g } of comps) {
     if (!g || (!nuevos.has(c.id) && !seTocan(g.cuerpo.caja, nueva))) continue;
-    salida.push(...cruzadosDe(problemasComponente(g, consulta), nuevos));
+    salida.push(...cruzadosDe(problemasComponente(g, consulta), nuevos, c.id));
   }
   return salida;
 }
@@ -181,7 +201,7 @@ export function cruzados(hoja: Hoja, nuevos: ReadonlySet<string>): Cruzado[] {
  * desde ese cable, como un toque con el cable que llega a ese borne
  * (cable–cable), y `problemasPegado` lo da como borne–cable
  * (`problemasTrazado` deja el contacto en el borne de su extremo a
- * `problemasComponente`).
+ * `problemasComponente`). Única excepción: `cruceEnTExistente`.
  */
 export function comprobarControl(ps: readonly Conflicto[], hoja: Hoja, nuevos: ReadonlySet<string>): void {
   const control = cruzados(hoja, nuevos);
@@ -190,7 +210,8 @@ export function comprobarControl(ps: readonly Conflicto[], hoja: Hoja, nuevos: R
   const propios = cruzadosDe(ps, nuevos);
   const lugar = (k: Cruzado) => `${k.existente}@${k.x},${k.y}`;
   const marcados = new Set(propios.map(lugar));
-  expect(control.filter((k) => !marcados.has(lugar(k)))).toEqual([]);
+  const paresMarcados = new Set(propios.map((k) => k.par));
+  expect(control.filter((k) => !marcados.has(lugar(k)) && !cruceEnTExistente(k, hoja, paresMarcados))).toEqual([]);
   expect(propios).toHaveLength(ps.length);
 }
 

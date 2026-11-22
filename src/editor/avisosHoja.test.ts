@@ -1164,7 +1164,7 @@ describe("R11 en reposo: arriba de 100 elementos y al abrir, por tramos (T29, D6
     expect(diferencias(editor, h)).toEqual([]);
   });
 
-  it("escena oficial (2000 + 3030 cables), con un reloj falso de 0,25 ms por paso: al abrir, pegar unos 500 y duplicar todo, cada tramo corta al llegar a 2 ms, y al terminar da lo mismo que el cálculo lento", () => {
+  it("escena oficial (2000 + 3030 cables), con un reloj falso de 0,25 ms por paso: al abrir, pegar unos 500 encimados y duplicar todo, cada tramo corta al llegar a 2 ms, y al terminar da lo mismo que el cálculo lento", () => {
     // Cambio de regla (Bruno, 2026-11-21): reemplaza al test de «ningún tramo pasa de 4 ms» con reloj real,
     // que dependía de la recolección de basura. Esa medición queda informativa en tests/bench/r11-tramos-node.mjs.
     const PASO = 0.25;
@@ -1205,8 +1205,11 @@ describe("R11 en reposo: arriba de 100 elementos y al abrir, por tramos (T29, D6
     while (recortar(h, h.componentes.slice(0, n + 1).map((c) => c.id)).cables.length + n + 1 <= 500) n++;
     const r500 = recortar(h, h.componentes.slice(0, n).map((c) => c.id));
     expect(r500.componentes.length + r500.cables.length).toBeGreaterThan(UMBRAL_R11_EN_VIVO);
-    editor.ejecutar(pegar(editor.documento, r500, Math.ceil(caja.ancho) + 20, 0));
-    terminar("pegar unos 500");
+    // Encimados, corridos 1 unidad (P-A de codosBanco): desde que la escena oficial no tiene
+    // conexiones aparentes, así el cálculo por partes se compara con miles.
+    editor.ejecutar(pegar(editor.documento, r500, 1, 0));
+    terminar("pegar unos 500 encimados");
+    expect(aparentesHoja(h, indexarHoja(h), editor.consulta).length).toBeGreaterThan(1000);
     const todos = recortar(h, [...h.componentes.map((c) => c.id), ...h.cables.map((w) => w.id)]);
     editor.ejecutar(pegar(editor.documento, todos, 0, Math.ceil(caja.alto) + 20));
     terminar("duplicar todo");

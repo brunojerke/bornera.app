@@ -49,4 +49,4 @@ Aprobado por Bruno el 2026-11-20 con I-A, M-A, L-A, T-A y H-A, más 5 ajustes. M
 - **Tests:** 2226 en verde (1 saltado), check limpio, humo 912/912. Corpus y referencias: 0 R11; `cables-t-libres`, 0 por R11-A. Recorridos al azar iguales al cálculo lento, en vivo y por partes; pruebas a propósito (sin cercanos, sin R11-A, sin poner al día, perdiendo afectados al reiniciar) detectadas.
 - **Banco:** el primer ABBA oficial (`14da3c9`) **no pasó** B2 máx. (9,3 → 11,1) ni B4 máx. (7,0 → 8,6). El ABBA oficial de `a6519f6` contra `b6dbeee` **pasa**: nada sube con T-A (tabla en `docs/bench.md`).
 - **Node (informa):** la escena oficial tiene 10 250 conexiones aparentes (13 394 avisos R11). Reloj real: tramo más largo 5,57 ms; los de más de 4 ms, todos con GC.
-- **Pendiente:** netbook (no corrida); `codosBanco` con la regla de W; sacar el `Conflicto` intermedio de `problemasTrazado`/`problemasComponente`.
+- **Pendiente:** netbook (no corrida); ~~`codosBanco` con la regla de W~~ (hecha el 2026-11-22: 0 aparentes, `docs/plan-codosBanco.md`); sacar el `Conflicto` intermedio de `problemasTrazado`/`problemasComponente`.

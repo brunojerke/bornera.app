@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generarBanco } from "../render/banco";
+import { aparentesHoja } from "../core/model/aparentes";
 import { componentesCableados, indexarHoja, recorridoCable, validarHoja } from "../core/model/cables";
 import { borneDe } from "../core/model/cables";
 import type { Cable, Extremo, Hoja } from "../core/model/documento";
@@ -52,6 +53,26 @@ describe("documentoBancoCables", () => {
       expect(derivaciones(hoja), `${n}`).toHaveLength(BANCO_CABLES.derivaciones);
       if (n > 100) expect(hoja.cables.length, `${n}`).toBe(Math.round(n * CABLES_POR_COMPONENTE) + BANCO_CABLES.derivaciones);
       expect(documentoBancoCables(n)).toEqual(doc);
+    }
+  });
+
+  it("todos los cables están tendidos como W (codosBanco): sin conexiones aparentes y ninguno entra a un borne por el cuerpo, también en la escena de T12", () => {
+    for (const [nombre, opciones] of [["oficial", BANCO_CABLES], ["T12", BANCO_CABLES_T12]] as const) {
+      const doc = documentoBancoCables(2000, 1, opciones);
+      const hoja = doc.hojas[0]!;
+      const indice = indexarHoja(hoja);
+      // Antes de codosBanco, la oficial tenía 10 250 aparentes y 1670 cables que entraban por el cuerpo.
+      expect(aparentesHoja(hoja, indice, new Editor(doc).consulta), nombre).toEqual([]);
+      const porCuerpo = hoja.cables.filter((w) => {
+        const p = recorridoCable(indice, w)!;
+        const n = p.length;
+        const lados: [Extremo, Direccion | null][] = [
+          [w.desde, direccionDe(p[2]! - p[0]!, p[3]! - p[1]!)],
+          [w.hasta, direccionDe(p[n - 4]! - p[n - 2]!, p[n - 3]! - p[n - 1]!)],
+        ];
+        return lados.some(([e, salida]) => e.tipo === "borne" && salida === opuesta(borneDe(indice.componentes.get(e.comp)!, e.borne)!.direccion));
+      });
+      expect(porCuerpo.map((w) => w.id), nombre).toEqual([]);
     }
   });
 
