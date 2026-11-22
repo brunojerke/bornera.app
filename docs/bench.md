@@ -20,6 +20,30 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Netbook y PC el mismo día (fase 5, C3) — 2026-11-22
+
+**Criterio escrito antes de medir** (`docs/plan-fase5.md`, secciones 3 y 4; hoja `docs/netbook-fase5.md`): `.msi` de `v0.1.5-alpha.1` (tag sobre `845fe69`, del borrador de `release.yml`) en las dos máquinas, «Probar la fase 5», 3 aperturas × (fría + caliente). S1–S5: mediana de las 3 calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %); netbook con sus topes, PC con los de C1. F1–F3 por su tope. B1–B16 contra los topes de la 3b: por fila, la mediana de las corridas; las corridas sueltas que fallan informan; B10 informa. Las frías informan (rango de las calientes + 1 ms). K no se recalcula.
+
+**Cómo se midió:** Bruno, las dos el 22/11 por la tarde (PC 15:02–15:05, netbook 15:28–15:37), Edge 157, «con disco». Filas 0, 2, 2b, 3, 4 y 5 de la netbook: pasan (Bruno). Sin informar: la fila 0 de la PC y las condiciones del banco. Los textos se llaman `n1-…`–`n3-…` (PC) y `frio1`–`caliente3` (netbook), al revés de la hoja.
+
+**Resultado: pasa.**
+
+| # | Netbook cal. 1 / 2 / 3 | Mediana | Tope netbook (máx. adm.) | PC cal. 1 / 2 / 3 | Tope PC | Netbook / PC |
+|---|---|---|---|---|---|---|
+| S1 máx. | 97,3 / 100,3 / 122,4 | 100,3 | 300 (330) | 21,2 / 22,5 / 21,9 | 54,5 | 4,6 (K2 5,5) |
+| S2 med. / máx. | 0,4/0,4 · 0,4/0,5 · 0,4/0,6 | 0,4 / 0,5 | 5 / 16 | 0,2/0,3 · 0,2/0,3 · 0,2/0,3 | 1,7 / 5,3 | resolución |
+| S3 máx. | 7,8 / 8,0 / 8,3 | 8,0 | 50 (55) | 2,5 / 2,6 / 2,8 | 16,7 | 3,1 (K1 3) |
+| S4 cuadro / gesto | 5,3/5,8 · 5,3/6,0 · 6,0/6,5 | 5,3 / 6,0 | 33 / 100 | 2,2/2,3 · 2,3/2,5 · 2,0/2,3 | 6,0 / 18,2 | 2,4 / 2,6 (K2) |
+| S5 máx. | 122,5 / 119,0 / 121,2 | 121,2 | 300 (330) | 51,3 / 46,7 / 52,4 | 100 | 2,4 (K1) |
+| F1 máx. | 3,7 / 3,5 / 5,5 | | 50 | 3,2 / 3,0 / 3,1 | 9 | |
+| F2 máx. | 100,9 / 96,1 / 134,4 | | 1000 | 57,8 / 52,9 / 56,6 | 1000 | |
+| F3 máx. | 249,0 / 175,5 / 191,1 | | 3000 | 61,9 / 62,9 / 64,9 | 1000 | |
+
+- **B en la netbook:** pasan todas por la mediana. Informan: B10 121–128 ms por gesto (3b: 124,5); caliente 1 con B6 2 lentos en un gesto (máx. 22,6 ms) y B11 1,3 % (2 de 152); B12 4,9 ms en las frías 1 y 3 (calientes 3,3–3,9). B1 143–152 ms, B2 24,5–26,4, B16 por gesto 43–45. B9 N = 500.
+- **S1, desglose en la netbook (máx.):** netlist 7,0–7,3 ms (T28: ≤ 27,5), cuadro 88–113 ms en 14–18 cuadros. S5 de pared (informa): 391–436 ms. Cadena de 100 de S4: gesto 72–86 ms (PC 11,5–12,2).
+- **Frías fuera de su rango (informan):** netbook S3 en las 3 (9,4–10,7 contra 9,3), S5 fría 1 (134,9) y 3 (123,6), F2 fría 1 (138,8), F3 fría 1 (312,0); PC F2 fría 1 (69,8).
+- **Arrastres de `npm run bench` (pendiente de C1):** las escenas de 100, 500 y 2000 sin cables no cambian en `845fe69` (`crearEscenaBanco`, sin diferencias contra `48c6048`), así que se midió A = `845fe69` contra B = `946589a`, Edge headless, 3 corridas por lado intercaladas (informa; Edge del usuario abierto). Con todo seleccionado, por gesto: de 100, A 58,4 / 28,6 / 28,4, B 28,6 / 30,8 / 31,6 (los dos grupos de C1 no aparecen); de 500, A 66,9 / 71,2 / 66,2, B 60,4 / 58,4 / 63,2 (mediana +6,5 ms, +11 %, rangos que no se pisan). «Mover todo» de 2000 máx.: A 9,8–9,9, B 9,7–10,1. Ningún cuadro > 10,4 ms ni lento en las 6. Las filas con cables cambian de escena (J-A): informan.
+
 ## Escena oficial con la regla de W (fase 5, `codosBanco`) — 2026-11-22
 
 **Criterio escrito antes de medir** (Bruno, J-A y ajustes del plan): ABBA `probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, 6 aperturas por exe (fría + caliente). A = esta tarea; B = `48c6048`. Controles (B15, S1–S4) con la regla de siempre; B1–B14, B16, F1–F3 y S5 solo por su tope en la PC (tabla en `docs/plan-codosBanco.md`; B9, B2 2.º y B16 por gesto informan). El ABBA se repite una vez solo si falla un control; si falla una fila con la escena, se frena sin repetir.
@@ -73,7 +97,7 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Las dos versiones recorren las mismas funciones con el mismo reparto (uniones, cables, índice espacial, mosaicos); A no suma trabajo nuevo en el paso (los avisos, R11 incluida, ~1 ms en las dos).
 - **Veredicto: el máximo de B1 lo pone la GC que cae dentro del paso.** C1 cierra «no pasa, causa conocida: GC», sin tarea nueva (regla de Bruno).
 
-**`npm run bench`, arrastres (Edge headless, 3 corridas por lado intercaladas, `d16e96a` contra `946589a`): sin resultado claro, pendiente para C3.** Ningún número sube en las 3 corridas. Arrastre con todo seleccionado de 100, por gesto: A 54,6 / 98,8 / 108,2 ms, B 65,3 / 49,0 / 65,3 ms (dos grupos, cerca de 50–65 y de 100, en los dos). De 500: A 71,4 / 93,9 / 117,0, B 85,8 / 75,7 / 116,0. «Mover todo» de 2000, máx.: A 9,6 / 10,1 / 10,0, B 11,0 / 10,4 / 10,0. Los máximos por cuadro no cambian (≤ 3 ms en 100). Decide el ABBA, que no ve nada en B3, B6 ni B16.
+**`npm run bench`, arrastres (Edge headless, 3 corridas por lado intercaladas, `d16e96a` contra `946589a`): sin resultado claro, pendiente para C3** (medido en C3: ver arriba). Ningún número sube en las 3 corridas. Arrastre con todo seleccionado de 100, por gesto: A 54,6 / 98,8 / 108,2 ms, B 65,3 / 49,0 / 65,3 ms (dos grupos, cerca de 50–65 y de 100, en los dos). De 500: A 71,4 / 93,9 / 117,0, B 85,8 / 75,7 / 116,0. «Mover todo» de 2000, máx.: A 9,6 / 10,1 / 10,0, B 11,0 / 10,4 / 10,0. Los máximos por cuadro no cambian (≤ 3 ms en 100). Decide el ABBA, que no ve nada en B3, B6 ni B16.
 
 ## Dibujo del estado (fase 5, T33) — 2026-11-21
 
