@@ -135,6 +135,7 @@ En Simular: **mantener apretado** el botón del mouse sobre un pulsador lo accio
 | ☐ | Pasa si |
 |---|---|
 | ☐ | Una sola «Bornera», versión `0.1.5`, y la lista de recientes sigue |
+| ☐ | Doble clic en un `.brn` (por ejemplo `marcha-parada.brn`): abre Bornera `0.1.5` con ese circuito |
 
 ## Al terminar
 1. ☐ Abrir Bornera. Si aparece «Bornera no se cerró bien», **Descartar** en cada copia que quede. Cerrar.
