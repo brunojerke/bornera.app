@@ -1,10 +1,10 @@
 # Bornera
 
-Editor y simulador de automatismos eléctricos, liviano y de código abierto. Permite dibujar circuitos de mando y potencia con símbolos IEC 60617 (la simulación está en desarrollo): pulsadores, contactores, relés térmicos, lámparas y motores. Está pensado para correr fluido en equipos de bajos recursos, como las netbooks escolares.
+Editor y simulador de automatismos eléctricos, liviano y de código abierto. Permite dibujar circuitos de mando y potencia con símbolos IEC 60617 y simular su mando: pulsadores, contactores, relés térmicos, lámparas y motores. Está pensado para correr fluido en equipos de bajos recursos, como las netbooks escolares.
 
 ## Estado
 
-**Versión 0.1.4**: editor de circuitos con copiar y pegar, etiquetado, referencias cruzadas y validaciones (fases 3 y 3b), y guardar y abrir completo (fase 4): autoguardado con recuperación después de un corte, archivos recientes, doble clic en un `.brn` en Windows y exportación sin comprimir (`.brn.json`). La simulación llega en la fase 5. El plan completo está en [docs/arquitectura.md](docs/arquitectura.md).
+**Versión 0.1.5**: editor de circuitos con copiar y pegar, etiquetado, referencias cruzadas y validaciones (fases 3 y 3b), guardar y abrir completo (fase 4): autoguardado con recuperación después de un corte, archivos recientes, doble clic en un `.brn` en Windows y exportación sin comprimir (`.brn.json`), y simulación del mando (fase 5): con F5 se entra a Simular, los pulsadores se accionan manteniendo el botón del mouse (Mayús+clic los deja apretados), los contactores y las lámparas responden y los cables se pintan según su potencial; si el circuito oscila o hay un corto, la simulación se detiene y avisa. El plan completo está en [docs/arquitectura.md](docs/arquitectura.md).
 
 [Descargas](https://github.com/brunojerke/bornera.app/releases) · [Instalar en Windows](#instalar-en-windows)
 
