@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "bornera"
-version = "0.1.5-alpha.1"
+version = "0.1.5"
 dependencies = [
  "serde",
  "serde_json",
