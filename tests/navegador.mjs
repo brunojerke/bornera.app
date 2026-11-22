@@ -2,7 +2,8 @@
 // las pruebas de humo (tests/humo). Sin dependencias: el navegador lo pone la
 // máquina.
 
-import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, rmSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
 function candidatos() {
@@ -44,4 +45,34 @@ export function buscarNavegador(pedido = process.env["BORNERA_NAVEGADOR"]) {
     );
   }
   return encontrado;
+}
+
+/**
+ * Cierra el navegador con todo su árbol de procesos y espera su salida. En
+ * Windows, `kill()` solo mata el proceso principal y los hijos de Edge siguen
+ * vivos con el perfil abierto (el borrado del perfil falla con EPERM), así que
+ * se usa `taskkill /T /F` sobre el pid propio (nunca por nombre de imagen).
+ */
+export async function cerrarNavegador(navegador, salida) {
+  if (navegador.exitCode === null) {
+    if (process.platform === "win32" && navegador.pid !== undefined) {
+      try {
+        execFileSync("taskkill", ["/PID", String(navegador.pid), "/T", "/F"], { stdio: "ignore" });
+      } catch {
+        navegador.kill();
+      }
+    } else {
+      navegador.kill();
+    }
+    await salida;
+  }
+}
+
+/** Borra el perfil temporal; si no puede, avisa y sigue (no cambia el código de salida). */
+export function borrarPerfil(perfil) {
+  try {
+    rmSync(perfil, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  } catch (e) {
+    console.error(`Aviso: no pude borrar el perfil temporal ${perfil} (${e instanceof Error ? e.message : e}).`);
+  }
 }

@@ -110,7 +110,7 @@ Simulación **lógica por conectividad**, no analógica: alcanza para automatism
 4. **Detectar cortocircuito:** si una misma red recibe L y N, o dos fases distintas, se marca el cortocircuito, se funde el fusible aguas arriba (si hay) o se detiene la simulación con aviso.
 5. **Evaluar cargas:** una bobina o lámpara se energiza si un borne está en fase y el otro en neutro (o + y −). Un motor trifásico gira si U, V y W reciben las tres fases; el sentido sale de la paridad de la secuencia (L1-L2-L3 vs L1-L3-L2).
 6. **Actualizar contactos:** las bobinas energizadas cambian sus contactos asociados.
-7. **Repetir hasta estabilizar:** se vuelve al paso 2 hasta que nada cambie. Si tras 50 iteraciones sigue cambiando, es un circuito oscilante (un relé que se corta a sí mismo): se avisa en vez de colgar el programa.
+7. **Repetir hasta estabilizar:** se vuelve al paso 2 hasta que nada cambie. Si el estado de las bobinas se repite o se pasa el tope (en la implementación, 2 × bobinas + 50 cambios), es un circuito oscilante (un relé que se corta a sí mismo): se avisa en vez de colgar el programa.
    > Nota (2026-11-21, T30): el motor está en `src/core/sim/motor.ts` sobre la netlist de T28 (`netlist.ts`), con el criterio de `docs/plan-fase5.md` y `docs/plan-T30.md`. Difiere de este esquema: cambia una bobina por iteración (la de etiqueta menor, D2-B) y avisa carreras; un estado de bobinas repetido es oscilación; el tope es 2 × bobinas + 50 cambios («No se estabilizó en N pasos»); corto u oscilación detienen la simulación (D3-A), sin fusibles por ahora. Una carga se enciende con potenciales distintos y al menos uno fase. La app lo usa desde T32.
 
 **Detalles importantes:**
@@ -176,6 +176,8 @@ La diferencia con CADe\_SIMU se gana acá: **dibujar solo lo necesario, solo cua
 - **Simulación incremental:** la netlist se arma una vez; durante la simulación solo se recalculan los contactos que cambiaron.
 
 **Banco de pruebas:** un script que genera circuitos de 100, 500 y 2000 componentes y mide fotogramas por segundo, tiempo de recálculo y RAM. Se corre en la netbook al final de cada fase.
+
+> Nota (2026-11-22, fase 5): el banco tiene dos escenas oficiales nuevas. La escena con cables (2000 + 3030) se tiende entera como W (`codosBanco`): 0 conexiones aparentes, así que los avisos R10 y R11 se miden sobre un circuito sano. La **escena de mando** (`bancoMando.ts`: 2000 símbolos, 2200 cables y 300 bobinas) alimenta S1–S5 de «Probar la fase 5»: entrar a Simular (con la netlist dentro de S1), pulsar y soltar, el dibujo del estado y la salida. Topes de la netbook por la regla de la fase 4 (K1 = 3, K2 = 5,5, decisión D1-D); en C3 (2026-11-22) los cocientes netbook / PC salieron S1 4,6, S3 3,1, S4 2,4 / 2,6 y S5 2,4. Detalle en `docs/bench.md`.
 
 ## Formato de archivo propio
 
@@ -281,11 +283,11 @@ Carpetas separadas por responsabilidad, para que Claude Code trabaje en un módu
 │   ├── core/              sin dependencias del navegador
 │   │   ├── model/         tipos, documento, comandos, deshacer
 │   │   ├── symbols/       definiciones de símbolos IEC
-│   │   ├── sim/           netlist, solver, eventos
+│   │   ├── sim/           netlist (`netlist.ts`) y motor de simulación (`motor.ts`); eventos y temporizadores, en una fase posterior
 │   │   ├── io/            formato .brn, migraciones, validación
 │   │   └── circuitos/     circuitos de referencia armados con comandos y su comparación por redes (solo los usan los tests)
 │   ├── render/            Renderer: canvas, svg, pdf
-│   ├── editor/            herramientas, selección, índice espacial
+│   ├── editor/            herramientas, selección, índice espacial; modo Simular (`simulacion.ts`) y su dibujo (`dibujoSimulacion.ts`); escenas del banco (`banco.ts`, `bancoMando.ts`)
 │   ├── ui/                paneles, barras, diálogos (Svelte)
 │   └── routes/            punto de entrada de SvelteKit (+page.svelte)
 ├── tests/
@@ -334,6 +336,12 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
      - Al cierre, `0.1.4` se instala encima de `0.1.4-alpha.N` sin desinstalar.
 5. **Simulación de mando:** fuentes, pulsadores, contactor, contactos auxiliares, lámpara, modo simular.
    - Pasa cuando: la marcha-parada con enclavamiento funciona y su test pasa.
+   - **Fase 5 cerrada el 2026-11-22** con `0.1.5` publicada (WiX `0.1.5.0`, instalada encima de la `0.1.5-alpha.1` sin desinstalar). Plan en `docs/plan-fase5.md`. Qué trae y dónde vive cada parte:
+     - T28, netlist con etiquetas de red; T30, motor (carreras, oscilación, corto, cargas en serie): sección «Motor de simulación» (notas de T30).
+     - T29, avisos R10 y R11: sección «Editor e interfaz» (validaciones en vivo).
+     - T31, banco de mando y «Probar la fase 5»: sección «Renderizado y rendimiento» (nota de la fase 5) y `docs/bench.md`.
+     - T32, modo Simular (F5, mantener y Mayús+clic, bloqueos); T33, dibujo del estado en la capa estática: «Motor de simulación» y «Renderizado y rendimiento» (notas de T32 y T33).
+     - Netbook y PC pasan todo con el `.msi` de la alpha.1 (`docs/netbook-fase5.md`, C3). Sin fusible, térmico, trifásica ni motores: son de la fase 6.
 6. **Potencia:** fuente trifásica, contactos principales, térmico, fusible, motores, cortocircuito.
    - Pasa cuando: la inversión de giro con enclavamiento eléctrico simula bien ambos sentidos.
 7. **Exportación:** PDF vectorial con rótulo y marco, SVG y PNG.

@@ -18,12 +18,12 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { buscarNavegador } from "../navegador.mjs";
+import { borrarPerfil, buscarNavegador, cerrarNavegador } from "../navegador.mjs";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const LIMITE_MS = 10 * 60 * 1000;
@@ -297,12 +297,9 @@ async function main() {
   } finally {
     clearTimeout(reloj);
     terminoAntes.catch(() => {});
-    if (navegador.exitCode === null) {
-      navegador.kill();
-      await salida;
-    }
+    await cerrarNavegador(navegador, salida);
     await servidor.close();
-    rmSync(perfil, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    borrarPerfil(perfil);
   }
 }
 

@@ -27,12 +27,12 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer } from "vite";
-import { buscarNavegador } from "../navegador.mjs";
+import { borrarPerfil, buscarNavegador, cerrarNavegador } from "../navegador.mjs";
 import { esperar, Pagina } from "./cdp.mjs";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -189,12 +189,9 @@ async function main() {
     }
   } finally {
     pagina?.cerrar();
-    if (navegador.exitCode === null) {
-      navegador.kill();
-      await salida;
-    }
+    await cerrarNavegador(navegador, salida);
     await servidor.close();
-    rmSync(perfil, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    borrarPerfil(perfil);
   }
 
   console.log(`\n${total - fallas} de ${total} comprobaciones bien${fallas ? ` · ${fallas} MAL` : ""}.`);

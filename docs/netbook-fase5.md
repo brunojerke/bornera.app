@@ -39,8 +39,8 @@ Pasos (repetir en las aperturas 1, 2 y 3; en los nombres, el número es el de la
 1. Abrir Bornera. Si aparece «Bornera no se cerró bien», elegir **Descartar**.
 2. En **Editar** (no en Simular): menú de desarrollo (la llave) › «Cierre de fase» › **«Probar la fase 5…»**. No tocar nada mientras corre.
 3. Al terminar sale el diálogo con la tabla (B1–B16, F1–F3 y S1–S5). Clic en **«Copiar»**.
-4. Pegar en el Bloc de notas y guardar en el pendrive como `fase5\n1-fria.txt` (`n2-`, `n3-`). Cerrar el diálogo.
-5. Otra vez «Probar la fase 5…», «Copiar» y guardar como `fase5\n1-caliente.txt` (`n2-`, `n3-`).
+4. Pegar en el Bloc de notas y guardar en la carpeta `fase5` del pendrive como `n1-fria.txt` (en la apertura 2, `n2-fria.txt`; en la 3, `n3-fria.txt`). Cerrar el diálogo.
+5. Otra vez «Probar la fase 5…», «Copiar» y guardar en la misma carpeta como `n1-caliente.txt` (`n2-caliente.txt`, `n3-caliente.txt`).
 6. Cerrar Bornera con la X.
 
 | Apertura | Fría guardada | Caliente guardada |
@@ -139,14 +139,14 @@ En Simular: **mantener apretado** el botón del mouse sobre un pulsador lo accio
 
 ## Al terminar
 1. ☐ Abrir Bornera. Si aparece «Bornera no se cerró bien», **Descartar** en cada copia que quede. Cerrar.
-2. ☐ Llevar de vuelta la carpeta `fase5` con los **6 textos** y esta hoja con lo anotado.
+2. ☐ Llevar de vuelta la carpeta `fase5` con los **6 textos** (`n1-fria.txt` … `n3-caliente.txt`) y esta hoja con lo anotado.
 
 ## La PC el mismo día
 
 > **Destacado.** En la PC, el mismo día que la netbook, con el **`.msi` del mismo tag** instalado, **el mismo protocolo** (3 aperturas × fría + caliente) y en las condiciones del banco: **enchufada, «Mejor rendimiento», apps cerradas, sin otra Bornera abierta**.
 
 1. Instalar el mismo `.msi` (fila 0, pasos 3 a 7).
-2. Hacer la fila 1 entera, guardando en `C:\Users\jerke\Downloads\fase5-pc\` como `p1-fria.txt` … `p3-caliente.txt` (fuera del repo).
+2. Hacer la fila 1 entera, guardando en `C:\Users\jerke\Downloads\fase5-pc\` como `p1-fria.txt`, `p1-caliente.txt` … `p3-caliente.txt` (prefijo `p` = PC; los de la netbook llevan `n`; fuera del repo).
 3. Copiar la carpeta `fase5` del pendrive a `C:\Users\jerke\Downloads\fase5\`.
 4. Pasarme las dos carpetas. K **no** se recalcula (D1-D: K1 = 3, K2 = 5,5); en C3 anoto los cocientes netbook / PC de S1–S5.
 
