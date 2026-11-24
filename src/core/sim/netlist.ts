@@ -46,6 +46,8 @@ const PAPEL_POR_BORNE: Readonly<Record<string, Readonly<Record<string, Papel>>>>
   "fuente.trifasica": { L1: "fase", L2: "fase", L3: "fase" },
   "fuente.trifasica_n": { L1: "fase", L2: "fase", L3: "fase", N: "neutro" },
 };
+// Las claves de borne de esta tabla ya están normalizadas (mayúsculas, sin
+// espacios): el nombre del borne es el de la red tal cual, sin normalizar.
 
 /** Un potencial: papel y nombre de red (etiqueta normalizada, no vacía). */
 export interface Potencial {
@@ -145,6 +147,19 @@ export function compararEtiquetas(a: string, b: string): number {
   return compararTexto(a, b);
 }
 
+/** Una fuente con potencial: el potencial (clave "papel|nombre") y su red por cables. */
+interface Fuente {
+  clave: string;
+  potencial: Potencial;
+  red: number;
+}
+
+/** Suma a `fuentes` la de ese papel y nombre, si tiene nombre y red. */
+function sumarFuente(fuentes: Fuente[], papel: Papel, nombre: string, red: number | undefined): void {
+  if (nombre === "" || red === undefined) return;
+  fuentes.push({ clave: `${papel}|${nombre}`, potencial: { papel, nombre }, red });
+}
+
 /** La netlist de una hoja. No cambia la hoja. */
 export function armarNetlist(hoja: Hoja): Netlist {
   const porCables = redes(hoja);
@@ -160,11 +175,7 @@ export function armarNetlist(hoja: Hoja): Netlist {
   });
 
   // Fuentes con potencial: el potencial (clave "papel|nombre") y su red por cables.
-  const fuentes: { clave: string; potencial: Potencial; red: number }[] = [];
-  const sumarFuente = (papel: Papel, nombre: string, red: number | undefined) => {
-    if (nombre === "" || red === undefined) return;
-    fuentes.push({ clave: `${papel}|${nombre}`, potencial: { papel, nombre }, red });
-  };
+  const fuentes: Fuente[] = [];
   for (const c of hoja.componentes) {
     const papel = PAPEL[c.tipo];
     const porBorne = papel ? undefined : PAPEL_POR_BORNE[c.tipo];
@@ -173,12 +184,12 @@ export function armarNetlist(hoja: Hoja): Netlist {
     if (!def) continue;
     const delComp = redCables.get(c.id);
     if (papel) {
-      if (def.bornes.length === 1) sumarFuente(papel, normalizarEtiqueta(c.etiqueta), delComp?.get(def.bornes[0]!.nombre));
+      if (def.bornes.length === 1) sumarFuente(fuentes, papel, normalizarEtiqueta(c.etiqueta), delComp?.get(def.bornes[0]!.nombre));
       continue;
     }
     for (const b of def.bornes) {
       const p = porBorne![b.nombre];
-      if (p) sumarFuente(p, normalizarEtiqueta(b.nombre), delComp?.get(b.nombre));
+      if (p) sumarFuente(fuentes, p, b.nombre, delComp?.get(b.nombre));
     }
   }
 
@@ -253,12 +264,13 @@ export function armarNetlist(hoja: Hoja): Netlist {
     if (!def) continue;
     if (def.elemento === "contacto_na" || def.elemento === "contacto_nc") {
       const etiqueta = normalizarEtiqueta(c.etiqueta);
-      polosDe(def).forEach(([pa, pb], polo) => {
-        const a = redDe(c.id, pa);
-        const b = redDe(c.id, pb);
-        if (a === undefined || b === undefined) return;
+      const polos = polosDe(def);
+      for (let polo = 0; polo < polos.length; polo++) {
+        const a = redDe(c.id, polos[polo]![0]);
+        const b = redDe(c.id, polos[polo]![1]);
+        if (a === undefined || b === undefined) continue;
         contactos.push({ comp: c.id, polo, etiqueta, na: def.elemento === "contacto_na", accionamiento: def.accionamiento, a, b });
-      });
+      }
     } else if ((def.elemento === "bobina" || def.elemento === "carga") && def.bornes.length === 2) {
       const a = redDe(c.id, def.bornes[0]!.nombre);
       const b = redDe(c.id, def.bornes[1]!.nombre);

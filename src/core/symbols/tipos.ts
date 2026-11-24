@@ -177,14 +177,24 @@ export function nombraRed(def: DefinicionSimbolo | undefined): boolean {
   return def?.elemento === "fuente" && def.bornes.length === 1;
 }
 
+/** Sin polos: la misma lista vacía en cada llamada. */
+const SIN_POLOS: readonly (readonly [string, string])[] = [];
+
+/** Polos armados de los contactos de 2 bornes sin `polos`, uno por definición (no se arman en cada llamada). */
+const POLOS_ARMADOS = new WeakMap<DefinicionSimbolo, readonly (readonly [string, string])[]>();
+
 /**
  * Los polos de un contacto (T34): `polos`, o sus dos bornes si no los tiene.
- * Fuera de los contactos, ninguno.
+ * Fuera de los contactos, ninguno. No arma arreglos nuevos en cada llamada:
+ * el polo de un contacto de 2 bornes se arma una vez por definición.
  */
 export function polosDe(def: DefinicionSimbolo): readonly (readonly [string, string])[] {
-  if (def.elemento !== "contacto_na" && def.elemento !== "contacto_nc") return [];
+  if (def.elemento !== "contacto_na" && def.elemento !== "contacto_nc") return SIN_POLOS;
   if (def.polos) return def.polos;
-  return def.bornes.length === 2 ? [[def.bornes[0]!.nombre, def.bornes[1]!.nombre]] : [];
+  if (def.bornes.length !== 2) return SIN_POLOS;
+  let polos = POLOS_ARMADOS.get(def);
+  if (!polos) POLOS_ARMADOS.set(def, (polos = [[def.bornes[0]!.nombre, def.bornes[1]!.nombre]]));
+  return polos;
 }
 
 /**

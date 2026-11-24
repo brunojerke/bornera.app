@@ -104,7 +104,8 @@ export function redes(hoja: Hoja, opciones: OpcionesRedes = {}): Red[] {
     let delComp = bornes.get(c.id);
     if (!delComp) bornes.set(c.id, (delComp = new Map()));
     for (const b of def.bornes) {
-      if (!delComp.has(b.nombre)) delComp.set(b.nombre, nuevo({ tipo: "borne", comp: c.id, borne: b.nombre, nombre: porBorne ? normalizarEtiqueta(b.nombre) : nombre }));
+      // Los nombres de borne de la biblioteca ya están normalizados (L1, N): no se normalizan otra vez.
+      if (!delComp.has(b.nombre)) delComp.set(b.nombre, nuevo({ tipo: "borne", comp: c.id, borne: b.nombre, nombre: porBorne ? b.nombre : nombre }));
     }
   }
 

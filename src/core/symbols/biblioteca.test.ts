@@ -365,3 +365,17 @@ describe("discontinua", () => {
     expect(discontinua(1, 1, 1, 1)).toEqual([]);
   });
 });
+
+describe("nombres de borne de las fuentes de varios bornes (T34)", () => {
+  it("ya están normalizados: la netlist y redes() los usan tal cual como nombre de red", () => {
+    for (const s of SIMBOLOS.filter((d) => d.elemento === "fuente" && d.bornes.length > 1)) {
+      for (const b of s.bornes) expect(b.nombre, `${s.tipo} ${b.nombre}`).toBe(b.nombre.trim().toUpperCase());
+    }
+  });
+
+  it("polosDe no arma arreglos nuevos en cada llamada", () => {
+    expect(polosDe(CONTACTO_AUXILIAR_NA)).toBe(polosDe(CONTACTO_AUXILIAR_NA));
+    expect(polosDe(LAMPARA)).toBe(polosDe(BOBINA_CONTACTOR));
+    expect(polosDe(CONTACTOR_PRINCIPAL)).toBe(CONTACTOR_PRINCIPAL.polos);
+  });
+});
