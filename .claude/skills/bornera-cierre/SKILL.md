@@ -43,6 +43,7 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
    - Después del commit, correr `git grep -nIP '\x{FFFD}|\x{C3}|\x{C2}|\x{E2}\x{20AC}' HEAD` y comprobar que da vacío, para confirmar lo que quedó guardado y no solo la copia de trabajo.
 
 7. **Actualizar Obsidian**
+   - Para escribir en Obsidian, nunca uses un heredoc sin comillas; usá un script en un archivo o un heredoc entre comillas simples
    - Ubicar el vault con la variable `BORNERA_VAULT`. Si no existe, preguntar la ruta; no adivinarla.
    - Actualizar `10 Proyectos/Bornera/Bornera.md` con sesión, errores resueltos y pendientes.
    - Crear `Decisión - <tema>.md` solo para decisiones nuevas que convenga recordar.
@@ -53,9 +54,8 @@ El objetivo es que cada cierre deje evidencia real y un registro útil para reto
 
 Mantenerlo breve y usar este orden:
 
-- **Qué cambió:** explicado en términos eléctricos, por ejemplo qué pasa con bornes, cables y conexiones al mover un contactor.
 - **Verificación:** cantidad de tests y resultado de check, humo y bench.
 - **Commit:** hash y mensaje.
 - **arquitectura.md:** qué se corrigió, o "sin cambios".
 - **No probado o pendiente:** decirlo siempre, sobre todo lo que depende de la netbook.
-- **Próxima sesión:** recordar a Bruno que haga /clear antes de seguir y darle un prompt de retome corto (tarea, etapa siguiente, HEAD esperado y decisiones vigentes) para pegar en la sesión nueva.
+- **Próxima sesión:** recordar a Bruno que haga /clear antes de seguir.
