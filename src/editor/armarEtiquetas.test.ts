@@ -558,7 +558,8 @@ function problemas(h: Hoja): string[] {
   for (const c of h.componentes) {
     const d = buscarSimbolo(c.tipo)!;
     if (esFuente(d)) {
-      if (c.etiqueta !== d.etiquetaInicial) salida.push(`La fuente ${c.id} dice "${c.etiqueta}".`);
+      // La trifásica no tiene etiqueta inicial: entra vacía (T34, D1-A).
+      if (c.etiqueta !== (d.etiquetaInicial ?? "")) salida.push(`La fuente ${c.id} dice "${c.etiqueta}".`);
       continue;
     }
     const e = normalizarEtiqueta(c.etiqueta);

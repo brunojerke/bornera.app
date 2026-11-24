@@ -312,6 +312,23 @@ describe("cuándo recalcula: solo por comando, y solo lo que el comando puede mo
     expect(editor.avisos.pasadasR6).toBe(r6 + 1);
   });
 
+  it("R6 con la trifásica (T34, D2-A): su L1 nombra la red de la bobina, así que el NC ya no avisa; igual que desde cero", () => {
+    const { editor, h, poner, tender } = armar();
+    const k = poner(BOBINA, 0, 0, "K1");
+    const nc = poner(AUXILIAR_NC, 10, 0, "K1");
+    const t = poner("fuente.trifasica", 0, -10, "");
+    tender(b(nc, "22"), b(k, "A1"), [[10, -2]]);
+    expect(editor.avisos.de(nc).map((a) => a.regla)).toContain("R6");
+    tender(b(t, "L1"), b(k, "A1"), [
+      [-2, -5],
+      [0, -5],
+    ]);
+    expect(editor.avisos.de(nc).map((a) => a.regla)).not.toContain("R6");
+    // Sin R9 para la trifásica sin etiqueta (D1-A).
+    expect(editor.avisos.de(t).map((a) => a.regla)).not.toContain("R9");
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
   it("R6 en las redes tocadas (3b, arreglo 2): con 2000 y un par NC y bobina, cablear el NC y deshacer visitan sus redes, no la hoja; un Grupo deshecho o rehecho va a la hoja entera", () => {
     const { editor, h, poner } = armar(documentoBancoCables(2000));
     const bobina = h.componentes.find((c) => c.tipo === BOBINA && c.etiqueta !== "")!;

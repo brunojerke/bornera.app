@@ -114,5 +114,26 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     }
   }
 
+  // Polos (T34): solo contactos; cada polo, dos bornes distintos que existen;
+  // cada borne en un solo polo; un contacto que no tiene 2 bornes, todos en polos.
+  const esContacto = def.elemento === "contacto_na" || def.elemento === "contacto_nc";
+  if (def.polos !== undefined) {
+    if (!esContacto) errores.push("Solo un contacto lleva polos.");
+    if (def.polos.length === 0) errores.push("La lista de polos está vacía.");
+    const enPolo = new Set<string>();
+    for (const polo of def.polos) {
+      const [a, b] = polo;
+      if (polo.length !== 2 || a === b) errores.push(`El polo ${polo.join("-")} tiene que unir dos bornes distintos.`);
+      for (const n of polo) {
+        if (!nombres.has(n)) errores.push(`El polo ${polo.join("-")} nombra un borne que no existe: "${n}".`);
+        else if (enPolo.has(n)) errores.push(`Borne "${n}" en dos polos.`);
+        enPolo.add(n);
+      }
+    }
+    if (esContacto) for (const b of def.bornes) if (!enPolo.has(b.nombre)) errores.push(`Borne "${b.nombre}" sin polo.`);
+  } else if (esContacto && def.bornes.length > 0 && def.bornes.length !== 2) {
+    errores.push(`Un contacto de ${def.bornes.length} bornes necesita polos.`);
+  }
+
   return errores;
 }

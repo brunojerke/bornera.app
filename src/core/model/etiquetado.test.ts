@@ -56,7 +56,7 @@ function etiquetaDe(doc: Documento, id: string): string {
 // ── Clases ─────────────────────────────────────────────────────────────────
 
 describe("titular y prefijo", () => {
-  it("se numeran la bobina (K), los pulsadores (S) y la lámpara (H); las fuentes y los auxiliares, no", () => {
+  it("se numeran la bobina (K), los pulsadores (S) y la lámpara (H); las fuentes (también la trifásica) y los seguidores, no", () => {
     expect(SIMBOLOS.map((s) => [s.tipo, esTitular(s), prefijoDe(s)])).toEqual([
       [FASE, false, null],
       [NEUTRO, false, null],
@@ -66,6 +66,8 @@ describe("titular y prefijo", () => {
       [AUXILIAR, false, null],
       [AUXILIAR_NC, false, null],
       [LAMPARA, true, "H"],
+      ["fuente.trifasica", false, null],
+      ["contactor.principal", false, null],
     ]);
   });
 

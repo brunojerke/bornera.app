@@ -451,6 +451,37 @@ describe("R9: alimentación sin nombre", () => {
   });
 });
 
+describe("trifásica (T34, D1-A y D2-A)", () => {
+  it("sin etiqueta no da R9: nombra sus bornes, su etiqueta es libre", () => {
+    const a = armar();
+    a.poner("fuente.trifasica", 0, 0, "");
+    expect(validar(a.h).filter((x) => x.regla === "R9")).toEqual([]);
+  });
+
+  it("el NC en la red de su bobina no da R6 si esa red es L1 de la trifásica (red con nombre)", () => {
+    const a = armar();
+    const k = a.poner(BOBINA, 0, 0, "K1");
+    const nc = a.poner(NC, 10, 0, "K1");
+    const t = a.poner("fuente.trifasica", 0, -10, "");
+    a.tender({ tipo: "borne", comp: nc, borne: "22" }, { tipo: "borne", comp: k, borne: "A1" }, [[10, -2]]);
+    expect(validar(a.h, ["R6"]).map((x) => x.id)).toEqual([nc]);
+    a.tender({ tipo: "borne", comp: t, borne: "L1" }, { tipo: "borne", comp: k, borne: "A1" }, [
+      [-2, -5],
+      [0, -5],
+    ]);
+    expect(validar(a.h, ["R6"])).toEqual([]);
+  });
+
+  it("CambiarEtiquetas: vaciarle la etiqueta no tira (en Fase y Neutro sí: necesitan nombre de red)", () => {
+    const a = armar();
+    const t = a.poner("fuente.trifasica", 0, 0, "Red");
+    a.hacer(new CambiarEtiquetas([[t, ""]]));
+    expect(a.h.componentes.find((c) => c.id === t)!.etiqueta).toBe("");
+    const f = a.poner(FASE, 10, 0);
+    expect(() => a.hacer(new CambiarEtiquetas([[f, ""]]))).toThrow("necesita un nombre de red");
+  });
+});
+
 describe("R10: fase L junto con L1, L2 o L3 (T29)", () => {
   const r10 = (h: Hoja) => validar(h).filter((x) => x.regla === "R10");
 

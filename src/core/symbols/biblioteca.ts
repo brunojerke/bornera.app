@@ -255,24 +255,23 @@ const AMPLITUD_SENO = 0.28;
 /** Tramos rectos con que se aproxima la senoide. */
 const TRAMOS_SENO = 12;
 
-/** Dibujo común de fase y neutro: círculo, senoide y tramo hasta el borne (0, 1). */
-function dibujoFuente(): Primitiva[] {
+/**
+ * Dibujo común de fase y neutro: círculo, senoide y tramo hasta el borne (0, 1).
+ * Con `cy` y `hasta`, el mismo círculo más arriba y el tramo hasta (0, hasta) (la trifásica).
+ */
+function dibujoFuente(cy = CENTRO_FUENTE, hasta = 1): Primitiva[] {
   const seno: Linea[] = [];
   const punto = (i: number): [number, number] => [
     -MEDIO_ANCHO_SENO + (2 * MEDIO_ANCHO_SENO * i) / TRAMOS_SENO,
     // y crece hacia abajo: el primer medio período sube.
-    CENTRO_FUENTE - AMPLITUD_SENO * Math.sin((2 * Math.PI * i) / TRAMOS_SENO),
+    cy - AMPLITUD_SENO * Math.sin((2 * Math.PI * i) / TRAMOS_SENO),
   ];
   for (let i = 0; i < TRAMOS_SENO; i++) {
     const [x1, y1] = punto(i);
     const [x2, y2] = punto(i + 1);
     seno.push(linea(x1, y1, x2, y2));
   }
-  return [
-    { forma: "circulo", cx: 0, cy: CENTRO_FUENTE, r: RADIO_FUENTE },
-    ...seno,
-    linea(0, CENTRO_FUENTE + RADIO_FUENTE, 0, 1),
-  ];
+  return [{ forma: "circulo", cx: 0, cy, r: RADIO_FUENTE }, ...seno, linea(0, cy + RADIO_FUENTE, 0, hasta)];
 }
 
 /** Fase: la etiqueta se edita (L1, L2, L3). */
@@ -301,6 +300,80 @@ export const NEUTRO: DefinicionSimbolo = {
   mostrarNombresBornes: false,
 };
 
+// ── Potencia (fase 6) ──────────────────────────────────────────────────────
+
+/** Centro del círculo de la trifásica: pegado al borde de arriba de su caja de 4 de alto. */
+const CENTRO_TRIFASICA = -2 + RADIO_FUENTE;
+
+/** X de los tres bornes de los símbolos tripolares: un polo cada 2 unidades. */
+const POLOS_X = [-2, 0, 2] as const;
+
+/**
+ * Fuente trifásica (T34): tres fases L1, L2 y L3 que salen hacia abajo. Cada
+ * borne es su propia red (D1-A): L1 es la misma red que una Fase «L1». La
+ * etiqueta es libre y no da nombre de red, así que no entra con etiqueta ni se
+ * numera. Dibujo: el círculo con la senoide de la fase arriba en el medio y
+ * un tramo hasta cada borne. Caja de 6×4, como los principales: con 2 de alto
+ * los nombres de los bornes pisaban el círculo.
+ */
+export const FUENTE_TRIFASICA: DefinicionSimbolo = {
+  tipo: "fuente.trifasica",
+  nombre: "Fuente trifásica",
+  categoria: "fuentes",
+  elemento: "fuente",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: [
+    ...dibujoFuente(CENTRO_TRIFASICA, 2),
+    linea(-RADIO_FUENTE, CENTRO_TRIFASICA, -2, CENTRO_TRIFASICA),
+    linea(-2, CENTRO_TRIFASICA, -2, 2),
+    linea(RADIO_FUENTE, CENTRO_TRIFASICA, 2, CENTRO_TRIFASICA),
+    linea(2, CENTRO_TRIFASICA, 2, 2),
+  ],
+  ladoNombresBornes: "derecha",
+  bornes: POLOS_X.map((x, i) => ({ nombre: `L${i + 1}`, x, y: 2, direccion: "abajo" as const })),
+};
+
+/** Tres contactos iguales, uno por polo, corridos a `POLOS_X`. */
+function tripolar(contacto: Primitiva[]): Primitiva[] {
+  const salida: Primitiva[] = [];
+  for (const dx of POLOS_X) {
+    for (const p of contacto) if (p.forma === "linea") salida.push(linea(p.x1 + dx, p.y1, p.x2 + dx, p.y2));
+  }
+  return salida;
+}
+
+/** Enlace mecánico de los tres polos, en y = 0, desde la cuchilla del primero a la del último. */
+function enlaceTripolar(xCuchilla: number): Linea[] {
+  return discontinua(POLOS_X[0] + xCuchilla, 0, POLOS_X[2] + xCuchilla, 0);
+}
+
+/**
+ * Contactos principales del contactor (T34), 07-13-02: tres NA con enlace
+ * mecánico. Lo acciona la bobina con su misma etiqueta, como al auxiliar, y
+ * los tres polos (1-2, 3-4, 5-6) se mueven juntos.
+ */
+export const CONTACTOR_PRINCIPAL: DefinicionSimbolo = {
+  tipo: "contactor.principal",
+  nombre: "Contactos principales",
+  categoria: "potencia",
+  elemento: "contacto_na",
+  accionamiento: "bobina",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: [...tripolar(contactoNA()), ...enlaceTripolar(xEnCentro(PUNTA_NA, BISAGRA_Y))],
+  primitivasAccionado: [...tripolar(contactoNACerrado()), ...enlaceTripolar(0)],
+  // Como en el auxiliar NA: la cuchilla se inclina a la izquierda.
+  ladoNombresBornes: "derecha",
+  bornes: POLOS_X.flatMap((x, i) => [
+    { nombre: `${2 * i + 1}`, x, y: -2, direccion: "arriba" as const },
+    { nombre: `${2 * i + 2}`, x, y: 2, direccion: "abajo" as const },
+  ]),
+  polos: [
+    ["1", "2"],
+    ["3", "4"],
+    ["5", "6"],
+  ],
+};
+
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   FASE,
@@ -311,6 +384,8 @@ export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   CONTACTO_AUXILIAR_NA,
   CONTACTO_AUXILIAR_NC,
   LAMPARA,
+  FUENTE_TRIFASICA,
+  CONTACTOR_PRINCIPAL,
 ];
 
 const POR_TIPO = new Map(SIMBOLOS.map((s) => [s.tipo, s]));

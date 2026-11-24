@@ -1481,7 +1481,8 @@ export class AvisosHoja {
         delComp.set(y, red);
         alguno = true;
         this._bornesR6++;
-        if (def.elemento === "fuente" && nombreDeFuente(info)) nombrada = true;
+        // Fase o Neutro con etiqueta; una fuente de varios bornes nombra cada uno (T34, D2-A).
+        if (def.elemento === "fuente" && (def.bornes.length > 1 || nombreDeFuente(info))) nombrada = true;
         const e = info.e;
         if (e !== "") {
           if (esBobina(def)) (bobinas ??= new Set()).add(e);

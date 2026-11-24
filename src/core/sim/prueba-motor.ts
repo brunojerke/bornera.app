@@ -2,6 +2,7 @@
 // recorre las redes una por una (BFS por los contactos que conducen), sin
 // union-find, sin tablas armadas de antemano y con conjuntos. Mismo criterio
 // que `motor.ts` (docs/plan-T30.md), para comparar resultados en los tests.
+// Con polos (T34): cada polo es un contacto; los de un componente se accionan juntos.
 // Solo lo importan los tests: el código de la app no lo usa.
 import type { Netlist } from "./netlist";
 
@@ -144,12 +145,13 @@ export class SimulacionLenta {
       if (quieren.length === 0) {
         r.grupos.forEach((miembros, g) => {
           if (r.potsDe[g]!.size !== 0) return;
-          const bornes = miembros.flatMap((red) => n.redes[red]!.bornes);
+          const bornes = miembros.flatMap((red) => n.redes[red]!.bornes.map((b) => ({ ...b, red })));
           const cargas = new Set<number>();
           let soloCargas = true;
           for (const b of bornes) {
             const k = n.cargas.findIndex((x) => x.comp === b.comp);
-            const c = n.contactos.findIndex((x) => x.comp === b.comp);
+            // Con polos (T34), el contacto de este borne es el polo de su componente que toca esta red.
+            const c = n.contactos.findIndex((x) => x.comp === b.comp && (x.a === b.red || x.b === b.red));
             if (k >= 0) cargas.add(k);
             else if (c >= 0 && r.conducen[c]) continue;
             else soloCargas = false;

@@ -229,3 +229,80 @@ describe("netlist: bordes", () => {
     expect(n.redes[red(n, "c1", "X1")]!.cables).toEqual(["w1"]);
   });
 });
+
+// ── Polos y fuentes de varios bornes (T34) ─────────────────────────────────
+
+describe("netlist: polos (T34)", () => {
+  it("los principales dan un contacto por polo, con la etiqueta y el accionamiento del símbolo", () => {
+    const h = hoja([comp("k", "contactor.principal", " k1 "), comp("b", "contactor.bobina", "K1")]);
+    const n = armarNetlist(h);
+    expect(n.contactos.map(({ comp, polo, etiqueta, na, accionamiento }) => ({ comp, polo, etiqueta, na, accionamiento }))).toEqual([
+      { comp: "k", polo: 0, etiqueta: "K1", na: true, accionamiento: "bobina" },
+      { comp: "k", polo: 1, etiqueta: "K1", na: true, accionamiento: "bobina" },
+      { comp: "k", polo: 2, etiqueta: "K1", na: true, accionamiento: "bobina" },
+    ]);
+    expect(n.contactos.map((c) => [c.a, c.b])).toEqual([
+      [red(n, "k", "1"), red(n, "k", "2")],
+      [red(n, "k", "3"), red(n, "k", "4")],
+      [red(n, "k", "5"), red(n, "k", "6")],
+    ]);
+  });
+
+  it("un contacto de dos bornes es el polo 0", () => {
+    const n = armarNetlist(hoja([comp("s", "pulsador.na", "S1")]));
+    expect(n.contactos).toEqual([{ comp: "s", polo: 0, etiqueta: "S1", na: true, accionamiento: "manual_momentaneo", a: red(n, "s", "13"), b: red(n, "s", "14") }]);
+  });
+
+  it("los polos siguen el orden de la hoja: los del primer componente antes que el siguiente", () => {
+    const n = armarNetlist(hoja([comp("a", "contactor.auxiliar_na", "K1"), comp("k", "contactor.principal", "K1"), comp("s", "pulsador.nc", "S0")]));
+    expect(n.contactos.map((c) => `${c.comp}${c.polo}`)).toEqual(["a0", "k0", "k1", "k2", "s0"]);
+  });
+});
+
+describe("netlist: fuente trifásica (T34)", () => {
+  it("cada borne es una fase con su nombre; la etiqueta no cuenta", () => {
+    const n = armarNetlist(hoja([comp("t", "fuente.trifasica", "Red 1")]));
+    expect(n.potenciales).toEqual([
+      { papel: "fase", nombre: "L1" },
+      { papel: "fase", nombre: "L2" },
+      { papel: "fase", nombre: "L3" },
+    ]);
+    expect(["L1", "L2", "L3"].map((b) => n.redes[red(n, "t", b)]!.potenciales)).toEqual([[0], [1], [2]]);
+    expect(n.enCorto).toEqual([]);
+  });
+
+  it("sin etiqueta también da sus tres potenciales (no hay R9 para la trifásica)", () => {
+    expect(armarNetlist(hoja([comp("t", "fuente.trifasica")])).potenciales).toHaveLength(3);
+  });
+
+  it("su L1 es la misma red que una Fase «L1», sin cable; su L2 no", () => {
+    const n = armarNetlist(hoja([comp("t", "fuente.trifasica"), comp("f", "fuente.fase", "l1")]));
+    expect(red(n, "t", "L1")).toBe(red(n, "f", "L"));
+    expect(red(n, "t", "L2")).not.toBe(red(n, "f", "L"));
+    expect(n.potenciales.map((p) => p.nombre)).toEqual(["L1", "L2", "L3"]);
+  });
+
+  it("dos trifásicas son las mismas tres redes", () => {
+    const n = armarNetlist(hoja([comp("t1", "fuente.trifasica", "A"), comp("t2", "fuente.trifasica", "B")]));
+    for (const b of ["L1", "L2", "L3"]) expect(red(n, "t1", b)).toBe(red(n, "t2", b));
+    expect(n.redes).toHaveLength(3);
+  });
+
+  it("L1 cableado a L2: corto por cables", () => {
+    const n = armarNetlist(hoja([comp("t", "fuente.trifasica")], [cable("w", ["t", "L1"], ["t", "L2"])]));
+    expect(n.enCorto).toEqual([red(n, "t", "L1")]);
+    expect(n.redes[red(n, "t", "L1")]!.potenciales).toEqual([0, 1]);
+  });
+
+  it("con una Fase «L2» unida a su L1 por cable: corto", () => {
+    const n = armarNetlist(hoja([comp("t", "fuente.trifasica"), comp("f", "fuente.fase", "L2")], [cable("w", ["t", "L1"], ["f", "L"])]));
+    expect(n.enCorto).toHaveLength(1);
+  });
+
+  it("misma partición que redes() unida por nombre (cada borne nombra su red, D2-A)", () => {
+    const h = hoja([comp("t", "fuente.trifasica"), comp("f", "fuente.fase", "L1"), comp("k", "contactor.principal", "K1")], [cable("w", ["t", "L3"], ["k", "5"])]);
+    const n = armarNetlist(h);
+    expect(particion(n.redes)).toEqual(particionEsperada(h));
+    expect(particion(n.redes)).toEqual(particion(redes(h, { unirPorNombre: true })));
+  });
+});

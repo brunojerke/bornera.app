@@ -12,7 +12,7 @@
 //   inversa: así es exacto aunque la operación ajuste coordenadas.
 // - Las coordenadas quedan siempre enteras.
 
-import { buscarSimbolo, esFuente } from "../symbols";
+import { buscarSimbolo, nombraRed } from "../symbols";
 import { copiarCable, indexarHoja, puntoExtremo, validarCable, type IndiceHoja } from "./cables";
 import {
   buscarComponente,
@@ -797,7 +797,7 @@ export class CambiarEtiquetas implements Comando {
     const componentes = this.ubicar(doc);
     for (const c of componentes) {
       const def = buscarSimbolo(c.tipo);
-      if (def && esFuente(def) && this.etiquetas.get(c.id) === "") {
+      if (nombraRed(def) && this.etiquetas.get(c.id) === "") {
         throw new Error(`La alimentación "${c.id}" necesita un nombre de red.`);
       }
     }

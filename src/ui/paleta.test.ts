@@ -5,9 +5,11 @@ import { agruparSimbolos, normalizar } from "./paleta";
 describe("agruparSimbolos", () => {
   it("agrupa la biblioteca en orden fijo y omite las categorías vacías", () => {
     const grupos = agruparSimbolos(SIMBOLOS);
-    expect(grupos.map((g) => g.nombre)).toEqual(["Fuentes", "Mando", "Señalización"]);
+    expect(grupos.map((g) => g.nombre)).toEqual(["Fuentes", "Mando", "Potencia", "Señalización"]);
     expect(grupos.flatMap((g) => g.simbolos)).toHaveLength(SIMBOLOS.length);
-    expect(grupos[0]!.simbolos.map((s) => s.tipo)).toEqual(["fuente.fase", "fuente.neutro"]);
+    expect(grupos[0]!.simbolos.map((s) => s.tipo)).toEqual(["fuente.fase", "fuente.neutro", "fuente.trifasica"]);
+    // T34: los contactos principales, primeros de Potencia.
+    expect(grupos[2]!.simbolos.map((s) => s.tipo)).toEqual(["contactor.principal"]);
   });
 
   it("en Mando, el auxiliar NC sale justo después del NA (T17b)", () => {

@@ -16,6 +16,9 @@ export function particion(lista: readonly ConBornes[]): string[][] {
 /** Papel de las fuentes, escrito aparte del de la netlist a propósito. */
 const PAPEL: Readonly<Record<string, string>> = { "fuente.fase": "fase", "fuente.neutro": "neutro" };
 
+/** Fuentes de varios bornes (T34): el papel de cada borne; el nombre de red es el del borne. */
+const TRIFASICAS = new Set(["fuente.trifasica", "fuente.trifasica_n"]);
+
 /**
  * La partición esperada, armada sin la netlist: las redes por cables de
  * `redes()`, unidas solo cuando comparten papel y nombre de una fuente.
@@ -27,8 +30,9 @@ export function particionEsperada(h: Hoja): string[][] {
   lista.forEach((r, i) => {
     for (const b of r.bornes) {
       const c = h.componentes.find((x) => x.id === b.comp)!;
-      const papel = PAPEL[c.tipo];
-      const nombre = c.etiqueta.trim().toUpperCase();
+      const tri = TRIFASICAS.has(c.tipo);
+      const papel = tri ? (b.borne === "N" ? "neutro" : "fase") : PAPEL[c.tipo];
+      const nombre = (tri ? b.borne : c.etiqueta).trim().toUpperCase();
       if (!papel || nombre === "") continue;
       const clave = `${papel}|${nombre}`;
       const otro = claveDe.get(clave);

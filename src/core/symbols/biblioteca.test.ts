@@ -5,15 +5,17 @@ import {
   buscarSimbolo,
   CONTACTO_AUXILIAR_NA,
   CONTACTO_AUXILIAR_NC,
+  CONTACTOR_PRINCIPAL,
   discontinua,
   FASE,
+  FUENTE_TRIFASICA,
   LAMPARA,
   NEUTRO,
   PULSADOR_NA,
   PULSADOR_NC,
   SIMBOLOS,
 } from "./biblioteca";
-import { esFuente, esSeguidor, type DefinicionSimbolo, type Primitiva, type Rotacion } from "./tipos";
+import { esFuente, esSeguidor, nombraRed, polosDe, type DefinicionSimbolo, type Primitiva, type Rotacion } from "./tipos";
 import { transformarBornes } from "./transformar";
 import { validarDefinicion } from "./validar";
 
@@ -54,8 +56,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los ocho símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(8);
+  it("tiene los diez símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(10);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -128,11 +130,11 @@ describe("biblioteca de símbolos", () => {
 });
 
 describe("contactos accionados (T33, D9-B)", () => {
-  const CONTACTOS = [PULSADOR_NA, PULSADOR_NC, CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC];
+  const CONTACTOS = [PULSADOR_NA, PULSADOR_NC, CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC, CONTACTOR_PRINCIPAL];
   /** La cuchilla: la línea que sale de la bisagra (0, 1) hacia arriba. */
   const cuchilla = (ps: readonly Primitiva[]) => ps.find((p) => p.forma === "linea" && p.x1 === 0 && p.y1 === 1 && p.y2 < 1);
 
-  it("los cuatro contactos tienen dibujo accionado; los demás símbolos no", () => {
+  it("los cinco contactos tienen dibujo accionado; los demás símbolos no", () => {
     for (const s of SIMBOLOS) expect(s.primitivasAccionado !== undefined, s.tipo).toBe(CONTACTOS.includes(s));
   });
 
@@ -151,7 +153,7 @@ describe("contactos accionados (T33, D9-B)", () => {
     }
   });
 
-  it.each([PULSADOR_NA, CONTACTO_AUXILIAR_NA].map((s) => [s.tipo, s] as const))("%s accionado está cerrado: la cuchilla llega al contacto fijo de arriba", (_, s) => {
+  it.each([PULSADOR_NA, CONTACTO_AUXILIAR_NA, CONTACTOR_PRINCIPAL].map((s) => [s.tipo, s] as const))("%s accionado está cerrado: la cuchilla llega al contacto fijo de arriba", (_, s) => {
     expect(cuchilla(s.primitivasAccionado!)).toMatchObject({ x2: 0, y2: -1 });
     expect(cuchilla(s.primitivas)).not.toMatchObject({ x2: 0, y2: -1 });
   });
@@ -196,9 +198,14 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     expect(SIMBOLOS.filter((s) => s.primerNumero !== undefined).map((s) => [s.tipo, s.primerNumero])).toEqual([["pulsador.nc", 0]]);
   });
 
-  it("fase y neutro son fuentes; los auxiliares NA y NC son los únicos seguidores (los pulsadores, a mano, se numeran)", () => {
-    expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO]);
-    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC]);
+  it("fase, neutro y trifásica son fuentes; los auxiliares y los principales, los seguidores (los pulsadores, a mano, se numeran)", () => {
+    expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO, FUENTE_TRIFASICA]);
+    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC, CONTACTOR_PRINCIPAL]);
+  });
+
+  it("solo fase y neutro nombran la red con su etiqueta (T34, D1-A)", () => {
+    expect(SIMBOLOS.filter((s) => nombraRed(s))).toEqual([FASE, NEUTRO]);
+    expect(nombraRed(undefined)).toBe(false);
   });
 });
 
@@ -281,6 +288,68 @@ describe("alimentaciones: fase y neutro", () => {
 
   it("los demás símbolos dibujan los nombres de sus bornes", () => {
     for (const s of SIMBOLOS.slice(2)) expect(s.mostrarNombresBornes).toBeUndefined();
+  });
+});
+
+describe("fuente trifásica (T34)", () => {
+  it("L1, L2 y L3 abajo (y = 2), en x −2, 0 y 2, en Fuentes, sin etiqueta inicial ni prefijo", () => {
+    expect(FUENTE_TRIFASICA.bornes).toEqual([
+      { nombre: "L1", x: -2, y: 2, direccion: "abajo" },
+      { nombre: "L2", x: 0, y: 2, direccion: "abajo" },
+      { nombre: "L3", x: 2, y: 2, direccion: "abajo" },
+    ]);
+    expect(FUENTE_TRIFASICA).toMatchObject({ tipo: "fuente.trifasica", elemento: "fuente", categoria: "fuentes", tamano: { ancho: 6, alto: 4 } });
+    expect(FUENTE_TRIFASICA.etiquetaInicial).toBeUndefined();
+    expect(FUENTE_TRIFASICA.prefijoEtiqueta).toBeUndefined();
+    expect(buscarSimbolo("fuente.trifasica")).toBe(FUENTE_TRIFASICA);
+  });
+
+  it("dibuja los nombres de sus bornes y no tiene polos", () => {
+    expect(FUENTE_TRIFASICA.mostrarNombresBornes).toBeUndefined();
+    expect(polosDe(FUENTE_TRIFASICA)).toEqual([]);
+  });
+});
+
+describe("contactos principales (T34)", () => {
+  it("1, 3, 5 arriba y 2, 4, 6 abajo, un polo cada 2 unidades", () => {
+    expect(CONTACTOR_PRINCIPAL.bornes).toEqual([
+      { nombre: "1", x: -2, y: -2, direccion: "arriba" },
+      { nombre: "2", x: -2, y: 2, direccion: "abajo" },
+      { nombre: "3", x: 0, y: -2, direccion: "arriba" },
+      { nombre: "4", x: 0, y: 2, direccion: "abajo" },
+      { nombre: "5", x: 2, y: -2, direccion: "arriba" },
+      { nombre: "6", x: 2, y: 2, direccion: "abajo" },
+    ]);
+  });
+
+  it("tres polos NA que siguen a la bobina, en Potencia, sin prefijo", () => {
+    expect(CONTACTOR_PRINCIPAL).toMatchObject({ tipo: "contactor.principal", elemento: "contacto_na", accionamiento: "bobina", categoria: "potencia" });
+    expect(polosDe(CONTACTOR_PRINCIPAL)).toEqual([
+      ["1", "2"],
+      ["3", "4"],
+      ["5", "6"],
+    ]);
+    expect(CONTACTOR_PRINCIPAL.prefijoEtiqueta).toBeUndefined();
+  });
+
+  it("cada polo queda vertical y a 4 de distancia en las 4 rotaciones, espejado o no", () => {
+    for (const rotacion of ROTACIONES) {
+      for (const espejado of [false, true]) {
+        const t = new Map(transformarBornes(CONTACTOR_PRINCIPAL.bornes, { rotacion, espejado }).map((b) => [b.nombre, b]));
+        for (const [a, b] of polosDe(CONTACTOR_PRINCIPAL)) {
+          const pa = t.get(a)!;
+          const pb = t.get(b)!;
+          expect(Math.abs(pa.x - pb.x) + Math.abs(pa.y - pb.y)).toBe(4);
+        }
+      }
+    }
+  });
+
+  it("los contactos de 2 bornes son un polo: sus dos bornes", () => {
+    expect(polosDe(CONTACTO_AUXILIAR_NA)).toEqual([["13", "14"]]);
+    expect(polosDe(PULSADOR_NC)).toEqual([["11", "12"]]);
+    expect(polosDe(BOBINA_CONTACTOR)).toEqual([]);
+    expect(polosDe(LAMPARA)).toEqual([]);
   });
 });
 

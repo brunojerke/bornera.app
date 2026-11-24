@@ -45,11 +45,11 @@ export interface Simulacion {
   readonly netlist: Netlist;
   /** Cambios de bobina permitidos en cada recálculo. */
   readonly tope: number;
-  /** Ids de los pulsadores apretados. */
+  /** Ids de los pulsadores apretados (un clic acciona todos sus polos). */
   readonly pulsados: ReadonlySet<string>;
   /** Por bobina de `netlist.bobinas`. */
   readonly tension: readonly boolean[];
-  /** Por contacto de `netlist.contactos`. */
+  /** Por polo de `netlist.contactos`. */
   readonly conducen: readonly boolean[];
   /** Por carga de `netlist.cargas`. */
   readonly encendidas: readonly boolean[];
@@ -78,9 +78,9 @@ interface Pre {
   pulsables: Set<string>;
   /** Por carga: índice de su bobina en `netlist.bobinas`, o -1. */
   cargaBobina: Int32Array;
-  /** Por red: las cargas con un borne en ella (repetida si tiene los dos). */
+  /** Por red: las cargas con un borne en ella (repetida si tiene los dos), en el orden de `netlist.cargas`. */
   cargasEnRed: number[][];
-  /** Por red: los contactos con un borne en ella. */
+  /** Por red: los polos con un borne en ella (repetido si tiene los dos). */
   contactosEnRed: number[][];
   /** Por red: bornes que no son de cargas ni de contactos. */
   otrosEnRed: Int32Array;
@@ -115,19 +115,24 @@ function preparar(n: Netlist): Pre {
   const cargaBobina = new Int32Array(n.cargas.length).fill(-1);
   n.bobinas.forEach((b, g) => b.cargas.forEach((k) => (cargaBobina[k] = g)));
 
+  // Por los extremos de cada polo y de cada carga (T34): un componente puede
+  // tener varios polos, así que no se busca por componente. Cada extremo es
+  // un borne; los que sobran en la red son de otros (fuentes, desconocidos…).
   const cargasEnRed: number[][] = Array.from({ length: R }, () => []);
   const contactosEnRed: number[][] = Array.from({ length: R }, () => []);
   const otrosEnRed = new Int32Array(R);
-  const cargaDeComp = new Map(n.cargas.map((k, i) => [k.comp, i]));
-  const contactoDeComp = new Map(n.contactos.map((c, i) => [c.comp, i]));
-  n.redes.forEach((r, i) => {
-    for (const b of r.bornes) {
-      const k = cargaDeComp.get(b.comp);
-      const c = contactoDeComp.get(b.comp);
-      if (k !== undefined) cargasEnRed[i]!.push(k);
-      else if (c !== undefined) contactosEnRed[i]!.push(c);
-      else otrosEnRed[i]!++;
-    }
+  n.redes.forEach((r, i) => (otrosEnRed[i] = r.bornes.length));
+  n.cargas.forEach((k, i) => {
+    cargasEnRed[k.a]!.push(i);
+    cargasEnRed[k.b]!.push(i);
+    otrosEnRed[k.a]!--;
+    otrosEnRed[k.b]!--;
+  });
+  n.contactos.forEach((c, i) => {
+    contactosEnRed[c.a]!.push(i);
+    contactosEnRed[c.b]!.push(i);
+    otrosEnRed[c.a]!--;
+    otrosEnRed[c.b]!--;
   });
 
   const pre: Pre = { potRed, esFase, modo, bobinaDe, pulsables, cargaBobina, cargasEnRed, contactosEnRed, otrosEnRed };

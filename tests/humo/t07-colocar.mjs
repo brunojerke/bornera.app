@@ -14,12 +14,18 @@ const componentes = (p) => p.evaluar("bornera.editor.documento.hojas[0].componen
 
 export default async function (p, comprobar) {
   const lista = await items(p);
-  comprobar("la paleta muestra los 8 símbolos", lista.length === 8, lista.map((i) => i.texto).join(", "));
+  comprobar("la paleta muestra los 10 símbolos", lista.length === 10, lista.map((i) => i.texto).join(", "));
   const lienzo = await p.caja("canvas");
 
-  // 1) Arrastrar cada ítem al lienzo, en columnas.
+  // 1) Arrastrar cada ítem al lienzo, en columnas. Los 8 de 0.1.5 en una fila; desde T34, la
+  // trifásica y los principales (6 de ancho) en otra más arriba: en la misma no caben a 1024×600.
+  const nuevos = ["Fuente trifásica", "Contactos principales"];
+  let enFila = 0;
+  let arriba = 0;
   for (let i = 0; i < lista.length; i++) {
-    const destino = { x: lienzo.cx - 250 + i * 80, y: lienzo.cy };
+    const destino = nuevos.includes(lista[i].texto)
+      ? { x: lienzo.cx - 250 + 300 * arriba++, y: lienzo.cy - 75 }
+      : { x: lienzo.cx - 250 + enFila++ * 80, y: lienzo.cy };
     await p.arrastrar(lista[i], destino);
     await esperar(50);
   }

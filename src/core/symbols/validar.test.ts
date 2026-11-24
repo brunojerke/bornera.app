@@ -18,8 +18,13 @@ const PULSADOR: DefinicionSimbolo = {
   ],
 };
 
+/**
+ * Una carga con estos bornes, para probar la geometría: en un contacto,
+ * otra cantidad de bornes que 2 pediría polos (T34).
+ */
 function conBornes(bornes: DefinicionSimbolo["bornes"]): DefinicionSimbolo {
-  return { ...PULSADOR, bornes };
+  const { accionamiento: _, ...sinAccionamiento } = PULSADOR;
+  return { ...sinAccionamiento, elemento: "carga", bornes };
 }
 
 describe("validarDefinicion", () => {
@@ -200,3 +205,65 @@ export const comprobacionesDeTipos: DefinicionSimbolo[] = [
   // @ts-expect-error una bobina no lleva accionamiento
   { tipo: "x", nombre: "x", categoria: "mando", elemento: "bobina", accionamiento: "bobina", tamano: { ancho: 2, alto: 2 }, primitivas: [], bornes: [] },
 ];
+
+describe("validarDefinicion: polos (T34)", () => {
+  /** Contacto tripolar de prueba, como los principales: 1-2, 3-4, 5-6. */
+  const TRIPOLAR: DefinicionSimbolo = {
+    tipo: "prueba.tripolar",
+    nombre: "Tripolar de prueba",
+    categoria: "potencia",
+    elemento: "contacto_na",
+    accionamiento: "bobina",
+    tamano: { ancho: 6, alto: 4 },
+    primitivas: [],
+    bornes: [-2, 0, 2].flatMap((x, i) => [
+      { nombre: `${2 * i + 1}`, x, y: -2, direccion: "arriba" as const },
+      { nombre: `${2 * i + 2}`, x, y: 2, direccion: "abajo" as const },
+    ]),
+    polos: [
+      ["1", "2"],
+      ["3", "4"],
+      ["5", "6"],
+    ],
+  };
+  const conPolos = (polos: DefinicionSimbolo["polos"]): DefinicionSimbolo => ({ ...TRIPOLAR, polos });
+
+  it("acepta un contacto de 6 bornes con 3 polos, y uno de 2 con su polo explícito", () => {
+    expect(validarDefinicion(TRIPOLAR)).toEqual([]);
+    expect(validarDefinicion({ ...PULSADOR, polos: [["13", "14"]] })).toEqual([]);
+  });
+
+  it("un contacto de 6 bornes sin polos", () => {
+    expect(validarDefinicion(conPolos(undefined))).toEqual(["Un contacto de 6 bornes necesita polos."]);
+  });
+
+  it("un borne en dos polos y otro sin polo", () => {
+    expect(validarDefinicion(conPolos([["1", "2"], ["3", "4"], ["4", "5"]]))).toEqual(['Borne "4" en dos polos.', 'Borne "6" sin polo.']);
+  });
+
+  it("un polo con un borne que no existe", () => {
+    expect(validarDefinicion(conPolos([["1", "2"], ["3", "4"], ["5", "7"]]))).toEqual([
+      'El polo 5-7 nombra un borne que no existe: "7".',
+      'Borne "6" sin polo.',
+    ]);
+  });
+
+  it("un polo que une un borne consigo mismo", () => {
+    expect(validarDefinicion(conPolos([["1", "2"], ["3", "4"], ["5", "5"], ["6", "6"]]))).toEqual([
+      "El polo 5-5 tiene que unir dos bornes distintos.",
+      'Borne "5" en dos polos.',
+      "El polo 6-6 tiene que unir dos bornes distintos.",
+      'Borne "6" en dos polos.',
+    ]);
+  });
+
+  it("una lista vacía de polos", () => {
+    expect(validarDefinicion({ ...PULSADOR, polos: [] })).toEqual(["La lista de polos está vacía.", 'Borne "13" sin polo.', 'Borne "14" sin polo.']);
+  });
+
+  it("polos fuera de un contacto", () => {
+    const { accionamiento: _, ...sinAccionamiento } = PULSADOR;
+    const bobina: DefinicionSimbolo = { ...sinAccionamiento, elemento: "bobina", polos: [["13", "14"]] };
+    expect(validarDefinicion(bobina)).toEqual(["Solo un contacto lleva polos."]);
+  });
+});

@@ -118,6 +118,13 @@ export type DefinicionSimbolo = Comportamiento & {
   primitivasAccionado?: Primitiva[];
   bornes: Borne[];
   /**
+   * Polos de un contacto (T34): pares de bornes que une cuando conduce, como
+   * los 1-2, 3-4 y 5-6 del contactor principal. Todos los polos se accionan
+   * juntos. Sin `polos`, un contacto de 2 bornes es un polo. Solo en
+   * contactos; cada borne en un solo polo (`validarDefinicion`).
+   */
+  polos?: readonly (readonly [string, string])[];
+  /**
    * De qué lado de las conexiones van los nombres de los bornes, en coordenadas
    * locales (gira y se espeja con el símbolo). Por defecto, "izquierda".
    * Sirve para alejarlos de partes del dibujo, como el tope de un contacto NC.
@@ -156,9 +163,28 @@ export type DefinicionSimbolo = Comportamiento & {
 /** Accionamientos a mano: el contacto es un pulsador o un selector, que se numera solo (S1, S2). */
 const ACCIONAMIENTOS_MANUALES: ReadonlySet<Accionamiento> = new Set<Accionamiento>(["manual_momentaneo", "manual_enclavado"]);
 
-/** Fase o neutro: su etiqueta es el nombre de la red. */
+/** Alimentación: fase, neutro o una fuente de varios bornes (la trifásica). No se numera. */
 export function esFuente(def: DefinicionSimbolo): boolean {
   return def.elemento === "fuente";
+}
+
+/**
+ * Fuente cuya etiqueta es el nombre de la red: la de un solo borne (fase y
+ * neutro). La etiqueta no puede quedar vacía (R9). En una fuente de varios
+ * bornes (la trifásica) nombra cada borne y la etiqueta es libre (T34, D1-A).
+ */
+export function nombraRed(def: DefinicionSimbolo | undefined): boolean {
+  return def?.elemento === "fuente" && def.bornes.length === 1;
+}
+
+/**
+ * Los polos de un contacto (T34): `polos`, o sus dos bornes si no los tiene.
+ * Fuera de los contactos, ninguno.
+ */
+export function polosDe(def: DefinicionSimbolo): readonly (readonly [string, string])[] {
+  if (def.elemento !== "contacto_na" && def.elemento !== "contacto_nc") return [];
+  if (def.polos) return def.polos;
+  return def.bornes.length === 2 ? [[def.bornes[0]!.nombre, def.bornes[1]!.nombre]] : [];
 }
 
 /**

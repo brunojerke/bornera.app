@@ -177,9 +177,9 @@ describe("ids estables", () => {
     cmd.aplicar(doc);
     expect(buscarComponente(doc, "c3")).toBeUndefined();
     cmd.deshacer(doc);
-    expect(ids(doc)).toEqual(["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"]);
+    expect(ids(doc)).toEqual(["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "c10"]);
     cmd.aplicar(doc);
-    expect(ids(doc)).toEqual(["c1", "c2", "c4", "c5", "c6", "c7", "c8"]);
+    expect(ids(doc)).toEqual(["c1", "c2", "c4", "c5", "c6", "c7", "c8", "c9", "c10"]);
   });
 
   it("Borrar varios, en varias hojas, devuelve cada uno a su hoja y a su orden", () => {
@@ -188,9 +188,9 @@ describe("ids estables", () => {
     colocar(doc, datos("pulsador.na", 0, 0), 1).aplicar(doc);
     colocar(doc, datos("pulsador.nc", 0, 4), 1).aplicar(doc);
     const antes = copia(doc);
-    const cmd = new Borrar(["c10", "c4", "c1", "c6", "c9"]);
+    const cmd = new Borrar(["c12", "c4", "c1", "c6", "c11"]);
     cmd.aplicar(doc);
-    expect(doc.hojas.map((h) => h.componentes.map((c) => c.id))).toEqual([["c2", "c3", "c5", "c7", "c8"], []]);
+    expect(doc.hojas.map((h) => h.componentes.map((c) => c.id))).toEqual([["c2", "c3", "c5", "c7", "c8", "c9", "c10"], []]);
     cmd.deshacer(doc);
     expect(doc).toEqual(antes);
   });

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { corto, oscilante } from "../core/circuitos/sim";
 import { marchaParada } from "../core/circuitos/marchaParada";
 import { serializar } from "../core/io";
+import * as motor from "../core/sim/motor";
 import type { Simulacion } from "../core/sim/motor";
 import { unirCajas, type Caja } from "../render/camara";
 import { DETALLE_COMPLETO } from "../render/detalle";
@@ -194,5 +195,31 @@ describe("Editor: dibujo del estado (T33)", () => {
     d = dibujoDe(ed.simulacion!.sim);
     expect(d.componentes.get(comp.k1AuxiliarNC!)).toEqual({ accionado: true, encendido: false, marcado: false });
     expect(d.componentes.has(comp.h2!)).toBe(false);
+  });
+  it("dibujoDe con polos (T34): los principales se ven accionados con su bobina, un estado por componente", () => {
+    const comps = [
+      { id: "t", tipo: "fuente.trifasica", etiqueta: "" },
+      { id: "n", tipo: "fuente.neutro", etiqueta: "N" },
+      { id: "s1", tipo: "pulsador.na", etiqueta: "S1" },
+      { id: "kb", tipo: "contactor.bobina", etiqueta: "K1" },
+      { id: "k", tipo: "contactor.principal", etiqueta: "K1" },
+    ].map((c) => ({ ...c, x: 0, y: 0, rot: 0 as const, espejado: false, params: {} }));
+    const cable = (id: string, a: [string, string], b: [string, string]) => ({
+      id,
+      desde: { tipo: "borne" as const, comp: a[0], borne: a[1] },
+      hasta: { tipo: "borne" as const, comp: b[0], borne: b[1] },
+      codos: [],
+    });
+    const hoja = { nombre: "Hoja 1", componentes: comps, cables: [cable("w1", ["t", "L1"], ["s1", "13"]), cable("w2", ["s1", "14"], ["kb", "A1"]), cable("w3", ["kb", "A2"], ["n", "N"]), cable("w4", ["t", "L2"], ["k", "3"])] };
+    const sim = (s: Simulacion) => dibujoDe(s);
+    const { entrarSimulacion, pulsar } = motor;
+    const e = entrarSimulacion(hoja);
+    if (!e.ok) throw new Error("no entra");
+    expect(sim(e.sim).componentes.has("k")).toBe(false);
+    const p = pulsar(e.sim, "s1");
+    const d = sim(p);
+    expect(d.componentes.get("k")).toEqual({ accionado: true, encendido: false, marcado: false });
+    // El cable de L2 al polo 3 va como fase.
+    expect(d.clases[p.netlist.redDeBorne.get("k")!.get("3")!]).toBe(CLASE_FASE);
   });
 });

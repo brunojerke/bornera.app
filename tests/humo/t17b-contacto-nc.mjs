@@ -108,7 +108,7 @@ async function probar(p, comprobar, buscarSimbolo, carpeta, archivos) {
   const textos = lista.map((i) => i.texto);
   const iNA = textos.indexOf("Contacto auxiliar NA");
   const iNC = textos.indexOf("Contacto auxiliar NC");
-  comprobar("la paleta tiene 8 ítems", lista.length === 8, textos.join(", "));
+  comprobar("la paleta tiene 10 ítems (T34: trifásica y principales)", lista.length === 10, textos.join(", "));
   comprobar("«Contacto auxiliar NC» está justo después de «Contacto auxiliar NA»", iNA >= 0 && iNC === iNA + 1, textos.join(", "));
   await p.captura("paleta");
 

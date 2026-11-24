@@ -24,7 +24,8 @@
 //   bobina, si esa red no tiene nombre de alimentación.
 // - R7. Borne de un símbolo conocido sin ningún extremo de cable.
 // - R8. Cable con algún extremo libre.
-// - R9. Fuente sin etiqueta: no da nombre de red.
+// - R9. Fuente sin etiqueta: no da nombre de red. Solo Fase y Neutro
+//   (`nombraRed`): la trifásica nombra sus bornes y su etiqueta es libre (T34).
 // - R10 (T29). Fase «L» en una hoja con alguna Fase «L1», «L2» o «L3», por
 //   etiqueta normalizada («l1» cuenta como «L1»). Para Bornera son fases
 //   distintas (D7). Marca cada Fase «L».
@@ -35,7 +36,7 @@
 // resultado completo: cada regla se decide sola (R5 mira la condición de R4
 // aunque R4 no se pida).
 
-import { buscarSimbolo, esBobina, esFuente, esSeguidor, SIMBOLOS, sigueABobina, type DefinicionSimbolo } from "../symbols";
+import { buscarSimbolo, esBobina, esSeguidor, nombraRed, SIMBOLOS, sigueABobina, type DefinicionSimbolo } from "../symbols";
 import type { Componente, Hoja } from "./documento";
 import { esTitular, prefijoDe } from "./etiquetado";
 import { normalizarEtiqueta } from "./etiquetas";
@@ -231,7 +232,7 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
     if (conCable && def) {
       for (const b of def.bornes) if (!conCable.has(clave(id, b.nombre))) avisos.push({ regla: "R7", severidad: "aviso", id, borne: b.nombre });
     }
-    if (activas.has("R9") && def !== undefined && esFuente(def) && e === "") avisos.push({ regla: "R9", severidad: "aviso", id });
+    if (activas.has("R9") && nombraRed(def) && e === "") avisos.push({ regla: "R9", severidad: "aviso", id });
     if (otrasR10 !== "" && esFaseL(c.tipo, e)) avisos.push({ regla: "R10", severidad: "aviso", id, otras: otrasR10 });
   }
 

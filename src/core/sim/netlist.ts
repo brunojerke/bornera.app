@@ -9,17 +9,21 @@
 //   normalizada. Fase «L1» y Fase «L2» son dos; Fase «N» y Neutro «N»,
 //   también. Las redes con el mismo potencial se unen (etiqueta de red).
 //   Una fuente sin etiqueta (solo desde un archivo: R9) no da potencial.
+//   En una fuente de varios bornes (T34, la trifásica), cada borne da el suyo:
+//   papel del borne (tabla por tipo y borne, D3-A) más su nombre; la etiqueta
+//   no cuenta (D1-A). Su L1 es la misma red que una Fase «L1».
 // - Corto por cables (D10-A): una red con dos potenciales o más. Acá solo se
 //   anota (`enCorto`); el motor lo ve en reposo, se detiene y avisa (T30).
-// - Contactos (NA o NC, con su accionamiento) y cargas (bobina, lámpara), cada
-//   uno con la red de sus dos bornes. Un símbolo desconocido no conduce ni es
+// - Contactos (NA o NC, con su accionamiento), uno por polo (T34: los 3 de
+//   un contactor principal, con la etiqueta y el accionamiento del símbolo), y
+//   cargas (bobina, lámpara), cada uno con la red de sus dos bornes. Un símbolo desconocido no conduce ni es
 //   carga; tampoco lo que la fase 5 no simula (la protección).
 // - Bobinas por etiqueta, en orden natural (K1, K2, K10): el orden de D2. Una
 //   etiqueta repetida en dos bobinas no se resuelve acá (R4 impide entrar).
 //
 // Solo la hoja que se recibe (la app muestra la primera). Sin DOM.
 
-import { buscarSimbolo, type Accionamiento } from "../symbols";
+import { buscarSimbolo, polosDe, type Accionamiento } from "../symbols";
 import type { Hoja } from "../model/documento";
 import { normalizarEtiqueta } from "../model/etiquetas";
 import { redes, type BorneRed } from "../model/redes";
@@ -31,6 +35,16 @@ export type Papel = "fase" | "neutro";
 const PAPEL: Readonly<Record<string, Papel>> = {
   "fuente.fase": "fase",
   "fuente.neutro": "neutro",
+};
+
+/**
+ * Papel de cada borne de las fuentes de varios bornes, por `tipo` y nombre de
+ * borne (T34, D3-A). El nombre del borne es el de la red. `fuente.trifasica_n`
+ * es de T35; está para el test de la fuente de 4 bornes (ajuste 2).
+ */
+const PAPEL_POR_BORNE: Readonly<Record<string, Readonly<Record<string, Papel>>>> = {
+  "fuente.trifasica": { L1: "fase", L2: "fase", L3: "fase" },
+  "fuente.trifasica_n": { L1: "fase", L2: "fase", L3: "fase", N: "neutro" },
 };
 
 /** Un potencial: papel y nombre de red (etiqueta normalizada, no vacía). */
@@ -49,15 +63,17 @@ export interface RedNetlist {
   potenciales: number[];
 }
 
-/** Un contacto: une sus dos redes cuando conduce. */
+/** Un polo de un contacto: une sus dos redes cuando conduce. Los polos de un componente se accionan juntos. */
 export interface ContactoNetlist {
   comp: string;
+  /** Índice del polo en `polosDe` de su símbolo: 0 en un contacto de un polo. */
+  polo: number;
   /** Etiqueta normalizada ("" sin etiqueta). Para el auxiliar, la de su bobina. */
   etiqueta: string;
   /** NA (true) o NC (false). */
   na: boolean;
   accionamiento: Accionamiento;
-  /** Redes de su primer y su segundo borne, como en su definición. */
+  /** Redes del primer y el segundo borne del polo, como en su definición. */
   a: number;
   b: number;
 }
@@ -82,7 +98,7 @@ export interface Netlist {
   redDeBorne: ReadonlyMap<string, ReadonlyMap<string, number>>;
   /** Índices de las redes con dos potenciales o más, de menor a mayor (D10-A). */
   enCorto: number[];
-  /** En el orden de la hoja. */
+  /** En el orden de la hoja y, en cada componente, por polo. */
   contactos: ContactoNetlist[];
   /** En el orden de la hoja. */
   cargas: CargaNetlist[];
@@ -145,14 +161,25 @@ export function armarNetlist(hoja: Hoja): Netlist {
 
   // Fuentes con potencial: el potencial (clave "papel|nombre") y su red por cables.
   const fuentes: { clave: string; potencial: Potencial; red: number }[] = [];
+  const sumarFuente = (papel: Papel, nombre: string, red: number | undefined) => {
+    if (nombre === "" || red === undefined) return;
+    fuentes.push({ clave: `${papel}|${nombre}`, potencial: { papel, nombre }, red });
+  };
   for (const c of hoja.componentes) {
     const papel = PAPEL[c.tipo];
-    const def = papel ? buscarSimbolo(c.tipo) : undefined;
-    if (!papel || !def || def.bornes.length !== 1) continue;
-    const nombre = normalizarEtiqueta(c.etiqueta);
-    const red = redCables.get(c.id)?.get(def.bornes[0]!.nombre);
-    if (nombre === "" || red === undefined) continue;
-    fuentes.push({ clave: `${papel}|${nombre}`, potencial: { papel, nombre }, red });
+    const porBorne = papel ? undefined : PAPEL_POR_BORNE[c.tipo];
+    if (!papel && !porBorne) continue;
+    const def = buscarSimbolo(c.tipo);
+    if (!def) continue;
+    const delComp = redCables.get(c.id);
+    if (papel) {
+      if (def.bornes.length === 1) sumarFuente(papel, normalizarEtiqueta(c.etiqueta), delComp?.get(def.bornes[0]!.nombre));
+      continue;
+    }
+    for (const b of def.bornes) {
+      const p = porBorne![b.nombre];
+      if (p) sumarFuente(p, normalizarEtiqueta(b.nombre), delComp?.get(b.nombre));
+    }
   }
 
   // Potenciales, ordenados: papel y después nombre.
@@ -223,15 +250,20 @@ export function armarNetlist(hoja: Hoja): Netlist {
   const cargas: CargaNetlist[] = [];
   for (const c of hoja.componentes) {
     const def = buscarSimbolo(c.tipo);
-    if (!def || def.bornes.length !== 2) continue;
-    const a = redDe(c.id, def.bornes[0]!.nombre);
-    const b = redDe(c.id, def.bornes[1]!.nombre);
-    if (a === undefined || b === undefined) continue;
-    const etiqueta = normalizarEtiqueta(c.etiqueta);
+    if (!def) continue;
     if (def.elemento === "contacto_na" || def.elemento === "contacto_nc") {
-      contactos.push({ comp: c.id, etiqueta, na: def.elemento === "contacto_na", accionamiento: def.accionamiento, a, b });
-    } else if (def.elemento === "bobina" || def.elemento === "carga") {
-      cargas.push({ comp: c.id, etiqueta, tipo: def.elemento, a, b });
+      const etiqueta = normalizarEtiqueta(c.etiqueta);
+      polosDe(def).forEach(([pa, pb], polo) => {
+        const a = redDe(c.id, pa);
+        const b = redDe(c.id, pb);
+        if (a === undefined || b === undefined) return;
+        contactos.push({ comp: c.id, polo, etiqueta, na: def.elemento === "contacto_na", accionamiento: def.accionamiento, a, b });
+      });
+    } else if ((def.elemento === "bobina" || def.elemento === "carga") && def.bornes.length === 2) {
+      const a = redDe(c.id, def.bornes[0]!.nombre);
+      const b = redDe(c.id, def.bornes[1]!.nombre);
+      if (a === undefined || b === undefined) continue;
+      cargas.push({ comp: c.id, etiqueta: normalizarEtiqueta(c.etiqueta), tipo: def.elemento, a, b });
     }
   }
 

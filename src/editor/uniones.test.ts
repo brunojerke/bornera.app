@@ -47,6 +47,15 @@ function generador(semilla: number): () => number {
 const SEMILLA = 20261111;
 /** Semilla de la segunda corrida al azar, con la biblioteca completa (T17b): la primera que llega a la cobertura mínima. */
 const SEMILLA_COMPLETA = 20261112;
+/** Los 8 tipos de 0.1.5, la biblioteca completa de T17b a T33: la segunda corrida no cambia con los símbolos nuevos. */
+const TIPOS_015 = SIMBOLOS.slice(0, 8).map((s) => s.tipo);
+/**
+ * Semilla de la tercera corrida, con la biblioteca de T34 (trifásica y
+ * principales): la primera desde 20261124 que llega a la cobertura mínima
+ * (de 20261124 a 20261131 quedan cortas de aceptadas o de anfitriones
+ * borrados; ninguna falla en la corrección).
+ */
+const SEMILLA_T34 = 20261132;
 
 function rutaDe(hoja: Hoja, e: Extremo): ExtremoRuta {
   if (e.tipo !== "borne") return { x: e.x, y: e.y };
@@ -396,7 +405,8 @@ describe("Uniones de a poco", () => {
 
   it.each([
     [`semilla ${SEMILLA}, los 7 tipos de 0.1.3`, SEMILLA, TIPOS_ESCENA_013],
-    [`semilla ${SEMILLA_COMPLETA}, la biblioteca completa con el NC`, SEMILLA_COMPLETA, SIMBOLOS.map((s) => s.tipo)],
+    [`semilla ${SEMILLA_COMPLETA}, los 8 tipos de 0.1.5 con el NC`, SEMILLA_COMPLETA, TIPOS_015],
+    [`semilla ${SEMILLA_T34}, la biblioteca completa de T34`, SEMILLA_T34, SIMBOLOS.map((s) => s.tipo)],
   ] as const)("al azar (%s): después de cada operación, igual que recorrer la hoja", (_, semilla, tipos) => {
     const azar = generador(semilla);
     const n = {

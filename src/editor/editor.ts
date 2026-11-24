@@ -113,7 +113,7 @@ import { normalizarEtiqueta } from "../core/model/etiquetas";
 import type { MotivoSinArrastre } from "../core/model/etiquetado";
 import { Historial, type MarcaGuardado, type OpcionesHistorial } from "../core/model/historial";
 import { problemasPegado, recortar, recorteVacio, type Recorte } from "../core/model/portapapeles";
-import { bornesColocados, buscarSimbolo, type DefinicionSimbolo } from "../core/symbols";
+import { bornesColocados, buscarSimbolo, nombraRed, type DefinicionSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
 import type { InfoDinamico } from "../render/capas";
 import { nivelDetalle } from "../render/detalle";
@@ -658,7 +658,8 @@ export class Editor {
     if (!unico) return base;
     const c = unico;
     const def = buscarSimbolo(c.tipo) ?? SIMBOLO_DESCONOCIDO;
-    const esFuente = def.elemento === "fuente";
+    // La etiqueta es el nombre de la red solo en Fase y Neutro; en la trifásica es libre (T34, D1-A).
+    const esFuente = nombraRed(def);
     const nota = this.notaRenombre;
     return {
       ...base,
@@ -690,7 +691,7 @@ export class Editor {
     for (const hoja of this.documento.hojas) {
       for (const c of hoja.componentes) {
         if (c.id === f.id || normalizarEtiqueta(c.etiqueta) !== red) continue;
-        if (buscarSimbolo(c.tipo)?.elemento === "fuente") n++;
+        if (nombraRed(buscarSimbolo(c.tipo))) n++;
       }
     }
     return n;

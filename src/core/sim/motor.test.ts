@@ -423,3 +423,143 @@ describe("motor: entrar (D4-A)", () => {
     expect(correr()).toEqual(correr());
   });
 });
+
+// ── Polos (T34) ───────────────────────────────────────────────────────────
+
+/** Trifásica T, pulsador S1 que alimenta K1 entre L1 y N, y los principales de K1 hacia U, V, W (sin motor: tres lámparas en estrella al neutro). */
+function potencia(): Hoja {
+  return circuito(
+    [
+      ["t", "fuente.trifasica"],
+      ["n", "fuente.neutro", "N"],
+      ["s1", "pulsador.na", "S1"],
+      ["kb", "contactor.bobina", "K1"],
+      ["k", "contactor.principal", "K1"],
+      ["hu", "senalizacion.lampara", "HU"],
+      ["hv", "senalizacion.lampara", "HV"],
+      ["hw", "senalizacion.lampara", "HW"],
+    ],
+    [
+      ["t:L1", "s1:13", "k:1"],
+      ["s1:14", "kb:A1"],
+      ["kb:A2", "n:N", "hu:X2", "hv:X2", "hw:X2"],
+      ["t:L2", "k:3"],
+      ["t:L3", "k:5"],
+      ["k:2", "hu:X1"],
+      ["k:4", "hv:X1"],
+      ["k:6", "hw:X1"],
+    ],
+  );
+}
+
+const nombreDeRed = (s: Simulacion, comp: string, borne: string): string | null => {
+  const p = s.potencialDeRed[s.netlist.redDeBorne.get(comp)!.get(borne)!];
+  return p === null || p === undefined ? null : s.netlist.potenciales[p]!.nombre;
+};
+
+describe("motor: polos (T34)", () => {
+  it("K1 cierra los tres polos a la vez: 2, 4 y 6 toman L1, L2 y L3", () => {
+    let s = entrar(potencia());
+    expect(s.conducen.filter((_, i) => s.netlist.contactos[i]!.comp === "k")).toEqual([false, false, false]);
+    expect(["2", "4", "6"].map((b) => nombreDeRed(s, "k", b))).toEqual([null, null, null]);
+    s = pulsar(s, "s1");
+    expect(tension(s, "K1")).toBe(true);
+    expect(s.conducen.filter((_, i) => s.netlist.contactos[i]!.comp === "k")).toEqual([true, true, true]);
+    expect(["2", "4", "6"].map((b) => nombreDeRed(s, "k", b))).toEqual(["L1", "L2", "L3"]);
+    expect(["hu", "hv", "hw"].map((h) => encendida(s, h))).toEqual([true, true, true]);
+    s = soltar(s, "s1");
+    expect(["2", "4", "6"].map((b) => nombreDeRed(s, "k", b))).toEqual([null, null, null]);
+    expect(s.avisos).toEqual([]);
+  });
+
+  it("los principales no son pulsadores: pulsarlos no hace nada", () => {
+    const s = entrar(potencia());
+    expect(pulsar(s, "k").conducen).toEqual(s.conducen);
+  });
+
+  it("sin bobina de su etiqueta, en reposo (abiertos)", () => {
+    const h = potencia();
+    h.componentes.find((c) => c.id === "k")!.etiqueta = "K9";
+    const s = pulsar(entrar(h), "s1");
+    expect(s.conducen.filter((_, i) => s.netlist.contactos[i]!.comp === "k")).toEqual([false, false, false]);
+    expect(encendida(s, "hu")).toBe(false);
+  });
+
+  it("K1 y K2 con las fases cruzadas: al cerrar los dos, «Cortocircuito entre L1 y L2» y se detiene", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["n", "fuente.neutro", "N"],
+        ["s1", "pulsador.na", "S1"],
+        ["s2", "pulsador.na", "S2"],
+        ["k1b", "contactor.bobina", "K1"],
+        ["k2b", "contactor.bobina", "K2"],
+        ["k1", "contactor.principal", "K1"],
+        ["k2", "contactor.principal", "K2"],
+      ],
+      [
+        ["t:L1", "s1:13", "s2:13", "k1:1", "k2:3"],
+        ["s1:14", "k1b:A1"],
+        ["s2:14", "k2b:A1"],
+        ["k1b:A2", "k2b:A2", "n:N"],
+        ["t:L2", "k1:3", "k2:1"],
+        ["t:L3", "k1:5", "k2:5"],
+        ["k1:2", "k2:2"],
+        ["k1:4", "k2:4"],
+        ["k1:6", "k2:6"],
+      ],
+    );
+    let s = pulsar(entrar(h), "s1");
+    expect(s.detenida).toBeNull();
+    expect(["2", "4", "6"].map((b) => nombreDeRed(s, "k1", b))).toEqual(["L1", "L2", "L3"]);
+    s = pulsar(s, "s2");
+    expect(s.detenida?.tipo).toBe("corto");
+    expect(textoAvisoSim(s.detenida!)).toBe("Cortocircuito entre L1 y L2");
+    expect(soltar(s, "s1", "s2").tension).toEqual(s.tension);
+  });
+
+  it("cargas en serie a través de un polo cerrado: «Cargas en serie: H1 y H2»", () => {
+    // L1 – H1 – polo 3-4 de K1 (cerrado) – H2 – N; K1 alimentada aparte.
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["n", "fuente.neutro", "N"],
+        ["kb", "contactor.bobina", "K1"],
+        ["k", "contactor.principal", "K1"],
+        ["h1", "senalizacion.lampara", "H1"],
+        ["h2", "senalizacion.lampara", "H2"],
+      ],
+      [
+        ["t:L1", "kb:A1", "h1:X1"],
+        ["kb:A2", "n:N", "h2:X2"],
+        ["h1:X2", "k:3"],
+        ["k:4", "h2:X1"],
+      ],
+    );
+    const s = entrar(h);
+    expect(tension(s, "K1")).toBe(true);
+    expect(textos(s.avisos)).toEqual(["Cargas en serie: H1 y H2"]);
+  });
+
+  it("con el polo de al lado abierto en la red del medio no avisa (el borne cuenta como contacto que no conduce)", () => {
+    // L1 – H1 – (polo 1-2 de K9, sin bobina: abierto) y (polo 3-4 cerrado por K1) – H2 – N.
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["n", "fuente.neutro", "N"],
+        ["kb", "contactor.bobina", "K1"],
+        ["k", "contactor.principal", "K1"],
+        ["k9", "contactor.principal", "K9"],
+        ["h1", "senalizacion.lampara", "H1"],
+        ["h2", "senalizacion.lampara", "H2"],
+      ],
+      [
+        ["t:L1", "kb:A1", "h1:X1"],
+        ["kb:A2", "n:N", "h2:X2"],
+        ["h1:X2", "k:3", "k9:1"],
+        ["k:4", "h2:X1"],
+      ],
+    );
+    expect(entrar(h).avisos).toEqual([]);
+  });
+});

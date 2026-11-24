@@ -16,8 +16,9 @@
 // del componente normalizada (sin espacios a los lados y en mayúsculas); una
 // etiqueta vacía no da nombre. `redes` une por nombre solo si se pide
 // (`unirPorNombre`), como etiquetas de red; `porNombre` anota qué redes se
-// unirían. Las fuentes de varios bornes (la trifásica, con el nombre de cada
-// borne) se suman cuando existan.
+// unirían. En las fuentes de varios bornes (la trifásica, T34 D2-A), cada
+// borne nombra su red con su propio nombre (L1, L2, L3, N); la etiqueta del
+// componente no cuenta.
 //
 // Se calcula del documento y no se guarda. Recorre la hoja entera: es para
 // entrar a simular y para los tests, no para cada cuadro.
@@ -99,10 +100,11 @@ export function redes(hoja: Hoja, opciones: OpcionesRedes = {}): Red[] {
     // Un símbolo desconocido no tiene bornes conocidos (y ningún cable puede llegarle: T15a lo rechaza).
     if (!def) continue;
     const nombre = nombreDeFuente(c) ?? "";
+    const porBorne = def.elemento === "fuente" && def.bornes.length > 1;
     let delComp = bornes.get(c.id);
     if (!delComp) bornes.set(c.id, (delComp = new Map()));
     for (const b of def.bornes) {
-      if (!delComp.has(b.nombre)) delComp.set(b.nombre, nuevo({ tipo: "borne", comp: c.id, borne: b.nombre, nombre }));
+      if (!delComp.has(b.nombre)) delComp.set(b.nombre, nuevo({ tipo: "borne", comp: c.id, borne: b.nombre, nombre: porBorne ? normalizarEtiqueta(b.nombre) : nombre }));
     }
   }
 
