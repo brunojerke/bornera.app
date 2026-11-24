@@ -47,3 +47,12 @@ ABBA `probar-webview2.mjs --exe=A,B --fase5 --base-fase5`, 3 bloques, fría + ca
 
 ## Sesiones
 1 o 2. **Ajuste 3:** si se parte, la primera termina con commit local de checkpoint con `npm test` y `npm run check` en verde; el ABBA va en la segunda.
+
+## Resultado (2026-11-24)
+- **Cerrada.** Commits: `cead0c5` (plan), `e904417` (checkpoint), `3fa36a3` (sin asignaciones evitables) y el de cierre.
+- `contactoDeComp` del motor no daba un resultado distinto: todos los polos de un componente conducen igual. Se cambió igual (dependía de eso sin decirlo).
+- La trifásica pasó de 6×2 a 6×4: con 2 de alto los nombres de los bornes pisaban el círculo (captura del humo).
+- Uniones: la corrida de T17b queda fija a los 8 tipos de 0.1.5; la de T34 usa la semilla 20261132 (la primera desde 20261124 con la cobertura mínima; las anteriores, cortas de aceptadas o de anfitriones borrados, sin fallas de corrección).
+- Banco: primer intento cortado (el exe de B tardó más de 4 min en «Probar la fase 5»); ABBA 1 no pasa B5 2.º (2,2 → 3,9); diagnóstico acotado y ABBA 2 pasa todo. Detalle en `docs/bench.md`.
+- Pendiente para T35: formato de referencias por polos («NA 1-2, 3-4, 5-6»; hoy sale «NA 1-2-3-4-5-6»), `fuente.trifasica_n` y R10 con la trifásica.
+

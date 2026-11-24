@@ -20,6 +20,41 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Polos y netlist multipolo (fase 6, T34) — 2026-11-24
+
+**Criterio escrito antes de medir** (`docs/plan-T34.md`, aprobado con 4 ajustes): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, 6 aperturas por exe, fría + caliente) contra `954f011`, misma escena (sin J-A). S1 (arma la netlist): tope 54,5 (máx. 60,0) **y no regresión (ajuste 1)**. S2 1,7 / 5,3 (máx. 2,7 / 6,3), S3 16,7 (18,4), S5 100,0 (110,0): tope y no regresión (mediana A ≤ B + máx(1 ms, 10 %)). S4 6,0 / 18,2 (7,0 / 20,0): control, por tope. B1–B16 con D6b-C (B2 por mediana); F1–F3 por tope. **Ajuste 4:** si falla solo una fila de control (B13, B15, S4), se repite el ABBA una vez; si falla una que se juzga, se frena y se consulta sin volver a medir.
+
+**Cómo se midió:** enchufada, «Mejor rendimiento» y apps cerradas (Bruno). Dos exes `tauri build --no-bundle` con la versión solo en `package.json` (local, revertida): A `0.1.5-t34.0` (`e904417`) y después `0.1.5-t34.1` (`3fa36a3`); B `0.1.5-t34b.0`, de un worktree temporal en `954f011` con `npm ci` y `svelte-kit sync`. Edge 158.
+
+**Primer intento: cortado, sin juicio.** La apertura 1 (A) terminó en 44 s; en la 2, **el exe de B tardó más de 4 min en «Probar la fase 5»** (límite de `probar-webview2.mjs`) y la corrida se cortó sin tabla. Abierto solo después, el mismo exe la terminó en 24 s (primera apertura de un exe recién compilado; causa no confirmada). Se relanzó el ABBA entero.
+
+**ABBA 1 (A = `e904417`): no pasa B5 2.º.** S1–S5 pasan (S1 20,6 / 25,6, sin regresión: B 21,5, límite 23,6); F pasa; B13 y B15 iguales; todo «igual» salvo **B5 2.º (máximo de deshacer «Pegar 500»): B 2,2 → A 3,9 ms** (calientes A 4,6 · 6,8 · 2,1 · 4,1 · 3,8 · 2,6; B 2,6 · 2,0 · 2,3 · 2,0 · 2,2 · 2,1). B5 1.º igual (1,9). Se frenó y consultó (ajuste 4).
+
+**Diagnóstico (Bruno, opción A acotada, reglas fijadas antes de medir):**
+1. *Asignaciones por llamada que sumó T34:* `polosDe` armaba `[[a, b]]` en cada llamada para un contacto de 2 bornes; `armarNetlist` creaba una clausura por contacto (`forEach`) y otra por armado (`sumarFuente`); `redes()` y la netlist normalizaban el nombre de cada borne de una fuente de varios bornes. `nombraRed`, R9 y R6 incremental no crean nada. **Ninguna está en el camino de deshacer «Pegar 500»** (se llaman al entrar a Simular o con una trifásica en la hoja).
+2. *Node* (`deshacer` de «Pegar 500» con la escena 2000 + 3030 y el recorte de 500 del banco, 4 procesos por lado A B B A A B B A, 60 medidos + 10 de calentamiento): mediana de medianas A 2,13 · B 2,04 ms; mediana de máximos A 4,41 · B 3,90 ms. **A ≈ B** (dentro de máx(1 ms, 10 %)); el pico más alto fue de B (12,2).
+3. *Una traza de A en WebView2* (corrida caliente, B5 1,9 / 3,7 ms): el escenario entero (preparar, 3 pegar, 3 deshacer y cuadros) es **una sola tarea de 471 ms** con 6 `MinorGC` de 0,9–2,0 ms; el exceso del máximo (1,8 ms) mide como un `MinorGC`, pero la traza no tiene marcas por paso: **no se puede atribuir** un GC a un deshacer.
+
+**Salida (regla de Bruno):** había asignaciones evitables → se quitaron (`3fa36a3`: `polosDe` memorizado por definición, `for` en vez de `forEach`, `sumarFuente` fuera, nombres de borne tal cual), tests en verde, y **ABBA nuevo completo** con las mismas reglas.
+
+**ABBA 2 (A = `3fa36a3`): pasa todo.** B1–B16 nada sube (**B5 2.º 2,4 → 2,2**); B13 y B15 iguales; F pasa; cierre de S: pasa.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 17,3 | 20,9 | 19,4 | **pasa (≤ 21,3, ajuste 1)** |
+| S2 | mediana | 1,7 | 0,2 | 0,2 | 0,2 | pasa (≤ 1,2) |
+| S2 | máx. | 5,3 | 0,3 | 0,4 | 0,3 | pasa (≤ 1,3) |
+| S3 | máx. | 16,7 | 2,9 | 3,8 | 2,9 | pasa (≤ 3,9) |
+| S4 | cuadro | 6,0 | 2,0 | 2,4 | 2,0 | informa (control) |
+| S4 | gesto | 18,2 | 2,3 | 2,7 | 2,3 | informa (control) |
+| S5 | máx. | 100,0 | 48,3 | 53,5 | 47,8 | pasa (≤ 52,6) |
+
+- S1, desglose (mediana): R4 0,8 · netlist 3,0 · iniciar 1,1 · cuadro 13,1 (ABBA 1: netlist 4,5). S5 de pared (informa): 164,4 ms. Cadena de 100 de S4 (informa): 5,0 / 12,1 ms.
+- F1 2,9–3,2 ms (≤ 9); F2 y F3 ≤ 63,1 ms (≤ 1 s). Medianas de las calientes: F1 2,7 · F2 37,4 · F3 51,3.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 10 en A (B5 2.º 4,0 y 7,8 entre ellas) y 4 en B (B5 2.º 7,0).
+- Lectura: el código del camino de B5 no cambió entre los dos ABBA y B5 2.º pasó de 3,9 a 2,2; junto con Node (A ≈ B), el pico de ABBA 1 es compatible con GC o ruido del máximo de 3 pasos, sin probarlo.
+- `npm run bench` no se corrió: T34 no toca dibujo, arrastre ni mosaicos; decide el ABBA.
+
 ## Netbook y PC el mismo día (fase 5, C3) — 2026-11-22
 
 **Criterio escrito antes de medir** (`docs/plan-fase5.md`, secciones 3 y 4; hoja `docs/netbook-fase5.md`): `.msi` de `v0.1.5-alpha.1` (tag sobre `845fe69`, del borrador de `release.yml`) en las dos máquinas, «Probar la fase 5», 3 aperturas × (fría + caliente). S1–S5: mediana de las 3 calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %); netbook con sus topes, PC con los de C1. F1–F3 por su tope. B1–B16 contra los topes de la 3b: por fila, la mediana de las corridas; las corridas sueltas que fallan informan; B10 informa. Las frías informan (rango de las calientes + 1 ms). K no se recalcula.
