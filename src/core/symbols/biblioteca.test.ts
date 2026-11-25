@@ -409,26 +409,26 @@ describe("nombres de borne de las fuentes de varios bornes (T34)", () => {
 
 // ── Potencia (T35) ─────────────────────────────────────────────────────────
 
-/** Bornes 1, 3, 5… arriba (y = −2) y 2, 4, 6… abajo (y = 2), uno por polo en `xs`. */
-const numerados = (xs: number[]) =>
+/** Bornes 1, 3, 5… arriba (y = −alto/2) y 2, 4, 6… abajo (y = alto/2), uno por polo en `xs`. */
+const numerados = (xs: number[], alto: number) =>
   xs.flatMap((x, i) => [
-    { nombre: `${2 * i + 1}`, x, y: -2, direccion: "arriba" },
-    { nombre: `${2 * i + 2}`, x, y: 2, direccion: "abajo" },
+    { nombre: `${2 * i + 1}`, x, y: -alto / 2, direccion: "arriba" },
+    { nombre: `${2 * i + 2}`, x, y: alto / 2, direccion: "abajo" },
   ]);
 const polos = (n: number) => Array.from({ length: n }, (_, i) => [`${2 * i + 1}`, `${2 * i + 2}`]);
 
-/** Los de polos numerados: definición, x de sus polos, ancho de la caja y prefijo. */
-const NUMERADOS: [DefinicionSimbolo, number[], number, string][] = [
-  [TERMOMAGNETICA_UNIPOLAR, [0], 2, "Q"],
-  [TERMOMAGNETICA_BIPOLAR, [-1, 1], 4, "Q"],
-  [TERMOMAGNETICA_TRIPOLAR, [-2, 0, 2], 6, "Q"],
-  [TERMOMAGNETICA_TETRAPOLAR, [-3, -1, 1, 3], 8, "Q"],
-  [DIFERENCIAL_BIPOLAR, [-1, 1], 6, "Q"],
-  [DIFERENCIAL_TETRAPOLAR, [-3, -1, 1, 3], 10, "Q"],
-  [GUARDAMOTOR, [-2, 0, 2], 8, "Q"],
-  [SECCIONADOR, [-2, 0, 2], 6, "Q"],
-  [FUSIBLE_TRIPOLAR, [-2, 0, 2], 6, "F"],
-  [TERMICO, [-2, 0, 2], 6, "F"],
+/** Los de polos numerados: definición, x de sus polos, caja (ancho, alto) y prefijo. Los diferenciales miden 6 de alto: el toroide va abajo. */
+const NUMERADOS: [DefinicionSimbolo, number[], number, number, string][] = [
+  [TERMOMAGNETICA_UNIPOLAR, [0], 2, 4, "Q"],
+  [TERMOMAGNETICA_BIPOLAR, [-1, 1], 4, 4, "Q"],
+  [TERMOMAGNETICA_TRIPOLAR, [-2, 0, 2], 6, 4, "Q"],
+  [TERMOMAGNETICA_TETRAPOLAR, [-3, -1, 1, 3], 8, 4, "Q"],
+  [DIFERENCIAL_BIPOLAR, [-1, 1], 6, 6, "Q"],
+  [DIFERENCIAL_TETRAPOLAR, [-3, -1, 1, 3], 10, 6, "Q"],
+  [GUARDAMOTOR, [-2, 0, 2], 8, 4, "Q"],
+  [SECCIONADOR, [-2, 0, 2], 6, 4, "Q"],
+  [FUSIBLE_TRIPOLAR, [-2, 0, 2], 6, 4, "F"],
+  [TERMICO, [-2, 0, 2], 6, 4, "F"],
 ];
 
 /** Los que llevan la «N» del polo de neutro (D8-A), con la x de ese polo. */
@@ -439,12 +439,12 @@ const CON_NEUTRO: [DefinicionSimbolo, number][] = [
 ];
 
 describe("protecciones y seccionador (T35, D13-A)", () => {
-  it.each(NUMERADOS.map(([s, xs, ancho, prefijo]) => [s.tipo, s, xs, ancho, prefijo] as const))(
+  it.each(NUMERADOS.map(([s, xs, ancho, alto, prefijo]) => [s.tipo, s, xs, ancho, alto, prefijo] as const))(
     "%s: bornes 1-2, 3-4… en sus polos, protección en Potencia con prefijo",
-    (_, s, xs, ancho, prefijo) => {
-      expect(s.bornes).toEqual(numerados(xs));
+    (_, s, xs, ancho, alto, prefijo) => {
+      expect(s.bornes).toEqual(numerados(xs, alto));
       expect(polosDe(s)).toEqual(polos(xs.length));
-      expect(s).toMatchObject({ elemento: "proteccion", categoria: "potencia", prefijoEtiqueta: prefijo, tamano: { ancho, alto: 4 } });
+      expect(s).toMatchObject({ elemento: "proteccion", categoria: "potencia", prefijoEtiqueta: prefijo, tamano: { ancho, alto } });
       expect(s.accionamiento).toBeUndefined();
       expect(s.primitivasAccionado).toBeUndefined();
     },
@@ -461,18 +461,18 @@ describe("protecciones y seccionador (T35, D13-A)", () => {
       expect(n(s), s.tipo).toHaveLength(1);
       // A la derecha del conductor del último polo, entre sus dos bornes.
       expect(n(s)[0]!.x, s.tipo).toBeGreaterThan(x);
-      expect(Math.abs(n(s)[0]!.y), s.tipo).toBeLessThan(2);
+      expect(Math.abs(n(s)[0]!.y), s.tipo).toBeLessThan(s.tamano.alto / 2);
     }
     const conN = new Set(CON_NEUTRO.map(([s]) => s));
     for (const [s] of NUMERADOS) if (!conN.has(s)) expect(n(s), s.tipo).toEqual([]);
   });
 
-  it("cada polo queda vertical y a 4 de distancia en las 4 rotaciones, espejado o no", () => {
-    for (const [s] of NUMERADOS) {
+  it("cada polo queda vertical y a su alto de distancia en las 4 rotaciones, espejado o no", () => {
+    for (const [s, , , alto] of NUMERADOS) {
       for (const rotacion of ROTACIONES) {
         for (const espejado of [false, true]) {
           const t = new Map(transformarBornes(s.bornes, { rotacion, espejado }).map((b) => [b.nombre, b]));
-          for (const [a, b] of polosDe(s)) expect(Math.abs(t.get(a)!.x - t.get(b)!.x) + Math.abs(t.get(a)!.y - t.get(b)!.y), s.tipo).toBe(4);
+          for (const [a, b] of polosDe(s)) expect(Math.abs(t.get(a)!.x - t.get(b)!.x) + Math.abs(t.get(a)!.y - t.get(b)!.y), s.tipo).toBe(alto);
         }
       }
     }

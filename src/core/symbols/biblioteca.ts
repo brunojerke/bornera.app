@@ -417,9 +417,9 @@ function polosNumerados(n: number): [string, string][] {
   return Array.from({ length: n }, (_, i) => [`${2 * i + 1}`, `${2 * i + 2}`] as [string, string]);
 }
 
-/** La «N» del polo de neutro (D8-A), a la derecha de la cuchilla del polo en `x`. */
-function marcaNeutro(x: number): Primitiva {
-  return { forma: "texto", x: x + 0.45, y: 0.5, texto: "N", alto: 0.7, alineacion: "izquierda" };
+/** La «N» del polo de neutro (D8-A), a la derecha de la cuchilla del polo en `x`, a la altura `y`. */
+function marcaNeutro(x: number, y = 0.5): Primitiva {
+  return { forma: "texto", x: x + 0.45, y, texto: "N", alto: 0.7, alineacion: "izquierda" };
 }
 
 /** Función de interruptor automático (07-13-05): una cruz sobre el contacto fijo de arriba. */
@@ -457,16 +457,29 @@ export const TERMOMAGNETICA_BIPOLAR = termomagnetica("proteccion.termomagnetica_
 export const TERMOMAGNETICA_TRIPOLAR = termomagnetica("proteccion.termomagnetica_tripolar", "Termomagnética tripolar", POLOS_X);
 export const TERMOMAGNETICA_TETRAPOLAR = termomagnetica("proteccion.termomagnetica_tetrapolar", "Termomagnética tetrapolar", POLOS_4);
 
+/** Las líneas del contacto corridas `dy` en vertical. */
+function corrido(contacto: Primitiva[], dy: number): Primitiva[] {
+  return contacto.flatMap((p) => (p.forma === "linea" ? [linea(p.x1, p.y1 + dy, p.x2, p.y2 + dy)] : []));
+}
+
+/** Y del centro del contacto del diferencial (corrido hacia arriba para dejar lugar al toroide). */
+const Y_CONTACTO_DIFERENCIAL = -1;
+/** Y del medio de la banda del toroide: entre el contacto y los nombres de los bornes de abajo. */
+const Y_TOROIDE = 1.45;
+
 /**
- * Diferencial: NA con enlace, el toroide que abraza los conductores abajo y el
- * bloque «IΔ» a la izquierda, unido al enlace y al toroide. El último polo es
- * el de neutro, con su «N» (D8-A): 3-4 en el bipolar, 7-8 en el tetrapolar.
+ * Diferencial: NA con enlace arriba, el toroide que abraza los conductores
+ * abajo y el bloque «IΔ» a la izquierda, unido al enlace y al toroide. Mide 6
+ * de alto: con 4, la banda pisaba los nombres de los bornes de abajo. El
+ * último polo es el de neutro, con su «N» (D8-A): 3-4 en el bipolar, 7-8 en
+ * el tetrapolar.
  */
 function diferencial(tipo: string, nombre: string, xs: readonly number[]): DefinicionSimbolo {
   const n = xs.length;
   const izq = xs[0]!;
   const der = xs[n - 1]!;
-  /** Bloque de disparo: 0,8 × 0,8 centrado en (cx, 0). */
+  const yc = Y_CONTACTO_DIFERENCIAL;
+  /** Bloque de disparo: 0,8 × 0,8 centrado en (cx, yc). */
   const cx = izq - 1.5;
   return {
     tipo,
@@ -474,20 +487,21 @@ function diferencial(tipo: string, nombre: string, xs: readonly number[]): Defin
     categoria: "potencia",
     elemento: "proteccion",
     prefijoEtiqueta: "Q",
-    tamano: { ancho: 2 * n + 2, alto: 4 },
+    tamano: { ancho: 2 * n + 2, alto: 6 },
     primitivas: [
-      ...multipolar(contactoNA(), xs),
-      ...enlace(xs, X_CUCHILLA_NA, cx + 0.4),
-      { forma: "rectangulo", x: cx - 0.4, y: -0.4, ancho: 0.8, alto: 0.8 },
-      { forma: "texto", x: cx, y: 0, texto: "IΔ", alto: 0.4, alineacion: "centro" },
+      // El contacto de 4 corrido 1 hacia arriba (de −3 a 1) y el conductor hasta el borne de abajo.
+      ...multipolar([...corrido(contactoNA(), yc), linea(0, 2 + yc, 0, 3)], xs),
+      ...discontinua(der + X_CUCHILLA_NA, yc, cx + 0.4, yc),
+      { forma: "rectangulo", x: cx - 0.4, y: yc - 0.4, ancho: 0.8, alto: 0.8 },
+      { forma: "texto", x: cx, y: yc, texto: "IΔ", alto: 0.4, alineacion: "centro" },
       // Toroide: una banda que cruza los conductores, unida al bloque.
-      { forma: "rectangulo", x: izq - 0.5, y: 1.3, ancho: der - izq + 1, alto: 0.35 },
-      linea(cx, 0.4, cx, 1.475),
-      linea(cx, 1.475, izq - 0.5, 1.475),
-      marcaNeutro(der),
+      { forma: "rectangulo", x: izq - 0.5, y: Y_TOROIDE - 0.175, ancho: der - izq + 1, alto: 0.35 },
+      linea(cx, yc + 0.4, cx, Y_TOROIDE),
+      linea(cx, Y_TOROIDE, izq - 0.5, Y_TOROIDE),
+      marcaNeutro(der, yc + 0.5),
     ],
     ladoNombresBornes: "derecha",
-    bornes: bornesPolos(xs),
+    bornes: bornesPolos(xs, 6),
     polos: polosNumerados(n),
   };
 }

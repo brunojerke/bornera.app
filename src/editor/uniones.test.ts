@@ -406,12 +406,13 @@ describe("Uniones de a poco", () => {
   });
 
   it.each([
-    [`semilla ${SEMILLA}, los 7 tipos de 0.1.3`, SEMILLA, TIPOS_ESCENA_013, 150],
-    [`semilla ${SEMILLA_COMPLETA}, los 8 tipos de 0.1.5 con el NC`, SEMILLA_COMPLETA, TIPOS_015, 150],
-    [`semilla ${SEMILLA_T34}, la biblioteca completa de T34`, SEMILLA_T34, SIMBOLOS.slice(0, 10).map((s) => s.tipo), 150],
-    // Los de potencia miden de 6 a 10 de ancho: chocan más y se rechazan más operaciones (T35).
-    [`semilla ${SEMILLA_T35}, la biblioteca completa de T35`, SEMILLA_T35, SIMBOLOS.map((s) => s.tipo), 120],
-  ] as const)("al azar (%s): después de cada operación, igual que recorrer la hoja", (_, semilla, tipos, minimoAceptadas) => {
+    [`semilla ${SEMILLA}, los 7 tipos de 0.1.3`, SEMILLA, TIPOS_ESCENA_013, 25],
+    [`semilla ${SEMILLA_COMPLETA}, los 8 tipos de 0.1.5 con el NC`, SEMILLA_COMPLETA, TIPOS_015, 25],
+    [`semilla ${SEMILLA_T34}, la biblioteca completa de T34`, SEMILLA_T34, SIMBOLOS.slice(0, 10).map((s) => s.tipo), 25],
+    // T35: 24 tipos, y los de potencia miden de 6 a 10 de ancho (chocan y se
+    // rechazan más). Con el doble de documentos hay de todo, con los mismos mínimos.
+    [`semilla ${SEMILLA_T35}, la biblioteca completa de T35`, SEMILLA_T35, SIMBOLOS.map((s) => s.tipo), 50],
+  ] as const)("al azar (%s): después de cada operación, igual que recorrer la hoja", (_, semilla, tipos, documentos) => {
     const azar = generador(semilla);
     const n = {
       aceptadas: 0,
@@ -427,7 +428,7 @@ describe("Uniones de a poco", () => {
       reconexionesRechazadas: 0,
     };
     const colocados = new Set<string>();
-    for (let d = 0; d < 25; d++) {
+    for (let d = 0; d < documentos; d++) {
       const { ed, cascadas } = editorAzar(azar, tipos);
       n.cascadas += cascadas;
       const hoja = ed.documento.hojas[0]!;
@@ -484,7 +485,7 @@ describe("Uniones de a poco", () => {
       }
     }
     // Que la prueba pruebe algo: hay de todo.
-    expect(n.aceptadas, JSON.stringify(n)).toBeGreaterThan(minimoAceptadas);
+    expect(n.aceptadas, JSON.stringify(n)).toBeGreaterThan(150);
     expect(n.rechazadas, JSON.stringify(n)).toBeGreaterThan(10);
     // Desde T26 la cascada se lleva cadenas enteras de T y quedan menos
     // anfitriones para borrar (la segunda semilla da 10 justos).
