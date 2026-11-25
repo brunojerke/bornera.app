@@ -125,7 +125,7 @@ describe("transformarBornes", () => {
       const errores = validarDefinicion({
         tipo: "prueba.asimetrico",
         nombre: "Prueba",
-        categoria: "mando",
+        subgrupo: "bobinas",
         elemento: "bobina",
         prefijoEtiqueta: "K",
         tamano: { ancho: 4, alto: 4 },

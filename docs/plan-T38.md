@@ -33,7 +33,7 @@ Un canvas chico por ítem (D10-A), dibujado una vez; nada en el bucle del lienzo
 - `validar.test.ts`: falta el subgrupo.
 - `miniatura.test.ts`: escala y tope; con contexto falso, un dibujo por símbolo; sin tema/dpr nuevo no redibuja.
 - `fase6.test.ts` y test de `compararB`: fila P1 y su juicio.
-- Humo `t38-paleta.mjs` (1024×600): 32 miniaturas con `title` y `aria-label` = nombre (ajuste 5); sin scroll horizontal; llegar a la Lámpara (scroll y plegado) y colocarla; colocar arrastrando el Motor trifásico; plegar Mando deja ver Potencia; «motor» despliega 2 con Potencia plegada; marca de miniaturas después de la de arranque; el `.brn` guarda tipo y no categoría.
+- Humo `t38-paleta.mjs` (1024×600): 32 miniaturas con `title` y `aria-label` = nombre (ajuste 5); sin scroll horizontal; llegar a la Lámpara (scroll y plegado) y colocarla; colocar arrastrando el Motor trifásico; plegar Mando deja ver Potencia; «motor» despliega los 2 motores y el guardamotor con Potencia plegada; marca de miniaturas después de la de arranque; el `.brn` guarda tipo y no categoría.
 
 ## Medición (fijada antes de medir; no se cambia)
 - `npm test`, `npm run check`, `npm run humo`, `cargo test`.

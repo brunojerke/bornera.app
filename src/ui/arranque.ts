@@ -7,12 +7,26 @@
 export const MARCA_ARRANQUE = "bornera:primer-cuadro-nitido";
 
 let marcada = false;
+/** Lo que espera al primer cuadro nítido (las miniaturas de la paleta, T38). */
+const esperando: (() => void)[] = [];
 
 /** Deja la marca si el cuadro quedó nítido y todavía no se marcó. Un `if` por cuadro. */
 export function marcarArranque(medida: { pendiente: boolean; esperar: number }): void {
   if (marcada || medida.pendiente || medida.esperar > 0) return;
   marcada = true;
   performance.mark(MARCA_ARRANQUE);
+  // Fuera del cuadro que se está dibujando: lo que espera no lo alarga.
+  if (esperando.length > 0) setTimeout(() => esperando.splice(0).forEach((f) => f()), 0);
+}
+
+/**
+ * Corre `f` después del primer cuadro nítido (en otra tarea, no dentro de ese
+ * cuadro); si ya pasó, en la próxima tarea. Las miniaturas de la paleta
+ * esperan acá para no demorar el arranque (fase 6 §4, T38).
+ */
+export function despuesDelArranque(f: () => void): void {
+  if (marcada) setTimeout(f, 0);
+  else esperando.push(f);
 }
 
 /** Los ms desde `timeOrigin` hasta la marca, o null si todavía no hubo cuadro nítido. */

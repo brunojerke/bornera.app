@@ -1,7 +1,7 @@
 // Chequeos de una definición de símbolo que el sistema de tipos no puede hacer.
 // Cada símbolo nuevo debe pasar `validarDefinicion` en su test de bornes.
 
-import { esFuente, esSeguidor, tienePolos, type DefinicionSimbolo, type Direccion, type Primitiva } from "./tipos";
+import { SUBGRUPOS, esFuente, esSeguidor, tienePolos, type DefinicionSimbolo, type Direccion, type Primitiva } from "./tipos";
 
 /** Prefijo de etiqueta válido: solo letras mayúsculas. */
 const PREFIJO_VALIDO = /^[A-Z]+$/;
@@ -47,6 +47,7 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
 
   if (def.tipo.trim() === "") errores.push("El tipo está vacío.");
   if (def.nombre.trim() === "") errores.push("El nombre está vacío.");
+  if (!(SUBGRUPOS as readonly string[]).includes(def.subgrupo)) errores.push(`Falta el subgrupo de la paleta (es "${String(def.subgrupo)}").`);
 
   if (!Number.isInteger(ancho) || !Number.isInteger(alto) || ancho <= 0 || alto <= 0) {
     errores.push(`El tamaño debe ser entero y positivo (es ${ancho}×${alto}).`);

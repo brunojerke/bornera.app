@@ -120,7 +120,7 @@ function pulsacion(xCuchilla: number): Primitiva[] {
 export const PULSADOR_NA: DefinicionSimbolo = {
   tipo: "pulsador.na",
   nombre: "Pulsador NA",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_na",
   accionamiento: "manual_momentaneo",
   prefijoEtiqueta: "S",
@@ -139,7 +139,7 @@ export const PULSADOR_NA: DefinicionSimbolo = {
 export const PULSADOR_NC: DefinicionSimbolo = {
   tipo: "pulsador.nc",
   nombre: "Pulsador NC",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_nc",
   accionamiento: "manual_momentaneo",
   prefijoEtiqueta: "S",
@@ -160,7 +160,7 @@ export const PULSADOR_NC: DefinicionSimbolo = {
 export const BOBINA_CONTACTOR: DefinicionSimbolo = {
   tipo: "contactor.bobina",
   nombre: "Bobina de contactor",
-  categoria: "mando",
+  subgrupo: "bobinas",
   elemento: "bobina",
   prefijoEtiqueta: "K",
   tamano: { ancho: 2, alto: 4 },
@@ -175,7 +175,7 @@ export const BOBINA_CONTACTOR: DefinicionSimbolo = {
 export const CONTACTO_AUXILIAR_NA: DefinicionSimbolo = {
   tipo: "contactor.auxiliar_na",
   nombre: "Contacto auxiliar NA",
-  categoria: "mando",
+  subgrupo: "contactos",
   elemento: "contacto_na",
   accionamiento: "bobina",
   tamano: { ancho: 2, alto: 4 },
@@ -197,7 +197,7 @@ export const CONTACTO_AUXILIAR_NA: DefinicionSimbolo = {
 export const CONTACTO_AUXILIAR_NC: DefinicionSimbolo = {
   tipo: "contactor.auxiliar_nc",
   nombre: "Contacto auxiliar NC",
-  categoria: "mando",
+  subgrupo: "contactos",
   elemento: "contacto_nc",
   accionamiento: "bobina",
   tamano: { ancho: 2, alto: 4 },
@@ -220,7 +220,7 @@ const C_LAMPARA = R_LAMPARA * Math.SQRT1_2;
 export const LAMPARA: DefinicionSimbolo = {
   tipo: "senalizacion.lampara",
   nombre: "Lámpara",
-  categoria: "senalizacion",
+  subgrupo: "senalizacion",
   elemento: "carga",
   prefijoEtiqueta: "H",
   tamano: { ancho: 2, alto: 4 },
@@ -278,7 +278,7 @@ function dibujoFuente(cy = CENTRO_FUENTE, hasta = 1): Primitiva[] {
 export const FASE: DefinicionSimbolo = {
   tipo: "fuente.fase",
   nombre: "Fase (L)",
-  categoria: "fuentes",
+  subgrupo: "alimentacion",
   elemento: "fuente",
   tamano: { ancho: 2, alto: 2 },
   primitivas: dibujoFuente(),
@@ -291,7 +291,7 @@ export const FASE: DefinicionSimbolo = {
 export const NEUTRO: DefinicionSimbolo = {
   tipo: "fuente.neutro",
   nombre: "Neutro (N)",
-  categoria: "fuentes",
+  subgrupo: "alimentacion",
   elemento: "fuente",
   tamano: { ancho: 2, alto: 2 },
   primitivas: dibujoFuente(),
@@ -319,7 +319,7 @@ const POLOS_X = [-2, 0, 2] as const;
 export const FUENTE_TRIFASICA: DefinicionSimbolo = {
   tipo: "fuente.trifasica",
   nombre: "Fuente trifásica",
-  categoria: "fuentes",
+  subgrupo: "fuentes",
   elemento: "fuente",
   tamano: { ancho: 6, alto: 4 },
   primitivas: [
@@ -355,7 +355,7 @@ function enlaceTripolar(xCuchilla: number): Linea[] {
 export const CONTACTOR_PRINCIPAL: DefinicionSimbolo = {
   tipo: "contactor.principal",
   nombre: "Contactos principales",
-  categoria: "potencia",
+  subgrupo: "maniobra",
   elemento: "contacto_na",
   accionamiento: "bobina",
   tamano: { ancho: 6, alto: 4 },
@@ -442,7 +442,7 @@ function termomagnetica(tipo: string, nombre: string, xs: readonly number[]): De
   return {
     tipo,
     nombre,
-    categoria: "potencia",
+    subgrupo: "proteccion",
     elemento: "proteccion",
     prefijoEtiqueta: "Q",
     tamano: { ancho: 2 * n, alto: 4 },
@@ -505,7 +505,7 @@ function diferencial(tipo: string, nombre: string, xs: readonly number[]): Defin
   return {
     tipo,
     nombre,
-    categoria: "potencia",
+    subgrupo: "proteccion",
     elemento: "proteccion",
     prefijoEtiqueta: "Q",
     tamano: { ancho: 2 * n + 2, alto: 6 },
@@ -545,7 +545,7 @@ const DISPAROS_GUARDAMOTOR: Primitiva[] = [
 export const GUARDAMOTOR: DefinicionSimbolo = {
   tipo: "proteccion.guardamotor",
   nombre: "Guardamotor",
-  categoria: "potencia",
+  subgrupo: "proteccion",
   elemento: "proteccion",
   prefijoEtiqueta: "Q",
   tamano: { ancho: 8, alto: 4 },
@@ -571,7 +571,7 @@ const X_MANUAL_SECCIONADOR = -2.75;
 export const SECCIONADOR: DefinicionSimbolo = {
   tipo: "maniobra.seccionador",
   nombre: "Seccionador",
-  categoria: "potencia",
+  subgrupo: "maniobra",
   elemento: "proteccion",
   prefijoEtiqueta: "Q",
   tamano: { ancho: 6, alto: 4 },
@@ -594,7 +594,7 @@ export const SECCIONADOR: DefinicionSimbolo = {
 export const FUSIBLE_TRIPOLAR: DefinicionSimbolo = {
   tipo: "proteccion.fusible_tripolar",
   nombre: "Fusible tripolar",
-  categoria: "potencia",
+  subgrupo: "proteccion",
   elemento: "proteccion",
   prefijoEtiqueta: "F",
   tamano: { ancho: 6, alto: 4 },
@@ -612,7 +612,7 @@ export const FUSIBLE_TRIPOLAR: DefinicionSimbolo = {
 export const TERMICO: DefinicionSimbolo = {
   tipo: "proteccion.termico",
   nombre: "Relé térmico",
-  categoria: "potencia",
+  subgrupo: "proteccion",
   elemento: "proteccion",
   prefijoEtiqueta: "F",
   tamano: { ancho: 6, alto: 4 },
@@ -671,7 +671,7 @@ function cuerpoMotor(cy: number): Primitiva[] {
 export const MOTOR_TRIFASICO: DefinicionSimbolo = {
   tipo: "motor.trifasico",
   nombre: "Motor trifásico",
-  categoria: "potencia",
+  subgrupo: "cargas",
   elemento: "carga",
   prefijoEtiqueta: "M",
   tamano: { ancho: 6, alto: 4 },
@@ -683,7 +683,7 @@ export const MOTOR_TRIFASICO: DefinicionSimbolo = {
 export const MOTOR_ESTRELLA_TRIANGULO: DefinicionSimbolo = {
   tipo: "motor.estrella_triangulo",
   nombre: "Motor estrella-triángulo",
-  categoria: "potencia",
+  subgrupo: "cargas",
   elemento: "carga",
   prefijoEtiqueta: "M",
   tamano: { ancho: 6, alto: 6 },
@@ -702,7 +702,7 @@ export const MOTOR_ESTRELLA_TRIANGULO: DefinicionSimbolo = {
 export const FUENTE_TRIFASICA_N: DefinicionSimbolo = {
   tipo: "fuente.trifasica_n",
   nombre: "Fuente trifásica con neutro",
-  categoria: "fuentes",
+  subgrupo: "fuentes",
   elemento: "fuente",
   tamano: { ancho: 8, alto: 4 },
   primitivas: (() => {
@@ -737,7 +737,7 @@ export const FUENTE_TRIFASICA_N: DefinicionSimbolo = {
 export const TIERRA: DefinicionSimbolo = {
   tipo: "fuente.tierra",
   nombre: "Tierra (PE)",
-  categoria: "fuentes",
+  subgrupo: "fuentes",
   elemento: "fuente",
   tamano: { ancho: 2, alto: 2 },
   primitivas: [linea(0, -1, 0, 0), linea(-0.8, 0, 0.8, 0), linea(-0.5, 0.35, 0.5, 0.35), linea(-0.2, 0.7, 0.2, 0.7)],
@@ -812,7 +812,7 @@ function dosBornes(arriba: string, abajo: string): DefinicionSimbolo["bornes"] {
 export const SELECTOR: DefinicionSimbolo = {
   tipo: "mando.selector",
   nombre: "Selector NA",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_na",
   accionamiento: "manual_enclavado",
   prefijoEtiqueta: "S",
@@ -826,7 +826,7 @@ export const SELECTOR: DefinicionSimbolo = {
 export const SETA: DefinicionSimbolo = {
   tipo: "mando.seta",
   nombre: "Seta NC",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_nc",
   accionamiento: "manual_enclavado",
   prefijoEtiqueta: "S",
@@ -840,7 +840,7 @@ export const SETA: DefinicionSimbolo = {
 export const FINAL_NA: DefinicionSimbolo = {
   tipo: "mando.final_na",
   nombre: "Final de carrera NA",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_na",
   accionamiento: "manual_momentaneo",
   prefijoEtiqueta: "S",
@@ -854,7 +854,7 @@ export const FINAL_NA: DefinicionSimbolo = {
 export const FINAL_NC: DefinicionSimbolo = {
   tipo: "mando.final_nc",
   nombre: "Final de carrera NC",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_nc",
   accionamiento: "manual_momentaneo",
   prefijoEtiqueta: "S",
@@ -868,7 +868,7 @@ export const FINAL_NC: DefinicionSimbolo = {
 export const TERMICO_NC: DefinicionSimbolo = {
   tipo: "termico.contacto_nc",
   nombre: "Contacto del térmico NC",
-  categoria: "mando",
+  subgrupo: "contactos",
   elemento: "contacto_nc",
   accionamiento: "termico",
   tamano: { ancho: 4, alto: 4 },
@@ -881,7 +881,7 @@ export const TERMICO_NC: DefinicionSimbolo = {
 export const TERMICO_NA: DefinicionSimbolo = {
   tipo: "termico.contacto_na",
   nombre: "Contacto del térmico NA",
-  categoria: "mando",
+  subgrupo: "contactos",
   elemento: "contacto_na",
   accionamiento: "termico",
   tamano: { ancho: 4, alto: 4 },
@@ -894,7 +894,7 @@ export const TERMICO_NA: DefinicionSimbolo = {
 export const FUSIBLE: DefinicionSimbolo = {
   tipo: "proteccion.fusible",
   nombre: "Fusible",
-  categoria: "mando",
+  subgrupo: "alimentacion",
   elemento: "proteccion",
   prefijoEtiqueta: "F",
   tamano: { ancho: 2, alto: 4 },
@@ -907,7 +907,7 @@ export const FUSIBLE: DefinicionSimbolo = {
 export const BOCINA: DefinicionSimbolo = {
   tipo: "senalizacion.bocina",
   nombre: "Bocina",
-  categoria: "senalizacion",
+  subgrupo: "senalizacion",
   elemento: "carga",
   prefijoEtiqueta: "H",
   tamano: { ancho: 2, alto: 4 },

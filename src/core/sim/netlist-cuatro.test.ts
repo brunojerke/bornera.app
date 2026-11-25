@@ -9,7 +9,7 @@ import type { DefinicionSimbolo } from "../symbols";
 const CUATRO: DefinicionSimbolo = {
   tipo: "fuente.trifasica_n",
   nombre: "Fuente trifásica con neutro (prueba)",
-  categoria: "fuentes",
+  subgrupo: "fuentes",
   elemento: "fuente",
   tamano: { ancho: 8, alto: 2 },
   primitivas: [],

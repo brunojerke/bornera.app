@@ -89,7 +89,24 @@ export type Comportamiento =
 
 // ── Definición ─────────────────────────────────────────────────────────────
 
-export type Categoria = "fuentes" | "mando" | "potencia" | "senalizacion";
+/**
+ * Lugar del símbolo en la paleta (fase 6, T38, D26-A). El grupo (Mando o
+ * Potencia), los nombres visibles y el orden están en `ui/paleta.ts`. No va
+ * al .brn: el archivo guarda el tipo.
+ */
+export const SUBGRUPOS = [
+  "alimentacion",
+  "entradas",
+  "contactos",
+  "bobinas",
+  "senalizacion",
+  "proteccion",
+  "maniobra",
+  "cargas",
+  "fuentes",
+] as const;
+
+export type Subgrupo = (typeof SUBGRUPOS)[number];
 
 export type Rotacion = 0 | 90 | 180 | 270;
 
@@ -105,7 +122,8 @@ export type DefinicionSimbolo = Comportamiento & {
   tipo: string;
   /** Texto visible, con ortografía correcta: "Bobina de contactor". */
   nombre: string;
-  categoria: Categoria;
+  /** Subgrupo de la paleta (`SUBGRUPOS`); el grupo sale de él. */
+  subgrupo: Subgrupo;
   /** Caja del símbolo, centrada en el origen (0,0), que también es el pivote de rotación. */
   tamano: { ancho: number; alto: number };
   primitivas: Primitiva[];

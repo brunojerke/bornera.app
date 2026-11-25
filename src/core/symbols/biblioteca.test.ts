@@ -156,7 +156,7 @@ describe("biblioteca de símbolos", () => {
     expect(CONTACTO_AUXILIAR_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "bobina" });
     expect(CONTACTO_AUXILIAR_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "bobina" });
     expect(BOBINA_CONTACTOR.elemento).toBe("bobina");
-    expect(LAMPARA).toMatchObject({ elemento: "carga", categoria: "senalizacion" });
+    expect(LAMPARA).toMatchObject({ elemento: "carga", subgrupo: "senalizacion" });
   });
 });
 
@@ -297,7 +297,7 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
 
 describe("contacto auxiliar NC (T17b)", () => {
   it("es contactor.auxiliar_nc, va en Mando justo después del NA y entra sin prefijo", () => {
-    expect(CONTACTO_AUXILIAR_NC).toMatchObject({ tipo: "contactor.auxiliar_nc", nombre: "Contacto auxiliar NC", categoria: "mando" });
+    expect(CONTACTO_AUXILIAR_NC).toMatchObject({ tipo: "contactor.auxiliar_nc", nombre: "Contacto auxiliar NC", subgrupo: "contactos" });
     expect(CONTACTO_AUXILIAR_NC.prefijoEtiqueta).toBeUndefined();
     expect(CONTACTO_AUXILIAR_NC.etiquetaInicial).toBeUndefined();
     expect(buscarSimbolo("contactor.auxiliar_nc")).toBe(CONTACTO_AUXILIAR_NC);
@@ -363,7 +363,7 @@ describe("alimentaciones: fase y neutro", () => {
     [FASE, "L"],
     [NEUTRO, "N"],
   ] as const)("%# es una fuente, va en Fuentes y se coloca con la etiqueta %s", (s, etiqueta) => {
-    expect(s).toMatchObject({ elemento: "fuente", categoria: "fuentes", etiquetaInicial: etiqueta });
+    expect(s).toMatchObject({ elemento: "fuente", subgrupo: "alimentacion", etiquetaInicial: etiqueta });
     // Su nombre visible es la etiqueta: el del borne no se dibuja.
     expect(s.mostrarNombresBornes).toBe(false);
   });
@@ -385,7 +385,7 @@ describe("fuente trifásica (T34)", () => {
       { nombre: "L2", x: 0, y: 2, direccion: "abajo" },
       { nombre: "L3", x: 2, y: 2, direccion: "abajo" },
     ]);
-    expect(FUENTE_TRIFASICA).toMatchObject({ tipo: "fuente.trifasica", elemento: "fuente", categoria: "fuentes", tamano: { ancho: 6, alto: 4 } });
+    expect(FUENTE_TRIFASICA).toMatchObject({ tipo: "fuente.trifasica", elemento: "fuente", subgrupo: "fuentes", tamano: { ancho: 6, alto: 4 } });
     expect(FUENTE_TRIFASICA.etiquetaInicial).toBeUndefined();
     expect(FUENTE_TRIFASICA.prefijoEtiqueta).toBeUndefined();
     expect(buscarSimbolo("fuente.trifasica")).toBe(FUENTE_TRIFASICA);
@@ -410,7 +410,7 @@ describe("contactos principales (T34)", () => {
   });
 
   it("tres polos NA que siguen a la bobina, en Potencia, sin prefijo", () => {
-    expect(CONTACTOR_PRINCIPAL).toMatchObject({ tipo: "contactor.principal", elemento: "contacto_na", accionamiento: "bobina", categoria: "potencia" });
+    expect(CONTACTOR_PRINCIPAL).toMatchObject({ tipo: "contactor.principal", elemento: "contacto_na", accionamiento: "bobina", subgrupo: "maniobra" });
     expect(polosDe(CONTACTOR_PRINCIPAL)).toEqual([
       ["1", "2"],
       ["3", "4"],
@@ -504,7 +504,7 @@ describe("protecciones y seccionador (T35, D13-A)", () => {
     (_, s, xs, ancho, alto, prefijo) => {
       expect(s.bornes).toEqual(numerados(xs, alto));
       expect(polosDe(s)).toEqual(polos(xs.length));
-      expect(s).toMatchObject({ elemento: "proteccion", categoria: "potencia", prefijoEtiqueta: prefijo, tamano: { ancho, alto } });
+      expect(s).toMatchObject({ elemento: "proteccion", subgrupo: s === SECCIONADOR ? "maniobra" : "proteccion", prefijoEtiqueta: prefijo, tamano: { ancho, alto } });
       expect(s.accionamiento).toBeUndefined();
     },
   );
@@ -562,7 +562,7 @@ describe("motores (T35, D14-A)", () => {
       { nombre: "V", x: 0, y: -2, direccion: "arriba" },
       { nombre: "W", x: 2, y: -2, direccion: "arriba" },
     ]);
-    expect(MOTOR_TRIFASICO).toMatchObject({ tipo: "motor.trifasico", elemento: "carga", categoria: "potencia", prefijoEtiqueta: "M", tamano: { ancho: 6, alto: 4 } });
+    expect(MOTOR_TRIFASICO).toMatchObject({ tipo: "motor.trifasico", elemento: "carga", subgrupo: "cargas", prefijoEtiqueta: "M", tamano: { ancho: 6, alto: 4 } });
   });
 
   it("estrella-triángulo: U1, V1, W1 arriba y U2, V2, W2 abajo; carga con prefijo M", () => {
@@ -574,7 +574,7 @@ describe("motores (T35, D14-A)", () => {
       { nombre: "V2", x: 0, y: 3, direccion: "abajo" },
       { nombre: "W2", x: 2, y: 3, direccion: "abajo" },
     ]);
-    expect(MOTOR_ESTRELLA_TRIANGULO).toMatchObject({ elemento: "carga", categoria: "potencia", prefijoEtiqueta: "M", tamano: { ancho: 6, alto: 6 } });
+    expect(MOTOR_ESTRELLA_TRIANGULO).toMatchObject({ elemento: "carga", subgrupo: "cargas", prefijoEtiqueta: "M", tamano: { ancho: 6, alto: 6 } });
   });
 
   it("no tienen polos y dibujan «M» y «3~» en un círculo", () => {
@@ -594,7 +594,7 @@ describe("fuente trifásica con neutro y tierra (T35)", () => {
       { nombre: "L3", x: 1, y: 2, direccion: "abajo" },
       { nombre: "N", x: 3, y: 2, direccion: "abajo" },
     ]);
-    expect(FUENTE_TRIFASICA_N).toMatchObject({ tipo: "fuente.trifasica_n", elemento: "fuente", categoria: "fuentes", tamano: { ancho: 8, alto: 4 } });
+    expect(FUENTE_TRIFASICA_N).toMatchObject({ tipo: "fuente.trifasica_n", elemento: "fuente", subgrupo: "fuentes", tamano: { ancho: 8, alto: 4 } });
     expect(FUENTE_TRIFASICA_N.etiquetaInicial).toBeUndefined();
     expect(FUENTE_TRIFASICA_N.prefijoEtiqueta).toBeUndefined();
     expect(nombraRed(FUENTE_TRIFASICA_N)).toBe(false);
@@ -608,28 +608,28 @@ describe("fuente trifásica con neutro y tierra (T35)", () => {
 
   it("tierra: un borne PE arriba, en Fuentes, entra «PE» y no da prefijo", () => {
     expect(TIERRA.bornes).toEqual([{ nombre: "PE", x: 0, y: -1, direccion: "arriba" }]);
-    expect(TIERRA).toMatchObject({ tipo: "fuente.tierra", elemento: "fuente", categoria: "fuentes", etiquetaInicial: "PE", tamano: { ancho: 2, alto: 2 } });
+    expect(TIERRA).toMatchObject({ tipo: "fuente.tierra", elemento: "fuente", subgrupo: "fuentes", etiquetaInicial: "PE", tamano: { ancho: 2, alto: 2 } });
     expect(TIERRA.prefijoEtiqueta).toBeUndefined();
   });
 });
 
 describe("mando (T36)", () => {
   it("selector y seta enclavados; finales como el pulsador; 95-96 y 97-98 siguen al térmico", () => {
-    expect(SELECTOR).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_enclavado", categoria: "mando" });
-    expect(SETA).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_enclavado", categoria: "mando" });
-    expect(FINAL_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_momentaneo", categoria: "mando" });
-    expect(FINAL_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_momentaneo", categoria: "mando" });
-    expect(TERMICO_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "termico", categoria: "mando" });
-    expect(TERMICO_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "termico", categoria: "mando" });
+    expect(SELECTOR).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_enclavado", subgrupo: "entradas" });
+    expect(SETA).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_enclavado", subgrupo: "entradas" });
+    expect(FINAL_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_momentaneo", subgrupo: "entradas" });
+    expect(FINAL_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_momentaneo", subgrupo: "entradas" });
+    expect(TERMICO_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "termico", subgrupo: "contactos" });
+    expect(TERMICO_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "termico", subgrupo: "contactos" });
     expect(TERMICO_NC.prefijoEtiqueta).toBeUndefined();
     expect(TERMICO_NA.prefijoEtiqueta).toBeUndefined();
   });
 
   it("el fusible de mando es una protección de un polo (1-2); la bocina, una carga en Señalización", () => {
-    expect(FUSIBLE).toMatchObject({ elemento: "proteccion", categoria: "mando", prefijoEtiqueta: "F", tamano: { ancho: 2, alto: 4 } });
+    expect(FUSIBLE).toMatchObject({ elemento: "proteccion", subgrupo: "alimentacion", prefijoEtiqueta: "F", tamano: { ancho: 2, alto: 4 } });
     expect(FUSIBLE.polos).toBeUndefined();
     expect(polosDe(FUSIBLE)).toEqual([["1", "2"]]);
-    expect(BOCINA).toMatchObject({ elemento: "carga", categoria: "senalizacion", prefijoEtiqueta: "H", tamano: { ancho: 2, alto: 4 } });
+    expect(BOCINA).toMatchObject({ elemento: "carga", subgrupo: "senalizacion", prefijoEtiqueta: "H", tamano: { ancho: 2, alto: 4 } });
     // Encendida se rellena como la lámpara: tiene un cuerpo (rectángulo).
     expect(BOCINA.primitivas.some((p) => p.forma === "rectangulo")).toBe(true);
   });

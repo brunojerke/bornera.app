@@ -151,7 +151,7 @@ import type { Herramienta, Resultado } from "./herramientas/tipos";
 export const SIMBOLO_DESCONOCIDO: DefinicionSimbolo = {
   tipo: "desconocido",
   nombre: "Símbolo desconocido",
-  categoria: "mando",
+  subgrupo: "cargas",
   elemento: "carga",
   tamano: { ancho: 2, alto: 2 },
   primitivas: [

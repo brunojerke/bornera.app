@@ -6,7 +6,7 @@ import { validarDefinicion } from "./validar";
 const PULSADOR: DefinicionSimbolo = {
   tipo: "prueba.pulsador_na",
   nombre: "Pulsador NA de prueba",
-  categoria: "mando",
+  subgrupo: "entradas",
   elemento: "contacto_na",
   accionamiento: "manual_momentaneo",
   prefijoEtiqueta: "S",
@@ -30,6 +30,12 @@ function conBornes(bornes: DefinicionSimbolo["bornes"]): DefinicionSimbolo {
 describe("validarDefinicion", () => {
   it("acepta una definición correcta", () => {
     expect(validarDefinicion(PULSADOR)).toEqual([]);
+  });
+
+  it("exige el subgrupo de la paleta (T38, D26-A)", () => {
+    const { subgrupo: _, ...sin } = PULSADOR;
+    expect(validarDefinicion(sin as DefinicionSimbolo)).toEqual(['Falta el subgrupo de la paleta (es "undefined").']);
+    expect(validarDefinicion({ ...PULSADOR, subgrupo: "mando" as never })).toEqual(['Falta el subgrupo de la paleta (es "mando").']);
   });
 
   it("rechaza bornes fuera de la grilla", () => {
@@ -205,9 +211,9 @@ export const comprobacionesDeTipos: DefinicionSimbolo[] = [
   // Contacto 95-96 del térmico.
   { ...PULSADOR, elemento: "contacto_nc", accionamiento: "termico" },
   // @ts-expect-error un contacto necesita accionamiento
-  { tipo: "x", nombre: "x", categoria: "mando", elemento: "contacto_na", tamano: { ancho: 2, alto: 2 }, primitivas: [], bornes: [] },
+  { tipo: "x", nombre: "x", subgrupo: "entradas", elemento: "contacto_na", tamano: { ancho: 2, alto: 2 }, primitivas: [], bornes: [] },
   // @ts-expect-error una bobina no lleva accionamiento
-  { tipo: "x", nombre: "x", categoria: "mando", elemento: "bobina", accionamiento: "bobina", tamano: { ancho: 2, alto: 2 }, primitivas: [], bornes: [] },
+  { tipo: "x", nombre: "x", subgrupo: "entradas", elemento: "bobina", accionamiento: "bobina", tamano: { ancho: 2, alto: 2 }, primitivas: [], bornes: [] },
 ];
 
 describe("validarDefinicion: polos (T34)", () => {
@@ -215,7 +221,7 @@ describe("validarDefinicion: polos (T34)", () => {
   const TRIPOLAR: DefinicionSimbolo = {
     tipo: "prueba.tripolar",
     nombre: "Tripolar de prueba",
-    categoria: "potencia",
+    subgrupo: "maniobra",
     elemento: "contacto_na",
     accionamiento: "bobina",
     tamano: { ancho: 6, alto: 4 },
