@@ -198,3 +198,93 @@ describe("Editor: entrar y salir de Simular (E-A)", () => {
     expect(ed.simulacion).toBeNull();
   });
 });
+
+// ── Mando (T36) ────────────────────────────────────────────────────────────
+
+/** L – selector S1 – H1 – N, L – seta S2 – H2 – N, L – final S3 – H3 – N, L – Q1 – F1 – 95-96 F2 – H4 – N, con F2. */
+function mandoT36(): Hoja {
+  const comps: [string, string, string][] = [
+    ["f", "fuente.fase", "L"],
+    ["n", "fuente.neutro", "N"],
+    ["sel", "mando.selector", "S1"],
+    ["seta", "mando.seta", "S2"],
+    ["fin", "mando.final_na", "S3"],
+    ["q", "proteccion.termomagnetica_unipolar", "Q1"],
+    ["fu", "proteccion.fusible", "F1"],
+    ["t", "proteccion.termico", "F2"],
+    ["c95", "termico.contacto_nc", "F2"],
+    ["h1", "senalizacion.lampara", "H1"],
+    ["h2", "senalizacion.lampara", "H2"],
+    ["h3", "senalizacion.bocina", "H3"],
+    ["h4", "senalizacion.lampara", "H4"],
+  ];
+  const nodos = [
+    ["f:L", "sel:13", "seta:11", "fin:13", "q:1"],
+    ["sel:14", "h1:X1"],
+    ["seta:12", "h2:X1"],
+    ["fin:14", "h3:X1"],
+    ["q:2", "fu:1"],
+    ["fu:2", "c95:95"],
+    ["c95:96", "h4:X1"],
+    ["h1:X2", "h2:X2", "h3:X2", "h4:X2", "n:N"],
+  ];
+  const componentes = comps.map(([id, tipo, etiqueta]) => ({ id, tipo, x: 0, y: 0, rot: 0 as const, espejado: false, etiqueta, params: {} }));
+  const extremo = (t: string) => {
+    const [comp, borne] = t.split(":") as [string, string];
+    return { tipo: "borne" as const, comp, borne };
+  };
+  const cables = nodos.flatMap((nodo, j) => nodo.slice(1).map((x, i) => ({ id: `w${j}_${i}`, desde: extremo(nodo[i]!), hasta: extremo(x), codos: [] })));
+  return { nombre: "Hoja 1", componentes, cables };
+}
+
+describe("SesionSimulacion: mando (T36, D7-A)", () => {
+  it("un clic sin Mayús acciona el selector y queda (sin mantener); otro clic lo libera", () => {
+    const s = sesion(mandoT36());
+    expect(encendida(s.sim, "h1")).toBe(false);
+    expect(s.presionar("sel", false)).toBe(true);
+    expect([s.mantenido, s.fijados, encendida(s.sim, "h1")]).toEqual([null, ["sel"], true]);
+    expect(s.soltarBoton()).toBe(false);
+    expect(encendida(s.sim, "h1")).toBe(true);
+    s.presionar("sel", false);
+    expect([s.fijados, encendida(s.sim, "h1")]).toEqual([[], false]);
+  });
+
+  it("la seta: un clic la acciona y abre su NC (H2 se apaga); otro clic la libera (ajuste 3); con Mayús, igual", () => {
+    const s = sesion(mandoT36());
+    expect(encendida(s.sim, "h2")).toBe(true);
+    s.presionar("seta", false);
+    s.soltarBoton();
+    expect([s.fijados, encendida(s.sim, "h2")]).toEqual([["seta"], false]);
+    s.presionar("seta", true);
+    expect([s.fijados, encendida(s.sim, "h2")]).toEqual([[], true]);
+  });
+
+  it("el final de carrera, como el pulsador: se mantiene con el botón y, con Mayús, se fija", () => {
+    const s = sesion(mandoT36());
+    s.presionar("fin", false);
+    expect([s.mantenido, encendida(s.sim, "h3")]).toEqual(["fin", true]);
+    s.soltarBoton();
+    expect(encendida(s.sim, "h3")).toBe(false);
+    s.presionar("fin", true);
+    s.soltarBoton();
+    expect([s.fijados, encendida(s.sim, "h3")]).toEqual([["fin"], true]);
+  });
+
+  it("Q1, F1, F2 y su 95-96 no responden al clic; conducen y H4 queda encendida", () => {
+    const s = sesion(mandoT36());
+    for (const id of ["q", "fu", "t", "c95"]) {
+      expect(s.esPulsable(id), id).toBe(false);
+      expect(s.presionar(id, false), id).toBe(false);
+      expect(s.presionar(id, true), id).toBe(false);
+    }
+    expect([s.mantenido, s.fijados, encendida(s.sim, "h4")]).toEqual([null, [], true]);
+  });
+
+  it("perder la ventana no libera los enclavados", () => {
+    const s = sesion(mandoT36());
+    s.presionar("sel", false);
+    s.presionar("seta", false);
+    expect(s.perderVentana()).toBe(false);
+    expect(s.fijados).toEqual(["sel", "seta"]);
+  });
+});

@@ -223,3 +223,55 @@ describe("Editor: dibujo del estado (T33)", () => {
     expect(d.clases[p.netlist.redDeBorne.get("k")!.get("3")!]).toBe(CLASE_FASE);
   });
 });
+
+describe("dibujoDe: mando y protecciones (T36)", () => {
+  /** L – Q1 – F2 (polo 1-2 del térmico) – 95-96 – H1 – N y – 97-98 – H2 – N. */
+  function hojaT36() {
+    const comps: [string, string, string][] = [
+      ["f", "fuente.fase", "L"],
+      ["n", "fuente.neutro", "N"],
+      ["q", "proteccion.termomagnetica_unipolar", "Q1"],
+      ["t", "proteccion.termico", "F2"],
+      ["c95", "termico.contacto_nc", "F2"],
+      ["c97", "termico.contacto_na", "F2"],
+      ["h1", "senalizacion.lampara", "H1"],
+      ["h2", "senalizacion.bocina", "H2"],
+    ];
+    const nodos = [
+      ["f:L", "q:1"],
+      ["q:2", "t:1"],
+      ["t:2", "c95:95", "c97:97"],
+      ["c95:96", "h1:X1"],
+      ["c97:98", "h2:X1"],
+      ["h1:X2", "h2:X2", "n:N"],
+    ];
+    const extremo = (x: string) => {
+      const [comp, borne] = x.split(":") as [string, string];
+      return { tipo: "borne" as const, comp, borne };
+    };
+    return {
+      nombre: "Hoja 1",
+      componentes: comps.map(([id, tipo, etiqueta]) => ({ id, tipo, x: 0, y: 0, rot: 0 as const, espejado: false, etiqueta, params: {} })),
+      cables: nodos.flatMap((nodo, j) => nodo.slice(1).map((x, i) => ({ id: `w${j}_${i}`, desde: extremo(nodo[i]!), hasta: extremo(x), codos: [] }))),
+    };
+  }
+
+  it("95-96 y 97-98 se dibujan en su estado real, el de reposo: 95-96 cerrado, 97-98 abierto (ajuste 1)", () => {
+    const e = motor.entrarSimulacion(hojaT36());
+    if (!e.ok) throw new Error("No entra");
+    const d = dibujoDe(e.sim);
+    expect(d.componentes.get("c95")?.accionado ?? false).toBe(false);
+    expect(d.componentes.get("c97")?.accionado ?? false).toBe(false);
+    // H1 encendida por el 95-96 cerrado; la bocina H2 apagada por el 97-98 abierto.
+    expect(d.componentes.get("h1")?.encendido).toBe(true);
+    expect(d.componentes.get("h2")?.encendido ?? false).toBe(false);
+  });
+
+  it("Q1 y F2 conducen: salen accionados (Q1 se dibuja cerrado, D20-B; F2 no tiene dibujo accionado y se ve igual)", () => {
+    const e = motor.entrarSimulacion(hojaT36());
+    if (!e.ok) throw new Error("No entra");
+    const d = dibujoDe(e.sim);
+    expect(d.componentes.get("q")?.accionado).toBe(true);
+    expect(d.componentes.get("t")?.accionado).toBe(true);
+  });
+});

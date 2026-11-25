@@ -12,7 +12,7 @@ describe("agruparSimbolos", () => {
     expect(grupos[2]!.simbolos.map((s) => s.tipo)).toEqual(["contactor.principal", "proteccion.termomagnetica_unipolar", "proteccion.termomagnetica_bipolar", "proteccion.termomagnetica_tripolar", "proteccion.termomagnetica_tetrapolar", "proteccion.diferencial_bipolar", "proteccion.diferencial_tetrapolar", "proteccion.guardamotor", "maniobra.seccionador", "proteccion.fusible_tripolar", "proteccion.termico", "motor.trifasico", "motor.estrella_triangulo"]);
   });
 
-  it("en Mando, el auxiliar NC sale justo después del NA (T17b)", () => {
+  it("en Mando, el auxiliar NC sale justo después del NA (T17b); después, los de T36", () => {
     const mando = agruparSimbolos(SIMBOLOS).find((g) => g.nombre === "Mando")!;
     expect(mando.simbolos.map((s) => s.nombre)).toEqual([
       "Pulsador NA",
@@ -20,6 +20,27 @@ describe("agruparSimbolos", () => {
       "Bobina de contactor",
       "Contacto auxiliar NA",
       "Contacto auxiliar NC",
+      "Selector NA",
+      "Seta NC",
+      "Final de carrera NA",
+      "Final de carrera NC",
+      "Contacto del térmico NC",
+      "Contacto del térmico NA",
+      "Fusible",
+    ]);
+  });
+
+  it("en Señalización, la bocina después de la lámpara (T36)", () => {
+    const s = agruparSimbolos(SIMBOLOS).find((g) => g.nombre === "Señalización")!;
+    expect(s.simbolos.map((x) => x.nombre)).toEqual(["Lámpara", "Bocina"]);
+  });
+
+  it("buscar «termo» deja solo las 4 termomagnéticas (fase 6, sección 5)", () => {
+    expect(agruparSimbolos(SIMBOLOS, "termo").flatMap((g) => g.simbolos.map((s) => s.tipo))).toEqual([
+      "proteccion.termomagnetica_unipolar",
+      "proteccion.termomagnetica_bipolar",
+      "proteccion.termomagnetica_tripolar",
+      "proteccion.termomagnetica_tetrapolar",
     ]);
   });
 

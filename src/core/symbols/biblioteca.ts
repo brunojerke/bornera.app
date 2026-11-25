@@ -376,8 +376,8 @@ export const CONTACTOR_PRINCIPAL: DefinicionSimbolo = {
 
 // ── Potencia (T35) ─────────────────────────────────────────────────────────
 // Protecciones y seccionador (D13-A): `elemento: "proteccion"` con un polo por
-// par de bornes (1-2, 3-4…). En T35 no conducen, como en la fase 5; T36 las
-// hace conducir siempre (D6-A) y 6b suma abrir y disparar. El polo N de las
+// par de bornes (1-2, 3-4…). Desde T36 conducen siempre (D6-A, D17-A) y 6b
+// suma abrir y disparar. El polo N de las
 // tetrapolares y de los diferenciales va con una «N» dibujada (D8-A).
 // Motores (D14-A): `elemento: "carga"` con 3 o 6 bornes. La netlist arma
 // cargas solo de 2 bornes, así que en 6a no conducen ni son carga.
@@ -431,6 +431,11 @@ const BARRA_SECCIONADOR: Linea[] = [linea(-0.35, -1, 0.35, -1)];
 /** X de la cuchilla del NA en y = 0: ahí se engancha el enlace. */
 const X_CUCHILLA_NA = xEnCentro(PUNTA_NA, BISAGRA_Y);
 
+// Dibujo cerrado (T36, D20-B): las protecciones conducen siempre en 6a y en
+// Simular salen accionadas (el NA cerrado, como el principal de T34). Lo
+// llevan las de cuchilla; el fusible y el térmico se ven igual en los dos
+// estados. Los textos («N», «IΔ», «I>») van iguales en los dos dibujos.
+
 /** Termomagnética de `xs.length` polos: NA con la cruz de automático y enlace; la 4P lleva la «N» en 7-8. */
 function termomagnetica(tipo: string, nombre: string, xs: readonly number[]): DefinicionSimbolo {
   const n = xs.length;
@@ -444,6 +449,11 @@ function termomagnetica(tipo: string, nombre: string, xs: readonly number[]): De
     primitivas: [
       ...multipolar([...contactoNA(), ...CRUZ_AUTOMATICO], xs),
       ...(n > 1 ? enlace(xs, X_CUCHILLA_NA) : []),
+      ...(n === 4 ? [marcaNeutro(xs[3]!)] : []),
+    ],
+    primitivasAccionado: [
+      ...multipolar([...contactoNACerrado(), ...CRUZ_AUTOMATICO], xs),
+      ...(n > 1 ? enlace(xs, 0) : []),
       ...(n === 4 ? [marcaNeutro(xs[3]!)] : []),
     ],
     ladoNombresBornes: "derecha",
@@ -481,6 +491,17 @@ function diferencial(tipo: string, nombre: string, xs: readonly number[]): Defin
   const yc = Y_CONTACTO_DIFERENCIAL;
   /** Bloque de disparo: 0,8 × 0,8 centrado en (cx, yc). */
   const cx = izq - 1.5;
+  /** Todo menos el contacto: el bloque, el toroide y la «N», iguales en los dos dibujos. */
+  const resto = (xCuchilla: number): Primitiva[] => [
+    ...discontinua(der + xCuchilla, yc, cx + 0.4, yc),
+    { forma: "rectangulo", x: cx - 0.4, y: yc - 0.4, ancho: 0.8, alto: 0.8 },
+    { forma: "texto", x: cx, y: yc, texto: "IΔ", alto: 0.4, alineacion: "centro" },
+    // Toroide: una banda que cruza los conductores, unida al bloque.
+    { forma: "rectangulo", x: izq - 0.5, y: Y_TOROIDE - 0.175, ancho: der - izq + 1, alto: 0.35 },
+    linea(cx, yc + 0.4, cx, Y_TOROIDE),
+    linea(cx, Y_TOROIDE, izq - 0.5, Y_TOROIDE),
+    marcaNeutro(der, yc + 0.5),
+  ];
   return {
     tipo,
     nombre,
@@ -491,15 +512,9 @@ function diferencial(tipo: string, nombre: string, xs: readonly number[]): Defin
     primitivas: [
       // El contacto de 4 corrido 1 hacia arriba (de −3 a 1) y el conductor hasta el borne de abajo.
       ...multipolar([...corrido(contactoNA(), yc), linea(0, 2 + yc, 0, 3)], xs),
-      ...discontinua(der + X_CUCHILLA_NA, yc, cx + 0.4, yc),
-      { forma: "rectangulo", x: cx - 0.4, y: yc - 0.4, ancho: 0.8, alto: 0.8 },
-      { forma: "texto", x: cx, y: yc, texto: "IΔ", alto: 0.4, alineacion: "centro" },
-      // Toroide: una banda que cruza los conductores, unida al bloque.
-      { forma: "rectangulo", x: izq - 0.5, y: Y_TOROIDE - 0.175, ancho: der - izq + 1, alto: 0.35 },
-      linea(cx, yc + 0.4, cx, Y_TOROIDE),
-      linea(cx, Y_TOROIDE, izq - 0.5, Y_TOROIDE),
-      marcaNeutro(der, yc + 0.5),
+      ...resto(X_CUCHILLA_NA),
     ],
+    primitivasAccionado: [...multipolar([...corrido(contactoNACerrado(), yc), linea(0, 2 + yc, 0, 3)], xs), ...resto(0)],
     ladoNombresBornes: "derecha",
     bornes: bornesPolos(xs, 6),
     polos: polosNumerados(n),
@@ -511,6 +526,17 @@ export const DIFERENCIAL_TETRAPOLAR = diferencial("proteccion.diferencial_tetrap
 
 /** X del bloque de disparo del guardamotor (térmico arriba, magnético abajo). */
 const X_DISPARO_GUARDAMOTOR = -3.5;
+
+/** Los disparos del guardamotor, iguales en los dos dibujos. */
+const DISPAROS_GUARDAMOTOR: Primitiva[] = [
+  linea(X_DISPARO_GUARDAMOTOR, -0.5, X_DISPARO_GUARDAMOTOR, 0.5),
+  { forma: "rectangulo", x: X_DISPARO_GUARDAMOTOR - 0.4, y: -1.3, ancho: 0.8, alto: 0.8 },
+  linea(X_DISPARO_GUARDAMOTOR - 0.25, -0.65, X_DISPARO_GUARDAMOTOR, -0.65),
+  linea(X_DISPARO_GUARDAMOTOR, -0.65, X_DISPARO_GUARDAMOTOR, -1.15),
+  linea(X_DISPARO_GUARDAMOTOR, -1.15, X_DISPARO_GUARDAMOTOR + 0.25, -1.15),
+  { forma: "rectangulo", x: X_DISPARO_GUARDAMOTOR - 0.4, y: 0.5, ancho: 0.8, alto: 0.8 },
+  { forma: "texto", x: X_DISPARO_GUARDAMOTOR, y: 0.9, texto: "I>", alto: 0.4, alineacion: "centro" },
+];
 
 /**
  * Guardamotor: tres NA con la cruz de automático y el enlace hasta los
@@ -526,13 +552,12 @@ export const GUARDAMOTOR: DefinicionSimbolo = {
   primitivas: [
     ...multipolar([...contactoNA(), ...CRUZ_AUTOMATICO], POLOS_X),
     ...enlace(POLOS_X, X_CUCHILLA_NA, X_DISPARO_GUARDAMOTOR),
-    linea(X_DISPARO_GUARDAMOTOR, -0.5, X_DISPARO_GUARDAMOTOR, 0.5),
-    { forma: "rectangulo", x: X_DISPARO_GUARDAMOTOR - 0.4, y: -1.3, ancho: 0.8, alto: 0.8 },
-    linea(X_DISPARO_GUARDAMOTOR - 0.25, -0.65, X_DISPARO_GUARDAMOTOR, -0.65),
-    linea(X_DISPARO_GUARDAMOTOR, -0.65, X_DISPARO_GUARDAMOTOR, -1.15),
-    linea(X_DISPARO_GUARDAMOTOR, -1.15, X_DISPARO_GUARDAMOTOR + 0.25, -1.15),
-    { forma: "rectangulo", x: X_DISPARO_GUARDAMOTOR - 0.4, y: 0.5, ancho: 0.8, alto: 0.8 },
-    { forma: "texto", x: X_DISPARO_GUARDAMOTOR, y: 0.9, texto: "I>", alto: 0.4, alineacion: "centro" },
+    ...DISPAROS_GUARDAMOTOR,
+  ],
+  primitivasAccionado: [
+    ...multipolar([...contactoNACerrado(), ...CRUZ_AUTOMATICO], POLOS_X),
+    ...enlace(POLOS_X, 0, X_DISPARO_GUARDAMOTOR),
+    ...DISPAROS_GUARDAMOTOR,
   ],
   ladoNombresBornes: "derecha",
   bornes: bornesPolos(POLOS_X),
@@ -553,6 +578,11 @@ export const SECCIONADOR: DefinicionSimbolo = {
   primitivas: [
     ...multipolar([...contactoNA(), ...BARRA_SECCIONADOR], POLOS_X),
     ...enlace(POLOS_X, X_CUCHILLA_NA, X_MANUAL_SECCIONADOR),
+    linea(X_MANUAL_SECCIONADOR, -0.5, X_MANUAL_SECCIONADOR, 0.5),
+  ],
+  primitivasAccionado: [
+    ...multipolar([...contactoNACerrado(), ...BARRA_SECCIONADOR], POLOS_X),
+    ...enlace(POLOS_X, 0, X_MANUAL_SECCIONADOR),
     linea(X_MANUAL_SECCIONADOR, -0.5, X_MANUAL_SECCIONADOR, 0.5),
   ],
   ladoNombresBornes: "derecha",
@@ -577,7 +607,7 @@ export const FUSIBLE_TRIPOLAR: DefinicionSimbolo = {
 /**
  * Relé térmico, elemento de potencia (07-15-21): el conductor hace un escalón
  * dentro de un rectángulo, por polo, y los rectángulos van unidos con trazos.
- * Sus contactos 95-96 y 97-98 son de T36 y lo siguen por la etiqueta.
+ * Sus contactos 95-96 y 97-98 (T36) lo siguen por la etiqueta.
  */
 export const TERMICO: DefinicionSimbolo = {
   tipo: "proteccion.termico",
@@ -716,6 +746,181 @@ export const TIERRA: DefinicionSimbolo = {
   mostrarNombresBornes: false,
 };
 
+// ── Mando (T36) ────────────────────────────────────────────────────────────
+// Contactos de 4 de ancho como los pulsadores: el accionamiento a la izquierda,
+// unido con trazos a la cuchilla en y = 0. Accionados (T33), los trazos
+// siguen a la cuchilla y el accionamiento queda donde está.
+// - Selector y seta: `manual_enclavado`; en Simular un clic los acciona y otro
+//   los libera (D7-A; la seta abre su NC). El final, como el pulsador.
+// - 95-96 y 97-98: `termico`, siguen al relé térmico F de su etiqueta. En 6a
+//   F no dispara: 95-96 cerrado y 97-98 abierto, como en reposo.
+// - Fusible de mando: protección de un polo, conduce siempre. Bocina: carga
+//   de 2 bornes, como la lámpara.
+
+/** X de la cuchilla en y = 0 del NA y del NC en reposo, y del NA cerrado. */
+const X_EN_NA = xEnCentro(PUNTA_NA, BISAGRA_Y);
+const X_EN_NC = xEnCentro(PUNTA_NC, BISAGRA_Y);
+const X_EN_NA_CERRADO = xEnCentro(PUNTA_NA_CERRADO, BISAGRA_Y);
+
+/** Trazos de la cuchilla en `xCuchilla` hasta el accionamiento en `hasta`, más el accionamiento. */
+function accionamiento(xCuchilla: number, hasta: number, cabeza: Primitiva[]): Primitiva[] {
+  return [...discontinua(xCuchilla, 0, hasta, 0), ...cabeza];
+}
+
+/** Accionamiento por giro (02-13-04): el trazo vertical con los extremos doblados. */
+const GIRO: Primitiva[] = [
+  linea(ACCIONADOR_X, -0.5, ACCIONADOR_X, 0.5),
+  linea(ACCIONADOR_X, -0.5, ACCIONADOR_X + 0.25, -0.5),
+  linea(ACCIONADOR_X - 0.25, 0.5, ACCIONADOR_X, 0.5),
+];
+
+/** X del vástago de la seta: la cabeza (medio círculo) queda a su izquierda. */
+const X_SETA = -1.5;
+/** Pulsador de seta (02-13-07): el vástago y la cabeza en medio círculo. */
+const SETA_CABEZA: Primitiva[] = [linea(X_SETA, -0.5, X_SETA, 0.5), { forma: "arco", cx: X_SETA, cy: 0, r: 0.5, desde: 90, hasta: 270 }];
+
+/** Rodillo del final de carrera (02-13-21): un círculo al final de los trazos. */
+const R_RODILLO = 0.35;
+const X_RODILLO = -2 + R_RODILLO;
+const RODILLO: Primitiva[] = [{ forma: "circulo", cx: X_RODILLO, cy: 0, r: R_RODILLO }];
+
+/** Efecto térmico (07-15-21) en un recuadro, como el del guardamotor. */
+const X_TERMICO = -1.6;
+const EFECTO_TERMICO: Primitiva[] = [
+  { forma: "rectangulo", x: X_TERMICO - 0.4, y: -0.4, ancho: 0.8, alto: 0.8 },
+  linea(X_TERMICO - 0.25, 0.2, X_TERMICO, 0.2),
+  linea(X_TERMICO, 0.2, X_TERMICO, -0.2),
+  linea(X_TERMICO, -0.2, X_TERMICO + 0.25, -0.2),
+];
+
+/** Un contacto NA o NC con accionamiento: dibujo de reposo y accionado. */
+function conAccionamiento(na: boolean, hasta: number, cabeza: Primitiva[]): Pick<DefinicionSimbolo, "primitivas" | "primitivasAccionado"> {
+  return na
+    ? { primitivas: [...contactoNA(), ...accionamiento(X_EN_NA, hasta, cabeza)], primitivasAccionado: [...contactoNACerrado(), ...accionamiento(X_EN_NA_CERRADO, hasta, cabeza)] }
+    : { primitivas: [...contactoNC(), ...accionamiento(X_EN_NC, hasta, cabeza)], primitivasAccionado: [...contactoNCAbierto(), ...accionamiento(X_EN_NA, hasta, cabeza)] };
+}
+
+/** Bornes de arriba y abajo con esos nombres. */
+function dosBornes(arriba: string, abajo: string): DefinicionSimbolo["bornes"] {
+  return [
+    { nombre: arriba, x: 0, y: -2, direccion: "arriba" },
+    { nombre: abajo, x: 0, y: 2, direccion: "abajo" },
+  ];
+}
+
+/** Selector NA (07-07-01 con accionamiento por giro): queda donde se lo deja. */
+export const SELECTOR: DefinicionSimbolo = {
+  tipo: "mando.selector",
+  nombre: "Selector NA",
+  categoria: "mando",
+  elemento: "contacto_na",
+  accionamiento: "manual_enclavado",
+  prefijoEtiqueta: "S",
+  tamano: { ancho: 4, alto: 4 },
+  ...conAccionamiento(true, ACCIONADOR_X, GIRO),
+  ladoNombresBornes: "derecha",
+  bornes: dosBornes("13", "14"),
+};
+
+/** Pulsador de seta NC (parada de emergencia): queda accionado hasta liberarlo. */
+export const SETA: DefinicionSimbolo = {
+  tipo: "mando.seta",
+  nombre: "Seta NC",
+  categoria: "mando",
+  elemento: "contacto_nc",
+  accionamiento: "manual_enclavado",
+  prefijoEtiqueta: "S",
+  tamano: { ancho: 4, alto: 4 },
+  ...conAccionamiento(false, X_SETA, SETA_CABEZA),
+  ladoNombresBornes: "izquierda",
+  bornes: dosBornes("11", "12"),
+};
+
+/** Final de carrera NA (07-08-01, con rodillo): como el pulsador, se mantiene. */
+export const FINAL_NA: DefinicionSimbolo = {
+  tipo: "mando.final_na",
+  nombre: "Final de carrera NA",
+  categoria: "mando",
+  elemento: "contacto_na",
+  accionamiento: "manual_momentaneo",
+  prefijoEtiqueta: "S",
+  tamano: { ancho: 4, alto: 4 },
+  ...conAccionamiento(true, X_RODILLO + R_RODILLO, RODILLO),
+  ladoNombresBornes: "derecha",
+  bornes: dosBornes("13", "14"),
+};
+
+/** Final de carrera NC (07-08-02, con rodillo). */
+export const FINAL_NC: DefinicionSimbolo = {
+  tipo: "mando.final_nc",
+  nombre: "Final de carrera NC",
+  categoria: "mando",
+  elemento: "contacto_nc",
+  accionamiento: "manual_momentaneo",
+  prefijoEtiqueta: "S",
+  tamano: { ancho: 4, alto: 4 },
+  ...conAccionamiento(false, X_RODILLO + R_RODILLO, RODILLO),
+  ladoNombresBornes: "izquierda",
+  bornes: dosBornes("11", "12"),
+};
+
+/** Contacto NC del relé térmico, 95-96: sigue al F de su etiqueta. */
+export const TERMICO_NC: DefinicionSimbolo = {
+  tipo: "termico.contacto_nc",
+  nombre: "Contacto del térmico NC",
+  categoria: "mando",
+  elemento: "contacto_nc",
+  accionamiento: "termico",
+  tamano: { ancho: 4, alto: 4 },
+  ...conAccionamiento(false, X_TERMICO + 0.4, EFECTO_TERMICO),
+  ladoNombresBornes: "izquierda",
+  bornes: dosBornes("95", "96"),
+};
+
+/** Contacto NA del relé térmico, 97-98: sigue al F de su etiqueta. */
+export const TERMICO_NA: DefinicionSimbolo = {
+  tipo: "termico.contacto_na",
+  nombre: "Contacto del térmico NA",
+  categoria: "mando",
+  elemento: "contacto_na",
+  accionamiento: "termico",
+  tamano: { ancho: 4, alto: 4 },
+  ...conAccionamiento(true, X_TERMICO + 0.4, EFECTO_TERMICO),
+  ladoNombresBornes: "derecha",
+  bornes: dosBornes("97", "98"),
+};
+
+/** Fusible de mando (07-21-01): un polo, 1-2. Conduce siempre (D6-A). */
+export const FUSIBLE: DefinicionSimbolo = {
+  tipo: "proteccion.fusible",
+  nombre: "Fusible",
+  categoria: "mando",
+  elemento: "proteccion",
+  prefijoEtiqueta: "F",
+  tamano: { ancho: 2, alto: 4 },
+  primitivas: [linea(0, -2, 0, 2), { forma: "rectangulo", x: -0.4, y: -1, ancho: 0.8, alto: 2 }],
+  ladoNombresBornes: "derecha",
+  bornes: dosBornes("1", "2"),
+};
+
+/** Bocina (08-10-05): el cuerpo y la boca que se abre a la derecha. Carga como la lámpara. */
+export const BOCINA: DefinicionSimbolo = {
+  tipo: "senalizacion.bocina",
+  nombre: "Bocina",
+  categoria: "senalizacion",
+  elemento: "carga",
+  prefijoEtiqueta: "H",
+  tamano: { ancho: 2, alto: 4 },
+  primitivas: [
+    ...conexiones(0.5),
+    { forma: "rectangulo", x: -0.4, y: -0.5, ancho: 0.8, alto: 1 },
+    linea(0.4, -0.5, 1, -0.9),
+    linea(1, -0.9, 1, 0.9),
+    linea(1, 0.9, 0.4, 0.5),
+  ],
+  bornes: dosBornes("X1", "X2"),
+};
+
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   FASE,
@@ -742,6 +947,14 @@ export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   TERMICO,
   MOTOR_TRIFASICO,
   MOTOR_ESTRELLA_TRIANGULO,
+  SELECTOR,
+  SETA,
+  FINAL_NA,
+  FINAL_NC,
+  TERMICO_NC,
+  TERMICO_NA,
+  FUSIBLE,
+  BOCINA,
 ];
 
 const POR_TIPO = new Map(SIMBOLOS.map((s) => [s.tipo, s]));

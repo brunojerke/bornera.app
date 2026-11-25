@@ -2,6 +2,7 @@
 // hasta que las bobinas quedan quietas. Criterio en docs/plan-T30.md y
 // docs/plan-fase5.md (sección 2, D2-B, D3-A, D4-A, D10-A).
 //
+// - Protecciones y seccionador (T36, D17-A): polos NA siempre cerrados.
 // - Estado: pulsadores apretados y bobinas con tensión, una por etiqueta, en
 //   el orden de `netlist.bobinas` (natural: K2 antes que K10). No es
 //   documento: sin Comandos ni historial; el documento no cambia.
@@ -70,12 +71,14 @@ interface Pre {
   potRed: Int32Array;
   /** Por potencial: es fase. */
   esFase: boolean[];
-  /** Por contacto: 0 a mano (pulsado), 1 por bobina (`bobinaDe`), 2 en reposo. */
+  /** Por contacto: 0 a mano (pulsado), 1 por bobina (`bobinaDe`), 2 en reposo, 3 cerrado (protección, T36). */
   modo: Int8Array;
   /** Por contacto con modo 1: índice en `netlist.bobinas`. */
   bobinaDe: Int32Array;
   /** Ids de los contactos a mano. */
   pulsables: Set<string>;
+  /** Ids de los contactos a mano enclavados (selector y seta, T36): un clic acciona y otro libera. */
+  enclavados: Set<string>;
   /** Por carga: índice de su bobina en `netlist.bobinas`, o -1. */
   cargaBobina: Int32Array;
   /** Por red: las cargas con un borne en ella (repetida si tiene los dos), en el orden de `netlist.cargas`. */
@@ -100,10 +103,14 @@ function preparar(n: Netlist): Pre {
   const modo = new Int8Array(n.contactos.length);
   const bobinaDe = new Int32Array(n.contactos.length).fill(-1);
   const pulsables = new Set<string>();
+  const enclavados = new Set<string>();
   n.contactos.forEach((c, i) => {
     if (c.accionamiento === "manual_momentaneo" || c.accionamiento === "manual_enclavado") {
       modo[i] = 0;
       pulsables.add(c.comp);
+      if (c.accionamiento === "manual_enclavado") enclavados.add(c.comp);
+    } else if (c.accionamiento === null) {
+      modo[i] = 3; // protección o seccionador: cerrado en 6a (T36, D17-A)
     } else if (c.accionamiento === "bobina" && indiceBobina.has(c.etiqueta)) {
       modo[i] = 1;
       bobinaDe[i] = indiceBobina.get(c.etiqueta)!;
@@ -135,7 +142,7 @@ function preparar(n: Netlist): Pre {
     otrosEnRed[c.b]!--;
   });
 
-  const pre: Pre = { potRed, esFase, modo, bobinaDe, pulsables, cargaBobina, cargasEnRed, contactosEnRed, otrosEnRed };
+  const pre: Pre = { potRed, esFase, modo, bobinaDe, pulsables, enclavados, cargaBobina, cargasEnRed, contactosEnRed, otrosEnRed };
   CACHE.set(n, pre);
   return pre;
 }
@@ -167,7 +174,7 @@ function calcular(n: Netlist, pre: Pre, pulsados: ReadonlySet<string>, tension: 
 
   const conducen = n.contactos.map((c, i) => {
     const m = pre.modo[i]!;
-    const activo = m === 0 ? pulsados.has(c.comp) : m === 1 ? tension[pre.bobinaDe[i]!]! : false;
+    const activo = m === 0 ? pulsados.has(c.comp) : m === 1 ? tension[pre.bobinaDe[i]!]! : m === 3;
     const conduce = c.na ? activo : !activo;
     if (conduce) {
       const ra = buscar(c.a);
@@ -403,6 +410,11 @@ export function soltar(sim: Simulacion, ...comps: string[]): Simulacion {
 /** Los pulsadores de la netlist (contactos a mano): los únicos que `pulsar` aprieta. */
 export function pulsables(n: Netlist): ReadonlySet<string> {
   return preparar(n).pulsables;
+}
+
+/** Los enclavados de la netlist (selector y seta, T36): pulsables que un clic acciona y otro libera. */
+export function enclavados(n: Netlist): ReadonlySet<string> {
+  return preparar(n).enclavados;
 }
 
 export type Entrada = { readonly ok: true; readonly sim: Simulacion } | { readonly ok: false; readonly errores: readonly Aviso[] };

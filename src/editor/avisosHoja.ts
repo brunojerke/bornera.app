@@ -225,6 +225,7 @@ function mismoAviso(x: Aviso, y: Aviso): boolean {
   if (x.regla !== y.regla || x.severidad !== y.severidad || x.id !== y.id) return false;
   switch (x.regla) {
     case "R2":
+      return x.etiqueta === (y as typeof x).etiqueta && x.termico === (y as typeof x).termico;
     case "R6":
       return x.etiqueta === (y as typeof x).etiqueta;
     case "R3":

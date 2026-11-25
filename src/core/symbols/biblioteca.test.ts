@@ -10,8 +10,12 @@ import {
   DIFERENCIAL_TETRAPOLAR,
   discontinua,
   FASE,
+  FINAL_NA,
+  FINAL_NC,
   FUENTE_TRIFASICA,
   FUENTE_TRIFASICA_N,
+  BOCINA,
+  FUSIBLE,
   FUSIBLE_TRIPOLAR,
   GUARDAMOTOR,
   LAMPARA,
@@ -21,8 +25,12 @@ import {
   PULSADOR_NA,
   PULSADOR_NC,
   SECCIONADOR,
+  SELECTOR,
+  SETA,
   SIMBOLOS,
   TERMICO,
+  TERMICO_NA,
+  TERMICO_NC,
   TERMOMAGNETICA_BIPOLAR,
   TERMOMAGNETICA_TETRAPOLAR,
   TERMOMAGNETICA_TRIPOLAR,
@@ -43,6 +51,15 @@ const ESPERADOS: [DefinicionSimbolo, string, string][] = [
   [CONTACTO_AUXILIAR_NA, "13", "14"],
   [CONTACTO_AUXILIAR_NC, "21", "22"],
   [LAMPARA, "X1", "X2"],
+  // Mando (T36).
+  [SELECTOR, "13", "14"],
+  [SETA, "11", "12"],
+  [FINAL_NA, "13", "14"],
+  [FINAL_NC, "11", "12"],
+  [TERMICO_NC, "95", "96"],
+  [TERMICO_NA, "97", "98"],
+  [FUSIBLE, "1", "2"],
+  [BOCINA, "X1", "X2"],
 ];
 
 /** Extremos de una primitiva, para ver si cae dentro de la caja. */
@@ -70,8 +87,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los 24 símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(24);
+  it("tiene los 32 símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(32);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -144,12 +161,35 @@ describe("biblioteca de símbolos", () => {
 });
 
 describe("contactos accionados (T33, D9-B)", () => {
-  const CONTACTOS = [PULSADOR_NA, PULSADOR_NC, CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC, CONTACTOR_PRINCIPAL];
+  const CONTACTOS = [
+    PULSADOR_NA,
+    PULSADOR_NC,
+    CONTACTO_AUXILIAR_NA,
+    CONTACTO_AUXILIAR_NC,
+    CONTACTOR_PRINCIPAL,
+    SELECTOR,
+    SETA,
+    FINAL_NA,
+    FINAL_NC,
+    TERMICO_NC,
+    TERMICO_NA,
+  ];
+  /** Las protecciones de cuchilla, cerradas en Simular (T36, D20-B); el fusible y el térmico se ven igual. */
+  const CERRADAS = [
+    TERMOMAGNETICA_UNIPOLAR,
+    TERMOMAGNETICA_BIPOLAR,
+    TERMOMAGNETICA_TRIPOLAR,
+    TERMOMAGNETICA_TETRAPOLAR,
+    DIFERENCIAL_BIPOLAR,
+    DIFERENCIAL_TETRAPOLAR,
+    GUARDAMOTOR,
+    SECCIONADOR,
+  ];
   /** La cuchilla: la línea que sale de la bisagra (0, 1) hacia arriba. */
   const cuchilla = (ps: readonly Primitiva[]) => ps.find((p) => p.forma === "linea" && p.x1 === 0 && p.y1 === 1 && p.y2 < 1);
 
-  it("los cinco contactos tienen dibujo accionado; los demás símbolos no", () => {
-    for (const s of SIMBOLOS) expect(s.primitivasAccionado !== undefined, s.tipo).toBe(CONTACTOS.includes(s));
+  it("los 11 contactos y las 8 protecciones de cuchilla (T36, D20-B) tienen dibujo accionado; los demás símbolos no", () => {
+    for (const s of SIMBOLOS) expect(s.primitivasAccionado !== undefined, s.tipo).toBe(CONTACTOS.includes(s) || CERRADAS.includes(s));
   });
 
   it.each(CONTACTOS.map((s) => [s.tipo, s] as const))("%s accionado: dentro de su caja, sin textos y con una línea hasta cada borne", (_, s) => {
@@ -167,12 +207,12 @@ describe("contactos accionados (T33, D9-B)", () => {
     }
   });
 
-  it.each([PULSADOR_NA, CONTACTO_AUXILIAR_NA, CONTACTOR_PRINCIPAL].map((s) => [s.tipo, s] as const))("%s accionado está cerrado: la cuchilla llega al contacto fijo de arriba", (_, s) => {
+  it.each([PULSADOR_NA, CONTACTO_AUXILIAR_NA, CONTACTOR_PRINCIPAL, SELECTOR, FINAL_NA, TERMICO_NA].map((s) => [s.tipo, s] as const))("%s accionado está cerrado: la cuchilla llega al contacto fijo de arriba", (_, s) => {
     expect(cuchilla(s.primitivasAccionado!)).toMatchObject({ x2: 0, y2: -1 });
     expect(cuchilla(s.primitivas)).not.toMatchObject({ x2: 0, y2: -1 });
   });
 
-  it.each([PULSADOR_NC, CONTACTO_AUXILIAR_NC].map((s) => [s.tipo, s] as const))("%s accionado está abierto: la cuchilla se aparta del tope", (_, s) => {
+  it.each([PULSADOR_NC, CONTACTO_AUXILIAR_NC, SETA, FINAL_NC, TERMICO_NC].map((s) => [s.tipo, s] as const))("%s accionado está abierto: la cuchilla se aparta del tope", (_, s) => {
     const reposo = cuchilla(s.primitivas) as Extract<Primitiva, { forma: "linea" }>;
     const accionada = cuchilla(s.primitivasAccionado!) as Extract<Primitiva, { forma: "linea" }>;
     // En reposo cruza el tope (x de 0 a 0,9 en y = −1); accionada queda a la izquierda.
@@ -189,6 +229,20 @@ describe("contactos accionados (T33, D9-B)", () => {
       const xEnCero = (c.x2 * 1) / (1 - c.y2);
       const trazos = s.primitivasAccionado!.filter((p) => p.forma === "linea" && p.y1 === 0 && p.y2 === 0);
       expect(Math.max(...trazos.map((p) => (p as Extract<Primitiva, { forma: "linea" }>).x1))).toBeCloseTo(xEnCero, 9);
+    }
+  });
+
+  it("los de mando (T36) dejan su accionamiento donde está y los trazos llegan a la cuchilla", () => {
+    for (const s of [SELECTOR, SETA, FINAL_NA, FINAL_NC, TERMICO_NC, TERMICO_NA]) {
+      // El accionamiento: todo lo que no es línea, más las líneas a la izquierda de x = −1 fuera de y = 0.
+      const cabeza = (ps: readonly Primitiva[]) =>
+        ps.filter((p) => (p.forma === "linea" ? !(p.y1 === 0 && p.y2 === 0) && Math.max(p.x1, p.x2) < -1 : true));
+      expect(cabeza(s.primitivasAccionado!), s.tipo).toEqual(cabeza(s.primitivas));
+      expect(cabeza(s.primitivas).length, s.tipo).toBeGreaterThan(0);
+      const c = cuchilla(s.primitivasAccionado!) as Extract<Primitiva, { forma: "linea" }>;
+      const xEnCero = (c.x2 * 1) / (1 - c.y2);
+      const trazos = s.primitivasAccionado!.filter((p) => p.forma === "linea" && p.y1 === 0 && p.y2 === 0);
+      expect(Math.max(...trazos.map((p) => (p as Extract<Primitiva, { forma: "linea" }>).x1)), s.tipo).toBeCloseTo(xEnCero, 9);
     }
   });
 });
@@ -217,6 +271,12 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
       ["proteccion.termico", "F"],
       ["motor.trifasico", "M"],
       ["motor.estrella_triangulo", "M"],
+      ["mando.selector", "S"],
+      ["mando.seta", "S"],
+      ["mando.final_na", "S"],
+      ["mando.final_nc", "S"],
+      ["proteccion.fusible", "F"],
+      ["senalizacion.bocina", "H"],
     ]);
   });
 
@@ -226,7 +286,7 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
 
   it("fase, neutro, trifásicas y tierra son fuentes; los auxiliares y los principales, los seguidores (los pulsadores, a mano, se numeran)", () => {
     expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO, FUENTE_TRIFASICA, FUENTE_TRIFASICA_N, TIERRA]);
-    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC, CONTACTOR_PRINCIPAL]);
+    expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC, CONTACTOR_PRINCIPAL, TERMICO_NC, TERMICO_NA]);
   });
 
   it("solo fase, neutro y tierra nombran la red con su etiqueta (T34, D1-A; T35)", () => {
@@ -446,7 +506,23 @@ describe("protecciones y seccionador (T35, D13-A)", () => {
       expect(polosDe(s)).toEqual(polos(xs.length));
       expect(s).toMatchObject({ elemento: "proteccion", categoria: "potencia", prefijoEtiqueta: prefijo, tamano: { ancho, alto } });
       expect(s.accionamiento).toBeUndefined();
-      expect(s.primitivasAccionado).toBeUndefined();
+    },
+  );
+
+  it.each(NUMERADOS.map(([s, xs]) => [s.tipo, s, xs] as const))(
+    "%s accionado (T36, D20-B): cada cuchilla cerrada y los mismos textos; el fusible y el térmico no tienen",
+    (_, s, xs) => {
+      if (s === FUSIBLE_TRIPOLAR || s === TERMICO) return expect(s.primitivasAccionado).toBeUndefined();
+      const a = s.primitivasAccionado!;
+      const textos = (ps: readonly Primitiva[]) => ps.filter((p) => p.forma === "texto");
+      expect(textos(a)).toEqual(textos(s.primitivas));
+      // Cada polo, la cuchilla vertical hasta su contacto fijo de arriba (corrida 1 hacia arriba en el diferencial).
+      const dy = s === DIFERENCIAL_BIPOLAR || s === DIFERENCIAL_TETRAPOLAR ? -1 : 0;
+      for (const x of xs) {
+        const cerrada = { forma: "linea", x1: x, y1: 1 + dy, x2: x, y2: -1 + dy };
+        expect(a, `${s.tipo} ${x}`).toContainEqual(cerrada);
+        expect(s.primitivas, `${s.tipo} ${x}`).not.toContainEqual(cerrada);
+      }
     },
   );
 
@@ -534,5 +610,32 @@ describe("fuente trifásica con neutro y tierra (T35)", () => {
     expect(TIERRA.bornes).toEqual([{ nombre: "PE", x: 0, y: -1, direccion: "arriba" }]);
     expect(TIERRA).toMatchObject({ tipo: "fuente.tierra", elemento: "fuente", categoria: "fuentes", etiquetaInicial: "PE", tamano: { ancho: 2, alto: 2 } });
     expect(TIERRA.prefijoEtiqueta).toBeUndefined();
+  });
+});
+
+describe("mando (T36)", () => {
+  it("selector y seta enclavados; finales como el pulsador; 95-96 y 97-98 siguen al térmico", () => {
+    expect(SELECTOR).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_enclavado", categoria: "mando" });
+    expect(SETA).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_enclavado", categoria: "mando" });
+    expect(FINAL_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "manual_momentaneo", categoria: "mando" });
+    expect(FINAL_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "manual_momentaneo", categoria: "mando" });
+    expect(TERMICO_NC).toMatchObject({ elemento: "contacto_nc", accionamiento: "termico", categoria: "mando" });
+    expect(TERMICO_NA).toMatchObject({ elemento: "contacto_na", accionamiento: "termico", categoria: "mando" });
+    expect(TERMICO_NC.prefijoEtiqueta).toBeUndefined();
+    expect(TERMICO_NA.prefijoEtiqueta).toBeUndefined();
+  });
+
+  it("el fusible de mando es una protección de un polo (1-2); la bocina, una carga en Señalización", () => {
+    expect(FUSIBLE).toMatchObject({ elemento: "proteccion", categoria: "mando", prefijoEtiqueta: "F", tamano: { ancho: 2, alto: 4 } });
+    expect(FUSIBLE.polos).toBeUndefined();
+    expect(polosDe(FUSIBLE)).toEqual([["1", "2"]]);
+    expect(BOCINA).toMatchObject({ elemento: "carga", categoria: "senalizacion", prefijoEtiqueta: "H", tamano: { ancho: 2, alto: 4 } });
+    // Encendida se rellena como la lámpara: tiene un cuerpo (rectángulo).
+    expect(BOCINA.primitivas.some((p) => p.forma === "rectangulo")).toBe(true);
+  });
+
+  it("los NC llevan los nombres a la izquierda (el tope a la derecha); los NA, a la derecha", () => {
+    for (const s of [SETA, FINAL_NC, TERMICO_NC]) expect(s.ladoNombresBornes, s.tipo).toBe("izquierda");
+    for (const s of [SELECTOR, FINAL_NA, TERMICO_NA]) expect(s.ladoNombresBornes, s.tipo).toBe("derecha");
   });
 });

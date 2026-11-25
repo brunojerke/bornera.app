@@ -56,7 +56,7 @@ const TIPOS_015 = SIMBOLOS.slice(0, 8).map((s) => s.tipo);
  * borrados; ninguna falla en la corrección).
  */
 const SEMILLA_T34 = 20261132;
-/** Semilla de la biblioteca completa de T35 (24 símbolos, con los de potencia). */
+/** Semilla de la biblioteca completa de T35 (24 símbolos, con los de potencia; desde T36 corre con los 32). */
 const SEMILLA_T35 = 20261135;
 
 function rutaDe(hoja: Hoja, e: Extremo): ExtremoRuta {

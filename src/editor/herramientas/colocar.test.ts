@@ -145,9 +145,9 @@ describe("HerramientaColocar, modo arrastre", () => {
   });
 });
 
-describe("los 24 símbolos de la biblioteca", () => {
+describe("los 32 símbolos de la biblioteca", () => {
   it("se colocan con ajuste a la grilla", () => {
-    expect(SIMBOLOS).toHaveLength(24);
+    expect(SIMBOLOS).toHaveLength(32);
     const d = doc();
     const historial = new Historial(d);
     SIMBOLOS.forEach((def, i) => {

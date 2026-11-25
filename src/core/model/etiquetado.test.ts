@@ -82,6 +82,15 @@ describe("titular y prefijo", () => {
       ["proteccion.termico", true, "F"],
       ["motor.trifasico", true, "M"],
       ["motor.estrella_triangulo", true, "M"],
+      // Mando (T36): 95-96 y 97-98 siguen al térmico, no se numeran.
+      ["mando.selector", true, "S"],
+      ["mando.seta", true, "S"],
+      ["mando.final_na", true, "S"],
+      ["mando.final_nc", true, "S"],
+      ["termico.contacto_nc", false, null],
+      ["termico.contacto_na", false, null],
+      ["proteccion.fusible", true, "F"],
+      ["senalizacion.bocina", true, "H"],
     ]);
   });
 
@@ -103,6 +112,12 @@ describe("titular y prefijo", () => {
       ["proteccion.termico", 1],
       ["motor.trifasico", 1],
       ["motor.estrella_triangulo", 1],
+      ["mando.selector", 1],
+      ["mando.seta", 1],
+      ["mando.final_na", 1],
+      ["mando.final_nc", 1],
+      ["proteccion.fusible", 1],
+      ["senalizacion.bocina", 1],
     ]);
     expect(primerNumeroDe(buscarSimbolo(DESCONOCIDO))).toBe(1);
   });

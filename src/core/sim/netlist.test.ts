@@ -259,6 +259,44 @@ describe("netlist: polos (T34)", () => {
   });
 });
 
+describe("netlist: protecciones (T36, D17-A)", () => {
+  it.each([
+    ["proteccion.termomagnetica_unipolar", 1],
+    ["proteccion.termomagnetica_bipolar", 2],
+    ["proteccion.termomagnetica_tripolar", 3],
+    ["proteccion.termomagnetica_tetrapolar", 4],
+    ["proteccion.diferencial_bipolar", 2],
+    ["proteccion.diferencial_tetrapolar", 4],
+    ["proteccion.guardamotor", 3],
+    ["maniobra.seccionador", 3],
+    ["proteccion.fusible_tripolar", 3],
+    ["proteccion.termico", 3],
+    ["proteccion.fusible", 1],
+  ] as const)("%s: un contacto NA sin accionamiento por par 1-2, 3-4…", (tipo, polos) => {
+    const n = armarNetlist(hoja([comp("q", tipo, " q1 ")]));
+    expect(n.contactos.map(({ comp, polo, etiqueta, na, accionamiento }) => ({ comp, polo, etiqueta, na, accionamiento }))).toEqual(
+      Array.from({ length: polos }, (_, polo) => ({ comp: "q", polo, etiqueta: "Q1", na: true, accionamiento: null })),
+    );
+    expect(n.contactos.map((c) => [c.a, c.b])).toEqual(Array.from({ length: polos }, (_, i) => [red(n, "q", `${2 * i + 1}`), red(n, "q", `${2 * i + 2}`)]));
+    expect(n.cargas).toEqual([]);
+  });
+
+  it("el N del diferencial bipolar es el polo 3-4 (D8-A); 95-96 y 97-98 son contactos «termico», la bocina una carga", () => {
+    const n = armarNetlist(hoja([comp("d", "proteccion.diferencial_bipolar"), comp("nc", "termico.contacto_nc", "F2"), comp("na", "termico.contacto_na", "F2"), comp("b", "senalizacion.bocina", "H1")]));
+    expect(n.contactos.filter((c) => c.comp === "d" && c.polo === 1).map((c) => [c.a, c.b])).toEqual([[red(n, "d", "3"), red(n, "d", "4")]]);
+    expect(n.contactos.filter((c) => c.comp !== "d").map(({ comp, na, accionamiento }) => [comp, na, accionamiento])).toEqual([
+      ["nc", false, "termico"],
+      ["na", true, "termico"],
+    ]);
+    expect(n.cargas.map(({ comp, tipo, etiqueta }) => [comp, tipo, etiqueta])).toEqual([["b", "carga", "H1"]]);
+  });
+
+  it("los motores siguen sin ser carga ni contacto (D14-A)", () => {
+    const n = armarNetlist(hoja([comp("m", "motor.trifasico", "M1"), comp("e", "motor.estrella_triangulo", "M2")]));
+    expect([n.contactos, n.cargas]).toEqual([[], []]);
+  });
+});
+
 describe("netlist: fuente trifásica (T34)", () => {
   it("cada borne es una fase con su nombre; la etiqueta no cuenta", () => {
     const n = armarNetlist(hoja([comp("t", "fuente.trifasica", "Red 1")]));

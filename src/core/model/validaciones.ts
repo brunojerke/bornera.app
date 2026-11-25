@@ -10,7 +10,8 @@
 // titular, en src/core/model/etiquetado.ts):
 // - R1. Seguidor sin etiqueta: no sigue a nadie.
 // - R2. Contacto que sigue a bobina, con etiqueta, sin ninguna bobina con esa
-//   etiqueta en la hoja.
+//   etiqueta en la hoja. También 95-96 y 97-98 sin relé térmico con esa
+//   etiqueta (T36; `termico` en el aviso).
 // - R3. Titular con prefijo y sin etiqueta. El símbolo desconocido no tiene
 //   prefijo: ya avisa al abrir.
 // - R4. Titulares con la misma etiqueta (cambio 6 del plan): error si en el
@@ -59,7 +60,8 @@ export type Severidad = "error" | "aviso";
  */
 export type Aviso =
   | { readonly regla: "R1"; readonly severidad: "aviso"; readonly id: string }
-  | { readonly regla: "R2"; readonly severidad: "aviso"; readonly id: string; readonly etiqueta: string }
+  /** `termico`: es un contacto del térmico (95-96, 97-98) y falta su relé térmico, no una bobina (T36). */
+  | { readonly regla: "R2"; readonly severidad: "aviso"; readonly id: string; readonly etiqueta: string; readonly termico?: true }
   /** `nombre`: el del símbolo ("Bobina de contactor"). */
   | { readonly regla: "R3"; readonly severidad: "aviso"; readonly id: string; readonly nombre: string }
   /** `otro`: el nombre del símbolo de otro titular del grupo (el primero en la hoja; del mismo tipo, si es aviso). */
@@ -114,12 +116,13 @@ function esFemenino(nombre: string): boolean {
  * diferencial, guardamotor, seccionador) y el del primero de la biblioteca
  * no diría la verdad. Tampoco se toma el símbolo de la hoja que lleva el
  * prefijo: el R5 de un componente dependería de otros grupos de etiqueta, y
- * el editor lo recalcula por grupo. K, S y H dicen lo de antes. Todo prefijo
- * de la biblioteca está acá (test).
+ * el editor lo recalcula por grupo. K y H dicen lo de antes; S, «aparato de
+ * mando» (T36, D19-A: pulsador, selector, seta y final). Todo prefijo de la
+ * biblioteca está acá (test).
  */
 export const NOMBRES_PREFIJO: ReadonlyMap<string, string> = new Map([
   ["K", "bobina"],
-  ["S", "pulsador"],
+  ["S", "aparato de mando"],
   ["H", "lámpara"],
   ["Q", "protección o maniobra"],
   ["F", "protección"],
@@ -177,6 +180,9 @@ export function fasesNumeradasDe(tipo: string, e: string): readonly string[] {
 /** Etiqueta numerada: letras y número ("K01" es K y 1). La misma forma que numera T17. */
 const NUMERADA = /^([A-Z]+)(\d+)$/;
 
+/** El relé térmico (elemento de potencia) al que siguen 95-96 y 97-98 por la etiqueta (R2, T36). */
+const TIPO_RELE_TERMICO = "proteccion.termico";
+
 // ── Validar ────────────────────────────────────────────────────────────────
 
 /** Lo que se sabe de cada componente, en el orden de la hoja. */
@@ -207,11 +213,13 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
 
   // Una pasada: las etiquetas de las bobinas y los titulares por etiqueta.
   const etiquetasBobina = new Set<string>();
+  const etiquetasTermico = new Set<string>();
   const titulares = new Map<string, number[]>();
   for (let i = 0; i < datos.length; i++) {
     const { def, e } = datos[i]!;
     if (e === "") continue;
     if (esBobina(def)) etiquetasBobina.add(e);
+    else if (def?.tipo === TIPO_RELE_TERMICO) etiquetasTermico.add(e);
     if (esTitular(def)) {
       let lista = titulares.get(e);
       if (!lista) titulares.set(e, (lista = []));
@@ -242,7 +250,10 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
     const { c, def, e } = datos[i]!;
     const id = c.id;
     if (activas.has("R1") && def !== undefined && esSeguidor(def) && e === "") avisos.push({ regla: "R1", severidad: "aviso", id });
-    if (activas.has("R2") && sigueABobina(def) && e !== "" && !etiquetasBobina.has(e)) avisos.push({ regla: "R2", severidad: "aviso", id, etiqueta: e });
+    if (activas.has("R2") && e !== "") {
+      if (sigueABobina(def) && !etiquetasBobina.has(e)) avisos.push({ regla: "R2", severidad: "aviso", id, etiqueta: e });
+      else if (def?.accionamiento === "termico" && !etiquetasTermico.has(e)) avisos.push({ regla: "R2", severidad: "aviso", id, etiqueta: e, termico: true });
+    }
     const prefijo = prefijoDe(def);
     if (activas.has("R3") && prefijo !== null && e === "") avisos.push({ regla: "R3", severidad: "aviso", id, nombre: def!.nombre });
     const repetida = repetidas.get(i);
@@ -382,7 +393,7 @@ export function textoAviso(a: Aviso): string {
     case "R1":
       return "Contacto sin etiqueta: no sigue a ninguna bobina.";
     case "R2":
-      return `No hay ninguna bobina ${a.etiqueta} para este contacto.`;
+      return a.termico ? `No hay ningún relé térmico ${a.etiqueta} para este contacto.` : `No hay ninguna bobina ${a.etiqueta} para este contacto.`;
     case "R3":
       return `${a.nombre} sin etiqueta.`;
     case "R4":

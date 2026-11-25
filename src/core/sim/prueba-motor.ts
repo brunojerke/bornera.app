@@ -79,6 +79,7 @@ export class SimulacionLenta {
     const conducen = n.contactos.map((c) => {
       let activo = false;
       if (c.accionamiento === "manual_momentaneo" || c.accionamiento === "manual_enclavado") activo = this.pulsados.has(c.comp);
+      else if (c.accionamiento === null) activo = true; // protección: cerrada en 6a (T36)
       else if (c.accionamiento === "bobina") {
         const g = n.bobinas.findIndex((b) => b.etiqueta === c.etiqueta);
         activo = g >= 0 && this.tension[g]!;

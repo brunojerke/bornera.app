@@ -178,18 +178,22 @@ describe("validarDefinicion: dibujo accionado (T33)", () => {
     expect(validarDefinicion({ ...PULSADOR, primitivasAccionado: [cuchilla] })).toEqual([]);
   });
 
-  it("solo un contacto lo lleva", () => {
+  it("solo un contacto o una protección lo lleva (T36, D20-B)", () => {
     const bobina = { ...PULSADOR, elemento: "bobina", accionamiento: undefined } as const;
-    expect(validarDefinicion({ ...bobina, primitivasAccionado: [cuchilla] })).toEqual(["Solo un contacto lleva dibujo accionado."]);
+    expect(validarDefinicion({ ...bobina, primitivasAccionado: [cuchilla] })).toEqual(["Solo un contacto o una protección lleva dibujo accionado."]);
+    const proteccion = { ...PULSADOR, elemento: "proteccion", accionamiento: undefined, prefijoEtiqueta: "Q" } as const;
+    expect(validarDefinicion({ ...proteccion, primitivasAccionado: [cuchilla] })).toEqual([]);
   });
 
-  it("rechaza textos y lo que sale de la caja", () => {
+  it("rechaza textos que no están en el reposo y lo que sale de la caja", () => {
     const texto = { forma: "texto", x: 0, y: 0, texto: "A", alto: 1 } as const;
     const afuera = { forma: "circulo", cx: 0, cy: 0, r: 1.5 } as const;
     expect(validarDefinicion({ ...PULSADOR, primitivasAccionado: [texto, afuera] })).toEqual([
-      "El dibujo accionado no lleva textos.",
+      "El dibujo accionado solo lleva los textos del reposo.",
       "El dibujo accionado sale de la caja del símbolo (circulo).",
     ]);
+    // El mismo texto del reposo, sí (T36: la «N» del neutro).
+    expect(validarDefinicion({ ...PULSADOR, primitivas: [...PULSADOR.primitivas, texto], primitivasAccionado: [cuchilla, { ...texto }] })).toEqual([]);
   });
 });
 

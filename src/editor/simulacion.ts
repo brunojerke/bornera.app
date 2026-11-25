@@ -8,6 +8,9 @@
 //   apretado hasta soltar el botón en cualquier lado o perder la ventana.
 //   Mayús+clic lo fija hasta otro clic sobre él. Al perder la ventana (M-A)
 //   se suelta el mantenido y los fijados siguen.
+// - Enclavados (T36, D7-A): el selector y la seta no se mantienen. Un clic,
+//   con Mayús o sin ella, los acciona (la seta abre su NC) y queda fijado;
+//   otro clic los libera. El final de carrera, como el pulsador.
 // - Detenida (D3-A): los pulsadores no responden hasta salir.
 // - Lo que ve el usuario (V-A, AV-A): los avisos nuevos de cada operación
 //   (`nuevos`) y un texto fijo con la detención (`textoEstado`). Desde T33
@@ -19,6 +22,7 @@
 import type { Hoja } from "../core/model/documento";
 import { listaY, type Aviso } from "../core/model/validaciones";
 import {
+  enclavados,
   entrarSimulacion,
   pulsables,
   pulsar,
@@ -41,9 +45,11 @@ export function textoNoSimula(errores: readonly Aviso[]): string {
 export class SesionSimulacion {
   private _sim: Simulacion;
   private readonly _pulsables: ReadonlySet<string>;
+  /** Los pulsables que un clic acciona y otro libera (selector y seta, T36). */
+  private readonly _enclavados: ReadonlySet<string>;
   /** El pulsador que tiene apretado el botón del mouse; null si ninguno. */
   private _mantenido: string | null = null;
-  /** Los fijados con Mayús+clic, en el orden en que se fijaron. */
+  /** Los fijados con Mayús+clic (o con un clic, los enclavados), en el orden en que se fijaron. */
   private readonly _fijados = new Set<string>();
   /** Los avisos que sumó la última operación (entrar, presionar o soltar). */
   private _nuevos: AvisoSim[] = [];
@@ -51,6 +57,7 @@ export class SesionSimulacion {
   private constructor(sim: Simulacion) {
     this._sim = sim;
     this._pulsables = pulsables(sim.netlist);
+    this._enclavados = enclavados(sim.netlist);
     this._nuevos = [...sim.nuevos];
   }
 
@@ -93,7 +100,8 @@ export class SesionSimulacion {
   /**
    * El botón del mouse se aprieta sobre el componente `id`. Un pulsador fijado
    * se suelta (otro clic, con Mayús o sin ella); si no, con Mayús se fija y
-   * sin ella se mantiene hasta `soltarBoton`. Devuelve si algo cambió:
+   * sin ella se mantiene hasta `soltarBoton`. Un enclavado (selector, seta)
+   * se fija con o sin Mayús (T36). Devuelve si algo cambió:
    * detenida, o si `id` no es un pulsador, no hace nada.
    */
   presionar(id: string, mayus: boolean): boolean {
@@ -104,7 +112,7 @@ export class SesionSimulacion {
     if (this._fijados.has(id)) {
       this._fijados.delete(id);
       this.aplicar(soltar(this._sim, id));
-    } else if (mayus) {
+    } else if (mayus || this._enclavados.has(id)) {
       this._fijados.add(id);
       this.aplicar(pulsar(this._sim, id));
     } else {

@@ -305,7 +305,7 @@ describe("R5: prefijo de otro tipo", () => {
     const { a, comp } = desdeMarchaParada();
     a.hacer(new CambiarEtiqueta(comp.h1, "S2"));
     const r5 = de(validar(a.h), "R5");
-    expect(r5.map(textoAviso)).toEqual(["S2 es nombre de pulsador y esto es una lámpara."]);
+    expect(r5.map(textoAviso)).toEqual(["S2 es nombre de aparato de mando y esto es una lámpara."]);
 
     a.hacer(new CambiarEtiqueta(comp.h1, "X1"));
     a.hacer(new CambiarEtiquetas(planRenombrarBobina(a.h, comp.k1Bobina, "KM1").cambios));
@@ -351,12 +351,65 @@ describe("R5 con los prefijos de potencia: un nombre neutro por prefijo (T35, aj
     expect(r5(a.h).map((x) => [x.id, textoAviso(x)])).toEqual([[t, "Q9 es nombre de protección o maniobra y esto es un relé térmico."]]);
   });
 
-  it("K, S y H dicen lo de antes", () => {
+  it("K y H dicen lo de antes; S, «aparato de mando» (T36, D19-A)", () => {
     const a = armar();
     a.poner("motor.trifasico", 0, 0, "K1");
     a.poner("motor.trifasico", 20, 0, "S1");
     a.poner("motor.trifasico", 40, 0, "H1");
-    expect(r5(a.h).map((x) => (x as Extract<Aviso, { regla: "R5" }>).de)).toEqual(["bobina", "pulsador", "lámpara"]);
+    // S, «aparato de mando» desde T36 (D19-A): pulsador, selector, seta y final.
+    expect(r5(a.h).map((x) => (x as Extract<Aviso, { regla: "R5" }>).de)).toEqual(["bobina", "aparato de mando", "lámpara"]);
+  });
+});
+
+describe("mando (T36): R2 del térmico y R5 de S", () => {
+  const r2 = (h: Hoja) => validar(h, ["R2"]);
+
+  it("95-96 y 97-98 «F2» sin relé térmico F2: R2 con su texto; con el F2, nada", () => {
+    const a = armar();
+    const nc = a.poner("termico.contacto_nc", 0, 0, "F2");
+    const na = a.poner("termico.contacto_na", 10, 0, "F2");
+    expect(r2(a.h)).toEqual([
+      { regla: "R2", severidad: "aviso", id: nc, etiqueta: "F2", termico: true },
+      { regla: "R2", severidad: "aviso", id: na, etiqueta: "F2", termico: true },
+    ]);
+    expect(textoAviso(r2(a.h)[0]!)).toBe("No hay ningún relé térmico F2 para este contacto.");
+    a.poner("proteccion.termico", 20, 0, "f2 ");
+    expect(r2(a.h)).toEqual([]);
+  });
+
+  it("otro F con esa etiqueta (un fusible F2) no sirve: R2; una bobina F2 tampoco", () => {
+    const a = armar();
+    const nc = a.poner("termico.contacto_nc", 0, 0, "F2");
+    a.poner("proteccion.fusible", 10, 0, "F2");
+    a.poner("contactor.bobina", 20, 0, "F2");
+    expect(r2(a.h).map((x) => x.id)).toEqual([nc]);
+  });
+
+  it("un auxiliar «F2» con el térmico F2 sigue con R2 de bobina (no le sirve el térmico)", () => {
+    const a = armar();
+    a.poner("proteccion.termico", 0, 0, "F2");
+    const aux = a.poner("contactor.auxiliar_na", 10, 0, "F2");
+    expect(r2(a.h)).toEqual([{ regla: "R2", severidad: "aviso", id: aux, etiqueta: "F2" }]);
+    expect(textoAviso(r2(a.h)[0]!)).toBe("No hay ninguna bobina F2 para este contacto.");
+  });
+
+  it("95-96 sin etiqueta: R1, no R2", () => {
+    const a = armar();
+    const nc = a.poner("termico.contacto_nc", 0, 0, "");
+    expect(validar(a.h, ["R1", "R2"])).toEqual([{ regla: "R1", severidad: "aviso", id: nc }]);
+  });
+
+  it("un selector, una seta o un final «K1» avisan R5 como el pulsador; una lámpara «S3», «aparato de mando»", () => {
+    const a = armar();
+    for (const [i, tipo] of ["mando.selector", "mando.seta", "mando.final_na", "mando.final_nc"].entries()) a.poner(tipo, 10 * i, 0, `K${i + 1}`);
+    a.poner("senalizacion.bocina", 50, 0, "S3");
+    expect(validar(a.h, ["R5"]).map(textoAviso)).toEqual([
+      "K1 es nombre de bobina y esto es un selector NA.",
+      "K2 es nombre de bobina y esto es una seta NC.",
+      "K3 es nombre de bobina y esto es un final de carrera NA.",
+      "K4 es nombre de bobina y esto es un final de carrera NC.",
+      "S3 es nombre de aparato de mando y esto es una bocina.",
+    ]);
   });
 });
 
@@ -738,7 +791,7 @@ const lento = {
 /** Lo que nombra un prefijo: la primera palabra del primer símbolo de la biblioteca que lo usa. */
 /** Lo que nombra cada prefijo en R5 (T35, ajuste 1 de Bruno), escrito aparte; solo los de la biblioteca. */
 function duenoLento(prefijo: string): string | undefined {
-  const nombres: Record<string, string> = { K: "bobina", S: "pulsador", H: "lámpara", Q: "protección o maniobra", F: "protección", M: "motor" };
+  const nombres: Record<string, string> = { K: "bobina", S: "aparato de mando", H: "lámpara", Q: "protección o maniobra", F: "protección", M: "motor" };
   return SIMBOLOS.some((s) => lento.titular(s) && s.prefijoEtiqueta === prefijo) ? nombres[prefijo] : undefined;
 }
 
@@ -803,6 +856,8 @@ function validarLento(h: Hoja): Aviso[] {
     const prefijo = def && lento.titular(def) ? (def.prefijoEtiqueta ?? null) : null;
     if (lento.seguidor(def) && e === "") salida.push({ regla: "R1", severidad: "aviso", id: c.id });
     if (lento.sigueABobina(def) && e !== "" && !todos.some((o) => lento.bobina(o.def) && o.e === e)) salida.push({ regla: "R2", severidad: "aviso", id: c.id, etiqueta: e });
+    // T36: 95-96 y 97-98 sin relé térmico de su etiqueta.
+    if (def?.accionamiento === "termico" && e !== "" && !todos.some((o) => o.c.tipo === "proteccion.termico" && o.e === e)) salida.push({ regla: "R2", severidad: "aviso", id: c.id, etiqueta: e, termico: true });
     if (prefijo !== null && e === "") salida.push({ regla: "R3", severidad: "aviso", id: c.id, nombre: def!.nombre });
 
     let r4: Aviso | null = null;

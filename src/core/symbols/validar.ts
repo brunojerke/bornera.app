@@ -21,6 +21,11 @@ function primitivaEnCaja(p: Exclude<Primitiva, { forma: "texto" }>, ancho: numbe
   }
 }
 
+/** Dos textos iguales: posición, texto, alto y alineación. */
+function mismoTexto(a: Extract<Primitiva, { forma: "texto" }>, b: Extract<Primitiva, { forma: "texto" }>): boolean {
+  return a.x === b.x && a.y === b.y && a.texto === b.texto && a.alto === b.alto && (a.alineacion ?? "izquierda") === (b.alineacion ?? "izquierda");
+}
+
 /**
  * Hacia dónde queda afuera desde un punto del borde de una caja de
  * `ancho` × `alto` centrada en el origen: una dirección en un lado, dos en una
@@ -67,13 +72,16 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     }
   }
 
-  // Dibujo accionado (T33): solo contactos, sin textos y dentro de la caja.
+  // Dibujo accionado (T33): solo contactos y protecciones (T36, D20-B), dentro
+  // de la caja. Un texto solo si el reposo tiene uno igual (la «N» del neutro,
+  // «IΔ»): así la caja de dibujo es la misma en los dos estados.
   const accionado = def.primitivasAccionado;
   if (accionado !== undefined) {
-    if (def.elemento !== "contacto_na" && def.elemento !== "contacto_nc") errores.push("Solo un contacto lleva dibujo accionado.");
+    if (!tienePolos(def)) errores.push("Solo un contacto o una protección lleva dibujo accionado.");
     for (const p of accionado) {
-      if (p.forma === "texto") errores.push("El dibujo accionado no lleva textos.");
-      else if (!primitivaEnCaja(p, ancho, alto)) errores.push(`El dibujo accionado sale de la caja del símbolo (${p.forma}).`);
+      if (p.forma === "texto") {
+        if (!def.primitivas.some((q) => q.forma === "texto" && mismoTexto(p, q))) errores.push("El dibujo accionado solo lleva los textos del reposo.");
+      } else if (!primitivaEnCaja(p, ancho, alto)) errores.push(`El dibujo accionado sale de la caja del símbolo (${p.forma}).`);
     }
   }
 

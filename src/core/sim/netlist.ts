@@ -16,9 +16,11 @@
 //   anota (`enCorto`); el motor lo ve en reposo, se detiene y avisa (T30).
 // - Contactos (NA o NC, con su accionamiento), uno por polo (T34: los 3 de
 //   un contactor principal, con la etiqueta y el accionamiento del símbolo), y
-//   cargas (bobina, lámpara), cada uno con la red de sus dos bornes. Un símbolo desconocido no conduce ni es
-//   carga; tampoco lo que todavía no se simula: las protecciones (hasta T36,
-//   D13-A) y los motores, cargas de 3 o 6 bornes (hasta 6b, D14-A).
+//   cargas (bobina, lámpara, bocina), cada uno con la red de sus dos bornes.
+//   Las protecciones y el seccionador (T36, D17-A) son contactos NA sin
+//   accionamiento (`null`), un polo por par: el motor los da cerrados (6b les
+//   suma abierta y disparada). Un símbolo desconocido no conduce ni es carga;
+//   tampoco los motores, cargas de 3 o 6 bornes (hasta 6b, D14-A).
 // - Bobinas por etiqueta, en orden natural (K1, K2, K10): el orden de D2. Una
 //   etiqueta repetida en dos bobinas no se resuelve acá (R4 impide entrar).
 //
@@ -73,9 +75,10 @@ export interface ContactoNetlist {
   polo: number;
   /** Etiqueta normalizada ("" sin etiqueta). Para el auxiliar, la de su bobina. */
   etiqueta: string;
-  /** NA (true) o NC (false). */
+  /** NA (true) o NC (false). Una protección es NA. */
   na: boolean;
-  accionamiento: Accionamiento;
+  /** El del símbolo; null en una protección o un seccionador, que en 6a conducen siempre (T36, D17-A). */
+  accionamiento: Accionamiento | null;
   /** Redes del primer y el segundo borne del polo, como en su definición. */
   a: number;
   b: number;
@@ -263,14 +266,16 @@ export function armarNetlist(hoja: Hoja): Netlist {
   for (const c of hoja.componentes) {
     const def = buscarSimbolo(c.tipo);
     if (!def) continue;
-    if (def.elemento === "contacto_na" || def.elemento === "contacto_nc") {
+    if (def.elemento === "contacto_na" || def.elemento === "contacto_nc" || def.elemento === "proteccion") {
       const etiqueta = normalizarEtiqueta(c.etiqueta);
       const polos = polosDe(def);
+      const na = def.elemento !== "contacto_nc";
+      const accionamiento = def.accionamiento ?? null;
       for (let polo = 0; polo < polos.length; polo++) {
         const a = redDe(c.id, polos[polo]![0]);
         const b = redDe(c.id, polos[polo]![1]);
         if (a === undefined || b === undefined) continue;
-        contactos.push({ comp: c.id, polo, etiqueta, na: def.elemento === "contacto_na", accionamiento: def.accionamiento, a, b });
+        contactos.push({ comp: c.id, polo, etiqueta, na, accionamiento, a, b });
       }
     } else if ((def.elemento === "bobina" || def.elemento === "carga") && def.bornes.length === 2) {
       const a = redDe(c.id, def.bornes[0]!.nombre);

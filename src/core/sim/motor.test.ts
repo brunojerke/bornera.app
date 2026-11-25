@@ -6,7 +6,7 @@ import { inversion } from "../circuitos/inversion";
 import { marchaParada } from "../circuitos/marchaParada";
 import { serializar } from "../io";
 import type { Cable, Componente, Hoja } from "../model/documento";
-import { entrarSimulacion, iniciar, pulsar, soltar, textoAvisoSim, type Simulacion } from "./motor";
+import { enclavados, entrarSimulacion, iniciar, pulsables, pulsar, soltar, textoAvisoSim, type Simulacion } from "./motor";
 import { armarNetlist } from "./netlist";
 
 // ── Ayudas ────────────────────────────────────────────────────────────────
@@ -564,7 +564,7 @@ describe("motor: polos (T34)", () => {
   });
 });
 
-// ── Potencia (T35): motores sin falsos cortos, protecciones que no conducen ─
+// ── Potencia (T35): motores sin falsos cortos; desde T36 las protecciones conducen ─
 
 /** Los contactos (polos) de la netlist de un componente. */
 const polosDeComp = (s: Simulacion, comp: string) => s.netlist.contactos.filter((c) => c.comp === comp);
@@ -643,7 +643,7 @@ describe("motor: potencia (T35, D13-A y D14-A)", () => {
     expect(nombreDeRed(s, "m", "U2")).toBeNull();
   });
 
-  it("trifásica con neutro → Q1 → K1 → F2 → M1: K1 se alimenta entre L1 y la N de la fuente; Q1 y F2 no conducen en T35 (D13-A), así que M1 queda sin tensión", () => {
+  it("trifásica con neutro → Q1 → K1 → F2 → M1: K1 se alimenta entre L1 y la N de la fuente; Q1 y F2 conducen (T36, D17-A): con K1, U, V y W toman L1, L2 y L3", () => {
     const h = circuito(
       [
         ["t", "fuente.trifasica_n"],
@@ -671,12 +671,25 @@ describe("motor: potencia (T35, D13-A y D14-A)", () => {
         ["f:6", "m:W"],
       ],
     );
-    const s = pulsar(entrar(h), "s1");
+    const conducen = (s: Simulacion, comp: string) => polosDeComp(s, comp).map((c) => s.conducen[s.netlist.contactos.indexOf(c)]);
+    const reposo = entrar(h);
+    // Sin K1: Q1 y F2 cerrados, pero K1 abierto deja a M1 sin tensión.
+    expect([conducen(reposo, "q"), conducen(reposo, "f"), conducen(reposo, "k")]).toEqual([
+      [true, true, true],
+      [true, true, true],
+      [false, false, false],
+    ]);
+    expect(["U", "V", "W"].map((b) => nombreDeRed(reposo, "m", b))).toEqual([null, null, null]);
+    expect(["2", "4", "6"].map((b) => nombreDeRed(reposo, "q", b))).toEqual(["L1", "L2", "L3"]);
+    const s = pulsar(reposo, "s1");
     expect(tension(s, "K1")).toBe(true);
-    expect(polosDeComp(s, "q")).toEqual([]);
-    expect(polosDeComp(s, "f")).toEqual([]);
-    expect(polosDeComp(s, "k").map((c) => s.conducen[s.netlist.contactos.indexOf(c)])).toEqual([true, true, true]);
-    expect(["U", "V", "W"].map((b) => nombreDeRed(s, "m", b))).toEqual([null, null, null]);
+    expect(polosDeComp(s, "q").map((c) => [c.polo, c.na, c.accionamiento])).toEqual([
+      [0, true, null],
+      [1, true, null],
+      [2, true, null],
+    ]);
+    expect(conducen(s, "k")).toEqual([true, true, true]);
+    expect(["U", "V", "W"].map((b) => nombreDeRed(s, "m", b))).toEqual(["L1", "L2", "L3"]);
     expect(s.detenida).toBeNull();
     expect(s.avisos).toEqual([]);
   });
@@ -699,5 +712,219 @@ describe("motor: potencia (T35, D13-A y D14-A)", () => {
     expect(red2("t", "L1")).toBe(red2("f1", "L"));
     expect(s2.netlist.enCorto).toEqual([]);
     expect([encendida(s2, "h"), encendida(s2, "h2")]).toEqual([true, true]);
+  });
+});
+
+// ── Mando y protecciones (T36) ─────────────────────────────────────────────
+
+/** Si conduce el polo `polo` de `comp`. */
+const conducePolo = (s: Simulacion, comp: string, polo = 0) => s.conducen[s.netlist.contactos.findIndex((c) => c.comp === comp && c.polo === polo)]!;
+
+/** Todos los símbolos de protección y el seccionador, con sus polos (T35). */
+const PROTECCIONES: [string, number][] = [
+  ["proteccion.termomagnetica_unipolar", 1],
+  ["proteccion.termomagnetica_bipolar", 2],
+  ["proteccion.termomagnetica_tripolar", 3],
+  ["proteccion.termomagnetica_tetrapolar", 4],
+  ["proteccion.diferencial_bipolar", 2],
+  ["proteccion.diferencial_tetrapolar", 4],
+  ["proteccion.guardamotor", 3],
+  ["maniobra.seccionador", 3],
+  ["proteccion.fusible_tripolar", 3],
+  ["proteccion.termico", 3],
+  ["proteccion.fusible", 1],
+];
+
+describe("motor: protecciones que conducen (T36, D17-A y D18-A)", () => {
+  it.each(PROTECCIONES)("%s: cada polo une la fase con una lámpara a neutro; un clic no hace nada", (tipo, polos) => {
+    const comps: [string, string, string?][] = [
+      ["f", "fuente.fase", "L1"],
+      ["n", "fuente.neutro", "N"],
+      ["q", tipo, "Q1"],
+    ];
+    const nodos: string[][] = [];
+    for (let i = 0; i < polos; i++) {
+      comps.push([`h${i}`, "senalizacion.lampara", `H${i + 1}`]);
+      nodos.push(["f:L", `q:${2 * i + 1}`], [`q:${2 * i + 2}`, `h${i}:X1`], [`h${i}:X2`, "n:N"]);
+    }
+    const s = entrar(circuito(comps, nodos));
+    expect(s.netlist.contactos.filter((c) => c.comp === "q")).toHaveLength(polos);
+    for (let i = 0; i < polos; i++) expect([conducePolo(s, "q", i), encendida(s, `h${i}`)], `polo ${i}`).toEqual([true, true]);
+    expect(s.detenida).toBeNull();
+    expect(s.avisos).toEqual([]);
+    // No es pulsable: pulsarla no cambia nada (el seccionador tampoco, D18-A).
+    expect(pulsables(s.netlist).has("q")).toBe(false);
+    expect(pulsar(s, "q").conducen).toEqual(s.conducen);
+  });
+
+  it("el diferencial bipolar con la fase en 1-2 y el neutro en 3-4 (la N, D8-A): la lámpara de abajo se enciende", () => {
+    const h = circuito(
+      [
+        ["f", "fuente.fase", "L1"],
+        ["n", "fuente.neutro", "N"],
+        ["q", "proteccion.diferencial_bipolar", "Q1"],
+        ["h", "senalizacion.lampara", "H1"],
+      ],
+      [["f:L", "q:1"], ["n:N", "q:3"], ["q:2", "h:X1"], ["q:4", "h:X2"]],
+    );
+    const s = entrar(h);
+    expect(encendida(s, "h")).toBe(true);
+    expect(s.avisos).toEqual([]);
+  });
+
+  it("una termomagnética entre L1 y L2: «Cortocircuito entre L1 y L2» al entrar (conduce como un cable)", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["q", "proteccion.termomagnetica_unipolar", "Q1"],
+      ],
+      [["t:L1", "q:1"], ["q:2", "t:L2"]],
+    );
+    const s = entrar(h);
+    expect(s.netlist.enCorto).toEqual([]);
+    expect(textos(s.avisos)).toEqual(["Cortocircuito entre L1 y L2"]);
+  });
+
+  it("marcha-parada con el fusible F1 en el mando: L – F1 – S0 – S1 – K1 – N arranca y retiene como sin él", () => {
+    const h = circuito(
+      [
+        ["f", "fuente.fase", "L"],
+        ["n", "fuente.neutro", "N"],
+        ["f1", "proteccion.fusible", "F1"],
+        ["s0", "pulsador.nc", "S0"],
+        ["s1", "pulsador.na", "S1"],
+        ["k1a", "contactor.auxiliar_na", "K1"],
+        ["kb", "contactor.bobina", "K1"],
+      ],
+      [["f:L", "f1:1"], ["f1:2", "s0:11"], ["s0:12", "s1:13", "k1a:13"], ["s1:14", "k1a:14", "kb:A1"], ["kb:A2", "n:N"]],
+    );
+    let s = entrar(h);
+    expect([conducePolo(s, "f1"), tension(s, "K1")]).toEqual([true, false]);
+    s = soltar(pulsar(s, "s1"), "s1");
+    expect(tension(s, "K1")).toBe(true);
+    s = soltar(pulsar(s, "s0"), "s0");
+    expect(tension(s, "K1")).toBe(false);
+  });
+});
+
+describe("motor: mando (T36)", () => {
+  /** L – contacto – H1 – N, con el contacto de tipo `tipo` y bornes `a`-`b`. */
+  const unContacto = (tipo: string, a: string, b: string, etiqueta: string, mas: [string, string, string?][] = []) =>
+    circuito(
+      [["f", "fuente.fase", "L"], ["n", "fuente.neutro", "N"], ["c", tipo, etiqueta], ["h", "senalizacion.lampara", "H1"], ...mas],
+      [["f:L", `c:${a}`], [`c:${b}`, "h:X1"], ["h:X2", "n:N"]],
+    );
+
+  it("selector y seta son enclavados; el final y el pulsador, no (D7-A)", () => {
+    const h = circuito(
+      [
+        ["sel", "mando.selector", "S1"],
+        ["seta", "mando.seta", "S2"],
+        ["fna", "mando.final_na", "S3"],
+        ["fnc", "mando.final_nc", "S4"],
+        ["p", "pulsador.na", "S5"],
+      ],
+      [["sel:13", "sel:14"], ["seta:11", "seta:12"], ["fna:13", "fna:14"], ["fnc:11", "fnc:12"], ["p:13", "p:14"]],
+    );
+    const n = armarNetlist(h);
+    expect([...pulsables(n)].sort()).toEqual(["fna", "fnc", "p", "sel", "seta"]);
+    expect([...enclavados(n)].sort()).toEqual(["sel", "seta"]);
+  });
+
+  it("selector NA: accionado cierra y enciende H1; liberado, abre", () => {
+    let s = entrar(unContacto("mando.selector", "13", "14", "S1"));
+    expect(encendida(s, "h")).toBe(false);
+    s = pulsar(s, "c");
+    expect([conducePolo(s, "c"), encendida(s, "h")]).toEqual([true, true]);
+    s = soltar(s, "c");
+    expect(encendida(s, "h")).toBe(false);
+  });
+
+  it("seta NC: en reposo conduce; accionada abre su NC y apaga H1 (ajuste 3); liberada, vuelve", () => {
+    let s = entrar(unContacto("mando.seta", "11", "12", "S1"));
+    expect(encendida(s, "h")).toBe(true);
+    s = pulsar(s, "c");
+    expect([conducePolo(s, "c"), encendida(s, "h")]).toEqual([false, false]);
+    s = soltar(s, "c");
+    expect(encendida(s, "h")).toBe(true);
+  });
+
+  it("finales de carrera NA y NC como los pulsadores", () => {
+    let na = entrar(unContacto("mando.final_na", "13", "14", "S1"));
+    let nc = entrar(unContacto("mando.final_nc", "11", "12", "S1"));
+    expect([encendida(na, "h"), encendida(nc, "h")]).toEqual([false, true]);
+    na = pulsar(na, "c");
+    nc = pulsar(nc, "c");
+    expect([encendida(na, "h"), encendida(nc, "h")]).toEqual([true, false]);
+  });
+
+  it("95-96 conduce y 97-98 no, con su F2 o sin él (F no dispara en T36; ajuste 1); un clic no hace nada", () => {
+    for (const conF of [true, false]) {
+      const mas: [string, string, string?][] = conF ? [["f2", "proteccion.termico", "F2"]] : [];
+      const nc = entrar(unContacto("termico.contacto_nc", "95", "96", "F2", mas));
+      const na = entrar(unContacto("termico.contacto_na", "97", "98", "F2", mas));
+      expect([conducePolo(nc, "c"), encendida(nc, "h")], `95-96, con F2: ${conF}`).toEqual([true, true]);
+      expect([conducePolo(na, "c"), encendida(na, "h")], `97-98, con F2: ${conF}`).toEqual([false, false]);
+      // El estado real es el de reposo: NC cerrado (conduce = !na), NA abierto; el dibujo, el de reposo.
+      for (const s of [nc, na]) {
+        const c = s.netlist.contactos.find((x) => x.comp === "c")!;
+        expect(c.accionamiento).toBe("termico");
+        expect(s.conducen[s.netlist.contactos.indexOf(c)] === c.na, "accionado").toBe(false);
+        expect(pulsables(s.netlist).has("c")).toBe(false);
+      }
+    }
+  });
+});
+
+describe("motor: bocina (T36, ajuste 2)", () => {
+  it("con S1 se enciende como la lámpara; entre fase y neutro no es corto", () => {
+    const h = circuito(
+      [
+        ["f", "fuente.fase", "L"],
+        ["n", "fuente.neutro", "N"],
+        ["s1", "pulsador.na", "S1"],
+        ["b", "senalizacion.bocina", "H1"],
+      ],
+      [["f:L", "s1:13"], ["s1:14", "b:X1"], ["b:X2", "n:N"]],
+    );
+    let s = entrar(h);
+    expect(s.netlist.cargas.map((c) => [c.comp, c.tipo])).toEqual([["b", "carga"]]);
+    expect(encendida(s, "b")).toBe(false);
+    s = pulsar(s, "s1");
+    expect(encendida(s, "b")).toBe(true);
+    expect(s.detenida).toBeNull();
+    expect(s.netlist.enCorto).toEqual([]);
+    expect(s.avisos).toEqual([]);
+  });
+
+  it("bocina y lámpara en serie entre L y N, también a través de un fusible: «Cargas en serie: H1 y H2»", () => {
+    for (const conFusible of [false, true]) {
+      const comps: [string, string, string?][] = [
+        ["f", "fuente.fase", "L"],
+        ["n", "fuente.neutro", "N"],
+        ["b", "senalizacion.bocina", "H1"],
+        ["h", "senalizacion.lampara", "H2"],
+      ];
+      const nodos = [["f:L", "b:X1"], ["h:X2", "n:N"]];
+      if (conFusible) {
+        comps.push(["fu", "proteccion.fusible", "F1"]);
+        nodos.push(["b:X2", "fu:1"], ["fu:2", "h:X1"]);
+      } else nodos.push(["b:X2", "h:X1"]);
+      const s = entrar(circuito(comps, nodos));
+      expect(textos(s.avisos), `con fusible: ${conFusible}`).toEqual(["Cargas en serie: H1 y H2"]);
+      expect([encendida(s, "b"), encendida(s, "h")]).toEqual([false, false]);
+    }
+  });
+
+  it("bocina directa entre L1 y L2 de la trifásica: se enciende, sin corto", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["b", "senalizacion.bocina", "H1"],
+      ],
+      [["t:L1", "b:X1"], ["b:X2", "t:L2"]],
+    );
+    const s = entrar(h);
+    expect([encendida(s, "b"), s.detenida]).toEqual([true, null]);
   });
 });

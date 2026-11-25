@@ -193,7 +193,7 @@ export function tienePolos(def: DefinicionSimbolo): boolean {
  * Los polos de un contacto o de una protección (T34, T35): `polos`, o sus dos
  * bornes si no los tiene. Fuera de ellos, ninguno. No arma arreglos nuevos en
  * cada llamada: el polo de 2 bornes se arma una vez por definición. La netlist
- * los lee solo de los contactos: las protecciones no conducen hasta T36.
+ * los lee de los contactos y de las protecciones (T36, que conducen siempre).
  */
 export function polosDe(def: DefinicionSimbolo): readonly (readonly [string, string])[] {
   if (!tienePolos(def)) return SIN_POLOS;
