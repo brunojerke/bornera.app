@@ -214,11 +214,12 @@ async function dibujarYGuardar(p, comprobar, h, m, archivos) {
   );
 
   // ── 2. Los 7 desde la paleta ──
-  const items = await p.evaluar(`[...document.querySelectorAll(".item")].map(e => { const r = e.getBoundingClientRect();
-    return { texto: e.textContent.trim(), x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+  // Cada ítem se desplaza a la vista antes de medirlo: desde T35 la paleta no entra entera a 1024×600.
   for (const c of COMPONENTES) {
     const nombreItem = buscarSimbolo(c.tipo)?.nombre;
-    const item = items.find((i) => i.texto === nombreItem);
+    const item = await p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === ${JSON.stringify(nombreItem ?? "")});
+      if (!e) return null; e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect();
+      return { texto: e.textContent.trim(), x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     if (!item) throw new Error(`No está «${nombreItem}» (${c.tipo}) en la paleta.`);
     await aLaVista(c.x - 3, c.y - 3, c.x + 4, c.y + 3, `colocar ${c.tipo}`);
     const destino = await p.punto(c.x, c.y);

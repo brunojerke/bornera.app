@@ -515,7 +515,7 @@ export default async function (p, comprobar) {
 
   // ── Colocar sobre un cable no coloca ──
   const lampara = await p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === "Lámpara");
-    const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await p.clic(lampara);
   n = await pasos();
   const sobreCable = await a(-3, 5); // el tramo de abajo de w2

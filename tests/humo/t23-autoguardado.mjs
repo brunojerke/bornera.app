@@ -148,7 +148,7 @@ export default async function (p, comprobar, { cargar, url }) {
   // D1, colocando en modo clic (la previa sigue al mouse).
   await colocar(20, "K5");
   const lampara = await p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === "Lámpara");
-    const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await p.clic(lampara);
   comprobar("clic en la paleta: colocando en modo clic", (await p.evaluar("bornera.editor.colocar?.modo")) === "clic");
   await esperaHasta("colocando en modo clic", () => p.esc());
