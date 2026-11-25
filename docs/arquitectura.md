@@ -88,7 +88,7 @@ Todo el programa gira alrededor de un único **Documento**: el editor lo modific
 **Entidades principales:**
 
 - **Documento:** formato y versión, metadatos (título, autor, fecha), `contadores` de ids (solo suben: un id borrado no se vuelve a dar) y la lista de hojas. El editor trabaja en la primera; un archivo con varias hojas abre, las conserva y avisa.
-- **Definición de símbolo:** se escribe una sola vez por tipo. Contiene el dibujo en coordenadas locales (líneas, arcos, círculos, texto), la posición y el nombre de cada borne, y el tipo de comportamiento (contacto NA, bobina, carga, fuente…).
+- **Definición de símbolo:** se escribe una sola vez por tipo. Contiene el dibujo en coordenadas locales (líneas, arcos, círculos, texto), la posición y el nombre de cada borne, el tipo de comportamiento (contacto NA, bobina, carga, fuente…) y su subgrupo en la paleta (desde T38; no va al `.brn`).
 - **Instancia de componente:** id, tipo de símbolo, posición en la grilla, rotación (0/90/180/270), espejado, etiqueta (K1, S2, H1) y parámetros (tensión, color de lámpara).
 - **Cable:** id, extremos `desde` y `hasta` y los codos intermedios (tramos horizontales o verticales, en enteros). Cada extremo está en un borne, sobre otro cable (una T) o libre.
 - **Unión:** punto donde llegan 3 o más brazos de una misma conexión (extremos de cable, bornes con cable y el anfitrión de una T); se calcula sola y no se guarda.
@@ -136,7 +136,7 @@ La interfaz tiene que ser cómoda en una pantalla de 1024×600: lienzo grande, p
 **Distribución de pantalla:**
 
 - **Arriba:** barra de herramientas (nuevo, abrir, guardar, exportar PDF, deshacer/rehacer, zoom) y el botón grande **Editar / Simular**.
-- **Izquierda:** paleta de componentes por categoría (fuentes, mando, potencia, señalización), con buscador. Plegable.
+- **Izquierda:** paleta de componentes en dos grupos plegables, Mando (alimentación, entradas, contactos, bobinas, señalización) y Potencia (protección, maniobra, cargas, fuentes), cada uno con sus subgrupos también plegables (T38). Cada símbolo es una miniatura dibujada con el mismo Renderer del lienzo, con el nombre en el tooltip; buscador que despliega lo que encuentra. Plegable.
 - **Centro:** lienzo con grilla.
 - **Derecha:** propiedades del elemento seleccionado (etiqueta, tensión, rotación). Plegable; se abre solo al seleccionar. Sin selección muestra el botón "Etiquetar los vacíos" (T17).
 - **Abajo:** barra de estado (coordenadas, zoom, avisos de simulación).
@@ -186,6 +186,8 @@ La diferencia con CADe\_SIMU se gana acá: **dibujar solo lo necesario, solo cua
 > Nota (2026-11-22, fase 5): el banco tiene dos escenas oficiales nuevas. La escena con cables (2000 + 3030) se tiende entera como W (`codosBanco`): 0 conexiones aparentes, así que los avisos R10 y R11 se miden sobre un circuito sano. La **escena de mando** (`bancoMando.ts`: 2000 símbolos, 2200 cables y 300 bobinas) alimenta S1–S5 de «Probar la fase 5»: entrar a Simular (con la netlist dentro de S1), pulsar y soltar, el dibujo del estado y la salida. Topes de la netbook por la regla de la fase 4 (K1 = 3, K2 = 5,5, decisión D1-D); en C3 (2026-11-22) los cocientes netbook / PC salieron S1 4,6, S3 3,1, S4 2,4 / 2,6 y S5 2,4. Detalle en `docs/bench.md`.
 
 > Nota (2026-11-25, fase 6, T37): tercera escena oficial, la **escena de potencia** (`bancoPotencia.ts`: 95 copias de la inversión de giro con potencia más una celda de lámpara, 2000 símbolos justos y 3519 cables, tendida por W y sin aparentes; L1, L2, L3 y N son una red cada una, 1526 redes). Alimenta S6 de «Probar la fase 6» (entrar a Simular hasta nítido al 31 %, como S1). El Lienzo deja una marca al primer cuadro nítido desde que abre la app (`arranque.ts`), base de P2. Plan en `docs/plan-T37.md`.
+
+> Nota (2026-11-25, fase 6, T38): las miniaturas de la paleta son un canvas chico por símbolo, dibujado una sola vez después del primer cuadro nítido del lienzo, con el `Path2D` ya cacheado del símbolo. Solo un tema o un dpr nuevo las rehacen; la búsqueda y el plegado las ocultan sin redibujar. Rehacer las 32 (P1) cuesta 0,4 ms en la PC (tope 9,1). Plan en `docs/plan-T38.md`.
 
 ## Formato de archivo propio
 

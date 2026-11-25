@@ -46,3 +46,13 @@ Un canvas chico por ítem (D10-A), dibujado una vez; nada en el bucle del lienzo
 
 ## Riesgos
 32 canvas montados antes del primer cuadro pueden mover P2 (se espera poco). `subgrupo` toca las 32 definiciones, no el `.brn`.
+
+## Resultado (2026-11-25)
+- Commits: `423f6e8` (plan), `dfdaf9c` y `d6b0c07` (checkpoints) y el de cierre. Todo el alcance hecho.
+- **Paso 1:** sin cambios. La lista ya desplazaba (434 de 995 px a 1024×600) y se llegaba a la Lámpara; no era CSS. Con la grilla, a 1024×600 la Lámpara entra sin desplazar.
+- **Ancho:** grilla de 172 px; entra con la barra de 17 px de WebView2 (174 útiles) y sin scroll horizontal (humo).
+- **Búsqueda:** «motor» trae también el Guardamotor (lo contiene): el humo espera los 2 motores y el guardamotor. La búsqueda oculta los ítems sin desmontarlos (las miniaturas no se redibujan).
+- **Humos:** desde T38 el primer `<canvas>` del DOM es una miniatura; los humos (30 archivos y `cdp.mjs`) y `webview2.mjs` buscan el lienzo por `canvas[aria-label^=Lienzo]`. t07, t34, t35, t36 y t37 se ajustan a la paleta nueva (ítems ocultos, lugar «Grupo › Subgrupo», trifásica al final, fila P1). Ninguna expectativa de la app se relajó.
+- `npm test` 2692; `npm run check` 0 errores; `npm run humo` 1134/1134 (`t38` 25/25); `cargo test` 7.
+- **ABBA contra `24090e0`: pasa.** P1 0,4 / 0,4 ms (≤ 9,1 / 10,1); P2 148,9 contra 139,3 (≤ 153,2; sube 9,6 ms); S6 19,5 / 23,5 con no regresión; S1–S5, B1–B16 (B2 1.º 10,6 → 10,6) y F pasan. S1 sube 17,8 → 20,5 (informa, R-A). Detalle en `docs/bench.md`.
+- **Pendiente:** P1, S6 y P2 de la netbook en C3; mirar ahí S1.
