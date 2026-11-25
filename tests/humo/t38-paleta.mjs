@@ -5,7 +5,10 @@
 //  - las 32 miniaturas, cada una con su canvas dibujado y el nombre en
 //    `title`, en `aria-label` y como texto (ajuste 5);
 //  - la marca de las miniaturas, una sola vez y después de la de arranque
-//    (fase 6 §4: no demoran el primer cuadro);
+//    (fase 6 §4: no demoran el primer cuadro); desde C1 también la de los
+//    canvas montados, entre las dos (montarlos antes alargaba P2);
+//  - plegar y desplegar un subgrupo, y cambiar el tema, dejan las 32
+//    dibujadas (C1, ajuste 2); si plegar desmontara el canvas, se redibuja;
 //  - sin scroll horizontal, también con una barra de scroll de 17 px (la de
 //    WebView2; headless puede no tenerla) (ajuste 1);
 //  - Mando › Alimentación … Potencia › Fuentes, en ese orden;
@@ -24,6 +27,7 @@ export const nombre = "T38: paleta con miniaturas y subgrupos plegables";
 
 const MARCA_ARRANQUE = "bornera:primer-cuadro-nitido";
 const MARCA_MINIATURAS = "bornera:miniaturas";
+const MARCA_MONTADAS = "bornera:miniaturas-montadas";
 /** Barra de scroll vertical de WebView2 en Windows (px CSS). */
 const BARRA_WEBVIEW2 = 17;
 
@@ -90,15 +94,59 @@ export default async function (p, comprobar, { cargar }) {
   comprobar(`cada miniatura está dibujada (canvas de ${lado} px con trazo)`, items.every((i) => i.ancho === lado && i.alto === lado && i.tinta > 0), JSON.stringify(items.filter((i) => i.tinta === 0 || i.ancho !== lado).map((i) => i.texto)));
   info(`píxeles con trazo: mín. ${Math.min(...items.map((i) => i.tinta))}, máx. ${Math.max(...items.map((i) => i.tinta))}`);
 
-  const marcas = await p.evaluar(`[${JSON.stringify(MARCA_ARRANQUE)}, ${JSON.stringify(MARCA_MINIATURAS)}].map((n) => performance.getEntriesByName(n, "mark").map((m) => m.startTime))`);
+  const marcas = await p.evaluar(`[${JSON.stringify(MARCA_ARRANQUE)}, ${JSON.stringify(MARCA_MINIATURAS)}, ${JSON.stringify(MARCA_MONTADAS)}].map((n) => performance.getEntriesByName(n, "mark").map((m) => m.startTime))`);
   comprobar(
     "las miniaturas se dibujan una vez, después del primer cuadro nítido (fase 6 §4)",
     marcas[0].length === 1 && marcas[1].length === 1 && marcas[1][0] > marcas[0][0],
     JSON.stringify(marcas),
   );
-  info(`arranque ${marcas[0][0]?.toFixed(1)} ms; miniaturas ${marcas[1][0]?.toFixed(1)} ms`);
+  comprobar(
+    "los canvas de las miniaturas se montan después del primer cuadro nítido y antes de dibujarse (C1)",
+    marcas[2].length === 1 && marcas[2][0] > marcas[0][0] && marcas[2][0] <= marcas[1][0],
+    JSON.stringify(marcas),
+  );
+  info(`arranque ${marcas[0][0]?.toFixed(1)} ms; montadas ${marcas[2][0]?.toFixed(1)} ms; miniaturas ${marcas[1][0]?.toFixed(1)} ms`);
 
   await p.captura("paleta");
+
+  // ── 1b. Plegar, desplegar y cambiar el tema no las dejan en blanco (C1) ──
+  /** Por ítem: si tiene canvas, si es el mismo de antes, píxeles con trazo y brillo medio del trazo. */
+  const dibujadas = () =>
+    p.evaluar(`[...document.querySelectorAll(".item")].map((e) => { const c = e.querySelector("canvas");
+      if (!c) return { nombre: e.getAttribute("aria-label"), canvas: false, tinta: 0 };
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let tinta = 0, fuerte = 0, brillo = 0;
+      for (let i = 3; i < d.length; i += 4) { if (d[i] > 0) tinta++; if (d[i] > 200) { fuerte++; brillo += (d[i - 3] + d[i - 2] + d[i - 1]) / 3; } }
+      return { nombre: e.getAttribute("aria-label"), canvas: true, mismo: c.__c1 === true, tinta, brillo: fuerte ? brillo / fuerte : null }; })`);
+  const enBlanco = (l) => l.filter((i) => !i.canvas || i.tinta === 0).map((i) => i.nombre);
+  const brilloMedio = (l) => l.reduce((a, i) => a + (i.brillo ?? 0), 0) / l.length;
+  await p.evaluar(`document.querySelectorAll(".item canvas").forEach((c) => { c.__c1 = true; }), true`);
+  await lista();
+  await plegar("Entradas");
+  await plegar("Entradas");
+  const trasPlegar = await dibujadas();
+  comprobar("plegar y desplegar Entradas deja las 32 dibujadas", trasPlegar.length === 32 && enBlanco(trasPlegar).length === 0, JSON.stringify(enBlanco(trasPlegar)));
+  const desmontadas = trasPlegar.filter((i) => !i.mismo).map((i) => i.nombre);
+  info(desmontadas.length === 0 ? "plegar no desmonta los canvas (el <details> conserva el DOM)" : `plegar desmontó ${desmontadas.length} canvas y se redibujaron: ${desmontadas.join(", ")}`);
+  const porTema = {};
+  try {
+    for (const tema of ["light", "dark"]) {
+      await p.cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: tema }] });
+      await esperar(150);
+      porTema[tema] = await dibujadas();
+      comprobar(`en ${tema === "light" ? "claro" : "oscuro"}, las 32 siguen dibujadas`, porTema[tema].length === 32 && enBlanco(porTema[tema]).length === 0, JSON.stringify(enBlanco(porTema[tema])));
+    }
+    comprobar(
+      "al pasar a oscuro se redibujan con el trazo del tema (más claro)",
+      brilloMedio(porTema.dark) > brilloMedio(porTema.light) + 100,
+      `claro ${brilloMedio(porTema.light).toFixed(0)}, oscuro ${brilloMedio(porTema.dark).toFixed(0)}`,
+    );
+    await p.captura("paleta-oscuro");
+  } finally {
+    await p.cdp("Emulation.setEmulatedMedia", { features: [] });
+    await esperar(150);
+  }
+  const deVuelta = await dibujadas();
+  comprobar("al volver al tema de la máquina, las 32 siguen dibujadas", deVuelta.length === 32 && enBlanco(deVuelta).length === 0, JSON.stringify(enBlanco(deVuelta)));
 
   // ── 2. Ancho: sin scroll horizontal, también con la barra de WebView2 ──
   const ancho = await p.evaluar(`(() => { const l = document.querySelector(".lista"), cs = getComputedStyle(l);

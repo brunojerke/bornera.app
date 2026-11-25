@@ -1,6 +1,7 @@
 // Miniaturas de la paleta (fase 6, T38; D10-A y D29-A): cada ítem registra su
-// canvas; las 32 se dibujan de una vez después del primer cuadro nítido del
-// lienzo (`despuesDelArranque`), también las de grupos plegados (el <details>
+// canvas, que la paleta monta después del primer cuadro nítido del lienzo
+// (C1); las 32 se dibujan de una vez en la tarea siguiente
+// (`despuesDelArranque`), también las de grupos plegados (el <details>
 // conserva el DOM), y la búsqueda solo las oculta. Se rehacen solo con un
 // tema o un dpr nuevo. Nada corre por cuadro.
 
@@ -10,6 +11,8 @@ import { despuesDelArranque } from "./arranque";
 
 /** Marca de `performance` cuando quedan dibujadas por primera vez (la mira el humo de T38). */
 export const MARCA_MINIATURAS = "bornera:miniaturas";
+/** Marca de cuando se monta el primer canvas (C1: después de la de arranque; la mira el humo de T38). */
+export const MARCA_MONTADAS = "bornera:miniaturas-montadas";
 
 /** Lo que la clase lee del entorno; en los tests, falsos. */
 export interface EntornoMiniaturas {
@@ -108,9 +111,15 @@ export function miniaturas(): Miniaturas {
   return m;
 }
 
+let montada = false;
+
 /** Acción de Svelte: `<canvas use:miniatura={def}>` registra el canvas y lo quita al desmontarse. */
 export function miniatura(canvas: HTMLCanvasElement, def: DefinicionSimbolo): { destroy(): void } {
   const m = miniaturas();
+  if (!montada) {
+    montada = true;
+    performance.mark(MARCA_MONTADAS);
+  }
   m.registrar(canvas, def);
   return { destroy: () => m.quitar(canvas) };
 }

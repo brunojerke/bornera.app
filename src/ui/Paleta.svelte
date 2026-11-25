@@ -15,6 +15,7 @@
   import { SIMBOLOS, type DefinicionSimbolo } from "../core/symbols";
   import { Plegado, agruparSimbolos } from "./paleta";
   import { miniatura } from "./miniaturas";
+  import { despuesDelArranque } from "./arranque";
 
   let {
     abierta = $bindable(true),
@@ -55,6 +56,14 @@
     }
     return ids;
   });
+
+  /**
+   * Los canvas de las miniaturas se montan después del primer cuadro nítido
+   * (C1 de la fase 6): crearlos antes alargaba el arranque (P2). Los botones,
+   * de 40 × 40 fijos, se montan desde el principio, así que nada se corre.
+   */
+  let montarMiniaturas = $state(false);
+  despuesDelArranque(() => (montarMiniaturas = true));
 
   const plegado = new Plegado();
   /** Sube con cada cambio del plegado: `abierto` lo lee para volver a evaluarse. */
@@ -125,7 +134,9 @@
                       title={desactivada ? `${def.nombre} (volvé al documento para colocar)` : def.nombre}
                       onpointerdown={(e) => onelegir?.(def, e)}
                     >
-                      <canvas use:miniatura={def} aria-hidden="true"></canvas>
+                      {#if montarMiniaturas}
+                        <canvas use:miniatura={def} aria-hidden="true"></canvas>
+                      {/if}
                       <span class="oculto">{def.nombre}</span>
                     </button>
                   </li>
