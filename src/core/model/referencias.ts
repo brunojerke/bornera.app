@@ -16,7 +16,7 @@
 // etiqueta de algo que no es bobina no aparece en ninguna; dos bobinas con la
 // misma etiqueta muestran la misma lista; un símbolo desconocido no cuenta.
 
-import { buscarSimbolo, esBobina, sigueABobina, type DefinicionSimbolo } from "../symbols";
+import { buscarSimbolo, esBobina, polosDe, sigueABobina, type DefinicionSimbolo } from "../symbols";
 import type { Hoja } from "./documento";
 import { normalizarEtiqueta } from "./etiquetas";
 
@@ -38,8 +38,13 @@ export interface FilaReferencia {
   /** Id del contacto. */
   readonly contacto: string;
   readonly clase: ClaseContacto;
-  /** Nombres de sus bornes (`bornesDeFila`): "13", "14". */
+  /** Nombres de sus bornes (`bornesDeFila`): "13", "14". Ordenan las filas. */
   readonly bornes: readonly string[];
+  /**
+   * Sus polos (T35, D16-A): el arreglo de `polosDe`, sin copiar. Son los que
+   * se escriben: «1-2, 3-4, 5-6» en el principal, «13-14» en un auxiliar.
+   */
+  readonly polos: readonly (readonly [string, string])[];
   readonly ubicacion: Ubicacion;
 }
 
@@ -108,6 +113,7 @@ export function referenciasCruzadas(hoja: Pick<Hoja, "componentes">, indiceHoja 
       contacto: c.id,
       clase: def!.elemento === "contacto_nc" ? "NC" : "NA",
       bornes: bornesDeFila(def!),
+      polos: polosDe(def!),
       ubicacion: { hoja: indiceHoja, x: c.x, y: c.y },
     };
     const lista = contactos.get(etiqueta);
@@ -142,8 +148,15 @@ export function textoUbicacion(u: Ubicacion): string {
 /**
  * La línea que se dibuja bajo la bobina: "NA 13-14 (10, 11)". Un espacio entre
  * las partes (elegido con las capturas de la etapa 2: es la más corta y deja
- * más margen contra lo que está a la derecha de la lista).
+ * más margen contra lo que está a la derecha de la lista). Con varios polos,
+ * separados por coma (T35, D16-A): "NA 1-2, 3-4, 5-6 (10, 11)".
  */
 export function textoFila(f: FilaReferencia): string {
-  return `${f.clase} ${f.bornes.join("-")} ${textoUbicacion(f.ubicacion)}`;
+  return `${f.clase} ${textoPolos(f.polos)} ${textoUbicacion(f.ubicacion)}`;
+}
+
+/** "13-14"; "1-2, 3-4, 5-6". Sin polos (no debería pasar en un seguidor), nada. */
+function textoPolos(polos: readonly (readonly [string, string])[]): string {
+  if (polos.length === 1) return `${polos[0]![0]}-${polos[0]![1]}`;
+  return polos.map(([a, b]) => `${a}-${b}`).join(", ");
 }

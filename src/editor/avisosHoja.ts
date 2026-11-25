@@ -19,8 +19,9 @@
 // - R7 y R8, incremental: los bornes de los componentes agregados, borrados o
 //   de otro tipo, los de los cables cuyos extremos cambiaron y esos cables.
 //   Sale de `BornesConCable`, que el editor pone al día antes.
-// - R10 (T29), por el mismo camino que las etiquetas: con cada Fase que llega,
-//   se va o cambia de etiqueta, se recalculan las Fases «L» (pocas).
+// - R10 (T29), por el mismo camino que las etiquetas: con cada Fase (o
+//   trifásica, T35) que llega, se va o cambia de etiqueta, se recalculan las
+//   Fases «L» (pocas).
 // - R11 (T29, I-A), aparte y después de la escena (`reflejarR11`: necesita el
 //   índice espacial al día). Se revisan los componentes y cables del cambio y
 //   lo que la consulta tiene cerca de ellos, nunca todos contra todos; los
@@ -50,7 +51,7 @@ import type { Cable, Componente, Documento, Extremo, Hoja } from "../core/model/
 import type { ConsultaTrazado } from "../core/model/trazado";
 import { normalizarEtiqueta } from "../core/model/etiquetas";
 import { nombreDeFuente } from "../core/model/redes";
-import { contarAvisos, esAuxiliarNC, esFaseL, esFaseNumerada, otrasFasesR10, validar, type Aviso, type Regla } from "../core/model/validaciones";
+import { contarAvisos, esAuxiliarNC, esFaseL, fasesNumeradasDe, otrasFasesR10, validar, type Aviso, type Regla } from "../core/model/validaciones";
 import { buscarSimbolo, esBobina, type DefinicionSimbolo } from "../core/symbols";
 import type { BornesConCable } from "./bornesConCable";
 
@@ -297,7 +298,7 @@ export class AvisosHoja {
   private readonly r10 = new Map<string, Aviso>();
   /** Las Fases «L» de la hoja (R10). */
   private readonly fasesL = new Set<string>();
-  /** Cuántas Fases hay con cada etiqueta L1, L2 y L3 (R10). */
+  /** Cuántas Fases L1, L2 y L3 hay, contando los bornes de las trifásicas (R10). */
   private readonly numeradas = new Map<string, number>();
   /** R11 por componente o cable, visibles (sin los que calla R11-A). */
   private readonly r11 = new Map<string, readonly Aviso[]>();
@@ -449,19 +450,21 @@ export class AvisosHoja {
     else if (this.entreCables.size === 0 || this.pendienteR11) this.vecinos = null;
   }
 
-  /** Suma la Fase a las cuentas de R10 (si es «L» o L1 a L3). */
+  /** Suma la Fase a las cuentas de R10 (si es «L», L1 a L3 o una trifásica). */
   private ponerFase(id: string, g: DatosComp): void {
     if (esFaseL(g.tipo, g.e)) this.fasesL.add(id);
-    else if (esFaseNumerada(g.tipo, g.e)) this.numeradas.set(g.e, (this.numeradas.get(g.e) ?? 0) + 1);
+    else for (const f of fasesNumeradasDe(g.tipo, g.e)) this.numeradas.set(f, (this.numeradas.get(f) ?? 0) + 1);
   }
 
   /** Saca la Fase de las cuentas de R10. */
   private sacarFase(id: string, g: DatosComp): void {
     if (esFaseL(g.tipo, g.e)) this.fasesL.delete(id);
-    else if (esFaseNumerada(g.tipo, g.e)) {
-      const n = (this.numeradas.get(g.e) ?? 0) - 1;
-      if (n > 0) this.numeradas.set(g.e, n);
-      else this.numeradas.delete(g.e);
+    else {
+      for (const f of fasesNumeradasDe(g.tipo, g.e)) {
+        const n = (this.numeradas.get(f) ?? 0) - 1;
+        if (n > 0) this.numeradas.set(f, n);
+        else this.numeradas.delete(f);
+      }
     }
   }
 

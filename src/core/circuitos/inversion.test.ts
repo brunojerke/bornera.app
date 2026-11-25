@@ -180,12 +180,12 @@ describe("inversión: validaciones y referencias (criterios de la fase 3b)", () 
     // Nadie más tiene lista.
     expect([...refs.keys()]).toEqual([c.k1Bobina, c.k2Bobina]);
     expect(refs.get(c.k1Bobina)).toEqual([
-      { contacto: c.k1Auxiliar, clase: "NA", bornes: ["13", "14"], ubicacion: { hoja: 0, x: 10, y: 11 } },
-      { contacto: c.k1AuxiliarNC, clase: "NC", bornes: ["21", "22"], ubicacion: { hoja: 0, x: 21, y: 17 } },
+      { contacto: c.k1Auxiliar, clase: "NA", bornes: ["13", "14"], polos: [["13", "14"]], ubicacion: { hoja: 0, x: 10, y: 11 } },
+      { contacto: c.k1AuxiliarNC, clase: "NC", bornes: ["21", "22"], polos: [["21", "22"]], ubicacion: { hoja: 0, x: 21, y: 17 } },
     ]);
     expect(refs.get(c.k2Bobina)).toEqual([
-      { contacto: c.k2Auxiliar, clase: "NA", bornes: ["13", "14"], ubicacion: { hoja: 0, x: 31, y: 11 } },
-      { contacto: c.k2AuxiliarNC, clase: "NC", bornes: ["21", "22"], ubicacion: { hoja: 0, x: 0, y: 17 } },
+      { contacto: c.k2Auxiliar, clase: "NA", bornes: ["13", "14"], polos: [["13", "14"]], ubicacion: { hoja: 0, x: 31, y: 11 } },
+      { contacto: c.k2AuxiliarNC, clase: "NC", bornes: ["21", "22"], polos: [["21", "22"]], ubicacion: { hoja: 0, x: 0, y: 17 } },
     ]);
     expect(refs.get(c.k1Bobina)!.map(textoFila)).toEqual(["NA 13-14 (10, 11)", "NC 21-22 (21, 17)"]);
     expect(refs.get(c.k2Bobina)!.map(textoFila)).toEqual(["NA 13-14 (31, 11)", "NC 21-22 (0, 17)"]);

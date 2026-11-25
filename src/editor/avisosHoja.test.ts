@@ -968,6 +968,30 @@ describe("R10 y R11 en el editor (T29)", () => {
     expect(diferencias(editor, h)).toEqual([]);
   });
 
+  it("R10 con la trifásica (T35, D15-A): colocarla marca la «L»; renombrar la «L» o borrar la última trifásica lo saca; deshacer lo vuelve", () => {
+    const mp = marchaParada();
+    const { editor, h, poner } = armar(mp.doc);
+    const r10 = () => editor.avisos.de(mp.comp.fase).filter((a) => a.regla === "R10");
+    const t = poner("fuente.trifasica", 40, 0, "");
+    expect(r10()).toEqual([{ regla: "R10", severidad: "aviso", id: mp.comp.fase, otras: "L1, L2 y L3" }]);
+    expect(editor.escena.obtener(mp.comp.fase)?.conAviso).toBe(true);
+    expect(diferencias(editor, h)).toEqual([]);
+    // Dos trifásicas: borrar una deja el aviso (se cuentan).
+    const t2 = poner("fuente.trifasica_n", 60, 0, "");
+    editor.ejecutar(new Borrar([t]));
+    expect(r10()).toHaveLength(1);
+    editor.ejecutar(new CambiarEtiqueta(mp.comp.fase, "L2"));
+    expect(r10()).toEqual([]);
+    editor.deshacer();
+    expect(r10()).toHaveLength(1);
+    editor.ejecutar(new Borrar([t2]));
+    expect(r10()).toEqual([]);
+    expect(editor.escena.obtener(mp.comp.fase)?.conAviso === true).toBe(false);
+    editor.deshacer();
+    expect(r10()).toHaveLength(1);
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
   it("R11: al abrir, un cable sobre un borne marca los dos; sacarlo con Mover lo quita, deshacer lo muestra y rehacer lo saca", () => {
     const a = armar();
     const l = a.poner(LAMPARA, 0, 0, "H1");

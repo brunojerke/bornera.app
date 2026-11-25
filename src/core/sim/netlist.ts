@@ -17,7 +17,8 @@
 // - Contactos (NA o NC, con su accionamiento), uno por polo (T34: los 3 de
 //   un contactor principal, con la etiqueta y el accionamiento del símbolo), y
 //   cargas (bobina, lámpara), cada uno con la red de sus dos bornes. Un símbolo desconocido no conduce ni es
-//   carga; tampoco lo que la fase 5 no simula (la protección).
+//   carga; tampoco lo que todavía no se simula: las protecciones (hasta T36,
+//   D13-A) y los motores, cargas de 3 o 6 bornes (hasta 6b, D14-A).
 // - Bobinas por etiqueta, en orden natural (K1, K2, K10): el orden de D2. Una
 //   etiqueta repetida en dos bobinas no se resuelve acá (R4 impide entrar).
 //
@@ -40,7 +41,7 @@ const PAPEL: Readonly<Record<string, Papel>> = {
 /**
  * Papel de cada borne de las fuentes de varios bornes, por `tipo` y nombre de
  * borne (T34, D3-A). El nombre del borne es el de la red. `fuente.trifasica_n`
- * es de T35; está para el test de la fuente de 4 bornes (ajuste 2).
+ * (símbolo de T35) suma el N como neutro.
  */
 const PAPEL_POR_BORNE: Readonly<Record<string, Readonly<Record<string, Papel>>>> = {
   "fuente.trifasica": { L1: "fase", L2: "fase", L3: "fase" },

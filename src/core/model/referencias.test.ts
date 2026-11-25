@@ -50,7 +50,7 @@ describe("referenciasCruzadas: marcha-parada", () => {
     const { doc, comp: c } = marchaParada();
     const refs = referenciasCruzadas(doc.hojas[0]!);
     expect([...refs.keys()]).toEqual([c.k1Bobina]);
-    expect(refs.get(c.k1Bobina)).toEqual([{ contacto: c.k1Auxiliar, clase: "NA", bornes: ["13", "14"], ubicacion: { hoja: 0, x: 10, y: 11 } }]);
+    expect(refs.get(c.k1Bobina)).toEqual([{ contacto: c.k1Auxiliar, clase: "NA", bornes: ["13", "14"], polos: [["13", "14"]], ubicacion: { hoja: 0, x: 10, y: 11 } }]);
     expect(lineas(refs)).toEqual([[c.k1Bobina, ["NA 13-14 (10, 11)"]]]);
   });
 
@@ -277,7 +277,9 @@ function referenciasLentas(hoja: Pick<Hoja, "componentes">): Map<string, FilaRef
       const borne = Number(bornes[0]);
       if (!Number.isInteger(borne)) throw new Error(`El cálculo lento espera bornes numéricos: ${c.tipo} tiene "${bornes[0]}".`);
       const clase = def.elemento === "contacto_nc" ? "NC" : "NA";
-      encontradas.push({ fila: { contacto: c.id, clase, bornes, ubicacion: { hoja: 0, x: c.x, y: c.y } }, i, borne });
+      // Polos escritos aparte (T35): los de la definición, o los dos bornes de un contacto simple.
+      const polos: [string, string][] = def.polos ? def.polos.map(([x, y]) => [x, y]) : [[bornes[0]!, bornes[1]!]];
+      encontradas.push({ fila: { contacto: c.id, clase, bornes, polos, ubicacion: { hoja: 0, x: c.x, y: c.y } }, i, borne });
     });
     if (encontradas.length === 0) continue;
     encontradas.sort((p, q) => p.borne - q.borne || p.fila.ubicacion.y - q.fila.ubicacion.y || p.fila.ubicacion.x - q.fila.ubicacion.x || p.i - q.i);
@@ -292,7 +294,7 @@ function referenciasLentas(hoja: Pick<Hoja, "componentes">): Map<string, FilaRef
 /** Las listas como texto, para comparar y para leer la diferencia. */
 function canonico(refs: ReadonlyMap<string, readonly FilaReferencia[]>): string[] {
   return [...refs].map(
-    ([id, filas]) => `${id} → ${filas.map((f) => `${f.contacto} ${f.clase} ${f.bornes.join("-")} h${f.ubicacion.hoja} (${f.ubicacion.x}, ${f.ubicacion.y})`).join(" | ")}`,
+    ([id, filas]) => `${id} → ${filas.map((f) => `${f.contacto} ${f.clase} ${f.bornes.join("-")} [${f.polos.map((q) => q.join("-")).join(", ")}] h${f.ubicacion.hoja} (${f.ubicacion.x}, ${f.ubicacion.y})`).join(" | ")}`,
   );
 }
 
@@ -545,5 +547,27 @@ describe("al azar, con semilla fija, contra el cálculo lento", () => {
       vi.doUnmock("./etiquetas");
       vi.resetModules();
     }
+  });
+});
+
+describe("contactos principales: la fila por polos (T35, D16-A)", () => {
+  const PRINCIPAL = "contactor.principal";
+
+  it("«NA 1-2, 3-4, 5-6 (x, y)» bajo la bobina, y el auxiliar sigue «NA 13-14»", () => {
+    const h = hojaCon([BOBINA, "K1", 0, 0], [PRINCIPAL, "K1", 10, -20], [NA, "K1", 4, 0]);
+    const filas = referenciasCruzadas(h).get("c1")!;
+    expect(filas.map(textoFila)).toEqual(["NA 1-2, 3-4, 5-6 (10, -20)", "NA 13-14 (4, 0)"]);
+  });
+
+  it("los polos de la fila son los de la definición, sin copiar", () => {
+    const h = hojaCon([BOBINA, "K1", 0, 0], [PRINCIPAL, "K1", 10, 0]);
+    const fila = referenciasCruzadas(h).get("c1")![0]!;
+    expect(fila.polos).toBe(buscarSimbolo(PRINCIPAL)!.polos);
+    expect(fila.bornes).toEqual(["1", "2", "3", "4", "5", "6"]);
+  });
+
+  it("las protecciones (Q, F) no son seguidoras: no entran en ninguna lista aunque lleven la etiqueta de la bobina", () => {
+    const h = hojaCon([BOBINA, "K1", 0, 0], ["proteccion.termico", "K1", 10, 0], ["proteccion.guardamotor", "K1", 20, 0]);
+    expect(referenciasCruzadas(h).size).toBe(0);
   });
 });

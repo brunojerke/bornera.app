@@ -374,6 +374,334 @@ export const CONTACTOR_PRINCIPAL: DefinicionSimbolo = {
   ],
 };
 
+// ── Potencia (T35) ─────────────────────────────────────────────────────────
+// Protecciones y seccionador (D13-A): `elemento: "proteccion"` con un polo por
+// par de bornes (1-2, 3-4…). En T35 no conducen, como en la fase 5; T36 las
+// hace conducir siempre (D6-A) y 6b suma abrir y disparar. El polo N de las
+// tetrapolares y de los diferenciales va con una «N» dibujada (D8-A).
+// Motores (D14-A): `elemento: "carga"` con 3 o 6 bornes. La netlist arma
+// cargas solo de 2 bornes, así que en 6a no conducen ni son carga.
+
+/** X de los polos de los símbolos de 1, 2 y 4 polos (los de 3, `POLOS_X`). */
+const POLOS_1 = [0] as const;
+const POLOS_2 = [-1, 1] as const;
+const POLOS_4 = [-3, -1, 1, 3] as const;
+
+/** Las primitivas del contacto (líneas y rectángulos) repetidas en cada polo de `xs`. */
+function multipolar(contacto: Primitiva[], xs: readonly number[]): Primitiva[] {
+  const salida: Primitiva[] = [];
+  for (const dx of xs) {
+    for (const p of contacto) {
+      if (p.forma === "linea") salida.push(linea(p.x1 + dx, p.y1, p.x2 + dx, p.y2));
+      else if (p.forma === "rectangulo") salida.push({ ...p, x: p.x + dx });
+    }
+  }
+  return salida;
+}
+
+/** Enlace mecánico en y = 0, de la cuchilla del último polo hasta `hastaX` (por defecto, la del primero). */
+function enlace(xs: readonly number[], xCuchilla: number, hastaX = xs[0]! + xCuchilla): Linea[] {
+  return discontinua(xs[xs.length - 1]! + xCuchilla, 0, hastaX, 0);
+}
+
+/** Bornes 1, 3, 5… arriba y 2, 4, 6… abajo, uno por polo de `xs`, en una caja de `alto`. */
+function bornesPolos(xs: readonly number[], alto = 4): DefinicionSimbolo["bornes"] {
+  return xs.flatMap((x, i) => [
+    { nombre: `${2 * i + 1}`, x, y: -alto / 2, direccion: "arriba" as const },
+    { nombre: `${2 * i + 2}`, x, y: alto / 2, direccion: "abajo" as const },
+  ]);
+}
+
+/** Polos 1-2, 3-4… de `n` polos. */
+function polosNumerados(n: number): [string, string][] {
+  return Array.from({ length: n }, (_, i) => [`${2 * i + 1}`, `${2 * i + 2}`] as [string, string]);
+}
+
+/** La «N» del polo de neutro (D8-A), a la derecha de la cuchilla del polo en `x`. */
+function marcaNeutro(x: number): Primitiva {
+  return { forma: "texto", x: x + 0.45, y: 0.5, texto: "N", alto: 0.7, alineacion: "izquierda" };
+}
+
+/** Función de interruptor automático (07-13-05): una cruz sobre el contacto fijo de arriba. */
+const CRUZ_AUTOMATICO: Linea[] = [linea(-0.25, -1.25, 0.25, -0.75), linea(-0.25, -0.75, 0.25, -1.25)];
+
+/** Función de seccionador (07-13-06): una barra sobre el contacto fijo de arriba. */
+const BARRA_SECCIONADOR: Linea[] = [linea(-0.35, -1, 0.35, -1)];
+
+/** X de la cuchilla del NA en y = 0: ahí se engancha el enlace. */
+const X_CUCHILLA_NA = xEnCentro(PUNTA_NA, BISAGRA_Y);
+
+/** Termomagnética de `xs.length` polos: NA con la cruz de automático y enlace; la 4P lleva la «N» en 7-8. */
+function termomagnetica(tipo: string, nombre: string, xs: readonly number[]): DefinicionSimbolo {
+  const n = xs.length;
+  return {
+    tipo,
+    nombre,
+    categoria: "potencia",
+    elemento: "proteccion",
+    prefijoEtiqueta: "Q",
+    tamano: { ancho: 2 * n, alto: 4 },
+    primitivas: [
+      ...multipolar([...contactoNA(), ...CRUZ_AUTOMATICO], xs),
+      ...(n > 1 ? enlace(xs, X_CUCHILLA_NA) : []),
+      ...(n === 4 ? [marcaNeutro(xs[3]!)] : []),
+    ],
+    ladoNombresBornes: "derecha",
+    bornes: bornesPolos(xs),
+    ...(n > 1 ? { polos: polosNumerados(n) } : {}),
+  };
+}
+
+export const TERMOMAGNETICA_UNIPOLAR = termomagnetica("proteccion.termomagnetica_unipolar", "Termomagnética unipolar", POLOS_1);
+export const TERMOMAGNETICA_BIPOLAR = termomagnetica("proteccion.termomagnetica_bipolar", "Termomagnética bipolar", POLOS_2);
+export const TERMOMAGNETICA_TRIPOLAR = termomagnetica("proteccion.termomagnetica_tripolar", "Termomagnética tripolar", POLOS_X);
+export const TERMOMAGNETICA_TETRAPOLAR = termomagnetica("proteccion.termomagnetica_tetrapolar", "Termomagnética tetrapolar", POLOS_4);
+
+/**
+ * Diferencial: NA con enlace, el toroide que abraza los conductores abajo y el
+ * bloque «IΔ» a la izquierda, unido al enlace y al toroide. El último polo es
+ * el de neutro, con su «N» (D8-A): 3-4 en el bipolar, 7-8 en el tetrapolar.
+ */
+function diferencial(tipo: string, nombre: string, xs: readonly number[]): DefinicionSimbolo {
+  const n = xs.length;
+  const izq = xs[0]!;
+  const der = xs[n - 1]!;
+  /** Bloque de disparo: 0,8 × 0,8 centrado en (cx, 0). */
+  const cx = izq - 1.5;
+  return {
+    tipo,
+    nombre,
+    categoria: "potencia",
+    elemento: "proteccion",
+    prefijoEtiqueta: "Q",
+    tamano: { ancho: 2 * n + 2, alto: 4 },
+    primitivas: [
+      ...multipolar(contactoNA(), xs),
+      ...enlace(xs, X_CUCHILLA_NA, cx + 0.4),
+      { forma: "rectangulo", x: cx - 0.4, y: -0.4, ancho: 0.8, alto: 0.8 },
+      { forma: "texto", x: cx, y: 0, texto: "IΔ", alto: 0.4, alineacion: "centro" },
+      // Toroide: una banda que cruza los conductores, unida al bloque.
+      { forma: "rectangulo", x: izq - 0.5, y: 1.3, ancho: der - izq + 1, alto: 0.35 },
+      linea(cx, 0.4, cx, 1.475),
+      linea(cx, 1.475, izq - 0.5, 1.475),
+      marcaNeutro(der),
+    ],
+    ladoNombresBornes: "derecha",
+    bornes: bornesPolos(xs),
+    polos: polosNumerados(n),
+  };
+}
+
+export const DIFERENCIAL_BIPOLAR = diferencial("proteccion.diferencial_bipolar", "Diferencial bipolar", POLOS_2);
+export const DIFERENCIAL_TETRAPOLAR = diferencial("proteccion.diferencial_tetrapolar", "Diferencial tetrapolar", POLOS_4);
+
+/** X del bloque de disparo del guardamotor (térmico arriba, magnético abajo). */
+const X_DISPARO_GUARDAMOTOR = -3.5;
+
+/**
+ * Guardamotor: tres NA con la cruz de automático y el enlace hasta los
+ * disparos térmico (el escalón, 07-15-21) y magnético («I>») a la izquierda.
+ */
+export const GUARDAMOTOR: DefinicionSimbolo = {
+  tipo: "proteccion.guardamotor",
+  nombre: "Guardamotor",
+  categoria: "potencia",
+  elemento: "proteccion",
+  prefijoEtiqueta: "Q",
+  tamano: { ancho: 8, alto: 4 },
+  primitivas: [
+    ...multipolar([...contactoNA(), ...CRUZ_AUTOMATICO], POLOS_X),
+    ...enlace(POLOS_X, X_CUCHILLA_NA, X_DISPARO_GUARDAMOTOR),
+    linea(X_DISPARO_GUARDAMOTOR, -0.5, X_DISPARO_GUARDAMOTOR, 0.5),
+    { forma: "rectangulo", x: X_DISPARO_GUARDAMOTOR - 0.4, y: -1.3, ancho: 0.8, alto: 0.8 },
+    linea(X_DISPARO_GUARDAMOTOR - 0.25, -0.65, X_DISPARO_GUARDAMOTOR, -0.65),
+    linea(X_DISPARO_GUARDAMOTOR, -0.65, X_DISPARO_GUARDAMOTOR, -1.15),
+    linea(X_DISPARO_GUARDAMOTOR, -1.15, X_DISPARO_GUARDAMOTOR + 0.25, -1.15),
+    { forma: "rectangulo", x: X_DISPARO_GUARDAMOTOR - 0.4, y: 0.5, ancho: 0.8, alto: 0.8 },
+    { forma: "texto", x: X_DISPARO_GUARDAMOTOR, y: 0.9, texto: "I>", alto: 0.4, alineacion: "centro" },
+  ],
+  ladoNombresBornes: "derecha",
+  bornes: bornesPolos(POLOS_X),
+  polos: polosNumerados(3),
+};
+
+/** X del accionador manual del seccionador. */
+const X_MANUAL_SECCIONADOR = -2.75;
+
+/** Seccionador tripolar: tres NA con la barra de seccionador y el enlace hasta el accionador manual (02-13-01). */
+export const SECCIONADOR: DefinicionSimbolo = {
+  tipo: "maniobra.seccionador",
+  nombre: "Seccionador",
+  categoria: "potencia",
+  elemento: "proteccion",
+  prefijoEtiqueta: "Q",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: [
+    ...multipolar([...contactoNA(), ...BARRA_SECCIONADOR], POLOS_X),
+    ...enlace(POLOS_X, X_CUCHILLA_NA, X_MANUAL_SECCIONADOR),
+    linea(X_MANUAL_SECCIONADOR, -0.5, X_MANUAL_SECCIONADOR, 0.5),
+  ],
+  ladoNombresBornes: "derecha",
+  bornes: bornesPolos(POLOS_X),
+  polos: polosNumerados(3),
+};
+
+/** Fusible tripolar (07-21-01, D4-A): un rectángulo con el conductor adentro, por polo. */
+export const FUSIBLE_TRIPOLAR: DefinicionSimbolo = {
+  tipo: "proteccion.fusible_tripolar",
+  nombre: "Fusible tripolar",
+  categoria: "potencia",
+  elemento: "proteccion",
+  prefijoEtiqueta: "F",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: multipolar([linea(0, -2, 0, 2), { forma: "rectangulo", x: -0.4, y: -1, ancho: 0.8, alto: 2 }], POLOS_X),
+  ladoNombresBornes: "derecha",
+  bornes: bornesPolos(POLOS_X),
+  polos: polosNumerados(3),
+};
+
+/**
+ * Relé térmico, elemento de potencia (07-15-21): el conductor hace un escalón
+ * dentro de un rectángulo, por polo, y los rectángulos van unidos con trazos.
+ * Sus contactos 95-96 y 97-98 son de T36 y lo siguen por la etiqueta.
+ */
+export const TERMICO: DefinicionSimbolo = {
+  tipo: "proteccion.termico",
+  nombre: "Relé térmico",
+  categoria: "potencia",
+  elemento: "proteccion",
+  prefijoEtiqueta: "F",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: [
+    ...multipolar(
+      [
+        linea(0, -2, 0, -0.3),
+        linea(0, -0.3, -0.3, -0.3),
+        linea(-0.3, -0.3, -0.3, 0.3),
+        linea(-0.3, 0.3, 0, 0.3),
+        linea(0, 0.3, 0, 2),
+        { forma: "rectangulo", x: -0.5, y: -0.8, ancho: 1, alto: 1.6 },
+      ],
+      POLOS_X,
+    ),
+    ...discontinua(-1.5, 0, -0.5, 0),
+    ...discontinua(0.5, 0, 1.5, 0),
+  ],
+  ladoNombresBornes: "derecha",
+  bornes: bornesPolos(POLOS_X),
+  polos: polosNumerados(3),
+};
+
+/** Radio del círculo de los motores. */
+const R_MOTOR = 1.5;
+/** Punto del círculo a 45° de la vertical. */
+const D_MOTOR = R_MOTOR * Math.SQRT1_2;
+
+/**
+ * Conexiones de los motores desde los bornes de `y` (−2 o −3 arriba; positivo,
+ * abajo) hasta el círculo de centro (0, cy): la del medio, recta; las de los
+ * lados bajan un poco y van en diagonal al círculo, a 45°.
+ */
+function conexionesMotor(y: number, cy: number): Linea[] {
+  const s = Math.sign(y);
+  const codo = y - s * 0.6;
+  return [
+    linea(-2, y, -2, codo),
+    linea(-2, codo, -D_MOTOR, cy + s * D_MOTOR),
+    linea(0, y, 0, cy + s * R_MOTOR),
+    linea(2, y, 2, codo),
+    linea(2, codo, D_MOTOR, cy + s * D_MOTOR),
+  ];
+}
+
+/** Círculo con «M» y «3~» (06-04-01), centrado en (0, cy). */
+function cuerpoMotor(cy: number): Primitiva[] {
+  return [
+    { forma: "circulo", cx: 0, cy, r: R_MOTOR },
+    { forma: "texto", x: 0, y: cy - 0.3, texto: "M", alto: 1, alineacion: "centro" },
+    { forma: "texto", x: 0, y: cy + 0.75, texto: "3~", alto: 0.6, alineacion: "centro" },
+  ];
+}
+
+/** Motor trifásico: U, V y W arriba. */
+export const MOTOR_TRIFASICO: DefinicionSimbolo = {
+  tipo: "motor.trifasico",
+  nombre: "Motor trifásico",
+  categoria: "potencia",
+  elemento: "carga",
+  prefijoEtiqueta: "M",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: [...conexionesMotor(-2, 0.5), ...cuerpoMotor(0.5)],
+  bornes: POLOS_X.map((x, i) => ({ nombre: "UVW"[i]!, x, y: -2, direccion: "arriba" as const })),
+};
+
+/** Motor para estrella-triángulo: U1, V1 y W1 arriba; U2, V2 y W2 abajo. */
+export const MOTOR_ESTRELLA_TRIANGULO: DefinicionSimbolo = {
+  tipo: "motor.estrella_triangulo",
+  nombre: "Motor estrella-triángulo",
+  categoria: "potencia",
+  elemento: "carga",
+  prefijoEtiqueta: "M",
+  tamano: { ancho: 6, alto: 6 },
+  primitivas: [...conexionesMotor(-3, 0), ...conexionesMotor(3, 0), ...cuerpoMotor(0)],
+  bornes: [
+    ...POLOS_X.map((x, i) => ({ nombre: `${"UVW"[i]}1`, x, y: -3, direccion: "arriba" as const })),
+    ...POLOS_X.map((x, i) => ({ nombre: `${"UVW"[i]}2`, x, y: 3, direccion: "abajo" as const })),
+  ],
+};
+
+/**
+ * Fuente trifásica con neutro: L1, L2, L3 y N abajo, en x −3, −1, 1 y 3. Como
+ * la trifásica (D1-A): cada borne es su red y la etiqueta es libre. L1 y N
+ * salen de los lados del círculo; L2 y L3, de abajo a 45°.
+ */
+export const FUENTE_TRIFASICA_N: DefinicionSimbolo = {
+  tipo: "fuente.trifasica_n",
+  nombre: "Fuente trifásica con neutro",
+  categoria: "fuentes",
+  elemento: "fuente",
+  tamano: { ancho: 8, alto: 4 },
+  primitivas: (() => {
+    const [circulo, ...resto] = dibujoFuente(CENTRO_TRIFASICA, 2);
+    // Sin el tramo del medio hasta el borne: este símbolo no tiene borne en x = 0.
+    const seno = resto.slice(0, -1);
+    const d = RADIO_FUENTE * Math.SQRT1_2;
+    // De (∓d, cy + d) a 45° hasta x = ∓1: baja 1 − d, así que llega a cy + 1.
+    const codo = CENTRO_TRIFASICA + 1;
+    return [
+      circulo!,
+      ...seno,
+      linea(-RADIO_FUENTE, CENTRO_TRIFASICA, -3, CENTRO_TRIFASICA),
+      linea(-3, CENTRO_TRIFASICA, -3, 2),
+      linea(-d, CENTRO_TRIFASICA + d, -1, codo),
+      linea(-1, codo, -1, 2),
+      linea(d, CENTRO_TRIFASICA + d, 1, codo),
+      linea(1, codo, 1, 2),
+      linea(RADIO_FUENTE, CENTRO_TRIFASICA, 3, CENTRO_TRIFASICA),
+      linea(3, CENTRO_TRIFASICA, 3, 2),
+    ];
+  })(),
+  ladoNombresBornes: "derecha",
+  bornes: POLOS_4.map((x, i) => ({ nombre: ["L1", "L2", "L3", "N"][i]!, x, y: 2, direccion: "abajo" as const })),
+};
+
+/**
+ * Tierra de protección (02-15-03): el borne PE arriba y tres trazos que se
+ * achican. Forma red y no da potencial en 6a (D11-B). Como la fase, la
+ * etiqueta es el nombre de la red: entra «PE».
+ */
+export const TIERRA: DefinicionSimbolo = {
+  tipo: "fuente.tierra",
+  nombre: "Tierra (PE)",
+  categoria: "fuentes",
+  elemento: "fuente",
+  tamano: { ancho: 2, alto: 2 },
+  primitivas: [linea(0, -1, 0, 0), linea(-0.8, 0, 0.8, 0), linea(-0.5, 0.35, 0.5, 0.35), linea(-0.2, 0.7, 0.2, 0.7)],
+  bornes: [{ nombre: "PE", x: 0, y: -1, direccion: "arriba" }],
+  etiquetaInicial: "PE",
+  mostrarNombresBornes: false,
+};
+
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   FASE,
@@ -386,6 +714,20 @@ export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   LAMPARA,
   FUENTE_TRIFASICA,
   CONTACTOR_PRINCIPAL,
+  FUENTE_TRIFASICA_N,
+  TIERRA,
+  TERMOMAGNETICA_UNIPOLAR,
+  TERMOMAGNETICA_BIPOLAR,
+  TERMOMAGNETICA_TRIPOLAR,
+  TERMOMAGNETICA_TETRAPOLAR,
+  DIFERENCIAL_BIPOLAR,
+  DIFERENCIAL_TETRAPOLAR,
+  GUARDAMOTOR,
+  SECCIONADOR,
+  FUSIBLE_TRIPOLAR,
+  TERMICO,
+  MOTOR_TRIFASICO,
+  MOTOR_ESTRELLA_TRIANGULO,
 ];
 
 const POR_TIPO = new Map(SIMBOLOS.map((s) => [s.tipo, s]));

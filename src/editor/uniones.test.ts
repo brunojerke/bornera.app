@@ -56,6 +56,8 @@ const TIPOS_015 = SIMBOLOS.slice(0, 8).map((s) => s.tipo);
  * borrados; ninguna falla en la corrección).
  */
 const SEMILLA_T34 = 20261132;
+/** Semilla de la biblioteca completa de T35 (24 símbolos, con los de potencia). */
+const SEMILLA_T35 = 20261135;
 
 function rutaDe(hoja: Hoja, e: Extremo): ExtremoRuta {
   if (e.tipo !== "borne") return { x: e.x, y: e.y };
@@ -404,10 +406,12 @@ describe("Uniones de a poco", () => {
   });
 
   it.each([
-    [`semilla ${SEMILLA}, los 7 tipos de 0.1.3`, SEMILLA, TIPOS_ESCENA_013],
-    [`semilla ${SEMILLA_COMPLETA}, los 8 tipos de 0.1.5 con el NC`, SEMILLA_COMPLETA, TIPOS_015],
-    [`semilla ${SEMILLA_T34}, la biblioteca completa de T34`, SEMILLA_T34, SIMBOLOS.map((s) => s.tipo)],
-  ] as const)("al azar (%s): después de cada operación, igual que recorrer la hoja", (_, semilla, tipos) => {
+    [`semilla ${SEMILLA}, los 7 tipos de 0.1.3`, SEMILLA, TIPOS_ESCENA_013, 150],
+    [`semilla ${SEMILLA_COMPLETA}, los 8 tipos de 0.1.5 con el NC`, SEMILLA_COMPLETA, TIPOS_015, 150],
+    [`semilla ${SEMILLA_T34}, la biblioteca completa de T34`, SEMILLA_T34, SIMBOLOS.slice(0, 10).map((s) => s.tipo), 150],
+    // Los de potencia miden de 6 a 10 de ancho: chocan más y se rechazan más operaciones (T35).
+    [`semilla ${SEMILLA_T35}, la biblioteca completa de T35`, SEMILLA_T35, SIMBOLOS.map((s) => s.tipo), 120],
+  ] as const)("al azar (%s): después de cada operación, igual que recorrer la hoja", (_, semilla, tipos, minimoAceptadas) => {
     const azar = generador(semilla);
     const n = {
       aceptadas: 0,
@@ -480,7 +484,7 @@ describe("Uniones de a poco", () => {
       }
     }
     // Que la prueba pruebe algo: hay de todo.
-    expect(n.aceptadas, JSON.stringify(n)).toBeGreaterThan(150);
+    expect(n.aceptadas, JSON.stringify(n)).toBeGreaterThan(minimoAceptadas);
     expect(n.rechazadas, JSON.stringify(n)).toBeGreaterThan(10);
     // Desde T26 la cascada se lleva cadenas enteras de T y quedan menos
     // anfitriones para borrar (la segunda semilla da 10 justos).

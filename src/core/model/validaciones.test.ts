@@ -10,7 +10,7 @@ import { crearDocumento, type Documento, type Extremo, type Hoja } from "./docum
 import { conEtiquetas, etiquetarLote, etiquetasDeTitulares, planRenombrarBobina } from "./etiquetado";
 import { Historial } from "./historial";
 import { pegar, recortar, type Recorte } from "./portapapeles";
-import { contarAvisos, textoAviso, textoRepetida, TODAS, validar, type Aviso, type Regla } from "./validaciones";
+import { contarAvisos, NOMBRES_PREFIJO, textoAviso, textoRepetida, TODAS, validar, type Aviso, type Regla } from "./validaciones";
 
 const BOBINA = "contactor.bobina";
 const NA = "contactor.auxiliar_na";
@@ -315,6 +315,51 @@ describe("R5: prefijo de otro tipo", () => {
   });
 });
 
+describe("R5 con los prefijos de potencia: un nombre neutro por prefijo (T35, ajuste 1 de Bruno)", () => {
+  const r5 = (h: Hoja) => de(validar(h), "R5");
+
+  it("todo prefijo de la biblioteca tiene su nombre en la tabla", () => {
+    const prefijos = new Set(SIMBOLOS.flatMap((s) => (s.prefijoEtiqueta ? [s.prefijoEtiqueta] : [])));
+    expect([...prefijos].sort()).toEqual([...NOMBRES_PREFIJO.keys()].sort());
+  });
+
+  it("un motor «Q2» con un guardamotor Q1 en la hoja: «protección o maniobra», no el nombre de un símbolo Q", () => {
+    const a = armar();
+    a.poner("proteccion.guardamotor", 0, 0, "Q1");
+    const m = a.poner("motor.trifasico", 20, 0, "Q2");
+    expect(r5(a.h)).toEqual([{ regla: "R5", severidad: "aviso", id: m, etiqueta: "Q2", nombre: "Motor trifásico", de: "protección o maniobra" }]);
+    expect(textoAviso(r5(a.h)[0]!)).toBe("Q2 es nombre de protección o maniobra y esto es un motor trifásico.");
+  });
+
+  it("un guardamotor «M1» y uno «F3»: «motor» y «protección»; con «Q4», nada", () => {
+    const a = armar();
+    const g = a.poner("proteccion.guardamotor", 0, 0, "M1");
+    const h = a.poner("proteccion.guardamotor", 20, 0, "F3");
+    a.poner("proteccion.guardamotor", 40, 0, "Q4");
+    expect(r5(a.h).map((x) => [x.id, textoAviso(x)])).toEqual([
+      [g, "M1 es nombre de motor y esto es un guardamotor."],
+      [h, "F3 es nombre de protección y esto es un guardamotor."],
+    ]);
+  });
+
+  it("un seccionador, un diferencial o un fusible con letras de su mismo prefijo no avisan; un térmico «Q1», sí", () => {
+    const a = armar();
+    a.poner("maniobra.seccionador", 0, 0, "Q1");
+    a.poner("proteccion.diferencial_bipolar", 20, 0, "Q2");
+    a.poner("proteccion.fusible_tripolar", 40, 0, "F1");
+    const t = a.poner("proteccion.termico", 60, 0, "Q9");
+    expect(r5(a.h).map((x) => [x.id, textoAviso(x)])).toEqual([[t, "Q9 es nombre de protección o maniobra y esto es un relé térmico."]]);
+  });
+
+  it("K, S y H dicen lo de antes", () => {
+    const a = armar();
+    a.poner("motor.trifasico", 0, 0, "K1");
+    a.poner("motor.trifasico", 20, 0, "S1");
+    a.poner("motor.trifasico", 40, 0, "H1");
+    expect(r5(a.h).map((x) => (x as Extract<Aviso, { regla: "R5" }>).de)).toEqual(["bobina", "pulsador", "lámpara"]);
+  });
+});
+
 describe("R6: NC en la rama de su propia bobina", () => {
   it("el enclavamiento bien hecho (cero) y el duplicado mal hecho, el límite de T17b: exactamente un R6, en el NC de la copia (ajuste 4)", () => {
     const a = armar();
@@ -527,6 +572,32 @@ describe("R10: fase L junto con L1, L2 o L3 (T29)", () => {
     expect(r10(a.h)).toEqual([]);
   });
 
+  it("una trifásica en la hoja con una Fase «L»: R10 en la «L», «L1, L2 y L3» (T35, D15-A)", () => {
+    const { a, comp } = desdeMarchaParada();
+    a.poner("fuente.trifasica", 40, 0);
+    expect(r10(a.h)).toEqual([{ regla: "R10", severidad: "aviso", id: comp.fase, otras: "L1, L2 y L3" }]);
+    expect(textoAviso(r10(a.h)[0]!)).toBe("Fase L junto con L1, L2 y L3: para Bornera son fases distintas.");
+  });
+
+  it("la trifásica con neutro también; su etiqueta no cuenta, y sin ninguna «L» no hay R10", () => {
+    const { a, comp } = desdeMarchaParada();
+    const t = a.poner("fuente.trifasica_n", 40, 0, "L");
+    expect(r10(a.h)).toEqual([{ regla: "R10", severidad: "aviso", id: comp.fase, otras: "L1, L2 y L3" }]);
+    a.hacer(new CambiarEtiqueta(comp.fase, "L1"));
+    expect(r10(a.h)).toEqual([]);
+    a.hacer(new Borrar([t]));
+    a.hacer(new CambiarEtiqueta(comp.fase, "L"));
+    expect(r10(a.h)).toEqual([]);
+  });
+
+  it("la tierra y los demás de potencia no cuentan", () => {
+    const { a } = desdeMarchaParada();
+    a.poner("fuente.tierra", 40, 0);
+    a.poner("proteccion.termomagnetica_tripolar", 50, 0);
+    a.poner("motor.trifasico", 60, 0);
+    expect(r10(a.h)).toEqual([]);
+  });
+
   it("L1, L2 y L3 sin ninguna «L»: sin R10", () => {
     const { a, comp } = desdeMarchaParada();
     a.hacer(new CambiarEtiqueta(comp.fase, "L1"));
@@ -665,9 +736,16 @@ const lento = {
 };
 
 /** Lo que nombra un prefijo: la primera palabra del primer símbolo de la biblioteca que lo usa. */
+/** Lo que nombra cada prefijo en R5 (T35, ajuste 1 de Bruno), escrito aparte; solo los de la biblioteca. */
 function duenoLento(prefijo: string): string | undefined {
-  const d = SIMBOLOS.find((s) => lento.titular(s) && s.prefijoEtiqueta === prefijo);
-  return d ? d.nombre.split(" ")[0]!.toLowerCase() : undefined;
+  const nombres: Record<string, string> = { K: "bobina", S: "pulsador", H: "lámpara", Q: "protección o maniobra", F: "protección", M: "motor" };
+  return SIMBOLOS.some((s) => lento.titular(s) && s.prefijoEtiqueta === prefijo) ? nombres[prefijo] : undefined;
+}
+
+/** Si el componente pone la fase `n` en la hoja (R10): una Fase con esa etiqueta, o una fuente de varios bornes con un borne `n` (T35). */
+function poneFaseLento(o: { c: { tipo: string }; def: DefinicionSimbolo | undefined; e: string }, n: string): boolean {
+  if (o.c.tipo === FASE) return o.e === n;
+  return o.def !== undefined && o.def.elemento === "fuente" && o.def.bornes.length > 1 && o.def.bornes.some((bb) => bb.nombre === n);
 }
 
 /** Vecinos de cada nodo ("b:comp|borne" o "w:cable"): lo que une cada cable. Sin union-find. */
@@ -763,7 +841,7 @@ function validarLento(h: Hoja): Aviso[] {
     }
     if (lento.fuente(def) && e === "") salida.push({ regla: "R9", severidad: "aviso", id: c.id });
     if (c.tipo === FASE && e === "L") {
-      const otras = ["L1", "L2", "L3"].filter((n) => todos.some((o) => o.c.tipo === FASE && o.e === n));
+      const otras = ["L1", "L2", "L3"].filter((n) => todos.some((o) => poneFaseLento(o, n)));
       if (otras.length > 0) salida.push({ regla: "R10", severidad: "aviso", id: c.id, otras: otras.length === 1 ? otras[0]! : `${otras.slice(0, -1).join(", ")} y ${otras.at(-1)}` });
     }
   }

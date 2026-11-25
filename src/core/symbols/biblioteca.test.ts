@@ -6,14 +6,28 @@ import {
   CONTACTO_AUXILIAR_NA,
   CONTACTO_AUXILIAR_NC,
   CONTACTOR_PRINCIPAL,
+  DIFERENCIAL_BIPOLAR,
+  DIFERENCIAL_TETRAPOLAR,
   discontinua,
   FASE,
   FUENTE_TRIFASICA,
+  FUENTE_TRIFASICA_N,
+  FUSIBLE_TRIPOLAR,
+  GUARDAMOTOR,
   LAMPARA,
+  MOTOR_ESTRELLA_TRIANGULO,
+  MOTOR_TRIFASICO,
   NEUTRO,
   PULSADOR_NA,
   PULSADOR_NC,
+  SECCIONADOR,
   SIMBOLOS,
+  TERMICO,
+  TERMOMAGNETICA_BIPOLAR,
+  TERMOMAGNETICA_TETRAPOLAR,
+  TERMOMAGNETICA_TRIPOLAR,
+  TERMOMAGNETICA_UNIPOLAR,
+  TIERRA,
 } from "./biblioteca";
 import { esFuente, esSeguidor, nombraRed, polosDe, type DefinicionSimbolo, type Primitiva, type Rotacion } from "./tipos";
 import { transformarBornes } from "./transformar";
@@ -56,8 +70,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los diez símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(10);
+  it("tiene los 24 símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(24);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -185,12 +199,24 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     expect(clases).toHaveLength(1);
   });
 
-  it("K en la bobina, S en los dos pulsadores y H en la lámpara", () => {
+  it("K en la bobina, S en los dos pulsadores, H en la lámpara; Q, F y M en potencia (T35, D9-A)", () => {
     expect(SIMBOLOS.filter((s) => s.prefijoEtiqueta !== undefined).map((s) => [s.tipo, s.prefijoEtiqueta])).toEqual([
       ["pulsador.na", "S"],
       ["pulsador.nc", "S"],
       ["contactor.bobina", "K"],
       ["senalizacion.lampara", "H"],
+      ["proteccion.termomagnetica_unipolar", "Q"],
+      ["proteccion.termomagnetica_bipolar", "Q"],
+      ["proteccion.termomagnetica_tripolar", "Q"],
+      ["proteccion.termomagnetica_tetrapolar", "Q"],
+      ["proteccion.diferencial_bipolar", "Q"],
+      ["proteccion.diferencial_tetrapolar", "Q"],
+      ["proteccion.guardamotor", "Q"],
+      ["maniobra.seccionador", "Q"],
+      ["proteccion.fusible_tripolar", "F"],
+      ["proteccion.termico", "F"],
+      ["motor.trifasico", "M"],
+      ["motor.estrella_triangulo", "M"],
     ]);
   });
 
@@ -198,13 +224,13 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     expect(SIMBOLOS.filter((s) => s.primerNumero !== undefined).map((s) => [s.tipo, s.primerNumero])).toEqual([["pulsador.nc", 0]]);
   });
 
-  it("fase, neutro y trifásica son fuentes; los auxiliares y los principales, los seguidores (los pulsadores, a mano, se numeran)", () => {
-    expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO, FUENTE_TRIFASICA]);
+  it("fase, neutro, trifásicas y tierra son fuentes; los auxiliares y los principales, los seguidores (los pulsadores, a mano, se numeran)", () => {
+    expect(SIMBOLOS.filter(esFuente)).toEqual([FASE, NEUTRO, FUENTE_TRIFASICA, FUENTE_TRIFASICA_N, TIERRA]);
     expect(SIMBOLOS.filter(esSeguidor)).toEqual([CONTACTO_AUXILIAR_NA, CONTACTO_AUXILIAR_NC, CONTACTOR_PRINCIPAL]);
   });
 
-  it("solo fase y neutro nombran la red con su etiqueta (T34, D1-A)", () => {
-    expect(SIMBOLOS.filter((s) => nombraRed(s))).toEqual([FASE, NEUTRO]);
+  it("solo fase, neutro y tierra nombran la red con su etiqueta (T34, D1-A; T35)", () => {
+    expect(SIMBOLOS.filter((s) => nombraRed(s))).toEqual([FASE, NEUTRO, TIERRA]);
     expect(nombraRed(undefined)).toBe(false);
   });
 });
@@ -286,8 +312,9 @@ describe("alimentaciones: fase y neutro", () => {
     expect(SIMBOLOS.slice(0, 2)).toEqual([FASE, NEUTRO]);
   });
 
-  it("los demás símbolos dibujan los nombres de sus bornes", () => {
-    for (const s of SIMBOLOS.slice(2)) expect(s.mostrarNombresBornes).toBeUndefined();
+  it("los demás símbolos, salvo la tierra (T35), dibujan los nombres de sus bornes", () => {
+    for (const s of SIMBOLOS.slice(2)) if (s !== TIERRA) expect(s.mostrarNombresBornes, s.tipo).toBeUndefined();
+    expect(TIERRA.mostrarNombresBornes).toBe(false);
   });
 });
 
@@ -377,5 +404,135 @@ describe("nombres de borne de las fuentes de varios bornes (T34)", () => {
     expect(polosDe(CONTACTO_AUXILIAR_NA)).toBe(polosDe(CONTACTO_AUXILIAR_NA));
     expect(polosDe(LAMPARA)).toBe(polosDe(BOBINA_CONTACTOR));
     expect(polosDe(CONTACTOR_PRINCIPAL)).toBe(CONTACTOR_PRINCIPAL.polos);
+  });
+});
+
+// ── Potencia (T35) ─────────────────────────────────────────────────────────
+
+/** Bornes 1, 3, 5… arriba (y = −2) y 2, 4, 6… abajo (y = 2), uno por polo en `xs`. */
+const numerados = (xs: number[]) =>
+  xs.flatMap((x, i) => [
+    { nombre: `${2 * i + 1}`, x, y: -2, direccion: "arriba" },
+    { nombre: `${2 * i + 2}`, x, y: 2, direccion: "abajo" },
+  ]);
+const polos = (n: number) => Array.from({ length: n }, (_, i) => [`${2 * i + 1}`, `${2 * i + 2}`]);
+
+/** Los de polos numerados: definición, x de sus polos, ancho de la caja y prefijo. */
+const NUMERADOS: [DefinicionSimbolo, number[], number, string][] = [
+  [TERMOMAGNETICA_UNIPOLAR, [0], 2, "Q"],
+  [TERMOMAGNETICA_BIPOLAR, [-1, 1], 4, "Q"],
+  [TERMOMAGNETICA_TRIPOLAR, [-2, 0, 2], 6, "Q"],
+  [TERMOMAGNETICA_TETRAPOLAR, [-3, -1, 1, 3], 8, "Q"],
+  [DIFERENCIAL_BIPOLAR, [-1, 1], 6, "Q"],
+  [DIFERENCIAL_TETRAPOLAR, [-3, -1, 1, 3], 10, "Q"],
+  [GUARDAMOTOR, [-2, 0, 2], 8, "Q"],
+  [SECCIONADOR, [-2, 0, 2], 6, "Q"],
+  [FUSIBLE_TRIPOLAR, [-2, 0, 2], 6, "F"],
+  [TERMICO, [-2, 0, 2], 6, "F"],
+];
+
+/** Los que llevan la «N» del polo de neutro (D8-A), con la x de ese polo. */
+const CON_NEUTRO: [DefinicionSimbolo, number][] = [
+  [TERMOMAGNETICA_TETRAPOLAR, 3],
+  [DIFERENCIAL_TETRAPOLAR, 3],
+  [DIFERENCIAL_BIPOLAR, 1],
+];
+
+describe("protecciones y seccionador (T35, D13-A)", () => {
+  it.each(NUMERADOS.map(([s, xs, ancho, prefijo]) => [s.tipo, s, xs, ancho, prefijo] as const))(
+    "%s: bornes 1-2, 3-4… en sus polos, protección en Potencia con prefijo",
+    (_, s, xs, ancho, prefijo) => {
+      expect(s.bornes).toEqual(numerados(xs));
+      expect(polosDe(s)).toEqual(polos(xs.length));
+      expect(s).toMatchObject({ elemento: "proteccion", categoria: "potencia", prefijoEtiqueta: prefijo, tamano: { ancho, alto: 4 } });
+      expect(s.accionamiento).toBeUndefined();
+      expect(s.primitivasAccionado).toBeUndefined();
+    },
+  );
+
+  it("la unipolar no necesita `polos`: sus dos bornes son el polo", () => {
+    expect(TERMOMAGNETICA_UNIPOLAR.polos).toBeUndefined();
+    expect(polosDe(TERMOMAGNETICA_UNIPOLAR)).toBe(polosDe(TERMOMAGNETICA_UNIPOLAR));
+  });
+
+  it("el polo N lleva su «N» dibujada (D8-A): 7-8 en las tetrapolares, 3-4 en el diferencial bipolar; las demás no", () => {
+    const n = (s: DefinicionSimbolo) => s.primitivas.filter((p): p is Extract<Primitiva, { forma: "texto" }> => p.forma === "texto" && p.texto === "N");
+    for (const [s, x] of CON_NEUTRO) {
+      expect(n(s), s.tipo).toHaveLength(1);
+      // A la derecha del conductor del último polo, entre sus dos bornes.
+      expect(n(s)[0]!.x, s.tipo).toBeGreaterThan(x);
+      expect(Math.abs(n(s)[0]!.y), s.tipo).toBeLessThan(2);
+    }
+    const conN = new Set(CON_NEUTRO.map(([s]) => s));
+    for (const [s] of NUMERADOS) if (!conN.has(s)) expect(n(s), s.tipo).toEqual([]);
+  });
+
+  it("cada polo queda vertical y a 4 de distancia en las 4 rotaciones, espejado o no", () => {
+    for (const [s] of NUMERADOS) {
+      for (const rotacion of ROTACIONES) {
+        for (const espejado of [false, true]) {
+          const t = new Map(transformarBornes(s.bornes, { rotacion, espejado }).map((b) => [b.nombre, b]));
+          for (const [a, b] of polosDe(s)) expect(Math.abs(t.get(a)!.x - t.get(b)!.x) + Math.abs(t.get(a)!.y - t.get(b)!.y), s.tipo).toBe(4);
+        }
+      }
+    }
+  });
+});
+
+describe("motores (T35, D14-A)", () => {
+  it("trifásico: U, V y W arriba en x −2, 0 y 2; carga con prefijo M", () => {
+    expect(MOTOR_TRIFASICO.bornes).toEqual([
+      { nombre: "U", x: -2, y: -2, direccion: "arriba" },
+      { nombre: "V", x: 0, y: -2, direccion: "arriba" },
+      { nombre: "W", x: 2, y: -2, direccion: "arriba" },
+    ]);
+    expect(MOTOR_TRIFASICO).toMatchObject({ tipo: "motor.trifasico", elemento: "carga", categoria: "potencia", prefijoEtiqueta: "M", tamano: { ancho: 6, alto: 4 } });
+  });
+
+  it("estrella-triángulo: U1, V1, W1 arriba y U2, V2, W2 abajo; carga con prefijo M", () => {
+    expect(MOTOR_ESTRELLA_TRIANGULO.bornes).toEqual([
+      { nombre: "U1", x: -2, y: -3, direccion: "arriba" },
+      { nombre: "V1", x: 0, y: -3, direccion: "arriba" },
+      { nombre: "W1", x: 2, y: -3, direccion: "arriba" },
+      { nombre: "U2", x: -2, y: 3, direccion: "abajo" },
+      { nombre: "V2", x: 0, y: 3, direccion: "abajo" },
+      { nombre: "W2", x: 2, y: 3, direccion: "abajo" },
+    ]);
+    expect(MOTOR_ESTRELLA_TRIANGULO).toMatchObject({ elemento: "carga", categoria: "potencia", prefijoEtiqueta: "M", tamano: { ancho: 6, alto: 6 } });
+  });
+
+  it("no tienen polos y dibujan «M» y «3~» en un círculo", () => {
+    for (const s of [MOTOR_TRIFASICO, MOTOR_ESTRELLA_TRIANGULO]) {
+      expect(polosDe(s)).toEqual([]);
+      expect(s.primitivas.filter((p) => p.forma === "circulo")).toHaveLength(1);
+      expect(s.primitivas.filter((p): p is Extract<Primitiva, { forma: "texto" }> => p.forma === "texto").map((p) => p.texto)).toEqual(["M", "3~"]);
+    }
+  });
+});
+
+describe("fuente trifásica con neutro y tierra (T35)", () => {
+  it("trifásica con neutro: L1, L2, L3 y N abajo, en x −3, −1, 1 y 3, en Fuentes, sin etiqueta inicial ni prefijo", () => {
+    expect(FUENTE_TRIFASICA_N.bornes).toEqual([
+      { nombre: "L1", x: -3, y: 2, direccion: "abajo" },
+      { nombre: "L2", x: -1, y: 2, direccion: "abajo" },
+      { nombre: "L3", x: 1, y: 2, direccion: "abajo" },
+      { nombre: "N", x: 3, y: 2, direccion: "abajo" },
+    ]);
+    expect(FUENTE_TRIFASICA_N).toMatchObject({ tipo: "fuente.trifasica_n", elemento: "fuente", categoria: "fuentes", tamano: { ancho: 8, alto: 4 } });
+    expect(FUENTE_TRIFASICA_N.etiquetaInicial).toBeUndefined();
+    expect(FUENTE_TRIFASICA_N.prefijoEtiqueta).toBeUndefined();
+    expect(nombraRed(FUENTE_TRIFASICA_N)).toBe(false);
+  });
+
+  it("cada borne de la trifásica con neutro baja por su propia vertical", () => {
+    const lineas = FUENTE_TRIFASICA_N.primitivas.filter((p): p is Extract<Primitiva, { forma: "linea" }> => p.forma === "linea");
+    const verticales = lineas.filter((l) => l.x1 === l.x2 && l.y2 === 2);
+    expect(verticales.map((l) => l.x1).sort((a, b) => a - b)).toEqual([-3, -1, 1, 3]);
+  });
+
+  it("tierra: un borne PE arriba, en Fuentes, entra «PE» y no da prefijo", () => {
+    expect(TIERRA.bornes).toEqual([{ nombre: "PE", x: 0, y: -1, direccion: "arriba" }]);
+    expect(TIERRA).toMatchObject({ tipo: "fuente.tierra", elemento: "fuente", categoria: "fuentes", etiquetaInicial: "PE", tamano: { ancho: 2, alto: 2 } });
+    expect(TIERRA.prefijoEtiqueta).toBeUndefined();
   });
 });

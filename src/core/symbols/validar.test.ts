@@ -261,9 +261,21 @@ describe("validarDefinicion: polos (T34)", () => {
     expect(validarDefinicion({ ...PULSADOR, polos: [] })).toEqual(["La lista de polos está vacía.", 'Borne "13" sin polo.', 'Borne "14" sin polo.']);
   });
 
-  it("polos fuera de un contacto", () => {
+  it("polos fuera de un contacto o una protección: en bobina, carga y fuente no", () => {
     const { accionamiento: _, ...sinAccionamiento } = PULSADOR;
-    const bobina: DefinicionSimbolo = { ...sinAccionamiento, elemento: "bobina", polos: [["13", "14"]] };
-    expect(validarDefinicion(bobina)).toEqual(["Solo un contacto lleva polos."]);
+    for (const elemento of ["bobina", "carga"] as const) {
+      const def: DefinicionSimbolo = { ...sinAccionamiento, elemento, polos: [["13", "14"]] };
+      expect(validarDefinicion(def), elemento).toEqual(["Solo un contacto o una protección lleva polos."]);
+    }
+    const { prefijoEtiqueta: __, ...sinPrefijo } = sinAccionamiento;
+    const fuente: DefinicionSimbolo = { ...sinPrefijo, elemento: "fuente", polos: [["13", "14"]] };
+    expect(validarDefinicion(fuente)).toEqual(["Solo un contacto o una protección lleva polos."]);
+  });
+
+  it("una protección lleva polos (T35, D13-A); con 6 bornes los necesita", () => {
+    const { accionamiento: _, ...sinAccionamiento } = TRIPOLAR;
+    const proteccion: DefinicionSimbolo = { ...sinAccionamiento, elemento: "proteccion", prefijoEtiqueta: "Q" };
+    expect(validarDefinicion(proteccion)).toEqual([]);
+    expect(validarDefinicion({ ...proteccion, polos: undefined })).toEqual(["Una protección de 6 bornes necesita polos."]);
   });
 });

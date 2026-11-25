@@ -1,7 +1,7 @@
 // Chequeos de una definición de símbolo que el sistema de tipos no puede hacer.
 // Cada símbolo nuevo debe pasar `validarDefinicion` en su test de bornes.
 
-import { esFuente, esSeguidor, type DefinicionSimbolo, type Direccion, type Primitiva } from "./tipos";
+import { esFuente, esSeguidor, tienePolos, type DefinicionSimbolo, type Direccion, type Primitiva } from "./tipos";
 
 /** Prefijo de etiqueta válido: solo letras mayúsculas. */
 const PREFIJO_VALIDO = /^[A-Z]+$/;
@@ -114,11 +114,12 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     }
   }
 
-  // Polos (T34): solo contactos; cada polo, dos bornes distintos que existen;
-  // cada borne en un solo polo; un contacto que no tiene 2 bornes, todos en polos.
-  const esContacto = def.elemento === "contacto_na" || def.elemento === "contacto_nc";
+  // Polos (T34; protecciones, T35 D13-A): solo contactos y protecciones; cada
+  // polo, dos bornes distintos que existen; cada borne en un solo polo; uno
+  // que no tiene 2 bornes, todos en polos.
+  const esContacto = tienePolos(def);
   if (def.polos !== undefined) {
-    if (!esContacto) errores.push("Solo un contacto lleva polos.");
+    if (!esContacto) errores.push("Solo un contacto o una protección lleva polos.");
     if (def.polos.length === 0) errores.push("La lista de polos está vacía.");
     const enPolo = new Set<string>();
     for (const polo of def.polos) {
@@ -132,7 +133,8 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     }
     if (esContacto) for (const b of def.bornes) if (!enPolo.has(b.nombre)) errores.push(`Borne "${b.nombre}" sin polo.`);
   } else if (esContacto && def.bornes.length > 0 && def.bornes.length !== 2) {
-    errores.push(`Un contacto de ${def.bornes.length} bornes necesita polos.`);
+    const quien = def.elemento === "proteccion" ? "Una protección" : "Un contacto";
+    errores.push(`${quien} de ${def.bornes.length} bornes necesita polos.`);
   }
 
   return errores;

@@ -563,3 +563,141 @@ describe("motor: polos (T34)", () => {
     expect(entrar(h).avisos).toEqual([]);
   });
 });
+
+// ── Potencia (T35): motores sin falsos cortos, protecciones que no conducen ─
+
+/** Los contactos (polos) de la netlist de un componente. */
+const polosDeComp = (s: Simulacion, comp: string) => s.netlist.contactos.filter((c) => c.comp === comp);
+
+describe("motor: potencia (T35, D13-A y D14-A)", () => {
+  it("M1 directo en L1, L2 y L3: entra sin corto ni avisos; no es carga ni contacto y sus bornes forman red", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["m", "motor.trifasico", "M1"],
+      ],
+      [
+        ["t:L1", "m:U"],
+        ["t:L2", "m:V"],
+        ["t:L3", "m:W"],
+      ],
+    );
+    const s = entrar(h);
+    expect(s.detenida).toBeNull();
+    expect(s.avisos).toEqual([]);
+    expect(s.netlist.enCorto).toEqual([]);
+    expect(s.netlist.cargas.map((c) => c.comp)).toEqual([]);
+    expect(polosDeComp(s, "m")).toEqual([]);
+    expect(["U", "V", "W"].map((b) => nombreDeRed(s, "m", b))).toEqual(["L1", "L2", "L3"]);
+  });
+
+  it("trifásica → K1 → M1: con K1 cerrado, U, V y W toman L1, L2 y L3 sin corto ni «cargas en serie»", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["n", "fuente.neutro", "N"],
+        ["s1", "pulsador.na", "S1"],
+        ["kb", "contactor.bobina", "K1"],
+        ["k", "contactor.principal", "K1"],
+        ["m", "motor.trifasico", "M1"],
+      ],
+      [
+        ["t:L1", "s1:13", "k:1"],
+        ["s1:14", "kb:A1"],
+        ["kb:A2", "n:N"],
+        ["t:L2", "k:3"],
+        ["t:L3", "k:5"],
+        ["k:2", "m:U"],
+        ["k:4", "m:V"],
+        ["k:6", "m:W"],
+      ],
+    );
+    let s = entrar(h);
+    expect(["U", "V", "W"].map((b) => nombreDeRed(s, "m", b))).toEqual([null, null, null]);
+    s = pulsar(s, "s1");
+    expect(tension(s, "K1")).toBe(true);
+    expect(s.detenida).toBeNull();
+    expect(["U", "V", "W"].map((b) => nombreDeRed(s, "m", b))).toEqual(["L1", "L2", "L3"]);
+    expect(s.avisos).toEqual([]);
+    s = soltar(s, "s1");
+    expect(s.avisos).toEqual([]);
+  });
+
+  it("estrella-triángulo en estrella (U2, V2 y W2 puenteados) sobre L1, L2 y L3: el motor no une U1 con U2, sin corto", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica"],
+        ["m", "motor.estrella_triangulo", "M1"],
+      ],
+      [
+        ["t:L1", "m:U1"],
+        ["t:L2", "m:V1"],
+        ["t:L3", "m:W1"],
+        ["m:U2", "m:V2", "m:W2"],
+      ],
+    );
+    const s = entrar(h);
+    expect(s.detenida).toBeNull();
+    expect(s.avisos).toEqual([]);
+    expect(s.netlist.enCorto).toEqual([]);
+    expect(nombreDeRed(s, "m", "U2")).toBeNull();
+  });
+
+  it("trifásica con neutro → Q1 → K1 → F2 → M1: K1 se alimenta entre L1 y la N de la fuente; Q1 y F2 no conducen en T35 (D13-A), así que M1 queda sin tensión", () => {
+    const h = circuito(
+      [
+        ["t", "fuente.trifasica_n"],
+        ["s1", "pulsador.na", "S1"],
+        ["kb", "contactor.bobina", "K1"],
+        ["q", "proteccion.termomagnetica_tripolar", "Q1"],
+        ["k", "contactor.principal", "K1"],
+        ["f", "proteccion.termico", "F2"],
+        ["m", "motor.trifasico", "M1"],
+      ],
+      [
+        ["t:L1", "s1:13", "q:1"],
+        ["s1:14", "kb:A1"],
+        ["kb:A2", "t:N"],
+        ["t:L2", "q:3"],
+        ["t:L3", "q:5"],
+        ["q:2", "k:1"],
+        ["q:4", "k:3"],
+        ["q:6", "k:5"],
+        ["k:2", "f:1"],
+        ["k:4", "f:3"],
+        ["k:6", "f:5"],
+        ["f:2", "m:U"],
+        ["f:4", "m:V"],
+        ["f:6", "m:W"],
+      ],
+    );
+    const s = pulsar(entrar(h), "s1");
+    expect(tension(s, "K1")).toBe(true);
+    expect(polosDeComp(s, "q")).toEqual([]);
+    expect(polosDeComp(s, "f")).toEqual([]);
+    expect(polosDeComp(s, "k").map((c) => s.conducen[s.netlist.contactos.indexOf(c)])).toEqual([true, true, true]);
+    expect(["U", "V", "W"].map((b) => nombreDeRed(s, "m", b))).toEqual([null, null, null]);
+    expect(s.detenida).toBeNull();
+    expect(s.avisos).toEqual([]);
+  });
+
+  it("la N de la trifásica con neutro es la red del Neutro «N» sin cable entre ellos; sus L, las de las Fases L1–L3", () => {
+    // H1 entre L1 y N de la trifásica; H2 entre la Fase «L1» y el Neutro «N».
+    const h2 = circuito(
+      [
+        ["t", "fuente.trifasica_n"],
+        ["n", "fuente.neutro", "N"],
+        ["f1", "fuente.fase", "L1"],
+        ["h", "senalizacion.lampara", "H1"],
+        ["h2", "senalizacion.lampara", "H2"],
+      ],
+      [["t:L1", "h:X1"], ["t:N", "h:X2"], ["f1:L", "h2:X1"], ["n:N", "h2:X2"]],
+    );
+    const s2 = entrar(h2);
+    const red2 = (comp: string, borne: string) => s2.netlist.redDeBorne.get(comp)!.get(borne)!;
+    expect(red2("t", "N")).toBe(red2("n", "N"));
+    expect(red2("t", "L1")).toBe(red2("f1", "L"));
+    expect(s2.netlist.enCorto).toEqual([]);
+    expect([encendida(s2, "h"), encendida(s2, "h2")]).toEqual([true, true]);
+  });
+});

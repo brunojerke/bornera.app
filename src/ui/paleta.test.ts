@@ -7,9 +7,9 @@ describe("agruparSimbolos", () => {
     const grupos = agruparSimbolos(SIMBOLOS);
     expect(grupos.map((g) => g.nombre)).toEqual(["Fuentes", "Mando", "Potencia", "Señalización"]);
     expect(grupos.flatMap((g) => g.simbolos)).toHaveLength(SIMBOLOS.length);
-    expect(grupos[0]!.simbolos.map((s) => s.tipo)).toEqual(["fuente.fase", "fuente.neutro", "fuente.trifasica"]);
-    // T34: los contactos principales, primeros de Potencia.
-    expect(grupos[2]!.simbolos.map((s) => s.tipo)).toEqual(["contactor.principal"]);
+    expect(grupos[0]!.simbolos.map((s) => s.tipo)).toEqual(["fuente.fase", "fuente.neutro", "fuente.trifasica", "fuente.trifasica_n", "fuente.tierra"]);
+    // T34: los contactos principales, primeros de Potencia; después, los de T35.
+    expect(grupos[2]!.simbolos.map((s) => s.tipo)).toEqual(["contactor.principal", "proteccion.termomagnetica_unipolar", "proteccion.termomagnetica_bipolar", "proteccion.termomagnetica_tripolar", "proteccion.termomagnetica_tetrapolar", "proteccion.diferencial_bipolar", "proteccion.diferencial_tetrapolar", "proteccion.guardamotor", "maniobra.seccionador", "proteccion.fusible_tripolar", "proteccion.termico", "motor.trifasico", "motor.estrella_triangulo"]);
   });
 
   it("en Mando, el auxiliar NC sale justo después del NA (T17b)", () => {

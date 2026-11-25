@@ -19,7 +19,8 @@
 //   de doble contacto) y dos del mismo tipo dan aviso.
 // - R5. Titular con prefijo cuya etiqueta es letras y número, con las letras
 //   del prefijo de otro símbolo de la biblioteca (un pulsador "K1"). No se
-//   suma a un error R4 del mismo componente (cambio 7).
+//   suma a un error R4 del mismo componente (cambio 7). Lo que nombra ese
+//   prefijo sale de una tabla por prefijo (T35, ajuste 1 de Bruno).
 // - R6. Auxiliar NC con un borne en la misma red que un borne de su propia
 //   bobina, si esa red no tiene nombre de alimentación.
 // - R7. Borne de un símbolo conocido sin ningún extremo de cable.
@@ -27,8 +28,9 @@
 // - R9. Fuente sin etiqueta: no da nombre de red. Solo Fase y Neutro
 //   (`nombraRed`): la trifásica nombra sus bornes y su etiqueta es libre (T34).
 // - R10 (T29). Fase «L» en una hoja con alguna Fase «L1», «L2» o «L3», por
-//   etiqueta normalizada («l1» cuenta como «L1»). Para Bornera son fases
-//   distintas (D7). Marca cada Fase «L».
+//   etiqueta normalizada («l1» cuenta como «L1»), o con una fuente de varios
+//   bornes que tiene L1, L2 o L3 (la trifásica, T35 D15-A). Para Bornera son
+//   fases distintas (D7). Marca cada Fase «L».
 // - R11 (T29). Conexión aparente que ya está en la hoja. Necesita la
 //   geometría: no la da `validar` sino `avisosR11` (src/core/model/aparentes.ts).
 //
@@ -36,7 +38,7 @@
 // resultado completo: cada regla se decide sola (R5 mira la condición de R4
 // aunque R4 no se pida).
 
-import { buscarSimbolo, esBobina, esSeguidor, nombraRed, SIMBOLOS, sigueABobina, type DefinicionSimbolo } from "../symbols";
+import { buscarSimbolo, esBobina, esFuente, esSeguidor, nombraRed, SIMBOLOS, sigueABobina, type DefinicionSimbolo } from "../symbols";
 import type { Componente, Hoja } from "./documento";
 import { esTitular, prefijoDe } from "./etiquetado";
 import { normalizarEtiqueta } from "./etiquetas";
@@ -107,18 +109,22 @@ function esFemenino(nombre: string): boolean {
 }
 
 /**
- * Prefijo → lo que nombra, en minúscula: la primera palabra del primer
- * símbolo de la biblioteca con ese prefijo. Hoy: K "bobina", S "pulsador",
- * H "lámpara".
+ * Prefijo → lo que nombra, en minúscula (R5). Un nombre neutro por prefijo
+ * (T35, ajuste 1 de Bruno): Q es de varios símbolos (termomagnética,
+ * diferencial, guardamotor, seccionador) y el del primero de la biblioteca
+ * no diría la verdad. Tampoco se toma el símbolo de la hoja que lleva el
+ * prefijo: el R5 de un componente dependería de otros grupos de etiqueta, y
+ * el editor lo recalcula por grupo. K, S y H dicen lo de antes. Todo prefijo
+ * de la biblioteca está acá (test).
  */
-const DUENOS_PREFIJO: ReadonlyMap<string, string> = (() => {
-  const m = new Map<string, string>();
-  for (const def of SIMBOLOS) {
-    const p = prefijoDe(def);
-    if (p !== null && !m.has(p)) m.set(p, primeraPalabra(def.nombre).toLowerCase());
-  }
-  return m;
-})();
+export const NOMBRES_PREFIJO: ReadonlyMap<string, string> = new Map([
+  ["K", "bobina"],
+  ["S", "pulsador"],
+  ["H", "lámpara"],
+  ["Q", "protección o maniobra"],
+  ["F", "protección"],
+  ["M", "motor"],
+]);
 
 /** El tipo de la Fase (R10). */
 const FASE = "fuente.fase";
@@ -145,9 +151,27 @@ export function esFaseL(tipo: string, e: string): boolean {
   return tipo === FASE && e === "L";
 }
 
-/** True si es una Fase L1, L2 o L3 (las que hacen saltar R10). */
-export function esFaseNumerada(tipo: string, e: string): boolean {
-  return tipo === FASE && FASES_NUMERADAS.includes(e);
+const SIN_FASES: readonly string[] = [];
+
+/** Fase «L1», «L2» o «L3»: su etiqueta, en un arreglo armado una vez. */
+const UNA_FASE: ReadonlyMap<string, readonly string[]> = new Map(FASES_NUMERADAS.map((f) => [f, [f]]));
+
+/**
+ * Las fuentes de varios bornes (las trifásicas) por tipo → sus bornes L1, L2
+ * o L3 (T35, D15-A): de la definición, sin la tabla de papeles de `sim/`.
+ */
+const FASES_DE_FUENTE: ReadonlyMap<string, readonly string[]> = new Map(
+  SIMBOLOS.filter((d) => esFuente(d) && !nombraRed(d)).map((d) => [d.tipo, d.bornes.map((b) => b.nombre).filter((n) => FASES_NUMERADAS.includes(n))]),
+);
+
+/**
+ * Las fases L1, L2 y L3 que el componente pone en la hoja (las que hacen
+ * saltar R10): la etiqueta de una Fase «L1» a «L3», o los bornes L1 a L3 de
+ * una trifásica. No arma arreglos en cada llamada.
+ */
+export function fasesNumeradasDe(tipo: string, e: string): readonly string[] {
+  if (tipo === FASE) return UNA_FASE.get(e) ?? SIN_FASES;
+  return FASES_DE_FUENTE.get(tipo) ?? SIN_FASES;
 }
 
 /** Etiqueta numerada: letras y número ("K01" es K y 1). La misma forma que numera T17. */
@@ -201,7 +225,7 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
   let otrasR10 = "";
   if (activas.has("R10")) {
     const numeradas = new Set<string>();
-    for (const { c, e } of datos) if (esFaseNumerada(c.tipo, e)) numeradas.add(e);
+    for (const { c, e } of datos) for (const f of fasesNumeradasDe(c.tipo, e)) numeradas.add(f);
     otrasR10 = otrasFasesR10((n) => numeradas.has(n));
   }
 
@@ -225,7 +249,7 @@ export function validar(hoja: Hoja, reglas: Iterable<Regla> = TODAS): Aviso[] {
     if (activas.has("R4") && repetida) avisos.push({ regla: "R4", severidad: repetida.severidad, id, etiqueta: e, otro: repetida.otro });
     if (activas.has("R5") && prefijo !== null && repetida?.severidad !== "error") {
       const m = NUMERADA.exec(e);
-      const de = m && m[1] !== prefijo ? DUENOS_PREFIJO.get(m[1]!) : undefined;
+      const de = m && m[1] !== prefijo ? NOMBRES_PREFIJO.get(m[1]!) : undefined;
       if (de !== undefined) avisos.push({ regla: "R5", severidad: "aviso", id, etiqueta: e, nombre: def!.nombre, de });
     }
     if (marcadosR6.has(id)) avisos.push({ regla: "R6", severidad: "aviso", id, etiqueta: e });

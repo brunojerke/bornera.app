@@ -177,9 +177,11 @@ describe("ids estables", () => {
     cmd.aplicar(doc);
     expect(buscarComponente(doc, "c3")).toBeUndefined();
     cmd.deshacer(doc);
-    expect(ids(doc)).toEqual(["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "c10"]);
+    // Uno por símbolo de la biblioteca: c1 a cN.
+    const todos = SIMBOLOS.map((_, i) => `c${i + 1}`);
+    expect(ids(doc)).toEqual(todos);
     cmd.aplicar(doc);
-    expect(ids(doc)).toEqual(["c1", "c2", "c4", "c5", "c6", "c7", "c8", "c9", "c10"]);
+    expect(ids(doc)).toEqual(todos.filter((id) => id !== "c3"));
   });
 
   it("Borrar varios, en varias hojas, devuelve cada uno a su hoja y a su orden", () => {
@@ -188,9 +190,12 @@ describe("ids estables", () => {
     colocar(doc, datos("pulsador.na", 0, 0), 1).aplicar(doc);
     colocar(doc, datos("pulsador.nc", 0, 4), 1).aplicar(doc);
     const antes = copia(doc);
-    const cmd = new Borrar(["c12", "c4", "c1", "c6", "c11"]);
+    // Los de la hoja 2 son los dos que siguen a los de la biblioteca.
+    const n = SIMBOLOS.length;
+    const cmd = new Borrar([`c${n + 2}`, "c4", "c1", "c6", `c${n + 1}`]);
     cmd.aplicar(doc);
-    expect(doc.hojas.map((h) => h.componentes.map((c) => c.id))).toEqual([["c2", "c3", "c5", "c7", "c8", "c9", "c10"], []]);
+    const quedan = SIMBOLOS.map((_, i) => `c${i + 1}`).filter((id) => !["c1", "c4", "c6"].includes(id));
+    expect(doc.hojas.map((h) => h.componentes.map((c) => c.id))).toEqual([quedan, []]);
     cmd.deshacer(doc);
     expect(doc).toEqual(antes);
   });

@@ -118,10 +118,11 @@ export type DefinicionSimbolo = Comportamiento & {
   primitivasAccionado?: Primitiva[];
   bornes: Borne[];
   /**
-   * Polos de un contacto (T34): pares de bornes que une cuando conduce, como
-   * los 1-2, 3-4 y 5-6 del contactor principal. Todos los polos se accionan
-   * juntos. Sin `polos`, un contacto de 2 bornes es un polo. Solo en
-   * contactos; cada borne en un solo polo (`validarDefinicion`).
+   * Polos de un contacto o de una protección (T34, T35 D13-A): pares de
+   * bornes que une cuando conduce, como los 1-2, 3-4 y 5-6 del contactor
+   * principal. Todos los polos se accionan juntos. Sin `polos`, un contacto o
+   * una protección de 2 bornes es un polo. Cada borne en un solo polo
+   * (`validarDefinicion`).
    */
   polos?: readonly (readonly [string, string])[];
   /**
@@ -183,13 +184,19 @@ const SIN_POLOS: readonly (readonly [string, string])[] = [];
 /** Polos armados de los contactos de 2 bornes sin `polos`, uno por definición (no se arman en cada llamada). */
 const POLOS_ARMADOS = new WeakMap<DefinicionSimbolo, readonly (readonly [string, string])[]>();
 
+/** Lleva polos: un contacto o una protección (T35, D13-A). */
+export function tienePolos(def: DefinicionSimbolo): boolean {
+  return def.elemento === "contacto_na" || def.elemento === "contacto_nc" || def.elemento === "proteccion";
+}
+
 /**
- * Los polos de un contacto (T34): `polos`, o sus dos bornes si no los tiene.
- * Fuera de los contactos, ninguno. No arma arreglos nuevos en cada llamada:
- * el polo de un contacto de 2 bornes se arma una vez por definición.
+ * Los polos de un contacto o de una protección (T34, T35): `polos`, o sus dos
+ * bornes si no los tiene. Fuera de ellos, ninguno. No arma arreglos nuevos en
+ * cada llamada: el polo de 2 bornes se arma una vez por definición. La netlist
+ * los lee solo de los contactos: las protecciones no conducen hasta T36.
  */
 export function polosDe(def: DefinicionSimbolo): readonly (readonly [string, string])[] {
-  if (def.elemento !== "contacto_na" && def.elemento !== "contacto_nc") return SIN_POLOS;
+  if (!tienePolos(def)) return SIN_POLOS;
   if (def.polos) return def.polos;
   if (def.bornes.length !== 2) return SIN_POLOS;
   let polos = POLOS_ARMADOS.get(def);

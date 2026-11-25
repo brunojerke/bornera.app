@@ -583,7 +583,9 @@ describe("al azar, con semilla fija, a través del editor", () => {
     const etiquetas = editor.etiquetas;
     const h = doc.hojas[0]!;
     const inicial = foto(doc);
-    const tipos = SIMBOLOS.map((s) => s.tipo);
+    // Los 10 de T34 y uno de cada clase de potencia (T35: Q, F, M y la trifásica
+    // con neutro): con los 24, el auxiliar casi no sale.
+    const tipos = [...SIMBOLOS.slice(0, 10).map((s) => s.tipo), "proteccion.guardamotor", "proteccion.termico", "motor.trifasico", "fuente.trifasica_n"];
     let portapapeles: Recorte | null = null;
     const hechas = {
       colocar: 0,

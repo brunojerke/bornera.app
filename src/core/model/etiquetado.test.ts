@@ -56,7 +56,7 @@ function etiquetaDe(doc: Documento, id: string): string {
 // ── Clases ─────────────────────────────────────────────────────────────────
 
 describe("titular y prefijo", () => {
-  it("se numeran la bobina (K), los pulsadores (S) y la lámpara (H); las fuentes (también la trifásica) y los seguidores, no", () => {
+  it("se numeran la bobina (K), los pulsadores (S), la lámpara (H) y los de potencia (Q, F, M; T35); las fuentes (también las trifásicas y la tierra) y los seguidores, no", () => {
     expect(SIMBOLOS.map((s) => [s.tipo, esTitular(s), prefijoDe(s)])).toEqual([
       [FASE, false, null],
       [NEUTRO, false, null],
@@ -68,6 +68,20 @@ describe("titular y prefijo", () => {
       [LAMPARA, true, "H"],
       ["fuente.trifasica", false, null],
       ["contactor.principal", false, null],
+      ["fuente.trifasica_n", false, null],
+      ["fuente.tierra", false, null],
+      ["proteccion.termomagnetica_unipolar", true, "Q"],
+      ["proteccion.termomagnetica_bipolar", true, "Q"],
+      ["proteccion.termomagnetica_tripolar", true, "Q"],
+      ["proteccion.termomagnetica_tetrapolar", true, "Q"],
+      ["proteccion.diferencial_bipolar", true, "Q"],
+      ["proteccion.diferencial_tetrapolar", true, "Q"],
+      ["proteccion.guardamotor", true, "Q"],
+      ["maniobra.seccionador", true, "Q"],
+      ["proteccion.fusible_tripolar", true, "F"],
+      ["proteccion.termico", true, "F"],
+      ["motor.trifasico", true, "M"],
+      ["motor.estrella_triangulo", true, "M"],
     ]);
   });
 
@@ -77,6 +91,18 @@ describe("titular y prefijo", () => {
       [PULSADOR_NC, 0],
       [BOBINA, 1],
       [LAMPARA, 1],
+      ["proteccion.termomagnetica_unipolar", 1],
+      ["proteccion.termomagnetica_bipolar", 1],
+      ["proteccion.termomagnetica_tripolar", 1],
+      ["proteccion.termomagnetica_tetrapolar", 1],
+      ["proteccion.diferencial_bipolar", 1],
+      ["proteccion.diferencial_tetrapolar", 1],
+      ["proteccion.guardamotor", 1],
+      ["maniobra.seccionador", 1],
+      ["proteccion.fusible_tripolar", 1],
+      ["proteccion.termico", 1],
+      ["motor.trifasico", 1],
+      ["motor.estrella_triangulo", 1],
     ]);
     expect(primerNumeroDe(buscarSimbolo(DESCONOCIDO))).toBe(1);
   });
@@ -334,6 +360,32 @@ describe("etiquetarVacios", () => {
 
   it("sin vacíos, nada", () => {
     expect(etiquetarVacios(marchaParada().doc.hojas[0]!).size).toBe(0);
+  });
+
+  it("T35: los de potencia se numeran con Q, F y M (D9-A), cada prefijo por su lado; los principales, la trifásica y la tierra no", () => {
+    const h = hoja(
+      comp("q1", "proteccion.termomagnetica_tripolar", "", 0, 0),
+      comp("g", "proteccion.guardamotor", "", 0, 10),
+      comp("sec", "maniobra.seccionador", "Q2", 0, 20),
+      comp("dif", "proteccion.diferencial_tetrapolar", "", 0, 30),
+      comp("fus", "proteccion.fusible_tripolar", "", 20, 0),
+      comp("ter", "proteccion.termico", "", 20, 10),
+      comp("m", "motor.trifasico", "", 20, 20),
+      comp("me", "motor.estrella_triangulo", "", 20, 30),
+      comp("k", "contactor.principal", "", 40, 0),
+      comp("t", "fuente.trifasica_n", "", 40, 10),
+      comp("pe", "fuente.tierra", "", 40, 20),
+    );
+    // En el orden de la hoja por (y, x): fila por fila.
+    expect([...etiquetarVacios(h)]).toEqual([
+      ["q1", "Q1"],
+      ["fus", "F1"],
+      ["g", "Q3"],
+      ["ter", "F2"],
+      ["m", "M1"],
+      ["dif", "Q4"],
+      ["me", "M2"],
+    ]);
   });
 });
 

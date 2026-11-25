@@ -430,16 +430,16 @@ describe("ids y contadores", () => {
 
 describe("símbolos (D5-A)", () => {
   it("desconocido sin cables: abre con aviso, conserva el tipo y se guarda igual", () => {
-    const texto = poner("hojas[0].componentes[2].tipo", "motor.trifasico");
+    const texto = poner("hojas[0].componentes[2].tipo", "motor.paso_a_paso");
     const r = abre(texto);
-    expect(r.avisos).toEqual([{ donde: "hojas[0].componentes[2].tipo", mensaje: "El símbolo «motor.trifasico» de «c3» no está en la biblioteca: se dibuja con «?»" }]);
-    expect(r.documento.hojas[0]!.componentes[2]!.tipo).toBe("motor.trifasico");
+    expect(r.avisos).toEqual([{ donde: "hojas[0].componentes[2].tipo", mensaje: "El símbolo «motor.paso_a_paso» de «c3» no está en la biblioteca: se dibuja con «?»" }]);
+    expect(r.documento.hojas[0]!.componentes[2]!.tipo).toBe("motor.paso_a_paso");
     expect(serializar(r.documento)).toBe(texto);
   });
 
   it("desconocido con cables en sus bornes: rechaza", () => {
-    expect(errores(poner("hojas[0].componentes[0].tipo", "motor.trifasico"))).toEqual([
-      { donde: "hojas[0].componentes[0].tipo", mensaje: "el símbolo «motor.trifasico» de «c1» no está en la biblioteca y tiene cables en sus bornes" },
+    expect(errores(poner("hojas[0].componentes[0].tipo", "motor.paso_a_paso"))).toEqual([
+      { donde: "hojas[0].componentes[0].tipo", mensaje: "el símbolo «motor.paso_a_paso» de «c1» no está en la biblioteca y tiene cables en sus bornes" },
     ]);
   });
 });
@@ -558,7 +558,7 @@ function mulberry32(semilla: number): () => number {
 
 const VALORES: readonly unknown[] = [
   0, 1, -1, 2, 4, 5, 6, 8, 10, 45, 90, 180, 270, 1.5, 10_000, 10_001, -10_001, 2 ** 53, null, true, false, "", "c1", "c2", "c3", "w1", "w2", "w3",
-  "13", "14", "A2", "borne", "cable", "libre", "pulsador.na", "motor.trifasico", "__proto__", [], {}, [1, 2], [1, 2, 3], { tipo: "libre", x: 0, y: 0 },
+  "13", "14", "A2", "borne", "cable", "libre", "pulsador.na", "motor.paso_a_paso", "__proto__", [], {}, [1, 2], [1, 2, 3], { tipo: "libre", x: 0, y: 0 },
 ];
 const CLAVES_EXTRA: readonly string[] = ["extra", "__proto__", "constructor", "x", "tipo", "id"];
 
