@@ -48,9 +48,10 @@ export interface BancoMando {
  * Copia a `doc` los componentes `ids` de `plantilla` (con los cables que
  * tienen sus dos extremos en ellos), corridos (dx, dy), con ids nuevos y las
  * etiquetas de `etiquetas` (por id de la plantilla; si falta, la misma).
- * Devuelve el id nuevo de cada id de la plantilla.
+ * Devuelve el id nuevo de cada id de la plantilla. También la usa la escena
+ * de potencia (`bancoPotencia.ts`, T37).
  */
-function copiar(doc: Documento, plantilla: Hoja, ids: ReadonlySet<string>, dx: number, dy: number, etiquetas: ReadonlyMap<string, string>): Map<string, string> {
+export function copiar(doc: Documento, plantilla: Hoja, ids: ReadonlySet<string>, dx: number, dy: number, etiquetas: ReadonlyMap<string, string>): Map<string, string> {
   const hoja = doc.hojas[0]!;
   const nuevo = new Map<string, string>();
   for (const c of plantilla.componentes) {
