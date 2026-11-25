@@ -20,6 +20,32 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Símbolos de potencia (fase 6, T35) — 2026-11-25
+
+**Criterio escrito antes de medir** (`docs/plan-T35.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, 6 aperturas por exe, fría + caliente) contra `446115a`, misma escena (`TIPOS_ESCENA_013`, sin J-A). S1 ≤ 54,5 (máx. 60,0) y no regresión; S2 1,7 / 5,3, S3 16,7, S5 100,0: tope y no regresión; S4 6,0 / 18,2 por tope. B1–B16 con D6b-C (**B2 por mediana**: B2 1.º decide y B2 2.º informa, regla vigente de `plan-fase6.md` §4). **B10 se juzga** (las referencias por polos tocan ese camino). F1 ≤ 9 ms, F2 y F3 ≤ 1 s. Control: S4, B13, B15 (si falla solo una, se repite una vez); si falla una juzgada, se frena y se consulta.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera (verificado antes de medir). Dos exes `tauri build --no-bundle` con la versión solo en `package.json` (local, revertida): A `0.1.5-t35.0` (`b060cfb`); B `0.1.5-t35b.0`, de un worktree temporal en `446115a` con `npm ci` y `svelte-kit sync` (ya borrado). Edge 158. Las 12 aperturas terminaron (38–41 s cada una).
+
+**Resultado: pasa.** S pasa (cierre «pasa»), F pasa, B1–B16 iguales salvo B2 2.º, que informa.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 20,1 | 21,9 | 19,9 | pasa (≤ 21,9) |
+| S2 | mediana | 1,7 | 0,2 | 0,2 | 0,2 | pasa (≤ 1,2) |
+| S2 | máx. | 5,3 | 0,3 | 0,4 | 0,3 | pasa (≤ 1,3) |
+| S3 | máx. | 16,7 | 3,0 | 3,3 | 3,0 | pasa (≤ 4,0) |
+| S4 | cuadro | 6,0 | 2,0 | 2,7 | 2,2 | informa (control) |
+| S4 | gesto | 18,2 | 2,3 | 3,2 | 2,4 | informa (control) |
+| S5 | máx. | 100,0 | 47,9 | 50,4 | 48,0 | pasa (≤ 52,9) |
+
+- **B10 (juzgada): 22,5 → 21,9 ms, igual** (calientes A 21,5–23,2 · B 21,8–23,0).
+- **B2 1.º (decide): 10,1 → 10,6, igual. B2 2.º (máx. de deshacer «Duplicar todo», informa): 10,2 → 12,3 ms**; el script lo marca «NO pasa» porque aplica D6b-C sin la excepción B-A. Calientes A 10,3–13,5 · B 9,8–13,8: los rangos se pisan, como el máximo bimodal de T32. T35 no suma trabajo en ese camino salvo un `for…of` sobre un arreglo vacío fijo por componente (R10 en `avisosHoja`).
+- B13 y B15 (control) iguales; B5 2.º 3,8 → 3,0; B1 1.º y 2.º, B4, B6, B11, B16 iguales.
+- S1, desglose (mediana): R4 0,9 · netlist 2,8 · iniciar 1,3 · cuadro 14,1. S5 de pared (informa): 160,4 ms. Cadena de 100 de S4 (informa): 4,9 / 11,8 ms.
+- F1 2,9–3,1 ms (≤ 9); F2 y F3 ≤ 63,8 ms (≤ 1 s). Medianas de las calientes: F1 2,7 · F2 38,2 · F3 51,7.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 10 en A (B1, B4 2.º, B5 2.º) y 7 en B (B1, B5 2.º, B6, B16).
+- `npm run bench` no se corrió: la escena del banco no tiene símbolos de T35 y su texto de referencias no cambia (contactos de un polo); decide el ABBA.
+
 ## Polos y netlist multipolo (fase 6, T34) — 2026-11-24
 
 **Criterio escrito antes de medir** (`docs/plan-T34.md`, aprobado con 4 ajustes): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, 6 aperturas por exe, fría + caliente) contra `954f011`, misma escena (sin J-A). S1 (arma la netlist): tope 54,5 (máx. 60,0) **y no regresión (ajuste 1)**. S2 1,7 / 5,3 (máx. 2,7 / 6,3), S3 16,7 (18,4), S5 100,0 (110,0): tope y no regresión (mediana A ≤ B + máx(1 ms, 10 %)). S4 6,0 / 18,2 (7,0 / 20,0): control, por tope. B1–B16 con D6b-C (B2 por mediana); F1–F3 por tope. **Ajuste 4:** si falla solo una fila de control (B13, B15, S4), se repite el ABBA una vez; si falla una que se juzga, se frena y se consulta sin volver a medir.

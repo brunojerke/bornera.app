@@ -47,3 +47,10 @@ Aprobado por Bruno el 2026-11-24 con D13-A, D14-A, D15-A y D16-A, más 4 ajustes
 ## Riesgos
 - La fila de 3 polos es más larga: puede pisar lo de su derecha (capturas).
 - Dibujos IEC simplificados: los revisa Bruno en las capturas.
+
+## Resultado (2026-11-25)
+- Commits: `4a88e6c` (plan), `b010268` (checkpoint), `35f57ad` (humo y diferencial de 6 de alto), `b060cfb` (humos viejos con 24 ítems) y el de cierre.
+- **Diferencial:** con 4 de alto la banda del toroide pisaba los nombres de los bornes de abajo (captura). Pasa a 6 de alto (bornes en ±3): el contacto sube 1 y el toroide queda en el tramo de abajo.
+- **Expectativas de tests que cambiaron** (no relajan nada): cuentas de la biblioteca (10 → 24 en biblioteca, paleta, colocar, etiquetado, t07 y t17b); `comandos.test` con los ids derivados de `SIMBOLOS`; `deserializar.test` usa `motor.paso_a_paso` como desconocido; `armarEtiquetas.test` al azar con los 10 de T34 y 4 de potencia (con los 24 el auxiliar casi no salía); `uniones.test` suma el caso de T35 con 50 documentos y los mismos mínimos (con 25, los símbolos anchos dejaban 5 «anfitriones borrados» de 10).
+- **ABBA contra `446115a`: pasa.** S y F pasan; B10 22,5 → 21,9 (igual); B2 1.º igual y B2 2.º 10,2 → 12,3 informa («B2 por mediana»). Detalle en `docs/bench.md`.
+- **Pendiente para T36:** que conduzcan las protecciones (D13-A) y decidir el seccionador; el nombre de R5 para S cuando estén selector, seta y final («pulsador» hoy).
