@@ -185,6 +185,8 @@ La diferencia con CADe\_SIMU se gana acá: **dibujar solo lo necesario, solo cua
 
 > Nota (2026-11-22, fase 5): el banco tiene dos escenas oficiales nuevas. La escena con cables (2000 + 3030) se tiende entera como W (`codosBanco`): 0 conexiones aparentes, así que los avisos R10 y R11 se miden sobre un circuito sano. La **escena de mando** (`bancoMando.ts`: 2000 símbolos, 2200 cables y 300 bobinas) alimenta S1–S5 de «Probar la fase 5»: entrar a Simular (con la netlist dentro de S1), pulsar y soltar, el dibujo del estado y la salida. Topes de la netbook por la regla de la fase 4 (K1 = 3, K2 = 5,5, decisión D1-D); en C3 (2026-11-22) los cocientes netbook / PC salieron S1 4,6, S3 3,1, S4 2,4 / 2,6 y S5 2,4. Detalle en `docs/bench.md`.
 
+> Nota (2026-11-25, fase 6, T37): tercera escena oficial, la **escena de potencia** (`bancoPotencia.ts`: 95 copias de la inversión de giro con potencia más una celda de lámpara, 2000 símbolos justos y 3519 cables, tendida por W y sin aparentes; L1, L2, L3 y N son una red cada una, 1526 redes). Alimenta S6 de «Probar la fase 6» (entrar a Simular hasta nítido al 31 %, como S1). El Lienzo deja una marca al primer cuadro nítido desde que abre la app (`arranque.ts`), base de P2. Plan en `docs/plan-T37.md`.
+
 ## Formato de archivo propio
 
 Sí es posible y conviene: un **JSON versionado y comprimido**, con extensión propia (`.brn`). Es fácil de leer, de depurar y de mantener compatible a futuro.
@@ -293,7 +295,7 @@ Carpetas separadas por responsabilidad, para que Claude Code trabaje en un módu
 │   │   ├── io/            formato .brn, migraciones, validación
 │   │   └── circuitos/     circuitos de referencia armados con comandos y su comparación por redes (solo los usan los tests)
 │   ├── render/            Renderer: canvas, svg, pdf
-│   ├── editor/            herramientas, selección, índice espacial; modo Simular (`simulacion.ts`) y su dibujo (`dibujoSimulacion.ts`); escenas del banco (`banco.ts`, `bancoMando.ts`)
+│   ├── editor/            herramientas, selección, índice espacial; modo Simular (`simulacion.ts`) y su dibujo (`dibujoSimulacion.ts`); escenas del banco (`banco.ts`, `bancoMando.ts`, `bancoPotencia.ts`)
 │   ├── ui/                paneles, barras, diálogos (Svelte)
 │   └── routes/            punto de entrada de SvelteKit (+page.svelte)
 ├── tests/

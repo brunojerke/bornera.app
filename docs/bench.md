@@ -20,6 +20,33 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Escena de potencia y «Probar la fase 6» (fase 6, T37) — 2026-11-25
+
+**Criterio escrito antes de medir** (`docs/plan-T37.md`): ABBA en WebView2 (`probar-webview2.mjs --fase6`: A corre «Probar la fase 6» y B «Probar la fase 5», 3 bloques, fría + caliente) contra `0322b14`, misma escena de B (`TIPOS_ESCENA_013`, sin J-A). **S6 (ajuste 1):** decide la mediana de las calientes ≤ 54,5 ms; el máx. ≤ 60,0 aparte (un pico aislado: se repite el ABBA una vez; si vuelve, no pasa); sin no regresión (la base no tiene S6). **P2** informa (la base no tiene la marca). S1–S5, B1–B16 y F con las reglas de T35/T36: S1 ≤ 54,5 (máx. 60,0); S2 1,7 / 5,3, S3 16,7, S5 100,0 con tope y no regresión; S4 6,0 / 18,2 por tope; B con D6b-C, **B10 se juzga** y **B2 por mediana, a mano** (B2 1.º decide, B2 2.º informa); F1 ≤ 9 ms, F2 y F3 ≤ 1 s. Control: S4, B13, B15.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera (verificado antes de medir; los WebView2 abiertos eran del buscador de Windows). Dos exes `tauri build --no-bundle` con la versión solo en `package.json` (local, revertida): A `0.1.5-t37.0` (`29ffb86`); B `0.1.5-t37b.0`, de un worktree temporal en `0322b14` con `npm ci` y `svelte-kit sync` (ya borrado). Edge 158. Las 12 aperturas terminaron (38–41 s cada una). Escena de potencia: 2000 componentes, 3519 cables, 95 trifásicas, 1526 redes.
+
+**Resultado: pasa.** S6 pasa por tope; S1–S5, B1–B16 y F pasan; nada sube.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| S6 | máx. | 54,5 (máx. 60,0) | **17,4** | 18,0 | — | no aplica |
+| S1 | máx. | 54,5 | 19,1 | 21,8 | 18,9 | informa (R-A) |
+| S2 | mediana / máx. | 1,7 / 5,3 | 0,2 / 0,3 | 0,3 / 0,4 | 0,2 / 0,3 | pasa |
+| S3 | máx. | 16,7 | 3,0 | 3,5 | 2,8 | pasa (≤ 3,8) |
+| S4 | cuadro / gesto | 6,0 / 18,2 | 2,0 / 2,3 | 2,3 / 2,6 | 2,0 / 2,3 | informa (control) |
+| S5 | máx. | 100,0 | 47,6 | 50,5 | 47,5 | pasa (≤ 52,3) |
+
+- **S6:** calientes 17,4 · 16,8 · 18,0 · 16,6 · 17,8 · 17,3; frías (informan) 17,2–20,7. Desglose (mediana): R4 0,8 · netlist 4,4 · iniciar 1,6 · cuadro 11,6. El supuesto del plan (25–35 ms) era alto: la netlist pesa poco más que en S1 (4,4 contra 3,5) y el cuadro al 31 % pesa menos (11,6 contra 14,1).
+- **P2 (informa, base de T38):** 171,4 · 134,0 · 134,5 · 134,4 · 133,3 · 134,2 ms; mediana 134,3. La 1.ª apertura, fría del sistema, tardó más.
+- **B2 1.º (decide): 10,1 → 10,7, igual. B2 2.º (informa): 10,3 → 11,1, igual para el script también**: la regla a mano no hizo falta.
+- **B10 (juzgada): 21,8 → 21,9, igual.** B13 y B15 (control) iguales.
+- S1, desglose (mediana): R4 1,0 · netlist 3,5 · iniciar 1,3 · cuadro 14,1. S5 de pared (informa): 167,8 ms. Cadena de 100 de S4 (informa): 5,0 / 12,3 ms.
+- F1 2,9–3,0 ms (≤ 9); F2 y F3 ≤ 68,4 ms (≤ 1 s). Medianas de las calientes: F1 2,7 · F2 42,1 · F3 52,2.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 7 en A (B1, B5 2.º, B6) y 4 en B (B1 2.º, B3, B4 2.º, B11).
+- Chrome headless (humo, informa): S6 28,4 / 20,4 ms (máx. / mediana); P2 324,0 ms.
+- `npm run bench` no se corrió: el dibujo de Editar no cambia (el Lienzo solo suma un `if` por cuadro hasta la marca); decide el ABBA.
+
 ## Mando y protecciones que conducen (fase 6, T36) — 2026-11-25
 
 **Criterio escrito antes de medir** (`docs/plan-T36.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, fría + caliente) contra `80c82f9`, misma escena (`TIPOS_ESCENA_013`, sin J-A). S1 ≤ 54,5 (máx. 60,0) y no regresión; S2 1,7 / 5,3, S3 16,7, S5 100,0: tope y no regresión; S4 6,0 / 18,2 por tope. B1–B16 con D6b-C (**B2 por mediana**: B2 1.º decide y B2 2.º informa). **B10 se juzga.** F1 ≤ 9 ms, F2 y F3 ≤ 1 s. Control: S4, B13, B15.

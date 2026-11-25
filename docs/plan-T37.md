@@ -36,3 +36,10 @@ D21-A copias de `inversionPotencia()` · D22-A 2000 justos con celda de 5 · D23
 ## Riesgos (supuestos)
 - Red L1–L3 enorme: netlist de S6 mayor que la de S1 (S6 ≈ 25–35 ms en la PC).
 - 31 % de 2000 con motores y Q de cuchilla: el cuadro pesa (B10 ≈ 23 ms).
+
+## Resultado (2026-11-25)
+- Commits: `c0496ec` (plan), `a4fcd6a` y `29ffb86` (checkpoints) y el de cierre. Todo el alcance hecho.
+- Escena: 2000 justos, 3519 cables, 1526 redes (95 × 16 + 2 + 4); L1, L2, L3 y N, una red cada una. Ninguna expectativa vieja cambió.
+- Humo `t37` 16/16; `npm run humo` 1108/1108.
+- **ABBA contra `0322b14`: pasa.** S6 17,4 / 18,0 (mediana / máx.; ≤ 54,5 y ≤ 60,0); P2 134,3 ms (informa); S1–S5, B1–B16 (B2 1.º 10,1 → 10,7, igual; B10 igual) y F pasan. Detalle en `docs/bench.md`.
+- **Pendiente:** S6 de la netbook en C3; P1 y el juicio de P2 en T38.
