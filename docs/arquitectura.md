@@ -189,6 +189,8 @@ La diferencia con CADe\_SIMU se gana acá: **dibujar solo lo necesario, solo cua
 
 > Nota (2026-11-25, fase 6, T38): las miniaturas de la paleta son un canvas chico por símbolo, dibujado una sola vez después del primer cuadro nítido del lienzo, con el `Path2D` ya cacheado del símbolo. Solo un tema o un dpr nuevo las rehacen; la búsqueda y el plegado las ocultan sin redibujar. Rehacer las 32 (P1) cuesta 0,4 ms en la PC (tope 9,1). Plan en `docs/plan-T38.md`.
 
+> Nota (2026-11-25, fase 6, C1): desde C1 los canvas de las miniaturas también se **montan** después del primer cuadro nítido (antes solo se dibujaban después); los botones de la paleta se montan desde el principio. Plan en `docs/plan-C1-fase6.md`.
+
 ## Formato de archivo propio
 
 Sí es posible y conviene: un **JSON versionado y comprimido**, con extensión propia (`.brn`). Es fácil de leer, de depurar y de mantener compatible a futuro.

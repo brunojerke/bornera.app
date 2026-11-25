@@ -20,6 +20,34 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## «Probar la fase 6» en la PC, contra `954f011` (fase 6, C1) — 2026-11-25
+
+**Criterio escrito antes de medir** (`docs/plan-C1-fase6.md`, aprobado con 4 ajustes): ABBA en WebView2 (`probar-webview2.mjs --fase6`: A corre «Probar la fase 6» y B «Probar la fase 5», 3 bloques, fría + caliente) contra `954f011` (cierre de la fase 5), misma escena de B (sin J-A). B1–B16 con D6b-C (B2 por mediana de la 1.ª, a mano); F por tope; S1–S5 por tope, con no regresión en S2, S3 y S5 (S1 y S4 informan). **S6 y P1 solo por tope** (B no los tiene): mediana ≤ 54,5 / 9,1, máx. ≤ 60,0 / 10,1 aparte. **P2 informa** (B no tiene la marca) y se compara con 139,3 (`24090e0`) y 148,9 (`f9d3b10`). Una sola repetición, solo por un control (B13, B15, S4, o máx. de S6/P1 sobre el tope con la mediana dentro).
+
+**Cómo se midió:** enchufada, «Mejor rendimiento», apps cerradas (Bruno), sin otra Bornera. A `0.1.5-c1.0` (`81a1c4b`, con los canvas de la paleta montados después del primer cuadro nítido); B `0.1.5-c1b.0`, de un worktree temporal en `954f011` (`npm ci`, `svelte-kit sync`), borrado con `git worktree remove` y `prune`. Los dos con `tauri build --no-bundle`, versión solo en `package.json` (revertida). Edge 158. Las 12 aperturas terminaron (39–43 s).
+
+**Resultado: pasa en el primer ABBA.** Nada sube; no hizo falta repetir.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| S6 | máx. | 54,5 (máx. 60,0) | **17,9** | 20,5 | — | sin base |
+| P1 | máx. | 9,1 (máx. 10,1) | **0,4** | 0,4 | — | sin base |
+| P2 | una por apertura | informa | **153,2** | 186,5 | — | informa |
+| S1 | máx. | 54,5 | 19,3 | 22,5 | 20,3 | informa (R-A) |
+| S2 | mediana / máx. | 1,7 / 5,3 | 0,2 / 0,4 | 0,3 / 0,5 | 0,2 / 0,3 | pasa |
+| S3 | máx. | 16,7 | 3,0 | 3,3 | 3,0 | pasa (≤ 4,0) |
+| S4 | cuadro / gesto | 6,0 / 18,2 | 1,9 / 2,2 | 2,3 / 2,5 | 2,0 / 2,3 | informa (R-A) |
+| S5 | máx. | 100,0 | 46,4 | 49,1 | 47,7 | pasa (≤ 52,4) |
+
+- **P2 no bajó:** A 186,5 · 158,8 · 158,4 · 146,2 · 136,4 · 148,0 ms, mediana 153,2, contra 148,9 (`f9d3b10`, T38) y 139,3 (`24090e0`). Montar los canvas después del primer cuadro no se nota en P2 (la 1.ª apertura, fría del sistema, es la más alta, como en T37 y T38). Son sesiones distintas y aquí no hay B que lo mida en el mismo ABBA: se informa tal cual y el cambio no se agranda (ajuste 3). Se mira en C3.
+- **S1, desglose (mediana de las calientes, ms):** A R4 0,8 · netlist 3,6 · iniciar 1,3 · cuadro 14,1; B R4 0,7 · netlist 3,3 · iniciar 1,4 · cuadro 14,6. Contra `954f011`, A queda 1,0 ms **por debajo** (19,3 / 20,3) y ninguna parte cambia más de 0,5 ms. La suba de T38 (17,8 → 20,5) no se ve contra la base de la fase 5: no está en ninguna parte del desglose; el 17,8 de `24090e0` fue el bajo de esa sesión (S1 varía ~2 ms entre sesiones).
+- S6, desglose (mediana): R4 0,9 · netlist 4,3 · iniciar 1,5 · cuadro 12,2. Calientes 19,0 · 18,4 · 17,5 · 17,3 · 20,5 · 17,4; frías 16,6–19,1.
+- P1: calientes 0,3–0,4; frías 0,3–0,6.
+- **B2 1.º (decide): 10,3 → 10,3, igual. B2 2.º (informa): 10,7 → 11,7, igual (+1,0 ms).** B10 22,9 → 22,5. B13 y B15 (control) iguales. B9 500 / 500.
+- F1 2,9–3,7 ms (≤ 9); F2 ≤ 68,3 y F3 ≤ 87,7 ms (≤ 1 s). Medianas de las calientes: F1 2,7 · F2 40,9 · F3 53,8.
+- Frías fuera del rango de sus calientes (+1 ms, informan): B 8, A 2 (B6 máx. 10,5 y 11,0).
+- S5 de pared (informa): 156,9 ms. Cadena de 100 de S4 (informa): 5,0 / 12,9 ms.
+
 ## Paleta con miniaturas: P1 y el juicio de P2 (fase 6, T38) — 2026-11-25
 
 **Criterio escrito antes de medir** (`docs/plan-T38.md`): ABBA en WebView2 (`probar-webview2.mjs --fase6 --base-fase6`: A y B corren «Probar la fase 6», 3 bloques, fría + caliente) contra `24090e0`, misma escena de B (`TIPOS_ESCENA_013`; la paleta sigue en 200 px, sin J-A). **P1 (ajuste 4), la regla de S6:** decide la mediana de las calientes ≤ 9,1 ms; el máx. ≤ 10,1 aparte (un pico aislado: se repite el ABBA una vez); no regresión «sin base» (B no tiene P1). **P2 (D30-A):** mediana de las aperturas de A ≤ la de B del mismo ABBA + máx(1 ms, 10 %); 134,3 ms de T37 es referencia. **S6:** mediana ≤ 54,5, máx. ≤ 60,0 aparte, una sola repetición, y no regresión contra B. S1–S5, B1–B16 y F con las reglas de T35–T37 (B2 por mediana de la 1.ª, a mano).

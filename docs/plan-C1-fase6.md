@@ -27,3 +27,10 @@
 ## Riesgos
 - El cambio podría no bajar P2 si el costo está en los 32 botones y no en los canvas; se informa tal cual, no se agranda el cambio en C1.
 - El worktree de `954f011` necesita `svelte-kit sync` (si no, la página del banco espera los 10 min).
+
+## Resultado (2026-11-25)
+- **Paso 1** (`81a1c4b`): `{#if}` con `despuesDelArranque` en `Paleta.svelte` y la marca `bornera:miniaturas-montadas`; 17 líneas, sin el core. Humo t38 31/31 (arranque < montadas ≤ miniaturas; plegar no desmonta los canvas; claro/oscuro dibujadas). `npm test` 2692, check 0, humo 1140/1140, `cargo test` 7.
+- **ABBA contra `954f011`: pasa** al primer intento. S6 17,9 / 20,5; P1 0,4 / 0,4; S1–S5, B1–B16 (B2 1.º 10,3 → 10,3) y F pasan.
+- **P2:** mediana 153,2 (contra 148,9 y 139,3): no bajó; se informa tal cual.
+- **S1:** 19,3 contra 20,3 de B; desglose igual (±0,5 ms). La suba de T38 no está en el desglose: era el 17,8 bajo de `24090e0`.
+- Pendiente: P1, S6, P2 y S1 de la netbook en C3.
