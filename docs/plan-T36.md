@@ -48,3 +48,14 @@ Colocar los 8 (captura por símbolo, una carpeta); Simular: selector y seta alte
 - `preparar` y `calcular` cambian (S2–S4 sin protecciones).
 - 32 ítems a 1024×600: la paleta desplaza; los humos viejos cuentan ítems.
 - Dibujos IEC simplificados: Bruno los revisa en las capturas.
+
+## Resultado (2026-11-25)
+- Commits: `86290f6` (plan), `2d5ff12` (checkpoint) y el de cierre.
+- Hecho todo el alcance, con los 4 ajustes. Q de cuchilla cerradas en Simular (D20-B): `validarDefinicion` deja el dibujo accionado en protecciones y admite los textos que también están en el reposo («N», «IΔ», «I>»).
+- **Expectativas que cambiaron** (no relajan nada): cuentas 24 → 32 (biblioteca, paleta, colocar, etiquetado, t07, t17b); R5 de S «aparato de mando»; el test de motor de T35 «Q1 y F2 no conducen» pasa a «conducen» (D17-A); en `validar.test`, el texto del dibujo accionado con textos.
+- **Azar del motor:** lote nuevo, semilla 36, con protecciones, enclavados, finales, 95-96/97-98 y bocina; el segundo borne de cada polo de protección alimenta un nodo propio (con los dos al azar casi todo era corto) y a veces bocina → fusible → lámpara (cubre «cargas en serie»). Los lotes 30 y 34 no cambian.
+- `inversionPotencia()` y `tests/circuitos/inversion-potencia.brn`: sin avisos; S1 da U V W = L1 L2 L3, S2 L3 L2 L1. Base `inversion-potencia` en `npm run circuito`.
+- Humo `t36-mando.mjs` 40/40; `npm run humo` 1092/1092.
+- **ABBA contra `80c82f9`: pasa** (S, B y F). Detalle en `docs/bench.md`.
+- **Pendiente:** referencias cruzadas del térmico (F2 con sus 95-96/97-98) y renombrar F con arrastre; disparar y abrir protecciones (6b).
+

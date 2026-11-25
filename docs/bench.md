@@ -20,6 +20,32 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Mando y protecciones que conducen (fase 6, T36) — 2026-11-25
+
+**Criterio escrito antes de medir** (`docs/plan-T36.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, fría + caliente) contra `80c82f9`, misma escena (`TIPOS_ESCENA_013`, sin J-A). S1 ≤ 54,5 (máx. 60,0) y no regresión; S2 1,7 / 5,3, S3 16,7, S5 100,0: tope y no regresión; S4 6,0 / 18,2 por tope. B1–B16 con D6b-C (**B2 por mediana**: B2 1.º decide y B2 2.º informa). **B10 se juzga.** F1 ≤ 9 ms, F2 y F3 ≤ 1 s. Control: S4, B13, B15.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera (verificado antes de medir). Dos exes `tauri build --no-bundle` con la versión solo en `package.json` (local, revertida): A `0.1.5-t36.0` (`2d5ff12`); B `0.1.5-t36b.0`, de un worktree temporal en `80c82f9` con `npm ci` y `svelte-kit sync` (ya borrado). Edge 158. Las 12 aperturas terminaron (40–42 s cada una).
+
+**Resultado: pasa.** S, B y F pasan; nada sube.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| S1 | máx. | 54,5 | 22,7 | 24,8 | 22,5 | pasa (≤ 24,8) |
+| S2 | mediana | 1,7 | 0,2 | 0,2 | 0,2 | pasa (≤ 1,2) |
+| S2 | máx. | 5,3 | 0,3 | 0,3 | 0,3 | pasa (≤ 1,3) |
+| S3 | máx. | 16,7 | 3,0 | 3,3 | 2,8 | pasa (≤ 3,8) |
+| S4 | cuadro | 6,0 | 1,8 | 3,1 | 1,8 | informa (control) |
+| S4 | gesto | 18,2 | 2,0 | 3,3 | 2,0 | informa (control) |
+| S5 | máx. | 100,0 | 46,1 | 49,4 | 45,8 | pasa (≤ 50,4) |
+
+- **B10 (juzgada): 23,4 → 23,9 ms, igual** (calientes A 22,9–24,8 · B 22,4–24,2).
+- **B2 1.º (decide): 10,6 → 10,6, igual. B2 2.º (informa): 11,8 → 11,1.**
+- B13 y B15 (control) iguales; B1, B4 2.º, B8 y B16 suben menos de 1 ms o del 10 %: iguales.
+- S1, desglose (mediana): R4 0,9 · netlist 4,8 · iniciar 1,6 · cuadro 15,5 (el desglose de B no se imprime: S1 de A y B son iguales, 22,7 y 22,5). S5 de pared (informa): 154,6 ms. Cadena de 100 de S4 (informa): 5,2 / 13,8 ms.
+- F1 3,0–4,8 ms (≤ 9); F2 y F3 ≤ 68,0 ms (≤ 1 s). Medianas de las calientes: F1 2,8 · F2 40,4 · F3 52,5.
+- Frías fuera del rango de sus calientes (+1 ms, informan): 8 en A (B1, B2 2.º, B3) y 5 en B (B1, B8, B10).
+- `npm run bench` no se corrió: la escena del banco no tiene símbolos de T36 y el dibujo de los de T35 no cambia en Editar; decide el ABBA.
+
 ## Símbolos de potencia (fase 6, T35) — 2026-11-25
 
 **Criterio escrito antes de medir** (`docs/plan-T35.md`): ABBA en WebView2 (`probar-webview2.mjs --fase5 --base-fase5`, 3 bloques, 6 aperturas por exe, fría + caliente) contra `446115a`, misma escena (`TIPOS_ESCENA_013`, sin J-A). S1 ≤ 54,5 (máx. 60,0) y no regresión; S2 1,7 / 5,3, S3 16,7, S5 100,0: tope y no regresión; S4 6,0 / 18,2 por tope. B1–B16 con D6b-C (**B2 por mediana**: B2 1.º decide y B2 2.º informa, regla vigente de `plan-fase6.md` §4). **B10 se juzga** (las referencias por polos tocan ese camino). F1 ≤ 9 ms, F2 y F3 ≤ 1 s. Control: S4, B13, B15 (si falla solo una, se repite una vez); si falla una juzgada, se frena y se consulta.

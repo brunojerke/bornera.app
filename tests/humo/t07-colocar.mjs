@@ -12,7 +12,7 @@ const items = (p) =>
 
 /**
  * Centro del ítem de la paleta con ese texto, desplazado a la vista: desde T35
- * la paleta tiene 24 ítems y a 1024×600 los de abajo quedan fuera.
+ * la paleta tiene 32 ítems (T36) y a 1024×600 los de abajo quedan fuera.
  */
 const itemVisible = (p, texto) =>
   p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === ${JSON.stringify(texto)});
@@ -26,7 +26,7 @@ const componentes = (p) => p.evaluar("bornera.editor.documento.hojas[0].componen
 
 export default async function (p, comprobar) {
   const lista = await items(p);
-  comprobar("la paleta muestra los 24 símbolos (T35)", lista.length === 24, lista.map((i) => i.texto).join(", "));
+  comprobar("la paleta muestra los 32 símbolos (T36)", lista.length === 32, lista.map((i) => i.texto).join(", "));
   comprobar("están los 10 de T34", DE_T34.every((t) => lista.some((i) => i.texto === t)), lista.map((i) => i.texto).join(", "));
   const lienzo = await p.caja("canvas");
 
