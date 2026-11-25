@@ -85,12 +85,12 @@ function lienzoAl31(ed: Editor, ancho: number, alto: number, centro: Caja | null
 }
 
 /** Entra a Simular por F5 (`Editor.entrarSimulacion`, S-A), con el tiempo de cada parte: inicio, R4, netlist y fin. */
-function entrarMedido(ed: Editor, marcas: number[]): void {
+function entrarMedido(ed: Editor, marcas: number[], escena: string): void {
   ed.salirSimulacion();
   marcas.push(performance.now());
   const errores = ed.entrarSimulacion(() => marcas.push(performance.now()));
   marcas.push(performance.now());
-  if (errores) throw new Error(`La escena de mando no entra a Simular: ${errores.map((a) => a.regla).join(", ")}.`);
+  if (errores) throw new Error(`La escena ${escena} no entra a Simular: ${errores.map((a) => a.regla).join(", ")}.`);
 }
 
 /** Una simulación de la escena para S2 y S3 (sin medir la entrada). */
@@ -100,26 +100,34 @@ function simulacionDe(hoja: Documento["hojas"][number]): Simulacion {
   return e.sim;
 }
 
-/** S1, con su vuelta de calentamiento. */
-async function medirS1(banco: BancoMando, ancho: number, alto: number): Promise<MuestraS1[]> {
-  const ed = new Editor(banco.doc);
+/**
+ * Entrar a Simular sobre `doc` hasta nítido al 31 %, `vueltas` veces más una
+ * de calentamiento: S1 (escena de mando) y S6 (escena de potencia, T37).
+ */
+export async function medirEntrada(doc: Documento, ancho: number, alto: number, vueltas: number, que: string, escena: string): Promise<MuestraS1[]> {
+  const ed = new Editor(doc);
   await esperarR11(ed);
   const { hastaNitido } = lienzoAl31(ed, ancho, alto);
-  hastaNitido("S1 (Editar)");
+  hastaNitido(`${que} (Editar)`);
   const muestras: MuestraS1[] = [];
-  for (let i = 0; i <= VUELTAS_S.S1; i++) {
+  for (let i = 0; i <= vueltas; i++) {
     await respirar();
     const marcas: number[] = [];
-    entrarMedido(ed, marcas);
-    const { cuadros } = hastaNitido("S1");
+    entrarMedido(ed, marcas, escena);
+    const { cuadros } = hastaNitido(que);
     const fin = performance.now();
     const [t0, t1, t2, t3] = marcas as [number, number, number, number];
     if (i > 0) muestras.push({ r4: t1 - t0, netlist: t2 - t1, iniciar: t3 - t2, cuadro: fin - t3, total: fin - t0, cuadros });
     // De vuelta a Editar, sin medir: la vuelta siguiente parte del mismo dibujo.
     ed.salirSimulacion();
-    hastaNitido("S1 (salir)");
+    hastaNitido(`${que} (salir)`);
   }
   return muestras;
+}
+
+/** S1, con su vuelta de calentamiento. */
+function medirS1(banco: BancoMando, ancho: number, alto: number): Promise<MuestraS1[]> {
+  return medirEntrada(banco.doc, ancho, alto, VUELTAS_S.S1, "S1", "de mando");
 }
 
 /** Caja que rodea las bobinas con esas etiquetas (para centrar la cámara en la cadena). */

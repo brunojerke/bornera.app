@@ -325,13 +325,15 @@ export function cierreS(tope, regresion) {
 
 /**
  * El desglose de S1 de un texto (la nota «S1, desglose …»): parte → ms.
+ * Con `fila` = "S6", el de S6 (T37).
  * @param {string} texto
+ * @param {string} [fila]
  * @returns {Map<string, number>}
  */
-export function desgloseS1(texto) {
+export function desgloseS1(texto, fila = "S1") {
   /** @type {Map<string, number>} */
   const partes = new Map();
-  const l = texto.split(/\r?\n/).find((x) => x.startsWith("S1, desglose"));
+  const l = texto.split(/\r?\n/).find((x) => x.startsWith(`${fila}, desglose`));
   if (!l) return partes;
   for (const m of l.matchAll(/(R4|netlist|iniciar|cuadro) ([\d,]+)/g)) partes.set(m[1] ?? "", num(m[2] ?? ""));
   return partes;
@@ -394,3 +396,107 @@ export function friasFuera(frias, calientes) {
   }
   return salida;
 }
+
+// ── «Probar la fase 6» (T37; docs/plan-T37.md, fijado antes de medir) ──────
+
+/**
+ * Tope de S6 en la PC (ms): 300 / K2 = 54,5. Aparte de `TOPES_S_PC`, así
+ * `--fase5` y `--base-fase5` no cambian. El número que se juzga es el máximo
+ * de cada corrida (el 1.º de la celda «máx. / mediana ms»).
+ */
+export const TOPES_S6_PC = { S6: [{ nombre: "máx.", indice: 0, tope: 54.5 }] };
+
+/**
+ * El juicio de S6 en la PC (ajuste 1 de T37, fijado antes de medir): decide
+ * la mediana de las calientes ≤ tope. El máximo ≤ tope + máx(1 ms, 10 %) se
+ * juzga aparte: si lo pasa una sola caliente (pico aislado), «repetir» (el
+ * ABBA se repite una vez, a mano; si vuelve a pasarse, «no pasa»); si lo pasa
+ * más de una, «no pasa». Las frías informan.
+ * @param {readonly string[]} frias
+ * @param {readonly string[]} calientes
+ * @returns {{ filas: { id: string, nombre: string, tope: number, margen: number, deciden: number[], informan: number[], mediana: number, maximo: number, sobreMargen: number[], estado: "pasa" | "repetir" | "no pasa" }[], estado: "pasa" | "repetir" | "no pasa" }}
+ */
+export function juzgarS6(frias, calientes) {
+  const valores = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
+    textos.map((t) => {
+      const f = filasS(t).get(id);
+      if (!f) throw new Error(`Falta ${id} en una corrida (¿es de «Probar la fase 6»?).`);
+      return f[i] ?? NaN;
+    });
+  const filas = Object.entries(TOPES_S6_PC).flatMap(([id, numeros]) =>
+    numeros.map(({ nombre, indice, tope }) => {
+      const deciden = valores(calientes, id, indice);
+      const med = mediana(deciden);
+      const max = deciden.length ? Math.max(...deciden) : NaN;
+      const margen = conMargen(tope);
+      const sobreMargen = deciden.filter((v) => v > margen);
+      /** @type {"pasa" | "repetir" | "no pasa"} */
+      const estado = deciden.length === 0 || !(med <= tope) || sobreMargen.length > 1 ? "no pasa" : sobreMargen.length === 1 ? "repetir" : "pasa";
+      return { id, nombre, tope, margen, deciden, informan: valores(frias, id, indice), mediana: med, maximo: max, sobreMargen, estado };
+    }),
+  );
+  const estado = filas.some((f) => f.estado === "no pasa") ? "no pasa" : filas.some((f) => f.estado === "repetir") ? "repetir" : "pasa";
+  return { filas, estado };
+}
+
+/**
+ * La no regresión de S6 (con `--base-fase6`, desde T38): mediana de las
+ * calientes de A ≤ la de B + máx(1 ms, 10 %).
+ * @param {readonly string[]} base calientes de B
+ * @param {readonly string[]} head calientes de A
+ */
+export function noRegresionS6(base, head) {
+  if (base.length === 0 || head.length === 0) throw new Error("No hay corridas para comparar S6.");
+  const med = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
+    mediana(
+      textos.map((t) => {
+        const f = filasS(t).get(id);
+        if (!f) throw new Error(`Falta ${id} en una corrida (¿la base corre «Probar la fase 6»?).`);
+        return f[i] ?? NaN;
+      }),
+    );
+  const filas = Object.entries(TOPES_S6_PC).flatMap(([id, numeros]) =>
+    numeros.map(({ nombre, indice }) => {
+      const b = med(base, id, indice);
+      const h = med(head, id, indice);
+      const limite = conMargen(b);
+      return { id, nombre, base: b, head: h, limite, pasa: h <= limite };
+    }),
+  );
+  return { filas, pasa: filas.every((f) => f.pasa) };
+}
+
+/**
+ * P2 de un texto (la fila «| P2 | … | N ms |»): ms desde `timeOrigin` hasta el
+ * primer cuadro nítido; NaN si no está o dice «sin marca».
+ * @param {string} texto
+ */
+export function arranqueP2(texto) {
+  const l = texto.split(/\r?\n/).find((x) => /^\| P2 \|/.test(x));
+  const c = l ? l.split("|").slice(1, -1).map((x) => x.trim()) : [];
+  const m = new RegExp(`^${N} ms$`).exec(c[4] ?? "");
+  return m ? num(m[1] ?? "") : NaN;
+}
+
+/**
+ * P2 por exe (plan de fase §4): una por apertura (la 1.ª corrida de cada una),
+ * mediana de las aperturas. Con base (`--base-fase6`, T38 juzga): A ≤ B +
+ * máx(1 ms, 10 %). Sin base (T37, B anterior a la marca): informa.
+ * @param {readonly string[]} primerasA la 1.ª corrida de cada apertura de A
+ * @param {readonly string[]} primerasB la 1.ª corrida de cada apertura de B
+ */
+export function juzgarP2(primerasA, primerasB) {
+  const a = primerasA.map(arranqueP2);
+  const b = primerasB.map(arranqueP2);
+  const medA = mediana(a.filter((x) => !Number.isNaN(x)));
+  const conBase = b.length > 0 && b.every((x) => !Number.isNaN(x));
+  const medB = conBase ? mediana(b) : NaN;
+  const limite = conBase ? conMargen(medB) : NaN;
+  return { a, b, medianaA: medA, medianaB: medB, limite, juzga: conBase, pasa: conBase ? a.every((x) => !Number.isNaN(x)) && medA <= limite : null };
+}
+
+/**
+ * El desglose de S6 de un texto (la nota «S6, desglose …», T37): parte → ms.
+ * @param {string} texto
+ */
+export const desgloseS6 = (texto) => desgloseS1(texto, "S6");

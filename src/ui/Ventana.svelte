@@ -25,6 +25,7 @@
   import { probarFase3b as correrFase3b } from "./probarFase3b";
   import { probarFase4 as correrFase4 } from "./probarFase4";
   import { probarFase5 as correrFase5 } from "./probarFase5";
+  import { probarFase6 as correrFase6 } from "./probarFase6";
   import { medirCopia as correrMedirCopia, motor } from "./medirCopia";
   import { Autoguardado, avisoFallo } from "./autoguardado";
   import { abrirBase, almacenIndexedDB, candadosWebLocks, idInstancia, motivoFallo, type AlmacenCopias } from "./respaldo";
@@ -471,6 +472,8 @@
   const probarFase4 = () => probarFase("Probar la fase 4", correrFase4);
   /** «Probar la fase 5» (T31): lo de la fase 4 más S1–S5 (escena de mando 2000 y la de F1–F3), armado aparte. */
   const probarFase5 = () => probarFase("Probar la fase 5", correrFase5);
+  /** «Probar la fase 6» (T37): lo de la fase 5 más S6 (escena de potencia 2000) y P2 (arranque). */
+  const probarFase6 = () => probarFase("Probar la fase 6", correrFase6);
 
   async function probarFase(titulo: string, correr: (progreso: (t: string) => void) => Promise<string>) {
     // No en Simular (T32, paso 5).
@@ -634,6 +637,7 @@
     onprobarfase3b={probarFase3b}
     onprobarfase4={probarFase4}
     onprobarfase5={probarFase5}
+    onprobarfase6={probarFase6}
     onmedircopia={medirCopia}
     oncopias={verCopias}
   />

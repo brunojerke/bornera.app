@@ -19,6 +19,7 @@
   import { probarArrastre, type OpcionesDiagnostico } from "./diagnosticoArrastre";
   import { ARRASTRADOS_DIAGNOSTICO, DURACION_DIAGNOSTICO_MS, tablaDiagnostico } from "./diagnostico";
   import { VERSION } from "./version";
+  import { marcarArranque } from "./arranque";
   import { documentoBanco, documentoBancoCables } from "../editor/banco";
   import { SIMBOLOS_BANCO_CABLES } from "./escenas";
   import * as comandos from "../core/model/comandos";
@@ -390,6 +391,7 @@
     vista = v;
     v.alDibujar = (m) => {
       medidor.registrar(performance.now(), m);
+      marcarArranque(m); // P2 (T37): una sola vez, en el primer cuadro nítido
       if (rendimiento) programarResumen();
       if (esperasCuadro.length > 0) {
         const esperas = esperasCuadro;

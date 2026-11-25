@@ -23,6 +23,14 @@
 //                   máx(1 ms, 10 %)) y el cierre del ajuste 1 de T32. Desde
 //                   T33 (R-A), S1 y S4 solo por tope: su no regresión informa,
 //                   y una base sin S4 (anterior a T33) no la tiene
+//   --fase6         A corre «Probar la fase 6» y B «Probar la fase 5» (T37):
+//                   lo de --base-fase5 (S1–S5 con no regresión) y además S6
+//                   de A por tope (ajuste 1 de T37: decide la mediana de las
+//                   calientes ≤ 54,5; el máx. ≤ 60,0 aparte, con un pico
+//                   aislado se repite el ABBA una vez) y P2 de A, que informa
+//   --base-fase6    con --fase6, B también corre «Probar la fase 6» (T38):
+//                   se suma la no regresión de S6 y P2 se juzga (mediana de
+//                   las aperturas de A ≤ la de B + máx(1 ms, 10 %))
 //   --bloques=N     bloques ABBA (por defecto 3: 6 aperturas por exe)
 //   --corridas=N    corridas por apertura (por defecto 2: fría y caliente)
 //   --puerto=N      puerto de depuración (por defecto 9333)
@@ -33,7 +41,7 @@
 // toca la hoja ni hace copias de recuperación. No agrega dependencias.
 
 import { existsSync, writeFileSync } from "node:fs";
-import { AVISO_S1_PC_MS, cadenaS4, cierreS, compararB, desgloseS1, filasB, filasF, friasFuera, juzgarF, juzgarS, mediana, metricas, noRegresionS, paredS5 } from "./compararB.mjs";
+import { AVISO_S1_PC_MS, cadenaS4, cierreS, compararB, desgloseS1, desgloseS6, filasB, filasF, friasFuera, juzgarF, juzgarP2, juzgarS, juzgarS6, mediana, metricas, noRegresionS, noRegresionS6, paredS5 } from "./compararB.mjs";
 import { valoresK } from "./factores.mjs";
 import { argumentos, cerrarResultado, conLaApp, esperar, textoResultado, tocarMenu, unDecimal } from "./webview2.mjs";
 
@@ -45,17 +53,25 @@ const puerto = entero("puerto", 9333);
 // --fase5 (T31): A corre «Probar la fase 5» y B «Probar la fase 4»; lo de
 // --fase4 y además S1–S5 de A con el ajuste 1 de T31 (compararB.mjs, juzgarS).
 // --base-fase5 (T32): B también corre «Probar la fase 5» y se juzga la no regresión de S.
-const baseFase5 = bandera("base-fase5");
+// --fase6 (T37): A corre «Probar la fase 6» y B «Probar la fase 5»; lo de
+// --base-fase5 más S6 y P2. --base-fase6 (T38): las dos la 6.
+const baseFase6 = bandera("base-fase6");
+const fase6 = bandera("fase6") || baseFase6;
+const baseFase5 = bandera("base-fase5") || fase6;
 const fase5 = bandera("fase5") || baseFase5;
 const fase4 = bandera("fase4") || fase5;
-/** El ítem del menú de cada exe: con --fase4, A corre la fase 4 y B la 3b; con --fase5, A la 5 y B la 4; con --base-fase5, las dos la 5. */
-const items = baseFase5
-  ? ["Probar la fase 5", "Probar la fase 5"]
-  : fase5
-    ? ["Probar la fase 5", "Probar la fase 4"]
-    : fase4
-      ? ["Probar la fase 4", "Probar la fase 3b"]
-      : ["Probar la fase 3b", "Probar la fase 3b"];
+/** El ítem del menú de cada exe: con --fase4, A corre la fase 4 y B la 3b; con --fase5, A la 5 y B la 4; con --base-fase5, las dos la 5; con --fase6, A la 6 y B la 5; con --base-fase6, las dos la 6. */
+const items = baseFase6
+  ? ["Probar la fase 6", "Probar la fase 6"]
+  : fase6
+    ? ["Probar la fase 6", "Probar la fase 5"]
+    : baseFase5
+      ? ["Probar la fase 5", "Probar la fase 5"]
+      : fase5
+        ? ["Probar la fase 5", "Probar la fase 4"]
+        : fase4
+          ? ["Probar la fase 4", "Probar la fase 3b"]
+          : ["Probar la fase 3b", "Probar la fase 3b"];
 /** Lo que puede tardar una corrida (con el calentamiento, en la PC, ~35 s). */
 const LIMITE_CORRIDA_MS = 240_000;
 
@@ -116,6 +132,9 @@ async function main() {
   const sB = baseFase5 ? juzgarS(deFrias.B, de("B", false), true) : null;
   const regresion = baseFase5 ? noRegresionS(de("B", false), de("A", false)) : null;
   const cierre = s && regresion ? cierreS(s, regresion) : null;
+  const s6 = fase6 ? juzgarS6(deFrias.A, de("A", false)) : null;
+  const regresionS6 = baseFase6 ? noRegresionS6(de("B", false), de("A", false)) : null;
+  const p2 = fase6 ? juzgarP2(deFrias.A, baseFase6 ? deFrias.B : []) : null;
   if (s && !bandera("json")) {
     for (const x of s.filas) console.log(`S ${x.id} ${x.nombre}: tope ${fmt(x.tope)} (máx. ${fmt(x.margen)}) · mediana ${fmt(x.mediana)} · máx. ${fmt(x.maximo)} · ${x.pasa ? "pasa" : "NO pasa"} · frías ${x.informan.map(fmt).join(", ")}`);
     const s1 = s.filas.find((x) => x.id === "S1");
@@ -136,8 +155,23 @@ async function main() {
       console.log(`Cierre de S (ajuste 1 de T32): ${cierre}`);
     }
   }
+  if (s6 && !bandera("json")) {
+    for (const x of s6.filas) {
+      const juicio = x.estado === "repetir" ? `REPETIR el ABBA una vez (pico aislado: ${x.sobreMargen.map(fmt).join(", ")})` : x.estado === "pasa" ? "pasa" : "NO pasa";
+      console.log(`S6 ${x.nombre} (ajuste 1 de T37): tope ${fmt(x.tope)} (mediana) · máx. ≤ ${fmt(x.margen)} aparte · mediana ${fmt(x.mediana)} · máx. ${fmt(x.maximo)} · ${juicio} · calientes ${x.deciden.map(fmt).join(", ")} · frías ${x.informan.map(fmt).join(", ")}`);
+    }
+    const cal = de("A", false);
+    console.log("Desglose S6 (mediana): " + ["R4", "netlist", "iniciar", "cuadro"].map((p) => `${p} ${fmt(mediana(cal.map((t) => desgloseS6(t).get(p) ?? NaN)))}`).join(" · "));
+    if (regresionS6) for (const x of regresionS6.filas) console.log(`No regresión S6 ${x.nombre}: B ${fmt(x.base)} · A ${fmt(x.head)} · límite ${fmt(x.limite)} · ${x.pasa ? "pasa" : "NO pasa"}`);
+    else console.log("No regresión S6: no aplica (la base corre «Probar la fase 5», sin S6).");
+    if (p2) {
+      const juicio = p2.juzga ? (p2.pasa ? "pasa" : "NO pasa") : "informa (la base no tiene la marca)";
+      console.log(`P2 (una por apertura, ms): A ${p2.a.map(fmt).join(", ")} · mediana ${fmt(p2.medianaA)}` + (p2.juzga ? ` · B mediana ${fmt(p2.medianaB)} · límite ${fmt(p2.limite)}` : "") + ` · ${juicio}`);
+    }
+    console.log("B2 por mediana (a mano, docs/plan-T37.md): B2 1.º decide; si B2 2.º sale «sube», se anota «informa» y no cuenta.");
+  }
   if (bandera("json")) {
-    console.log(JSON.stringify({ exes, items, inicio, calientes, frias, fuera, f, s, sB, regresion, cierre, aperturas }, null, 2));
+    console.log(JSON.stringify({ exes, items, inicio, calientes, frias, fuera, f, s, sB, regresion, cierre, s6, regresionS6, p2, aperturas }, null, 2));
     return;
   }
   console.log(`\nA = ${exes[0]}\nB = ${exes[1]}`);
