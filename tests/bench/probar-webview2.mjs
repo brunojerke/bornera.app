@@ -30,7 +30,10 @@
 //                   aislado se repite el ABBA una vez) y P2 de A, que informa
 //   --base-fase6    con --fase6, B también corre «Probar la fase 6» (T38):
 //                   se suma la no regresión de S6 y P2 se juzga (mediana de
-//                   las aperturas de A ≤ la de B + máx(1 ms, 10 %))
+//                   las aperturas de A ≤ la de B + máx(1 ms, 10 %)). Desde
+//                   T38, si A trae P1, se juzga con la regla de S6 (mediana
+//                   de las calientes ≤ 9,1; máx. ≤ 10,1 aparte, una sola
+//                   repetición); su no regresión, solo si B también la trae
 //   --bloques=N     bloques ABBA (por defecto 3: 6 aperturas por exe)
 //   --corridas=N    corridas por apertura (por defecto 2: fría y caliente)
 //   --puerto=N      puerto de depuración (por defecto 9333)
@@ -41,7 +44,7 @@
 // toca la hoja ni hace copias de recuperación. No agrega dependencias.
 
 import { existsSync, writeFileSync } from "node:fs";
-import { AVISO_S1_PC_MS, cadenaS4, cierreS, compararB, desgloseS1, desgloseS6, filasB, filasF, friasFuera, juzgarF, juzgarP2, juzgarS, juzgarS6, mediana, metricas, noRegresionS, noRegresionS6, paredS5 } from "./compararB.mjs";
+import { AVISO_S1_PC_MS, cadenaS4, cierreS, compararB, desgloseS1, desgloseS6, filasB, filasF, filasS, friasFuera, juzgarF, juzgarP1, juzgarP2, juzgarS, juzgarS6, mediana, metricas, noRegresionP1, noRegresionS, noRegresionS6, paredS5 } from "./compararB.mjs";
 import { valoresK } from "./factores.mjs";
 import { argumentos, cerrarResultado, conLaApp, esperar, textoResultado, tocarMenu, unDecimal } from "./webview2.mjs";
 
@@ -135,6 +138,10 @@ async function main() {
   const s6 = fase6 ? juzgarS6(deFrias.A, de("A", false)) : null;
   const regresionS6 = baseFase6 ? noRegresionS6(de("B", false), de("A", false)) : null;
   const p2 = fase6 ? juzgarP2(deFrias.A, baseFase6 ? deFrias.B : []) : null;
+  // P1 (T38): solo si A la trae (desde T38 «Probar la fase 6» la tiene).
+  const conP1 = fase6 && de("A", false).length > 0 && de("A", false).every((t) => filasS(t, "P").has("P1"));
+  const p1 = conP1 ? juzgarP1(deFrias.A, de("A", false)) : null;
+  const regresionP1 = conP1 && baseFase6 ? noRegresionP1(de("B", false), de("A", false)) : null;
   if (s && !bandera("json")) {
     for (const x of s.filas) console.log(`S ${x.id} ${x.nombre}: tope ${fmt(x.tope)} (máx. ${fmt(x.margen)}) · mediana ${fmt(x.mediana)} · máx. ${fmt(x.maximo)} · ${x.pasa ? "pasa" : "NO pasa"} · frías ${x.informan.map(fmt).join(", ")}`);
     const s1 = s.filas.find((x) => x.id === "S1");
@@ -164,6 +171,14 @@ async function main() {
     console.log("Desglose S6 (mediana): " + ["R4", "netlist", "iniciar", "cuadro"].map((p) => `${p} ${fmt(mediana(cal.map((t) => desgloseS6(t).get(p) ?? NaN)))}`).join(" · "));
     if (regresionS6) for (const x of regresionS6.filas) console.log(`No regresión S6 ${x.nombre}: B ${fmt(x.base)} · A ${fmt(x.head)} · límite ${fmt(x.limite)} · ${x.pasa ? "pasa" : "NO pasa"}`);
     else console.log("No regresión S6: no aplica (la base corre «Probar la fase 5», sin S6).");
+    if (p1) {
+      for (const x of p1.filas) {
+        const juicio = x.estado === "repetir" ? `REPETIR el ABBA una vez (pico aislado: ${x.sobreMargen.map(fmt).join(", ")})` : x.estado === "pasa" ? "pasa" : "NO pasa";
+        console.log(`P1 ${x.nombre} (ajuste 4 de T38, regla de S6): tope ${fmt(x.tope)} (mediana) · máx. ≤ ${fmt(x.margen)} aparte · mediana ${fmt(x.mediana)} · máx. ${fmt(x.maximo)} · ${juicio} · calientes ${x.deciden.map(fmt).join(", ")} · frías ${x.informan.map(fmt).join(", ")}`);
+      }
+      if (regresionP1) for (const x of regresionP1.filas) console.log(`No regresión P1 ${x.nombre}: B ${fmt(x.base)} · A ${fmt(x.head)} · límite ${fmt(x.limite)} · ${x.pasa ? "pasa" : "NO pasa"}`);
+      else console.log("No regresión P1: sin base (B no tiene P1).");
+    } else console.log("P1: A no la trae (antes de T38).");
     if (p2) {
       const juicio = p2.juzga ? (p2.pasa ? "pasa" : "NO pasa") : "informa (la base no tiene la marca)";
       console.log(`P2 (una por apertura, ms): A ${p2.a.map(fmt).join(", ")} · mediana ${fmt(p2.medianaA)}` + (p2.juzga ? ` · B mediana ${fmt(p2.medianaB)} · límite ${fmt(p2.limite)}` : "") + ` · ${juicio}`);
@@ -171,7 +186,7 @@ async function main() {
     console.log("B2 por mediana (a mano, docs/plan-T37.md): B2 1.º decide; si B2 2.º sale «sube», se anota «informa» y no cuenta.");
   }
   if (bandera("json")) {
-    console.log(JSON.stringify({ exes, items, inicio, calientes, frias, fuera, f, s, sB, regresion, cierre, s6, regresionS6, p2, aperturas }, null, 2));
+    console.log(JSON.stringify({ exes, items, inicio, calientes, frias, fuera, f, s, sB, regresion, cierre, s6, regresionS6, p1, regresionP1, p2, aperturas }, null, 2));
     return;
   }
   console.log(`\nA = ${exes[0]}\nB = ${exes[1]}`);

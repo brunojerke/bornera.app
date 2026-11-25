@@ -17,7 +17,7 @@ export default async function (p, comprobar) {
       editor.ejecutar(cmd);
       return cmd.id;
     });
-    const cv = document.querySelector("canvas");
+    const cv = document.querySelector("canvas[aria-label^=Lienzo]");
     editor.vista.camara.zoom = 1;
     editor.vista.camara.centrar(10, 0, cv.clientWidth, cv.clientHeight);
     editor.vista.invalidar();
@@ -96,13 +96,13 @@ export default async function (p, comprobar) {
   // Escena de 2000 (Ctrl+Shift+B tres veces: 100, 500, 2000), alejada al mínimo.
   for (let i = 0; i < 3; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
   await p.esperarA("bornera.activo()?.escena.cantidad === 2000");
-  const r = await p.caja("canvas");
+  const r = await p.caja("canvas[aria-label^=Lienzo]");
   for (let i = 0; i < 4; i++) await p.rueda(r.cx, r.cy, 100);
   await esperar(300);
   // Con 2000 la escena no entra en pantalla ni al 10 %: se buscan huecos cerca de las esquinas.
   const vacio = (x0, y0, d) =>
     p.evaluar(`(() => { const ed = bornera.activo(); const cam = ed.vista.camara;
-      const r = document.querySelector("canvas").getBoundingClientRect();
+      const r = document.querySelector("canvas[aria-label^=Lienzo]").getBoundingClientRect();
       for (let k = 0; k < 200; k++) { const px = ${x0} + ${d} * k, py = ${y0} + ${d} * k;
         const g = cam.aGrilla(px - r.left, py - r.top);
         if (!ed.escena.idEnPunto(g.x, g.y, 3 / cam.escala)) return { x: px, y: py }; }
@@ -110,7 +110,7 @@ export default async function (p, comprobar) {
   const desde = await vacio(r.x + 2, r.y + 2, 1);
   const hasta = await vacio(r.x + r.ancho - 2, r.y + r.alto - 2, -1);
   const esperados = await p.evaluar(`(() => { const ed = bornera.activo(); const cam = ed.vista.camara;
-    const r = document.querySelector("canvas").getBoundingClientRect();
+    const r = document.querySelector("canvas[aria-label^=Lienzo]").getBoundingClientRect();
     const a = cam.aGrilla(${desde.x} - r.left, ${desde.y} - r.top), b = cam.aGrilla(${hasta.x} - r.left, ${hasta.y} - r.top);
     return ed.escena.idsEnCaja({ x: a.x, y: a.y, ancho: b.x - a.x, alto: b.y - a.y }, "contiene").length; })()`);
   await p.arrastrar(desde, hasta);

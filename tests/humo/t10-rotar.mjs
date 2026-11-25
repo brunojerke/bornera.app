@@ -25,13 +25,13 @@ export default async function (p, comprobar) {
   /** Guarda los píxeles del lienzo con un nombre. */
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   /** Píxeles distintos entre el lienzo de ahora y la foto `n` (−1 si cambió el tamaño). */
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -52,7 +52,7 @@ export default async function (p, comprobar) {
   await seleccionar([lejos]);
   await p.esc();
   await esperar(200); // el panel se abrió: que el lienzo termine de cambiar de tamaño
-  await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+  await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
     v.camara.zoom = 1; v.camara.centrar(0, 1, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
   await foto("vacia");
 

@@ -260,7 +260,7 @@ async function probarAbrir(p, comprobar, h, archivos) {
       await p.cdp("Runtime.releaseObject", { objectId: result.objectId });
       return listeners.length;
     };
-    return { ventana: await cuenta("window"), lienzo: await cuenta('document.querySelector("canvas")') };
+    return { ventana: await cuenta("window"), lienzo: await cuenta('document.querySelector("canvas[aria-label^=Lienzo]")') };
   };
 
   comprobar("en Editar, Nuevo y Abrir están activos", (await activado("Nuevo")) && (await activado("Abrir")));

@@ -26,12 +26,12 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -40,7 +40,7 @@ export default async function (p, comprobar) {
   /** True si el píxel del punto de grilla (gx, gy) cambió respecto de la foto `n`. */
   const pintado = async (gx, gy, n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas"); const k = cv.width / cv.clientWidth;
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const k = cv.width / cv.clientWidth;
       const q = bornera.activo().vista.camara.aPantalla(${gx}, ${gy});
       const x = Math.round(q.x * k), y = Math.round(q.y * k), i = (y * cv.width + x) * 4;
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(x, y, 1, 1).data;
@@ -53,7 +53,7 @@ export default async function (p, comprobar) {
   const aviso = () => texto(".avisos");
   const documento = () => p.evaluar("JSON.stringify(bornera.editor.documento.hojas)");
   const camara = (gx, gy) =>
-    p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = 0.5; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
 
   /**
@@ -228,7 +228,7 @@ export default async function (p, comprobar) {
   // Los mosaicos cubren 256 px físicos desde el origen de la grilla: un píxel
   // está en el borde si su x o su y de grilla, en px, cae a menos de 2 px de
   // un múltiplo de 256, en cualquiera de las dos fotos.
-  const bordes = await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const k = cv.width / cv.clientWidth;
+  const bordes = await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const k = cv.width / cv.clientWidth;
     const a = globalThis.__fotos["lejos"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
     const cam = bornera.editor.vista.camara; const e = cam.escala * k;
     const cerca = (g) => { const m = (((g * e) % 256) + 256) % 256; return m < 2 || m > 254; };

@@ -54,12 +54,12 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -73,7 +73,7 @@ export default async function (p, comprobar) {
   };
   const documento = () => p.evaluar("JSON.stringify(bornera.editor.documento.hojas)");
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidarContenido(); })()`);
     await reposo();
   };
@@ -114,7 +114,7 @@ export default async function (p, comprobar) {
     // K9 para mover a la derecha: dos cables en A1 (120, 58), uno arriba y otro a la izquierda.
     const k9 = comp(120, 60, "K9"); cab(B(k9, "A1"), L(120, 52)); cab(B(k9, "A1"), L(112, 58));
 
-    const css = getComputedStyle(document.querySelector("canvas"));
+    const css = getComputedStyle(document.querySelector("canvas[aria-label^=Lienzo]"));
     const cx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
     const rgb = (nombre) => { cx.fillStyle = css.getPropertyValue(nombre).trim(); cx.fillRect(0, 0, 1, 1); return Array.from(cx.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
     const fondo = rgb("--lienzo"), trazo = rgb("--simbolo"), borne = rgb("--borne");
@@ -127,7 +127,7 @@ export default async function (p, comprobar) {
      * columna. El del medio es round(posición).
      */
     globalThis.__corte = ({ eje, x, y, d }) => {
-      const cv = document.querySelector("canvas"), { k, ox, oy } = pantalla();
+      const cv = document.querySelector("canvas[aria-label^=Lienzo]"), { k, ox, oy } = pantalla();
       const px = Math.round(x * k) - ox, py = Math.round(y * k) - oy;
       const x0 = eje === "fila" ? px - ${LADO} : px + d, y0 = eje === "fila" ? py + d : py - ${LADO};
       const w = eje === "fila" ? ${2 * LADO + 1} : 1, h = eje === "fila" ? 1 : ${2 * LADO + 1};
@@ -138,10 +138,10 @@ export default async function (p, comprobar) {
     };
     /** Color del píxel del centro de (x, y). */
     globalThis.__color = ({ x, y }) => { const { k, ox, oy } = pantalla();
-      return Array.from(document.querySelector("canvas").getContext("2d").getImageData(Math.round(x * k) - ox, Math.round(y * k) - oy, 1, 1).data.slice(0, 3)); };
+      return Array.from(document.querySelector("canvas[aria-label^=Lienzo]").getContext("2d").getImageData(Math.round(x * k) - ox, Math.round(y * k) - oy, 1, 1).data.slice(0, 3)); };
     /** Píxeles de un cuadrado de ±${LADO} px alrededor de (x, y). */
     globalThis.__ventana = ({ x, y }) => { const { k, ox, oy } = pantalla();
-      return Array.from(document.querySelector("canvas").getContext("2d").getImageData(Math.round(x * k) - ox - ${LADO}, Math.round(y * k) - oy - ${LADO}, ${2 * LADO + 1}, ${2 * LADO + 1}).data); };
+      return Array.from(document.querySelector("canvas[aria-label^=Lienzo]").getContext("2d").getImageData(Math.round(x * k) - ox - ${LADO}, Math.round(y * k) - oy - ${LADO}, ${2 * LADO + 1}, ${2 * LADO + 1}).data); };
     return { verticales, horizontales, cruces, eles, k1, k2, k9, trazo, borne, contraste: Math.abs(trazo[canal] - fondo[canal]) }; })()`);
   comprobar("el color del símbolo se distingue del fondo", e.contraste > 100, `${e.contraste} de 255`);
   const cortes = (lista) => p.evaluar(`${JSON.stringify(lista)}.map((q) => globalThis.__corte(q))`);

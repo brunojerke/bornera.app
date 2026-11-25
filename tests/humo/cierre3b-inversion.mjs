@@ -156,7 +156,7 @@ function ayudantes(p, carpeta) {
   /** Deja a la vista la caja de grilla [x0, x1]×[y0, y1], a MARGEN px del borde del lienzo (ver t15). */
   const aLaVista = async (x0, y0, x1, y1, motivo) => {
     for (let i = 0; i < 8; i++) {
-      const k = await p.caja("canvas");
+      const k = await p.caja("canvas[aria-label^=Lienzo]");
       const a = await p.punto(x0, y0);
       const b = await p.punto(x1, y1);
       const fuera = (lo, hi, desde, largo) => lo < desde + MARGEN || hi > desde + largo - MARGEN;
@@ -472,7 +472,7 @@ async function armar(p, comprobar, h, m, archivos) {
 async function probarF(p, comprobar, h, tamano, escalaMinTextos) {
   const medir = () =>
     p.evaluar(`(() => { const ed = bornera.activo(), cam = ed.vista.camara, k = ed.escena.caja;
-      const cv = document.querySelector("canvas").getBoundingClientRect();
+      const cv = document.querySelector("canvas[aria-label^=Lienzo]").getBoundingClientRect();
       const a = cam.aPantalla(k.x, k.y), b = cam.aPantalla(k.x + k.ancho, k.y + k.alto);
       const rect = (r) => ({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom });
       const de = (sel) => { const e = document.querySelector(sel); return e ? rect(e.getBoundingClientRect()) : null; };

@@ -40,11 +40,12 @@ const ETIQUETA = ["R1", "R2", "R3", "R4", "R5", "R9"];
 const item = (p, texto) =>
   p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === ${JSON.stringify(texto)});
     if (!e) return null; e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect();
-    const g = e.parentElement?.closest("*:has(> h2, > h3, > summary, > .titulo)")?.querySelector("h2, h3, summary, .titulo")?.textContent.trim() ?? "";
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, grupo: g }; })()`);
+    // Desde T38, el lugar es «Grupo › Subgrupo» («Mando › Entradas»).
+    const g = []; for (let d = e.closest("details"); d; d = d.parentElement?.closest("details")) g.unshift(d.querySelector(":scope > summary")?.textContent.trim() ?? "");
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, grupo: g.join(" › ") }; })()`);
 
 const centrar = (p, zoom, gx, gy) =>
-  p.evaluar(`(() => { const ed = bornera.activo(), cv = document.querySelector("canvas");
+  p.evaluar(`(() => { const ed = bornera.activo(), cv = document.querySelector("canvas[aria-label^=Lienzo]");
     ed.vista.camara.zoom = ${zoom}; ed.vista.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); ed.vista.invalidar(); })()`);
 
 export default async function (p, comprobar) {

@@ -93,7 +93,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
   const etiquetaPorCodigo = (id, texto) =>
     p.evaluar(`(() => { const { editor, comandos: c } = bornera; editor.ejecutar(new c.CambiarEtiqueta(${JSON.stringify(id)}, ${JSON.stringify(texto)})); })()`);
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
     await esperar(60);
   };
@@ -140,7 +140,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = { w: cv.width, h: cv.height, datos: cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data }; })()`);
   };
   /**
@@ -149,7 +149,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
    */
   const distintos = async (n, k = null) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas"); const f = globalThis.__fotos["${n}"];
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const f = globalThis.__fotos["${n}"];
       if (f.w !== cv.width || f.h !== cv.height) return -1;
       const b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data, a = f.datos;
       let x0 = 0, y0 = 0, x1 = cv.width, y1 = cv.height;
@@ -403,7 +403,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
   await abrir(rutaMarcha);
   await camara(1, 8, 16);
   await p.mouse("mouseMoved", 5, 5);
-  const lienzo = await p.caja("canvas");
+  const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
   const zoomInicial = (await barra())[1];
   const saltos = [];
   let ruedaBien = true;

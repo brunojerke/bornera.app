@@ -7,7 +7,7 @@
 //  - el botón está en el menú de desarrollo, después de «Probar la fase 5»;
 //  - corre y la tabla trae B1–B16, F1–F3, S1–S6 y P2: S6 con el tope de la
 //    netbook (300 ms) y lo medido; P2 con los ms de la marca y «se anota»;
-//    S6 y P2 sin K; P1 no está (T38, D23-A);
+//    S6 y P2 sin K; desde T38 también P1 (las miniaturas, ≤ 50 ms, sin K);
 //  - las notas traen la escena de potencia (2000 + 3519, 95 trifásicas, 1526
 //    redes) y el desglose de S6;
 //  - la hoja queda igual: documento, historial y título sin «•».
@@ -80,10 +80,12 @@ export default async function (p, comprobar) {
   const s = celdas(texto, "S");
   const pp = celdas(texto, "P");
   comprobar("trae B1–B16 y F1–F3", b.length === 16 && isDeepStrictEqual(f.map((c) => c[0]), ["F1", "F2", "F3"]), `${b.length} B, ${f.length} F`);
-  comprobar("trae S1–S6 y P2, sin P1 (T38)", isDeepStrictEqual(s.map((c) => c[0]), ["S1", "S2", "S3", "S4", "S5", "S6"]) && isDeepStrictEqual(pp.map((c) => c[0]), ["P2"]), JSON.stringify([...s, ...pp].map((c) => c[0])));
+  comprobar("trae S1–S6, P1 (desde T38) y P2", isDeepStrictEqual(s.map((c) => c[0]), ["S1", "S2", "S3", "S4", "S5", "S6"]) && isDeepStrictEqual(pp.map((c) => c[0]), ["P1", "P2"]), JSON.stringify([...s, ...pp].map((c) => c[0])));
   const s6 = s.find((c) => c[0] === "S6") ?? [];
   comprobar("S6 con el tope de la netbook (≤ 300 ms, máx.), lo medido («X / Y ms») y «pasa» o «no pasa»", s6[3] === "≤ 300 ms (máx.)" && /^\d+,\d \/ \d+,\d ms$/.test(s6[4] ?? "") && ["pasa", "no pasa"].includes(s6[5]), JSON.stringify(s6));
-  const p2 = pp[0] ?? [];
+  const p1 = pp.find((c) => c[0] === "P1") ?? [];
+  comprobar("P1 (T38): las 32 miniaturas, tope de la netbook (≤ 50 ms, máx.), «X / Y ms», sin K", p1[1] === "Dibujar las 32 miniaturas de la paleta de cero" && p1[3] === "≤ 50 ms (máx.)" && /^\d+,\d \/ \d+,\d ms$/.test(p1[4] ?? "") && ["pasa", "no pasa"].includes(p1[5]) && p1[6] === "—", JSON.stringify(p1));
+  const p2 = pp.find((c) => c[0] === "P2") ?? [];
   const p2ms = Number((/^([\d,]+) ms$/.exec(p2[4] ?? "")?.[1] ?? "").replace(",", "."));
   comprobar("P2 trae los ms de la marca de arranque y «se anota»", p2[5] === "se anota" && Math.abs(p2ms - (marca[0] ?? NaN)) <= 0.05, `${p2[4]} contra ${marca[0]}`);
   comprobar("S6 y P2 no llevan K", s6[6] === "—" && p2[6] === "—");

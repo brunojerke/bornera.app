@@ -34,13 +34,13 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   /** Píxeles del lienzo distintos de la foto `n` (la barra de estado y el panel no son del lienzo). */
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -48,7 +48,7 @@ export default async function (p, comprobar) {
   };
   /** Dónde están los píxeles distintos de la foto `n`: su caja en unidades de grilla (para el detalle de una falla). */
   const donde = (n) =>
-    p.evaluar(`(() => { const cv = document.querySelector("canvas"); const k = cv.width / cv.clientWidth;
+    p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const k = cv.width / cv.clientWidth;
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) {
@@ -62,7 +62,7 @@ export default async function (p, comprobar) {
   const aviso = () => p.evaluar(`document.querySelector(".avisos")?.textContent.trim() ?? null`);
   const pista = () => p.evaluar(`document.querySelector("footer .pista-herramienta")?.textContent.trim() ?? null`);
   const camara = (gx, gy) =>
-    p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = 1; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
   /** La hoja vale, todos los tramos son ortogonales y sin largo cero, y cada T está sobre su anfitrión. */
   const sana = () =>
@@ -173,7 +173,7 @@ export default async function (p, comprobar) {
   const fueraDeUniones = async (n) => {
     await reposo();
     return p.evaluar(`(async () => { const { MARGEN_UNION: M } = await import("/src/render/escenaEditable.ts");
-      const cv = document.querySelector("canvas"), ed = bornera.editor, cam = ed.vista.camara, k = cam.escala;
+      const cv = document.querySelector("canvas[aria-label^=Lienzo]"), ed = bornera.editor, cam = ed.vista.camara, k = cam.escala;
       const ox = Math.round(cam.x * k), oy = Math.round(cam.y * k);
       const cajas = ed.uniones.todas().map((u) => [Math.floor((u.x - M) * k) - ox - 1, Math.floor((u.y - M) * k) - oy - 1,
         Math.ceil((u.x + M) * k) - ox + 1, Math.ceil((u.y + M) * k) - oy + 1])
@@ -403,7 +403,7 @@ export default async function (p, comprobar) {
     [
       "se pierde la captura (lostpointercapture)",
       async () => {
-        await p.evaluar(`document.querySelector("canvas").dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 1 }))`);
+        await p.evaluar(`document.querySelector("canvas[aria-label^=Lienzo]").dispatchEvent(new PointerEvent("lostpointercapture", { pointerId: 1 }))`);
         await esperar(30);
       },
     ],
@@ -411,7 +411,7 @@ export default async function (p, comprobar) {
       "pointerup perdido (otro apretar)",
       async () => {
         const q = await a(-6, 3);
-        await p.evaluar(`document.querySelector("canvas").dispatchEvent(new PointerEvent("pointerdown",
+        await p.evaluar(`document.querySelector("canvas[aria-label^=Lienzo]").dispatchEvent(new PointerEvent("pointerdown",
           { pointerId: 1, isPrimary: true, pointerType: "mouse", button: 0, buttons: 1, clientX: ${q.x}, clientY: ${q.y}, bubbles: true, cancelable: true }))`);
         await esperar(30);
       },
@@ -466,7 +466,7 @@ export default async function (p, comprobar) {
   const menuFuera = await menu();
   if (menuEnGesto === "[]" && menuFuera === "[]") {
     // El navegador no mandó contextmenu por el botón derecho de CDP: se prueba el manejador con un evento sintético.
-    const r = await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    const r = await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const enGesto = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, buttons: 1 });
       const fuera = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, buttons: 0 });
       cv.dispatchEvent(enGesto); cv.dispatchEvent(fuera); return [enGesto.defaultPrevented, fuera.defaultPrevented]; })()`);

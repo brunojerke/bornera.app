@@ -84,7 +84,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
   const colocar = (tipo, x, y, etiqueta) =>
     ejecutar(`c.colocar(editor.documento, { tipo: "${tipo}", x: ${x}, y: ${y}, rot: 0, espejado: false, etiqueta: ${JSON.stringify(etiqueta)}, params: {} })`);
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
     await esperar(60);
   };
@@ -118,13 +118,13 @@ async function probar(p, comprobar, m, carpeta, archivos) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = { w: cv.width, h: cv.height, datos: cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data }; })()`);
   };
   /** Píxeles distintos entre el lienzo de ahora y la foto `n` (−1 si cambió el tamaño). */
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas"); const f = globalThis.__fotos["${n}"];
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const f = globalThis.__fotos["${n}"];
       if (f.w !== cv.width || f.h !== cv.height) return -1;
       const b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data, a = f.datos;
       let d = 0;
@@ -142,7 +142,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
   const colores = async (k) => {
     await reposo();
     return p.evaluar(`(() => {
-      const cv = document.querySelector("canvas"); const cam = bornera.activo().vista.camara; const dpr = cv.width / cv.clientWidth;
+      const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const cam = bornera.activo().vista.camara; const dpr = cv.width / cv.clientWidth;
       const css = getComputedStyle(document.documentElement);
       const rgb = (n) => { const h = css.getPropertyValue(n).trim(); return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); };
       const C = { aviso: rgb("--aviso"), conflicto: rgb("--conflicto") };
@@ -448,7 +448,7 @@ async function probar(p, comprobar, m, carpeta, archivos) {
   // ── 10. Mover el mouse no recalcula ──
   await camara(1, 20, 16);
   const antes10 = await contadores();
-  const lienzo = await p.caja("canvas");
+  const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
   for (let i = 0; i <= 30; i++) await p.mouse("mouseMoved", lienzo.x + (lienzo.ancho * i) / 30, lienzo.y + lienzo.alto * (0.2 + (0.6 * i) / 30));
   await esperar(60);
   comprobar("10. mover el mouse por el lienzo no recalcula ninguna validación", isDeepStrictEqual(await contadores(), antes10), JSON.stringify({ antes10, despues: await contadores() }));

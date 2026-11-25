@@ -64,7 +64,7 @@ async function probar(p, comprobar, buscarSimbolo, carpeta, archivos) {
       const cmd = c.colocar(editor.documento, { tipo: "${tipo}", x: ${x}, y: ${y}, rot: 0, espejado: false, etiqueta: ${JSON.stringify(etiqueta)}, params: {} });
       editor.ejecutar(cmd); return cmd.id; })()`);
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidarContenido(); })()`);
     await esperar(60);
   };
@@ -113,7 +113,7 @@ async function probar(p, comprobar, buscarSimbolo, carpeta, archivos) {
   await p.captura("paleta");
 
   // ── 2. Arrastrar al lienzo ──
-  const lienzo = await p.caja("canvas");
+  const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
   const nPasos = await pasos();
   await p.arrastrar(lista[iNC], { x: lienzo.cx - 100, y: lienzo.cy });
   await esperar(80);

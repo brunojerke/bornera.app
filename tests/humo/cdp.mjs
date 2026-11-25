@@ -203,9 +203,9 @@ export class Pagina {
       const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, ancho: r.width, alto: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 }; })()`);
   }
 
-  /** Punto de grilla (gx, gy) del editor activo → coordenadas de la página. */
+  /** Punto de grilla (gx, gy) del editor activo → coordenadas de la página. El lienzo se busca por su aria-label: desde T38 las miniaturas de la paleta también son canvas. */
   async punto(gx, gy) {
-    return this.evaluar(`(() => { const r = document.querySelector("canvas").getBoundingClientRect();
+    return this.evaluar(`(() => { const r = document.querySelector("canvas[aria-label^=Lienzo]").getBoundingClientRect();
       const p = bornera.activo().vista.camara.aPantalla(${gx}, ${gy}); return { x: r.left + p.x, y: r.top + p.y }; })()`);
   }
 

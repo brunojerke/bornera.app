@@ -16,7 +16,7 @@ export default async function (p, comprobar) {
       editor.ejecutar(cmd);
       return cmd.id;
     });
-    const cv = document.querySelector("canvas");
+    const cv = document.querySelector("canvas[aria-label^=Lienzo]");
     editor.vista.camara.zoom = 1;
     editor.vista.camara.centrar(5, 0, cv.clientWidth, cv.clientHeight);
     editor.vista.invalidar();
@@ -62,7 +62,7 @@ export default async function (p, comprobar) {
   comprobar("mientras se arrastra, los dos salen de la capa estática", await ocultos(a, b));
   comprobar(
     "cursor de mover",
-    (await p.evaluar(`document.querySelector("canvas").parentElement.style.cursor`)) === "move",
+    (await p.evaluar(`document.querySelector("canvas[aria-label^=Lienzo]").parentElement.style.cursor`)) === "move",
   );
   await p.captura("arrastrando");
   await p.esc();
@@ -83,7 +83,7 @@ export default async function (p, comprobar) {
   for (let i = 0; i < 3; i++) await p.tecla("B", "KeyB", 66, CTRL | MAYUS);
   await p.esperarA("bornera.activo()?.escena.cantidad === 2000");
   await esperar(200);
-  const c = await p.evaluar(`(() => { const ed = bornera.activo(); const cv = document.querySelector("canvas");
+  const c = await p.evaluar(`(() => { const ed = bornera.activo(); const cv = document.querySelector("canvas[aria-label^=Lienzo]");
     const cen = ed.vista.camara.aGrilla(cv.clientWidth / 2, cv.clientHeight / 2);
     const ids = ed.escena.idsEnCaja({ x: cen.x - 15, y: cen.y - 10, ancho: 30, alto: 20 }, "toca");
     let mejor = null, d = Infinity;

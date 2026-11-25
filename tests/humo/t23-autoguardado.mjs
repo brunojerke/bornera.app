@@ -82,7 +82,7 @@ export default async function (p, comprobar, { cargar, url }) {
     for (const [x, etiqueta] of [[0, "K1"], [10, "K2"]]) {
       editor.ejecutar(c.colocar(editor.documento, { tipo: "contactor.bobina", x, y: 0, rot: 0, espejado: false, etiqueta, params: {} }));
     }
-    const cv = document.querySelector("canvas");
+    const cv = document.querySelector("canvas[aria-label^=Lienzo]");
     editor.vista.camara.zoom = 1;
     editor.vista.camara.centrar(5, 0, cv.clientWidth, cv.clientHeight);
     editor.vista.invalidar();

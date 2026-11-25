@@ -33,12 +33,12 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -77,13 +77,13 @@ export default async function (p, comprobar) {
   const k2 = await colocarK("contactor.bobina", 4, 0, "K2");
   await seleccionar([k1]);
   await esperar(250); // el panel se abrió solo: que el lienzo termine de cambiar de tamaño
-  await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+  await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
     v.camara.zoom = 1; v.camara.centrar(0, 4, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
 
   // ── Espacio en 1024×600 ──
   const espacio = await p.evaluar(`(() => {
     const panel = document.querySelector('${PANEL}'), campo = document.querySelector("${CAMPO}");
-    const r = campo.getBoundingClientRect(), cv = document.querySelector("canvas");
+    const r = campo.getBoundingClientRect(), cv = document.querySelector("canvas[aria-label^=Lienzo]");
     const botones = [...panel.querySelectorAll("button")].map(b => b.getBoundingClientRect());
     const centro = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return { dentro: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight,
@@ -355,7 +355,7 @@ export default async function (p, comprobar) {
   await reposo();
   // Desde un rincón del lienzo fuera de la escena (se aleja hasta que quede afuera) hasta el centro.
   const { ini, fin } = await p.evaluar(`(() => { const ed = bornera.activo(), v = ed.vista, k = ed.escena.caja;
-    const r = document.querySelector("canvas").getBoundingClientRect();
+    const r = document.querySelector("canvas[aria-label^=Lienzo]").getBoundingClientRect();
     const afuera = () => { const g = v.camara.aGrilla(4, 4); return g.x < k.x - 0.5 && g.y < k.y - 0.5; };
     for (let i = 0; i < 20 && !afuera(); i++) { v.camara.zoom *= 0.85; v.camara.centrar(k.x + k.ancho / 2, k.y + k.alto / 2, r.width, r.height); }
     v.invalidar();

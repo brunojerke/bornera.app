@@ -12,7 +12,7 @@ export const nombre = "Símbolos de fase y neutro";
  * `k`, como texto: para comparar una región antes y después.
  */
 const region = (p, k) =>
-  p.evaluar(`(() => { const cv = document.querySelector("canvas"); const cam = bornera.activo().vista.camara;
+  p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const cam = bornera.activo().vista.camara;
     const d = cv.width / cv.clientWidth; const a = cam.aPantalla(${k.x}, ${k.y}), b = cam.aPantalla(${k.x + k.ancho}, ${k.y + k.alto});
     const x = Math.floor(a.x * d), y = Math.floor(a.y * d), w = Math.ceil(b.x * d) - x, h = Math.ceil(b.y * d) - y;
     const datos = cv.getContext("2d").getImageData(x, y, w, h).data; let s = 0;
@@ -20,14 +20,14 @@ const region = (p, k) =>
     return w + "x" + h + ":" + s; })()`);
 
 const centrar = (p, zoom, gx, gy) =>
-  p.evaluar(`(() => { const ed = bornera.activo(), cv = document.querySelector("canvas");
+  p.evaluar(`(() => { const ed = bornera.activo(), cv = document.querySelector("canvas[aria-label^=Lienzo]");
     ed.vista.camara.zoom = ${zoom}; ed.vista.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); ed.vista.invalidar(); })()`);
 
 export default async function (p, comprobar) {
   // 1) Colocar fase y neutro arrastrando desde la paleta.
   const items = await p.evaluar(`[...document.querySelectorAll(".item")].map(e => { const r = e.getBoundingClientRect();
     return { texto: e.textContent.trim(), x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
-  const lienzo = await p.caja("canvas");
+  const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
   await centrar(p, 1, 0, 0);
   await esperar(50);
   for (const [i, texto] of ["Fase (L)", "Neutro (N)"].entries()) {

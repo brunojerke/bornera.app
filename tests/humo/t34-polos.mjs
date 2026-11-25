@@ -34,12 +34,16 @@ export default async function (p, comprobar) {
   const tri = lista.find((i) => i.texto.includes("Fuente trifásica"));
   const principal = lista.find((i) => i.texto.includes("Contactos principales"));
   comprobar("la paleta tiene «Fuente trifásica» y «Contactos principales»", tri !== undefined && principal !== undefined, lista.map((i) => i.texto).join(", "));
-  const grupos = await p.evaluar(`[...document.querySelectorAll(".item")].map(e => e.parentElement?.closest("*:has(> h2, > h3, > summary, > .titulo)")?.querySelector("h2, h3, summary, .titulo")?.textContent.trim() ?? "")`);
+  // Desde T38, el lugar es «Grupo › Subgrupo» (la trifásica en Potencia › Fuentes).
+  const grupos = await p.evaluar(`[...document.querySelectorAll(".item")].map(e => { const g = []; for (let d = e.closest("details"); d; d = d.parentElement?.closest("details")) g.unshift(d.querySelector(":scope > summary")?.textContent.trim() ?? ""); return g.join(" › "); })`);
   const grupoDe = (texto) => grupos[lista.findIndex((i) => i.texto.includes(texto))] ?? "";
   comprobar("la trifásica va en Fuentes y los principales en Potencia", grupoDe("Fuente trifásica").includes("Fuentes") && grupoDe("Contactos principales").includes("Potencia"), `${grupoDe("Fuente trifásica")} / ${grupoDe("Contactos principales")}`);
 
   const destino = await p.punto(0, -2);
-  if (tri) await p.arrastrar(tri, destino);
+  // Desde T38 la trifásica está al final (Potencia › Fuentes): se la trae a la vista antes de arrastrar.
+  const triVisible = await p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === "Fuente trifásica");
+    if (!e) return null; e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  if (triVisible) await p.arrastrar(triVisible, destino);
   await esperar(80);
   const t = await p.evaluar(`(() => { const c = bornera.editor.documento.hojas[0].componentes.find((x) => x.tipo === "fuente.trifasica"); return c ? { id: c.id, x: c.x, y: c.y, etiqueta: c.etiqueta } : null; })()`);
   comprobar("arrastrar coloca la trifásica, sin etiqueta (D1-A)", t !== null && t.etiqueta === "", JSON.stringify(t));

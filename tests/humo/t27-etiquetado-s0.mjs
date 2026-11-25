@@ -38,7 +38,7 @@ export default async function (p, comprobar) {
       const cmd = c.colocar(editor.documento, { tipo: "${tipo}", x: ${x}, y: ${y}, rot: 0, espejado: false, etiqueta: ${JSON.stringify(etiqueta)}, params: {} });
       editor.ejecutar(cmd); return cmd.id; })()`);
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidarContenido(); })()`);
     await esperar(60);
   };

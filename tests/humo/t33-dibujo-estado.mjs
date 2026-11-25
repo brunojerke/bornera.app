@@ -41,12 +41,12 @@ async function probar(p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -55,12 +55,12 @@ async function probar(p, comprobar) {
   /** Los colores de los píxeles alrededor del punto de grilla (gx, gy), de 3×3. */
   const alrededor = async (gx, gy) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas"); const k = cv.width / cv.clientWidth;
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const k = cv.width / cv.clientWidth;
       const q = bornera.activo().vista.camara.aPantalla(${gx}, ${gy});
       const d = cv.getContext("2d").getImageData(Math.round(q.x * k) - 1, Math.round(q.y * k) - 1, 3, 3).data;
       const s = []; for (let i = 0; i < d.length; i += 4) s.push([d[i], d[i + 1], d[i + 2]]); return s; })()`);
   };
-  const tema = async (nombre) => rgb(await p.evaluar(`getComputedStyle(document.querySelector("canvas")).getPropertyValue("${nombre}")`));
+  const tema = async (nombre) => rgb(await p.evaluar(`getComputedStyle(document.querySelector("canvas[aria-label^=Lienzo]")).getPropertyValue("${nombre}")`));
   /** La distancia del píxel más parecido a `color` alrededor de (gx, gy). */
   const cerca = async (gx, gy, color) => Math.min(...(await alrededor(gx, gy)).map((c) => distancia(c, color)));
   /** Un punto en el medio del tramo más largo de un cable de esa clase; null si no hay. */

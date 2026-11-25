@@ -227,14 +227,17 @@ export const conMargen = (tope) => tope + Math.max(PISO_MS, TOLERANCIA * tope);
 /**
  * Las filas S de un texto de «Probar la fase 5»: id → los dos números de la
  * celda («X / Y ms»). Antes de T33, S4 («se mide en T33») no tiene números y no sale.
+ * Con `letra` = "P", las P (T38: P1; P2 no tiene esa celda y no sale).
  * @param {string} texto
+ * @param {string} [letra]
  * @returns {Map<string, number[]>}
  */
-export function filasS(texto) {
+export function filasS(texto, letra = "S") {
   /** @type {Map<string, number[]>} */
   const filas = new Map();
+  const fila = new RegExp(`^\\| ${letra}\\d+ \\|`);
   for (const l of texto.split(/\r?\n/)) {
-    if (!/^\| S\d+ \|/.test(l)) continue;
+    if (!fila.test(l)) continue;
     const c = l.split("|").slice(1, -1).map((x) => x.trim());
     const m = new RegExp(`^${N} / ${N} ms`).exec(c[4] ?? "");
     if (m) filas.set(c[0] ?? "", [num(m[1] ?? ""), num(m[2] ?? "")]);
@@ -407,23 +410,33 @@ export function friasFuera(frias, calientes) {
 export const TOPES_S6_PC = { S6: [{ nombre: "máx.", indice: 0, tope: 54.5 }] };
 
 /**
+ * Tope de P1 en la PC (ms): 50 / K2 = 9,1 (T38). Se juzga con la regla de S6
+ * (ajuste 4 de T38): mediana de las calientes ≤ 9,1; máx. ≤ 10,1 aparte, con
+ * una sola repetición si lo pasa una caliente.
+ */
+export const TOPES_P1_PC = { P1: [{ nombre: "máx.", indice: 0, tope: 9.1 }] };
+
+/**
  * El juicio de S6 en la PC (ajuste 1 de T37, fijado antes de medir): decide
  * la mediana de las calientes ≤ tope. El máximo ≤ tope + máx(1 ms, 10 %) se
  * juzga aparte: si lo pasa una sola caliente (pico aislado), «repetir» (el
  * ABBA se repite una vez, a mano; si vuelve a pasarse, «no pasa»); si lo pasa
  * más de una, «no pasa». Las frías informan.
+ * Con `topes` = TOPES_P1_PC y `letra` = "P", el de P1 (T38, la misma regla).
  * @param {readonly string[]} frias
  * @param {readonly string[]} calientes
+ * @param {Record<string, { nombre: string, indice: number, tope: number }[]>} [topes]
+ * @param {string} [letra]
  * @returns {{ filas: { id: string, nombre: string, tope: number, margen: number, deciden: number[], informan: number[], mediana: number, maximo: number, sobreMargen: number[], estado: "pasa" | "repetir" | "no pasa" }[], estado: "pasa" | "repetir" | "no pasa" }}
  */
-export function juzgarS6(frias, calientes) {
+export function juzgarS6(frias, calientes, topes = TOPES_S6_PC, letra = "S") {
   const valores = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
     textos.map((t) => {
-      const f = filasS(t).get(id);
+      const f = filasS(t, letra).get(id);
       if (!f) throw new Error(`Falta ${id} en una corrida (¿es de «Probar la fase 6»?).`);
       return f[i] ?? NaN;
     });
-  const filas = Object.entries(TOPES_S6_PC).flatMap(([id, numeros]) =>
+  const filas = Object.entries(topes).flatMap(([id, numeros]) =>
     numeros.map(({ nombre, indice, tope }) => {
       const deciden = valores(calientes, id, indice);
       const med = mediana(deciden);
@@ -442,20 +455,23 @@ export function juzgarS6(frias, calientes) {
 /**
  * La no regresión de S6 (con `--base-fase6`, desde T38): mediana de las
  * calientes de A ≤ la de B + máx(1 ms, 10 %).
+ * Con `topes` = TOPES_P1_PC y `letra` = "P", la de P1 (cuando la base la tenga).
  * @param {readonly string[]} base calientes de B
  * @param {readonly string[]} head calientes de A
+ * @param {Record<string, { nombre: string, indice: number, tope: number }[]>} [topes]
+ * @param {string} [letra]
  */
-export function noRegresionS6(base, head) {
+export function noRegresionS6(base, head, topes = TOPES_S6_PC, letra = "S") {
   if (base.length === 0 || head.length === 0) throw new Error("No hay corridas para comparar S6.");
   const med = (/** @type {readonly string[]} */ textos, /** @type {string} */ id, /** @type {number} */ i) =>
     mediana(
       textos.map((t) => {
-        const f = filasS(t).get(id);
+        const f = filasS(t, letra).get(id);
         if (!f) throw new Error(`Falta ${id} en una corrida (¿la base corre «Probar la fase 6»?).`);
         return f[i] ?? NaN;
       }),
     );
-  const filas = Object.entries(TOPES_S6_PC).flatMap(([id, numeros]) =>
+  const filas = Object.entries(topes).flatMap(([id, numeros]) =>
     numeros.map(({ nombre, indice }) => {
       const b = med(base, id, indice);
       const h = med(head, id, indice);
@@ -464,6 +480,20 @@ export function noRegresionS6(base, head) {
     }),
   );
   return { filas, pasa: filas.every((f) => f.pasa) };
+}
+
+/** P1 en la PC (T38, ajuste 4): la regla de S6 con su tope. */
+export const juzgarP1 = (/** @type {readonly string[]} */ frias, /** @type {readonly string[]} */ calientes) => juzgarS6(frias, calientes, TOPES_P1_PC, "P");
+
+/**
+ * La no regresión de P1: null si alguna corrida de la base no tiene P1
+ * (T38 contra 24090e0: «sin base»); si no, la de S6 con el tope de P1.
+ * @param {readonly string[]} base calientes de B
+ * @param {readonly string[]} head calientes de A
+ */
+export function noRegresionP1(base, head) {
+  if (base.length === 0 || base.some((t) => !filasS(t, "P").has("P1"))) return null;
+  return noRegresionS6(base, head, TOPES_P1_PC, "P");
 }
 
 /**

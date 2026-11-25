@@ -28,7 +28,7 @@ export default async function (p, comprobar) {
   const lista = await items(p);
   comprobar("la paleta muestra los 32 símbolos (T36)", lista.length === 32, lista.map((i) => i.texto).join(", "));
   comprobar("están los 10 de T34", DE_T34.every((t) => lista.some((i) => i.texto === t)), lista.map((i) => i.texto).join(", "));
-  const lienzo = await p.caja("canvas");
+  const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
 
   // 1) Arrastrar cada ítem al lienzo, en columnas. Los 8 de 0.1.5 en una fila; desde T34, la
   // trifásica y los principales (6 de ancho) en otra más arriba: en la misma no caben a 1024×600.
@@ -95,7 +95,8 @@ export default async function (p, comprobar) {
   await p.evaluar(`(() => { const i = document.querySelector('input[type=search]'); i.value = 'LAMPARA';
     i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await esperar(50);
-  const filtrados = (await items(p)).map((i) => i.texto);
+  // Desde T38 la búsqueda oculta los ítems que no coinciden (no los saca del DOM).
+  const filtrados = await p.evaluar(`[...document.querySelectorAll(".item")].filter((e) => e.checkVisibility()).map((e) => e.textContent.trim())`);
   comprobar("buscar 'LAMPARA' deja solo la lámpara", JSON.stringify(filtrados) === JSON.stringify(["Lámpara"]), filtrados.join(", "));
 
   // 5) Deshacer de a uno hasta vaciar.

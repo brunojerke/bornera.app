@@ -88,7 +88,7 @@ async function probar(p, comprobar) {
   const todos = [...abierta.componentes.map((c) => c.id), ...abierta.cables.map((w) => w.id)];
   await p.evaluar(`bornera.editor.seleccionarIds(${JSON.stringify(todos)})`);
   await tecla(C, CTRL);
-  await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+  await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
     v.camara.zoom = 0.2; v.camara.centrar(22, 50, cv.clientWidth, cv.clientHeight); v.invalidarContenido(); })()`);
   await esperar(60);
   await a(22, 80);

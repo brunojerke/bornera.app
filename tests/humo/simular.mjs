@@ -16,7 +16,7 @@ export default async function (p, comprobar) {
 
   await p.evaluar(`(() => { const { editor: ed, comandos: c } = bornera;
     ed.ejecutar(c.colocar(ed.documento, { tipo: "contactor.bobina", x: 0, y: 0, rot: 0, espejado: false, etiqueta: "K1", params: {} }));
-    const cv = document.querySelector("canvas"); ed.vista.camara.zoom = 1; ed.vista.camara.centrar(0, 0, cv.clientWidth, cv.clientHeight); ed.vista.invalidar(); })()`);
+    const cv = document.querySelector("canvas[aria-label^=Lienzo]"); ed.vista.camara.zoom = 1; ed.vista.camara.centrar(0, 0, cv.clientWidth, cv.clientHeight); ed.vista.invalidar(); })()`);
   await p.tecla(...F5);
   await esperar(50);
   comprobar("F5 pasa a Simular", await p.evaluar(`document.querySelector(".modo button.simular").getAttribute("aria-pressed") === "true"`));

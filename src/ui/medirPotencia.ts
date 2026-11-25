@@ -17,7 +17,7 @@ export async function medirPotencia(
   ancho: number,
   alto: number,
   progreso: (paso: string) => void = () => {},
-): Promise<{ muestras: MuestrasFase6; escena: { componentes: number; cables: number; trifasicas: number; redes: number } }> {
+): Promise<{ muestras: Omit<MuestrasFase6, "p1">; escena: { componentes: number; cables: number; trifasicas: number; redes: number } }> {
   progreso("armando la escena de potencia 2000");
   await respirar();
   const banco = bancoPotencia();

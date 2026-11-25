@@ -24,12 +24,12 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -47,7 +47,7 @@ export default async function (p, comprobar) {
   const pista = () => p.evaluar(`document.querySelector("footer .pista-herramienta")?.textContent.trim() ?? null`);
   const deshacerActivo = () => p.evaluar(`!document.querySelector('button[aria-label="Deshacer"]').disabled`);
   const botonCable = () => p.evaluar(`document.querySelector(".herramienta")?.getAttribute("aria-pressed") === "true"`);
-  const cursor = () => p.evaluar(`document.querySelector("canvas").parentElement.style.cursor`);
+  const cursor = () => p.evaluar(`document.querySelector("canvas[aria-label^=Lienzo]").parentElement.style.cursor`);
   /** Clic en el punto de grilla (gx, gy). */
   const clic = async (gx, gy) => p.clic(await p.punto(gx, gy));
   const mover = async (gx, gy) => {
@@ -92,7 +92,7 @@ export default async function (p, comprobar) {
   await p.evaluar(`bornera.editor.seleccionarIds(["c4"])`);
   await p.esc();
   await esperar(150);
-  await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+  await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
     v.camara.zoom = 1; v.camara.centrar(5, -1, cv.clientWidth, cv.clientHeight); v.invalidar(); })()`);
   await afuera();
   await foto("base");
@@ -276,7 +276,7 @@ export default async function (p, comprobar) {
       const [vx, vy] = VEC[b.direccion];
       salida.push({ rot, espejado, x: b.x, y: b.y, ax: b.x + 3 * vx, ay: b.y + 3 * vy, hx: b.x + 3 * vx + 2 * vy, hy: b.y + 3 * vy + 2 * vx, comp: k.id });
     }
-    const cv = document.querySelector("canvas"); ed.vista.camara.zoom = 0.7; ed.vista.camara.centrar(52, 4, cv.clientWidth, cv.clientHeight); ed.vista.invalidar();
+    const cv = document.querySelector("canvas[aria-label^=Lienzo]"); ed.vista.camara.zoom = 0.7; ed.vista.camara.centrar(52, 4, cv.clientWidth, cv.clientHeight); ed.vista.invalidar();
     return salida; })()`);
   await esperar(100);
   await tecla(W);

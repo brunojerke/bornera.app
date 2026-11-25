@@ -78,7 +78,7 @@ export async function conLaApp(exe, puerto, trabajo) {
   let pagina = null;
   try {
     pagina = await Pagina.conectar(await paginaDeLaApp(puerto));
-    const listo = `!!document.querySelector('[aria-label="Menú de desarrollo"]') && !!document.querySelector("canvas")`;
+    const listo = `!!document.querySelector('[aria-label="Menú de desarrollo"]') && !!document.querySelector("canvas[aria-label^=Lienzo]")`;
     for (let i = 0; i < 300 && !(await pagina.evaluar(listo).catch(() => false)); i++) await esperar(100);
     const recuperar = await cerrarRecuperar(pagina);
     return { ...(await trabajo(pagina)), recuperar };

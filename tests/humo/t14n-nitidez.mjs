@@ -48,12 +48,12 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -61,7 +61,7 @@ export default async function (p, comprobar) {
   };
   const documento = () => p.evaluar("JSON.stringify(bornera.editor.documento.hojas)");
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidarContenido(); })()`);
     await reposo();
   };
@@ -98,7 +98,7 @@ export default async function (p, comprobar) {
     ed.ejecutar(c.cablear(d, { desde: { tipo: "borne", comp: m.id, borne: "A2" }, hasta: { tipo: "libre", x: 64, y: 66 }, codos: [[60, 66]] }));
 
     // Colores del tema, en RGB.
-    const css = getComputedStyle(document.querySelector("canvas"));
+    const css = getComputedStyle(document.querySelector("canvas[aria-label^=Lienzo]"));
     const cx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
     const rgb = (nombre) => { cx.fillStyle = css.getPropertyValue(nombre).trim(); cx.fillRect(0, 0, 1, 1); return Array.from(cx.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
     const fondo = rgb("--lienzo"), trazo = rgb("--simbolo");
@@ -110,7 +110,7 @@ export default async function (p, comprobar) {
      * cae el punto de la grilla. null si queda fuera del lienzo.
      */
     globalThis.__corte = ({ eje, x, y }) => {
-      const cv = document.querySelector("canvas"), cam = bornera.editor.vista.camara, k = cam.escala;
+      const cv = document.querySelector("canvas[aria-label^=Lienzo]"), cam = bornera.editor.vista.camara, k = cam.escala;
       const ox = Math.round(cam.x * k), oy = Math.round(cam.y * k);
       const px = eje === "v" ? Math.round(x * k) - ox : Math.floor(x * k) - ox;
       const py = eje === "v" ? Math.floor(y * k) - oy : Math.round(y * k) - oy;

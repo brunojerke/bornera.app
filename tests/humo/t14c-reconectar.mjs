@@ -26,12 +26,12 @@ export default async function (p, comprobar) {
       if (quietos >= 3) listo(true); else requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
   const foto = async (n) => {
     await reposo();
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       (globalThis.__fotos ??= {})["${n}"] = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; })()`);
   };
   const distintos = async (n) => {
     await reposo();
-    return p.evaluar(`(() => { const cv = document.querySelector("canvas");
+    return p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]");
       const a = globalThis.__fotos["${n}"], b = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
       if (a.length !== b.length) return -1; let k = 0;
       for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) k++;
@@ -47,13 +47,13 @@ export default async function (p, comprobar) {
   const pasos = () => p.evaluar("bornera.editor.historial.hechos.length");
   const pista = () => p.evaluar(`document.querySelector("footer .pista-herramienta")?.textContent.trim() ?? null`);
   const aviso = () => p.evaluar(`document.querySelector(".avisos")?.textContent.trim() ?? null`);
-  const cursor = () => p.evaluar(`document.querySelector("canvas").parentElement.style.cursor`);
+  const cursor = () => p.evaluar(`document.querySelector("canvas[aria-label^=Lienzo]").parentElement.style.cursor`);
   const uniones = () => p.evaluar(`JSON.stringify(bornera.editor.uniones.todas().map((u) => [u.x, u.y]))`);
   const seleccion = () => p.evaluar(`JSON.stringify([...bornera.editor.seleccion].sort())`);
   const cable = (id) => p.evaluar(`JSON.stringify(bornera.editor.documento.hojas[0].cables.find((w) => w.id === "${id}"))`);
   const deseleccionar = () => p.evaluar(`bornera.activo().seleccionarIds([])`);
   const camara = async (zoom, gx, gy) => {
-    await p.evaluar(`(() => { const cv = document.querySelector("canvas"); const v = bornera.editor.vista;
+    await p.evaluar(`(() => { const cv = document.querySelector("canvas[aria-label^=Lienzo]"); const v = bornera.editor.vista;
       v.camara.zoom = ${zoom}; v.camara.centrar(${gx}, ${gy}, cv.clientWidth, cv.clientHeight); v.invalidarContenido(); })()`);
     await reposo();
   };
@@ -84,7 +84,7 @@ export default async function (p, comprobar) {
   const deBorne = (gx, gy, lado) =>
     p.evaluar(`(() => { const cam = bornera.editor.vista.camara, k = cam.escala;
       const px = Math.round(${gx} * k) - Math.round(cam.x * k), py = Math.round(${gy} * k) - Math.round(cam.y * k);
-      const d = document.querySelector("canvas").getContext("2d").getImageData(px - ${lado}, py - ${lado}, ${2 * lado + 1}, ${2 * lado + 1}).data;
+      const d = document.querySelector("canvas[aria-label^=Lienzo]").getContext("2d").getImageData(px - ${lado}, py - ${lado}, ${2 * lado + 1}, ${2 * lado + 1}).data;
       const c = ${JSON.stringify(e.borne)}, f = ${JSON.stringify(e.fondo)}, t = ${JSON.stringify(e.trazo)};
       const dist = (i, q) => Math.abs(d[i] - q[0]) + Math.abs(d[i + 1] - q[1]) + Math.abs(d[i + 2] - q[2]);
       let n = 0;
@@ -106,7 +106,7 @@ export default async function (p, comprobar) {
     const w2 = cab(L(4, 4), L(16, 4));
     const w6 = cab(L(20, -6), L(28, -6));
     const w7 = cab(T(w6, 24, -6), L(24, -2));
-    const css = getComputedStyle(document.querySelector("canvas"));
+    const css = getComputedStyle(document.querySelector("canvas[aria-label^=Lienzo]"));
     const cx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
     const rgb = (nombre) => { cx.fillStyle = css.getPropertyValue(nombre).trim(); cx.fillRect(0, 0, 1, 1); return Array.from(cx.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
     return { k1, k2, w1, w2, w6, w7, borne: rgb("--borne"), trazo: rgb("--simbolo"), fondo: rgb("--lienzo") }; })()`);
@@ -187,13 +187,13 @@ export default async function (p, comprobar) {
     // A (1, 1) px del centro de (8, 4) cae dentro del punto (a 58 % mide 5,8 px) y fuera de los dos cables.
     const puntoPrevia = await p.evaluar(`(() => { const cam = bornera.editor.vista.camara, k = cam.escala;
       const px = Math.round(8 * k) - Math.round(cam.x * k) + 1, py = Math.round(4 * k) - Math.round(cam.y * k) + 1;
-      return Array.from(document.querySelector("canvas").getContext("2d").getImageData(px, py, 1, 1).data.slice(0, 3)); })()`);
+      return Array.from(document.querySelector("canvas[aria-label^=Lienzo]").getContext("2d").getImageData(px, py, 1, 1).data.slice(0, 3)); })()`);
     await soltar(8.1, 3.9);
     await deseleccionar();
     await reposo();
     const puntoSoltado = await p.evaluar(`(() => { const cam = bornera.editor.vista.camara, k = cam.escala;
       const px = Math.round(8 * k) - Math.round(cam.x * k) + 1, py = Math.round(4 * k) - Math.round(cam.y * k) + 1;
-      return Array.from(document.querySelector("canvas").getContext("2d").getImageData(px, py, 1, 1).data.slice(0, 3)); })()`);
+      return Array.from(document.querySelector("canvas[aria-label^=Lienzo]").getContext("2d").getImageData(px, py, 1, 1).data.slice(0, 3)); })()`);
     const cerca = (x, y) => x.every((v, i) => Math.abs(v - y[i]) <= 3);
     const restosT = await sinRestos();
     const unionesT = await uniones();

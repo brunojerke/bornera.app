@@ -125,7 +125,7 @@ async function probar(p, comprobar, carpeta) {
   comprobar("con S0 fijado, S1 no arranca", (await conTension()) === "[]");
   await pulsarYSoltar("S0", "pulsador.nc");
   comprobar("otro clic suelta S0: vuelve a reposo", !(await s0Accionado()) && (await p.evaluar("bornera.simulacion().fijados.length")) === 0, await estado());
-  comprobar("el cursor es la mano sobre un pulsador", (await p.evaluar(`document.querySelector("canvas").parentElement.style.cursor`)) === "pointer");
+  comprobar("el cursor es la mano sobre un pulsador", (await p.evaluar(`document.querySelector("canvas[aria-label^=Lienzo]").parentElement.style.cursor`)) === "pointer");
 
   // ── 2. Bloqueos en Simular ──
   comprobar("Guardar, Guardar como, Abrir y Nuevo desactivados; Exportar activo", !(await activado("Guardar")) && !(await activado("Guardar como")) && !(await activado("Abrir")) && !(await activado("Nuevo")) && (await activado("Exportar sin comprimir (.brn.json)")));
