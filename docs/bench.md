@@ -20,6 +20,38 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Netbook y PC el mismo día (fase 6, C3) — 2026-11-27
+
+**Criterio escrito antes de medir** (`docs/plan-fase6.md` §4 y §5; hoja `docs/netbook-fase6.md`): `.msi` de `v0.1.6-alpha.1` (tag sobre `f2e1e28`) en las dos máquinas, «Probar la fase 6», 3 aperturas × (fría + caliente). S2–S6 y P1: mediana de las 3 calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %); netbook con sus topes, PC con los de C1. S1 informa (contra 300 / 54,5). F1–F3 por su tope. B1–B16 contra los topes de la 3b: por fila, la mediana de las calientes; las corridas sueltas que fallan informan; B10 informa (regla de C3 de la fase 5). P2 informa. Las frías informan (rango de las calientes + 1 ms). K no se recalcula (K1 = 3, K2 = 5,5).
+
+**Cómo se midió:** Bruno, las dos el 27/11 por la mañana (netbook 7:57–8:15, PC 8:42–8:51), las 12 corridas «con disco» y `0.1.6-alpha.1`. **WebView2 distinto: netbook Edge 157, PC Edge 158** (el runtime es del sistema; la hoja no lo fijaba). Fila 0: una sola «Bornera» `0.1.6-alpha.1` en las dos (Bruno). Filas 2, 3 y 4 de la netbook: pasan (Bruno). Condiciones del banco de la PC ese día: sin informar. Textos con el nombre de la hoja (`netbook1-fria.txt` … `pc3-caliente.txt`).
+
+**Resultado: pasa.** Ninguna fila juzgada falla, ni en la netbook ni en la PC.
+
+| # | Netbook cal. 1 / 2 / 3 | Mediana | Tope netbook (máx. adm.) | PC cal. 1 / 2 / 3 | Mediana | Tope PC | Netbook / PC |
+|---|---|---|---|---|---|---|---|
+| S6 máx. | 116,2 / 103,5 / 110,2 | **110,2** | 300 (330) | 30,3 / 23,8 / 27,9 | **27,9** | 54,5 (60,0) | 3,9 (K2 5,5) |
+| P1 máx. | 5,9 / 3,4 / 1,3 | **3,4** | 50 (55) | 0,6 / 0,6 / 0,6 | **0,6** | 9,1 (10,1) | resolución |
+| S1 máx. (informa) | 117,2 / 105,6 / 104,6 | 105,6 | 300 | 28,2 / 23,0 / 24,9 | 24,9 | 54,5 | 4,2 (K2) |
+| S2 med. / máx. | 0,6/0,7 · 0,5/0,6 · 0,5/0,6 | 0,5 / 0,6 | 5 / 16 | 0,4/0,6 · 0,4/0,6 · 0,4/0,6 | 0,4 / 0,6 | 1,7 / 5,3 | resolución |
+| S3 máx. | 8,5 / 7,7 / 7,7 | 7,7 | 50 (55) | 5,9 / 4,2 / 4,1 | 4,2 | 16,7 | 1,8 (K1 3) |
+| S4 cuadro / gesto | 6,1/6,6 · 5,6/6,1 · 5,1/5,6 | 5,6 / 6,1 | 33 / 100 | 2,7/2,9 · 2,3/2,9 · 2,3/2,8 | 2,3 / 2,9 | 6,0 / 18,2 | 2,4 / 2,1 (K2) |
+| S5 máx. | 128,4 / 109,8 / 133,8 | 128,4 | 300 (330) | 56,1 / 74,4 / 76,1 | 74,4 | 100 | 1,7 (K1) |
+| P2 (una por apertura) | 851,8 / 745,9 / 896,3 | **851,8** | informa | 159,4 / 150,4 / 160,4 | **159,4** | informa | 5,3 |
+| F1 máx. | 3,9 / 3,7 / 4,0 | | 50 | 3,1 / 2,9 / 4,6 | | 9 | |
+| F2 máx. | 152,9 / 98,1 / 110,0 | | 1000 | 76,0 / 72,5 / 71,3 | | 1000 | |
+| F3 máx. | 215,0 / 168,3 / 168,6 | | 3000 | 84,7 / 76,9 / 78,3 | | 1000 | |
+
+- **B en la netbook:** pasan todas por la mediana. Informan: B10 151,0 / 118,6 / 114,9 ms por gesto (mediana 118,6; fase 5: 121–128); corridas sueltas que fallan: caliente 1 con B12 4,8 ms (mediana 3,3 ≤ 4,5) y B16 1 lento (52,7 ms por gesto; mediana 0 lentos), caliente 3 con B15 1 lento (máx. 18,9 ms; mediana 0). B1 142,8–170,9 ms (mediana), B2 24,2–32,5, B6 1 lento en las calientes 1 y 3 (máx. 28,4; tope ≤ 1 por gesto), B16 por gesto 42,9–52,7. B9 N = 500 en las 6.
+- **B en la PC:** las 6 corridas pasan todo; B10 29,1–35,6, B9 N = 500.
+- **S6, desglose en la netbook (máx.):** netlist 10,5–34,5 ms (el 34,5 es la caliente 3; en las otras 5 corridas 8,7–12,5), cuadro 71–103 ms en 11–13 cuadros. PC: netlist 6,0–6,9, cuadro 16,8–20,9 en 4–5 cuadros.
+- **S1, desglose en la netbook (máx.):** netlist 8,1–9,7 ms (T28: ≤ 27,5), cuadro 94–107 ms en 15–17 cuadros. S5 de pared (informa): 446–483 ms (fase 5: 391–436). Cadena de 100 de S4: gesto 72–95 ms.
+- **P2 y el cambio de C1** (los canvas de la paleta, montados después del primer cuadro nítido): **la netbook no muestra nada, ni a favor ni en contra.** No hay P2 de la netbook sin el cambio (la marca nació en T37, después de la `0.1.5`), así que no hay base. Lo que se movió es chico frente a P2: dibujar las 32 miniaturas cuesta en la netbook 1,1–1,4 ms de mediana (máx. 5,9), menos del 1 % de 852 ms, y P2 varía 150 ms entre aperturas (746–896). El cociente netbook / PC de P2 (5,3) queda en la escala de K2 (5,5): nada indica que la paleta retrase el primer cuadro de la netbook más que el de la PC. P1 no mide montar los 32 canvas (solo el dibujo); ese costo no está medido aparte.
+- **La PC salió más lenta que en C1** (mismas reglas, por tope: pasa igual). Mediana de las calientes contra C1 (exe `--no-bundle`, 2026-11-25): S6 27,9 / 17,9, S1 24,9 / 19,3, S5 74,4 / 46,4 (la caliente 1 dio 56,1), S3 4,2 / 3,0, P2 159,4 / 153,2. Por eso los cocientes de hoy quedan por debajo de los de la fase 5 (S1 4,2 / 4,6, S3 1,8 / 3,1, S5 1,7 / 2,4). No se volvió a medir; informa.
+- **Frías fuera de su rango (informan):** netbook B1 (frías 1 y 2; máx. 259,9 en la 2), B3 fría 1 (máx. 23,9 ms, 1 lento), B4 máx. (frías 1 y 3), B8 fría 2 (37,5), B11 (frías 1 y 2), F1 fría 2 (5,3), F2 (fría 1 188,5; fría 2 mediana), S1 (frías 1 y 3: 121,3 y 143,4), S3 fría 1 (mediana 9,5), S5 fría 1 (141,2 / 134,9); PC S1 fría 1 (29,4), S3 fría 3 (mediana 4,7), S5 fría 1 (mediana 74,1).
+- **Fila 3, `npm run circuito`** (`BORNERA_BASE=inversion-potencia`, `inversion-a-mano.brn` fuera del repo): **pasa a la tercera versión del archivo**, «misma partición que la base (20 redes, 58 bornes)». La 1.ª no tenía H1 ni H2, tenía F1 y F2 cambiados y la fase de mando en L0; la 2.ª tenía el fusible y el 95-96 con los bornes al revés (L1 → F1·2, F1·1 → F2·96, F2·95 → S0·11: equivale eléctricamente, pero la comparación es por borne). Bruno corrigió las dos; el criterio no cambió.
+- **Timeout de `npm test` (informa; no se tocó el test ni su límite):** `src/editor/bancoPotencia.test.ts:64` («está tendida como W») tardó 22,1 s contra el límite de 20 s en dos corridas completas de `npm test` con la PC cargada (112 workers); solo, 10,8 s. Pasaba en C1 y no cambió código; `tests.yml` en verde (última corrida, 2026-11-25, `v0.1.6-alpha.1`). Pendiente.
+
 ## «Probar la fase 6» en la PC, contra `954f011` (fase 6, C1) — 2026-11-25
 
 **Criterio escrito antes de medir** (`docs/plan-C1-fase6.md`, aprobado con 4 ajustes): ABBA en WebView2 (`probar-webview2.mjs --fase6`: A corre «Probar la fase 6» y B «Probar la fase 5», 3 bloques, fría + caliente) contra `954f011` (cierre de la fase 5), misma escena de B (sin J-A). B1–B16 con D6b-C (B2 por mediana de la 1.ª, a mano); F por tope; S1–S5 por tope, con no regresión en S2, S3 y S5 (S1 y S4 informan). **S6 y P1 solo por tope** (B no los tiene): mediana ≤ 54,5 / 9,1, máx. ≤ 60,0 / 10,1 aparte. **P2 informa** (B no tiene la marca) y se compara con 139,3 (`24090e0`) y 148,9 (`f9d3b10`). Una sola repetición, solo por un control (B13, B15, S4, o máx. de S6/P1 sobre el tope con la mediana dentro).

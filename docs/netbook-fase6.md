@@ -133,3 +133,20 @@ A 1024×600 (la pantalla de la netbook), con Bornera maximizada. Hoja nueva (Arc
 - Frías fuera del rango: ______________________
 - Filas 2 ☐ 3 ☐ 4 ☐
 - Sorpresas: ____________________________________________
+
+## Resultado (C3, 2026-11-27)
+Juzgado con las reglas de esta hoja y de `docs/plan-fase6.md` §4, fijadas antes de medir. Detalle en `docs/bench.md` («Netbook y PC el mismo día (fase 6, C3)»).
+
+- Fila 0: `0.1.6-alpha.1` y «con disco» en los 12 textos · una sola Bornera ☑ (netbook y PC, Bruno).
+- **Fila 1: pasa.**
+  - S6 (3 calientes): 116,2 / 103,5 / 110,2 ms · mediana 110,2 ≤ 300, máx. 116,2 ≤ 330 ☑
+  - P1: 5,9 / 3,4 / 1,3 ms · mediana 3,4 ≤ 50, máx. 5,9 ≤ 55 ☑
+  - S1 (informa): 117,2 / 105,6 / 104,6 ms (≤ 300) · P2 (por apertura): 851,8 / 745,9 / 896,3 ms, mediana 851,8
+  - S2–S5 por tope y F1–F3 pasan; B1–B16 pasan por la mediana (B10 informa: 118,6 ms).
+  - Frías fuera del rango: B1, B3, B4, B8, B11, F1, F2, S1, S3 y S5 (informan).
+- Filas 2 ☑ 3 ☑ 4 ☑ (Bruno).
+- PC el mismo día: pasa con los topes de C1 (S6 27,9; P1 0,6; P2 159,4). WebView2: netbook 157, PC 158.
+- P2 no muestra el cambio de C1: no hay base sin el cambio, y las miniaturas cuestan ~1 ms frente a 852.
+- Sorpresas: la PC, más lenta que en C1 (S5 74,4 contra 46,4), dentro de sus topes.
+- Fila 3, `npm run circuito` con `BORNERA_BASE=inversion-potencia`: pasa (20 redes, 58 bornes) con la 3.ª versión de `inversion-a-mano.brn` (antes: faltaban H1 y H2, F1/F2 y L0 cambiados; después, fusible y 95-96 con los bornes al revés).
+- Condiciones de la PC ese día: sin informar.
