@@ -12,6 +12,7 @@ import type { Componente, Documento, Extremo, Hoja } from "../core/model/documen
 import type { Historial } from "../core/model/historial";
 import { pegar, recortar } from "../core/model/portapapeles";
 import { aparentesHoja, avisosR11, juntarConR11, mismaRedPorRedes } from "../core/model/aparentes";
+import { redes } from "../core/model/redes";
 import { contarAvisos, validar, type Aviso } from "../core/model/validaciones";
 import { buscarSimbolo } from "../core/symbols";
 import type { Caja } from "../render/camara";
@@ -326,6 +327,37 @@ describe("cuándo recalcula: solo por comando, y solo lo que el comando puede mo
     expect(editor.avisos.de(nc).map((a) => a.regla)).not.toContain("R6");
     // Sin R9 para la trifásica sin etiqueta (D1-A).
     expect(editor.avisos.de(t).map((a) => a.regla)).not.toContain("R9");
+    expect(diferencias(editor, h)).toEqual([]);
+  });
+
+  it("R6 con una fuente propia (T39, D-B10): «G1.L+» nombra la red; renombrar a G5 deja «G5.L+» y recalcula R6; sin etiqueta vuelve", () => {
+    const { editor, h, poner, tender } = armar();
+    const k = poner(BOBINA, 0, 0, "K1");
+    const nc = poner(AUXILIAR_NC, 10, 0, "K1");
+    const g = poner("fuente.continua", 0, -10, "G1");
+    tender(b(nc, "22"), b(k, "A1"), [[10, -2]]);
+    expect(editor.avisos.de(nc).map((a) => a.regla)).toContain("R6");
+    // Solo un cable: R6 en las redes tocadas, que ve el nombre de la salida.
+    const local = editor.avisos.pasadasR6Hoja;
+    tender(b(g, "L+"), b(k, "A1"), [
+      [-1, -5],
+      [0, -5],
+    ]);
+    expect(editor.avisos.pasadasR6Hoja).toBe(local);
+    expect(editor.avisos.de(nc).map((a) => a.regla)).not.toContain("R6");
+    expect(diferencias(editor, h)).toEqual([]);
+    // Renombrar: R6 vuelve a calcularse y la red pasa a llamarse «G5.L+».
+    const r6 = editor.avisos.pasadasR6;
+    editor.ejecutar(new CambiarEtiqueta(g, "G5"));
+    expect(editor.avisos.pasadasR6).toBe(r6 + 1);
+    expect(redes(h).find((r) => r.bornes.some((x) => x.comp === k && x.borne === "A1"))?.nombres).toEqual(["G5.L+"]);
+    expect(editor.avisos.de(nc).map((a) => a.regla)).not.toContain("R6");
+    expect(diferencias(editor, h)).toEqual([]);
+    // Sin etiqueta la salida no nombra la red: el NC vuelve a avisar.
+    editor.ejecutar(new CambiarEtiqueta(g, ""));
+    expect(editor.avisos.pasadasR6).toBe(r6 + 2);
+    expect(editor.avisos.de(nc).map((a) => a.regla)).toContain("R6");
+    expect(editor.avisos.de(g).map((a) => a.regla)).toContain("R3");
     expect(diferencias(editor, h)).toEqual([]);
   });
 

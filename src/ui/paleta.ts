@@ -27,6 +27,7 @@ export const SUBGRUPOS_PALETA = {
   maniobra: { grupo: "potencia", nombre: "Maniobra" },
   cargas: { grupo: "potencia", nombre: "Cargas" },
   fuentes: { grupo: "potencia", nombre: "Fuentes" },
+  transformacion: { grupo: "potencia", nombre: "Transformación" },
 } as const satisfies Record<Subgrupo, { grupo: Grupo; nombre: string }>;
 
 export interface SubgrupoPaleta {

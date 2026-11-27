@@ -91,6 +91,13 @@ describe("titular y prefijo", () => {
       ["termico.contacto_na", false, null],
       ["proteccion.fusible", true, "F"],
       ["senalizacion.bocina", true, "H"],
+      // Fuentes propias y trafos (T39): titulares con prefijo, no fuentes.
+      ["fuente.continua", true, "G"],
+      ["fuente.variable", true, "G"],
+      ["fuente.conmutada", true, "G"],
+      ["transformador.monofasico", true, "T"],
+      ["transformador.trifasico", true, "T"],
+      ["transformador.variac", true, "T"],
     ]);
   });
 
@@ -118,6 +125,12 @@ describe("titular y prefijo", () => {
       ["mando.final_nc", 1],
       ["proteccion.fusible", 1],
       ["senalizacion.bocina", 1],
+      ["fuente.continua", 1],
+      ["fuente.variable", 1],
+      ["fuente.conmutada", 1],
+      ["transformador.monofasico", 1],
+      ["transformador.trifasico", 1],
+      ["transformador.variac", 1],
     ]);
     expect(primerNumeroDe(buscarSimbolo(DESCONOCIDO))).toBe(1);
   });

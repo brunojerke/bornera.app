@@ -104,11 +104,15 @@ export const SUBGRUPOS = [
   "maniobra",
   "cargas",
   "fuentes",
+  "transformacion",
 ] as const;
 
 export type Subgrupo = (typeof SUBGRUPOS)[number];
 
 export type Rotacion = 0 | 90 | 180 | 270;
+
+/** Papel de un borne de salida (T39, D-B1 A): el + es fase y el − neutro; sin papel nuevo. */
+export type PapelSalida = "fase" | "neutro";
 
 export interface Transformacion {
   /** Rotación en sentido horario, sobre el origen (centro del símbolo). */
@@ -143,6 +147,21 @@ export type DefinicionSimbolo = Comportamiento & {
    * (`validarDefinicion`).
    */
   polos?: readonly (readonly [string, string])[];
+  /**
+   * Cargas del símbolo (T39, D-B7 A): pares de bornes, cada uno una carga que
+   * se enciende con potenciales distintos en sus dos bornes, como la entrada
+   * L-N de una fuente conmutada o el primario 1U1-1U2 de un trafo. Sin
+   * `cargas`, una bobina o una carga de 2 bornes es una carga y el resto
+   * ninguna; con `cargas` (vacío vale), solo esos pares (`cargasDe`).
+   */
+  cargas?: readonly (readonly [string, string])[];
+  /**
+   * Salida propia (T39, D-B2 A, D-B7 A): borne → papel. Cada borne da un
+   * potencial propio, siempre activo, de nombre etiqueta + borne («G1.L+»,
+   * «T1.2U1»; D-B8, D-B10). Sin etiqueta no da potencial. El símbolo que la
+   * lleva es titular, con prefijo, y no es fuente (`validarDefinicion`).
+   */
+  salida?: Readonly<Record<string, PapelSalida>>;
   /**
    * De qué lado de las conexiones van los nombres de los bornes, en coordenadas
    * locales (gira y se espeja con el símbolo). Por defecto, "izquierda".
@@ -220,6 +239,22 @@ export function polosDe(def: DefinicionSimbolo): readonly (readonly [string, str
   let polos = POLOS_ARMADOS.get(def);
   if (!polos) POLOS_ARMADOS.set(def, (polos = [[def.bornes[0]!.nombre, def.bornes[1]!.nombre]]));
   return polos;
+}
+
+/** Cargas armadas de las bobinas y cargas de 2 bornes sin `cargas`, una por definición. */
+const CARGAS_ARMADAS = new WeakMap<DefinicionSimbolo, readonly (readonly [string, string])[]>();
+
+/**
+ * Las cargas del símbolo (T39): `cargas` si las tiene; si no, sus dos bornes
+ * en una bobina o una carga de 2 bornes (lámpara, bocina); si no, ninguna (los
+ * motores de 3 y 6 bornes, hasta 6b). No arma arreglos nuevos en cada llamada.
+ */
+export function cargasDe(def: DefinicionSimbolo): readonly (readonly [string, string])[] {
+  if (def.cargas) return def.cargas;
+  if ((def.elemento !== "bobina" && def.elemento !== "carga") || def.bornes.length !== 2) return SIN_POLOS;
+  let cargas = CARGAS_ARMADAS.get(def);
+  if (!cargas) CARGAS_ARMADAS.set(def, (cargas = [[def.bornes[0]!.nombre, def.bornes[1]!.nombre]]));
+  return cargas;
 }
 
 /**

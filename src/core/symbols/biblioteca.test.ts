@@ -12,8 +12,11 @@ import {
   FASE,
   FINAL_NA,
   FINAL_NC,
+  FUENTE_CONMUTADA,
+  FUENTE_CONTINUA,
   FUENTE_TRIFASICA,
   FUENTE_TRIFASICA_N,
+  FUENTE_VARIABLE,
   BOCINA,
   FUSIBLE,
   FUSIBLE_TRIPOLAR,
@@ -36,8 +39,11 @@ import {
   TERMOMAGNETICA_TRIPOLAR,
   TERMOMAGNETICA_UNIPOLAR,
   TIERRA,
+  TRAFO_MONOFASICO,
+  TRAFO_TRIFASICO,
+  VARIAC,
 } from "./biblioteca";
-import { esFuente, esSeguidor, nombraRed, polosDe, type DefinicionSimbolo, type Primitiva, type Rotacion } from "./tipos";
+import { cargasDe, esFuente, esSeguidor, nombraRed, polosDe, type DefinicionSimbolo, type Primitiva, type Rotacion } from "./tipos";
 import { transformarBornes } from "./transformar";
 import { validarDefinicion } from "./validar";
 
@@ -87,8 +93,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los 32 símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(32);
+  it("tiene los 38 símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(38);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -253,7 +259,7 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     expect(clases).toHaveLength(1);
   });
 
-  it("K en la bobina, S en los dos pulsadores, H en la lámpara; Q, F y M en potencia (T35, D9-A)", () => {
+  it("K en la bobina, S en los dos pulsadores, H en la lámpara; Q, F y M en potencia (T35, D9-A); G y T (T39)", () => {
     expect(SIMBOLOS.filter((s) => s.prefijoEtiqueta !== undefined).map((s) => [s.tipo, s.prefijoEtiqueta])).toEqual([
       ["pulsador.na", "S"],
       ["pulsador.nc", "S"],
@@ -277,6 +283,12 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
       ["mando.final_nc", "S"],
       ["proteccion.fusible", "F"],
       ["senalizacion.bocina", "H"],
+      ["fuente.continua", "G"],
+      ["fuente.variable", "G"],
+      ["fuente.conmutada", "G"],
+      ["transformador.monofasico", "T"],
+      ["transformador.trifasico", "T"],
+      ["transformador.variac", "T"],
     ]);
   });
 
@@ -637,5 +649,63 @@ describe("mando (T36)", () => {
   it("los NC llevan los nombres a la izquierda (el tope a la derecha); los NA, a la derecha", () => {
     for (const s of [SETA, FINAL_NC, TERMICO_NC]) expect(s.ladoNombresBornes, s.tipo).toBe("izquierda");
     for (const s of [SELECTOR, FINAL_NA, TERMICO_NA]) expect(s.ladoNombresBornes, s.tipo).toBe("derecha");
+  });
+});
+
+describe("fuentes propias y trafos (T39, D-B7 A)", () => {
+  type Caso = [DefinicionSimbolo, string, string, readonly (readonly [string, string, string])[], readonly (readonly [string, string])[], Record<string, string>];
+  // [símbolo, subgrupo, prefijo, bornes (nombre, x,y, dirección), cargas, salida (borne → papel)]
+  const CASOS: Caso[] = [
+    [FUENTE_CONTINUA, "alimentacion", "G", [["L+", "-1,2", "abajo"], ["M", "1,2", "abajo"]], [], { "L+": "fase", M: "neutro" }],
+    [FUENTE_VARIABLE, "alimentacion", "G", [["V+", "-1,2", "abajo"], ["V-", "1,2", "abajo"]], [], { "V+": "fase", "V-": "neutro" }],
+    [
+      FUENTE_CONMUTADA,
+      "alimentacion",
+      "G",
+      [["L", "-2,-2", "arriba"], ["N", "0,-2", "arriba"], ["PE", "2,-2", "arriba"], ["+V", "-1,2", "abajo"], ["-V", "1,2", "abajo"]],
+      [["L", "N"]],
+      { "+V": "fase", "-V": "neutro" },
+    ],
+    [TRAFO_MONOFASICO, "transformacion", "T", [["1U1", "-1,-3", "arriba"], ["1U2", "1,-3", "arriba"], ["2U1", "-1,3", "abajo"], ["2U2", "1,3", "abajo"]], [["1U1", "1U2"]], { "2U1": "fase", "2U2": "neutro" }],
+    [
+      TRAFO_TRIFASICO,
+      "transformacion",
+      "T",
+      [["1U", "-2,-3", "arriba"], ["1V", "0,-3", "arriba"], ["1W", "2,-3", "arriba"], ["2U", "-3,3", "abajo"], ["2V", "-1,3", "abajo"], ["2W", "1,3", "abajo"], ["2N", "3,3", "abajo"]],
+      [],
+      { "2U": "fase", "2V": "fase", "2W": "fase", "2N": "neutro" },
+    ],
+    [VARIAC, "transformacion", "T", [["1U1", "-1,-3", "arriba"], ["1U2", "1,-3", "arriba"], ["2U1", "-1,3", "abajo"], ["2U2", "1,3", "abajo"]], [["1U1", "1U2"]], { "2U1": "fase", "2U2": "neutro" }],
+  ];
+
+  it.each(CASOS.map((c) => [c[0].tipo, ...c] as const))("%s: bornes, cargas, salida y papel", (_, s, subgrupo, prefijo, bornes, cargas, salida) => {
+    expect(validarDefinicion(s)).toEqual([]);
+    expect(s.bornes.map((b) => [b.nombre, `${b.x},${b.y}`, b.direccion])).toEqual(bornes);
+    expect(s).toMatchObject({ elemento: "carga", subgrupo, prefijoEtiqueta: prefijo });
+    expect(cargasDe(s)).toEqual(cargas);
+    expect(s.salida).toEqual(salida);
+    // Titular, no fuente (D-B7 A): se numera y no nombra la red con la etiqueta.
+    expect(esFuente(s)).toBe(false);
+    expect(nombraRed(s)).toBe(false);
+    // Bornes en ASCII (D-T39-1 A): se escriben en una etiqueta de red.
+    for (const b of s.bornes) expect(b.nombre).toMatch(/^[A-Z0-9+-]+$/);
+  });
+
+  it("los 6 van al final de SIMBOLOS, en el orden del plan", () => {
+    expect(SIMBOLOS.slice(-6)).toEqual([FUENTE_CONTINUA, FUENTE_VARIABLE, FUENTE_CONMUTADA, TRAFO_MONOFASICO, TRAFO_TRIFASICO, VARIAC]);
+  });
+
+  it("el variac es el trafo mono con la flecha: mismos bornes, cargas y salida, y más trazos", () => {
+    expect(VARIAC.bornes).toEqual(TRAFO_MONOFASICO.bornes);
+    expect(VARIAC.primitivas.length).toBeGreaterThan(TRAFO_MONOFASICO.primitivas.length);
+  });
+
+  it("cargasDe sin `cargas`: bobina y cargas de 2 bornes, sí; motores y contactos, no", () => {
+    expect(cargasDe(LAMPARA)).toEqual([["X1", "X2"]]);
+    expect(cargasDe(LAMPARA)).toBe(cargasDe(LAMPARA));
+    expect(cargasDe(BOBINA_CONTACTOR)).toEqual([["A1", "A2"]]);
+    expect(cargasDe(MOTOR_TRIFASICO)).toEqual([]);
+    expect(cargasDe(PULSADOR_NA)).toEqual([]);
+    expect(cargasDe(FASE)).toEqual([]);
   });
 });

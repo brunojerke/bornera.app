@@ -1487,6 +1487,8 @@ export class AvisosHoja {
         this._bornesR6++;
         // Fase o Neutro con etiqueta; una fuente de varios bornes nombra cada uno (T34, D2-A).
         if (def.elemento === "fuente" && (def.bornes.length > 1 || nombreDeFuente(info))) nombrada = true;
+        // Un borne de salida con etiqueta nombra su red («G1.L+», T39 D-B10), como en `redes()`.
+        else if (def.salida?.[y] && info.e !== "") nombrada = true;
         const e = info.e;
         if (e !== "") {
           if (esBobina(def)) (bobinas ??= new Set()).add(e);

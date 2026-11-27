@@ -37,12 +37,12 @@ const TIPO_NC = "contactor.auxiliar_nc";
 const TIPO_NA = "contactor.auxiliar_na";
 
 export default async function (p, comprobar, { cargar }) {
-  const { buscarSimbolo } = await cargar("/src/core/symbols/biblioteca.ts");
+  const { buscarSimbolo, SIMBOLOS } = await cargar("/src/core/symbols/biblioteca.ts");
   const carpeta = mkdtempSync(join(tmpdir(), "bornera-descargas-"));
   const archivos = mkdtempSync(join(tmpdir(), "bornera-archivos-"));
   await p.descargasEn(carpeta);
   try {
-    await probar(p, comprobar, buscarSimbolo, carpeta, archivos);
+    await probar(p, comprobar, buscarSimbolo, SIMBOLOS.length, carpeta, archivos);
   } finally {
     await p.interceptarSelector(false).catch(() => undefined);
     await p.descargasEn(null).catch(() => undefined);
@@ -50,7 +50,7 @@ export default async function (p, comprobar, { cargar }) {
   }
 }
 
-async function probar(p, comprobar, buscarSimbolo, carpeta, archivos) {
+async function probar(p, comprobar, buscarSimbolo, cantidad, carpeta, archivos) {
   const tecla = ([key, code, vk], mods = 0) => p.tecla(key, code, vk, mods);
   const hojaJSON = () => p.evaluar("JSON.stringify(bornera.editor.documento.hojas)");
   const hoja = () => p.evaluar("JSON.parse(JSON.stringify(bornera.editor.documento.hojas[0]))");
@@ -108,7 +108,7 @@ async function probar(p, comprobar, buscarSimbolo, carpeta, archivos) {
   const textos = lista.map((i) => i.texto);
   const iNA = textos.indexOf("Contacto auxiliar NA");
   const iNC = textos.indexOf("Contacto auxiliar NC");
-  comprobar("la paleta tiene 32 ítems (T36: los de mando)", lista.length === 32, textos.join(", "));
+  comprobar(`la paleta tiene ${cantidad} ítems, uno por símbolo`, lista.length === cantidad, textos.join(", "));
   comprobar("«Contacto auxiliar NC» está justo después de «Contacto auxiliar NA»", iNA >= 0 && iNC === iNA + 1, textos.join(", "));
   await p.captura("paleta");
 

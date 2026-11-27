@@ -921,6 +921,208 @@ export const BOCINA: DefinicionSimbolo = {
   bornes: dosBornes("X1", "X2"),
 };
 
+// ── Fuentes propias y trafos (T39, biblioteca 2) ───────────────────────────
+// Titulares con `salida` (D-B7 A): cada borne de salida da un potencial
+// propio, siempre activo (D-B2 A), de nombre etiqueta + borne («G1.L+»,
+// «T1.2U1»; D-B8, D-B10): dos fuentes no se unen entre sí ni con la red. El +
+// es fase y el − neutro (D-B1 A); en los trafos, 2U2 y 2N son neutro
+// (D-T39-3 A). La entrada L-N (conmutada) y el primario 1U1-1U2 (trafo mono y
+// variac) son cargas; el primario trifásico no, hasta 6b (D-B11 A). PE no
+// tiene papel (D11). El negativo va en ASCII: `V-`, `-V` (D-T39-1 A).
+
+/** Signo de continua (02-02-04): una raya llena y debajo tres trazos, centrado en (0, y). */
+function signoContinua(y: number): Linea[] {
+  return [linea(-0.6, y, 0.6, y), linea(-0.6, y + 0.3, -0.3, y + 0.3), linea(-0.15, y + 0.3, 0.15, y + 0.3), linea(0.3, y + 0.3, 0.6, y + 0.3)];
+}
+
+/** Flecha de regulación (02-03-01): de (x1, y1) a (x2, y2), con la punta en (x2, y2). */
+function flecha(x1: number, y1: number, x2: number, y2: number): Linea[] {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  const punta = (d: number) => linea(x2, y2, x2 - 0.45 * Math.cos(a + d), y2 - 0.45 * Math.sin(a + d));
+  return [linea(x1, y1, x2, y2), punta(0.45), punta(-0.45)];
+}
+
+/** Caja de la fuente de continua y la variable: 4×4, cuerpo arriba y los dos bornes abajo, en x −1 y 1. */
+const CUERPO_CONTINUA: Primitiva[] = [{ forma: "rectangulo", x: -1.6, y: -1.8, ancho: 3.2, alto: 2.8 }, linea(-1, 1, -1, 2), linea(1, 1, 1, 2)];
+
+/** Los dos bornes de salida de abajo de una fuente de continua, en x −1 y 1. */
+function bornesSalidaContinua(mas: string, menos: string): DefinicionSimbolo["bornes"] {
+  return [
+    { nombre: mas, x: -1, y: 2, direccion: "abajo" },
+    { nombre: menos, x: 1, y: 2, direccion: "abajo" },
+  ];
+}
+
+/** Fuente de continua 12/24 V: L+ y M (EN 60445). La tensión va dibujada (`params` sin editor). */
+export const FUENTE_CONTINUA: DefinicionSimbolo = {
+  tipo: "fuente.continua",
+  nombre: "Fuente de continua 12/24 V",
+  subgrupo: "alimentacion",
+  elemento: "carga",
+  prefijoEtiqueta: "G",
+  tamano: { ancho: 4, alto: 4 },
+  primitivas: [...CUERPO_CONTINUA, ...signoContinua(-0.9), { forma: "texto", x: 0, y: 0.45, texto: "12/24 V", alto: 0.5, alineacion: "centro" }],
+  ladoNombresBornes: "derecha",
+  bornes: bornesSalidaContinua("L+", "M"),
+  cargas: [],
+  salida: { "L+": "fase", M: "neutro" },
+};
+
+/** Fuente variable: V+ y V-, con la flecha de regulación cruzando el cuerpo. */
+export const FUENTE_VARIABLE: DefinicionSimbolo = {
+  tipo: "fuente.variable",
+  nombre: "Fuente variable",
+  subgrupo: "alimentacion",
+  elemento: "carga",
+  prefijoEtiqueta: "G",
+  tamano: { ancho: 4, alto: 4 },
+  primitivas: [...CUERPO_CONTINUA, ...signoContinua(-0.55), ...flecha(-1.3, 0.7, 1.3, -1.5)],
+  ladoNombresBornes: "derecha",
+  bornes: bornesSalidaContinua("V+", "V-"),
+  cargas: [],
+  salida: { "V+": "fase", "V-": "neutro" },
+};
+
+/**
+ * Fuente conmutada de riel (tipo DR-120-24): L, N y PE arriba; +V y -V abajo
+ * (un borne de cada uno; la real trae dos puenteados). Convertidor (06-14-03):
+ * caja con la diagonal, «~» arriba a la izquierda y continua abajo a la derecha.
+ */
+export const FUENTE_CONMUTADA: DefinicionSimbolo = {
+  tipo: "fuente.conmutada",
+  nombre: "Fuente conmutada (riel)",
+  subgrupo: "alimentacion",
+  elemento: "carga",
+  prefijoEtiqueta: "G",
+  tamano: { ancho: 6, alto: 4 },
+  primitivas: [
+    { forma: "rectangulo", x: -2.6, y: -1.2, ancho: 5.2, alto: 2.4 },
+    linea(-2.6, 1.2, 2.6, -1.2),
+    { forma: "texto", x: -1.5, y: -0.45, texto: "~", alto: 0.8, alineacion: "centro" },
+    ...signoContinua(0.3).map((l) => linea(l.x1 + 1.5, l.y1, l.x2 + 1.5, l.y2)),
+    linea(-2, -2, -2, -1.2),
+    linea(0, -2, 0, -1.2),
+    linea(2, -2, 2, -1.2),
+    linea(-1, 1.2, -1, 2),
+    linea(1, 1.2, 1, 2),
+  ],
+  ladoNombresBornes: "derecha",
+  bornes: [
+    { nombre: "L", x: -2, y: -2, direccion: "arriba" },
+    { nombre: "N", x: 0, y: -2, direccion: "arriba" },
+    { nombre: "PE", x: 2, y: -2, direccion: "arriba" },
+    ...bornesSalidaContinua("+V", "-V"),
+  ],
+  cargas: [["L", "N"]],
+  salida: { "+V": "fase", "-V": "neutro" },
+};
+
+/** Radio y centros de los dos círculos del trafo mono y del variac (06-09-01, forma 1). */
+const R_TRAFO = 1.1;
+const CY_TRAFO = 0.7;
+/** Y donde una vertical en x = ±1 toca el círculo de arriba (el de abajo, con el signo cambiado). */
+const Y_TOQUE_TRAFO = CY_TRAFO + Math.sqrt(R_TRAFO * R_TRAFO - 1);
+
+/** Trafo de dos devanados, 4×6: dos círculos y los bornes 1U1, 1U2 arriba y 2U1, 2U2 abajo, en x −1 y 1. */
+const CUERPO_TRAFO: Primitiva[] = [
+  { forma: "circulo", cx: 0, cy: -CY_TRAFO, r: R_TRAFO },
+  { forma: "circulo", cx: 0, cy: CY_TRAFO, r: R_TRAFO },
+  linea(-1, -3, -1, -Y_TOQUE_TRAFO),
+  linea(1, -3, 1, -Y_TOQUE_TRAFO),
+  linea(-1, Y_TOQUE_TRAFO, -1, 3),
+  linea(1, Y_TOQUE_TRAFO, 1, 3),
+];
+
+const BORNES_TRAFO: DefinicionSimbolo["bornes"] = [
+  { nombre: "1U1", x: -1, y: -3, direccion: "arriba" },
+  { nombre: "1U2", x: 1, y: -3, direccion: "arriba" },
+  { nombre: "2U1", x: -1, y: 3, direccion: "abajo" },
+  { nombre: "2U2", x: 1, y: 3, direccion: "abajo" },
+];
+
+/** Transformador monofásico: primario 1U1-1U2 (carga), secundario 2U1-2U2 (salida). */
+export const TRAFO_MONOFASICO: DefinicionSimbolo = {
+  tipo: "transformador.monofasico",
+  nombre: "Transformador monofásico",
+  subgrupo: "transformacion",
+  elemento: "carga",
+  prefijoEtiqueta: "T",
+  tamano: { ancho: 4, alto: 6 },
+  primitivas: CUERPO_TRAFO,
+  ladoNombresBornes: "derecha",
+  bornes: BORNES_TRAFO,
+  cargas: [["1U1", "1U2"]],
+  salida: { "2U1": "fase", "2U2": "neutro" },
+};
+
+/** Variac: el trafo mono con la flecha de regulación cruzando los dos círculos. */
+export const VARIAC: DefinicionSimbolo = {
+  tipo: "transformador.variac",
+  nombre: "Variac",
+  subgrupo: "transformacion",
+  elemento: "carga",
+  prefijoEtiqueta: "T",
+  tamano: { ancho: 4, alto: 6 },
+  primitivas: [...CUERPO_TRAFO, ...flecha(-1.7, 1.9, 1.7, -1.9)],
+  ladoNombresBornes: "derecha",
+  bornes: BORNES_TRAFO,
+  cargas: [["1U1", "1U2"]],
+  salida: { "2U1": "fase", "2U2": "neutro" },
+};
+
+/** Radio y centros de los círculos del trafo trifásico. */
+const R_TRAFO_3 = 1.3;
+const CY_TRAFO_3 = 0.9;
+
+/** Punto del círculo de centro (0, cy) a `grados` de +x (y crece hacia abajo, así que −90 es arriba). */
+function enCirculo(cy: number, grados: number): [number, number] {
+  const a = (grados * Math.PI) / 180;
+  return [R_TRAFO_3 * Math.cos(a), cy + R_TRAFO_3 * Math.sin(a)];
+}
+
+/**
+ * Transformador trifásico, 8×6: primario 1U, 1V y 1W arriba (x −2, 0, 2), sin
+ * carga hasta 6b (D-B11 A); secundario 2U, 2V, 2W y 2N abajo (x −3, −1, 1, 3).
+ * Los de los lados bajan un poco y van en diagonal al círculo.
+ */
+export const TRAFO_TRIFASICO: DefinicionSimbolo = {
+  tipo: "transformador.trifasico",
+  nombre: "Transformador trifásico",
+  subgrupo: "transformacion",
+  elemento: "carga",
+  prefijoEtiqueta: "T",
+  tamano: { ancho: 8, alto: 6 },
+  primitivas: (() => {
+    const arriba = -CY_TRAFO_3;
+    const [xa, ya] = enCirculo(arriba, -135);
+    const [xb, yb] = enCirculo(CY_TRAFO_3, 160);
+    const yMedio = CY_TRAFO_3 + Math.sqrt(R_TRAFO_3 * R_TRAFO_3 - 1);
+    return [
+      { forma: "circulo", cx: 0, cy: arriba, r: R_TRAFO_3 },
+      { forma: "circulo", cx: 0, cy: CY_TRAFO_3, r: R_TRAFO_3 },
+      { forma: "texto", x: 0, y: arriba, texto: "3~", alto: 0.6, alineacion: "centro" },
+      linea(-2, -3, -2, -2.4),
+      linea(-2, -2.4, xa, ya),
+      linea(0, -3, 0, arriba - R_TRAFO_3),
+      linea(2, -3, 2, -2.4),
+      linea(2, -2.4, -xa, ya),
+      linea(-3, 3, -3, 2.4),
+      linea(-3, 2.4, xb, yb),
+      linea(-1, yMedio, -1, 3),
+      linea(1, yMedio, 1, 3),
+      linea(3, 3, 3, 2.4),
+      linea(3, 2.4, -xb, yb),
+    ];
+  })(),
+  ladoNombresBornes: "derecha",
+  bornes: [
+    ...POLOS_X.map((x, i) => ({ nombre: `1${"UVW"[i]}`, x, y: -3, direccion: "arriba" as const })),
+    ...POLOS_4.map((x, i) => ({ nombre: ["2U", "2V", "2W", "2N"][i]!, x, y: 3, direccion: "abajo" as const })),
+  ],
+  cargas: [],
+  salida: { "2U": "fase", "2V": "fase", "2W": "fase", "2N": "neutro" },
+};
+
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   FASE,
@@ -955,6 +1157,12 @@ export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   TERMICO_NA,
   FUSIBLE,
   BOCINA,
+  FUENTE_CONTINUA,
+  FUENTE_VARIABLE,
+  FUENTE_CONMUTADA,
+  TRAFO_MONOFASICO,
+  TRAFO_TRIFASICO,
+  VARIAC,
 ];
 
 const POR_TIPO = new Map(SIMBOLOS.map((s) => [s.tipo, s]));

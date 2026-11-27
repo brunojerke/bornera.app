@@ -12,7 +12,7 @@ const items = (p) =>
 
 /**
  * Centro del ítem de la paleta con ese texto, desplazado a la vista: desde T35
- * la paleta tiene 32 ítems (T36) y a 1024×600 los de abajo quedan fuera.
+ * la paleta tiene 38 ítems (T39) y a 1024×600 los de abajo quedan fuera.
  */
 const itemVisible = (p, texto) =>
   p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === ${JSON.stringify(texto)});
@@ -24,9 +24,10 @@ const DE_T34 = ["Fase (L)", "Neutro (N)", "Fuente trifásica", "Pulsador NA", "P
 
 const componentes = (p) => p.evaluar("bornera.editor.documento.hojas[0].componentes.map(c => ({ tipo: c.tipo, x: c.x, y: c.y, etiqueta: c.etiqueta }))");
 
-export default async function (p, comprobar) {
+export default async function (p, comprobar, { cargar }) {
+  const { SIMBOLOS } = await cargar("/src/core/symbols/index.ts");
   const lista = await items(p);
-  comprobar("la paleta muestra los 32 símbolos (T36)", lista.length === 32, lista.map((i) => i.texto).join(", "));
+  comprobar(`la paleta muestra los ${SIMBOLOS.length} símbolos (38 desde T39)`, lista.length === SIMBOLOS.length && SIMBOLOS.length === 38, lista.map((i) => i.texto).join(", "));
   comprobar("están los 10 de T34", DE_T34.every((t) => lista.some((i) => i.texto === t)), lista.map((i) => i.texto).join(", "));
   const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
 

@@ -289,3 +289,39 @@ describe("validarDefinicion: polos (T34)", () => {
     expect(validarDefinicion({ ...proteccion, polos: undefined })).toEqual(["Una protección de 6 bornes necesita polos."]);
   });
 });
+
+describe("validarDefinicion: cargas y salida (T39, D-B7 A)", () => {
+  const FUENTE: DefinicionSimbolo = {
+    ...conBornes([
+      { nombre: "L", x: 0, y: -2, direccion: "arriba" },
+      { nombre: "N", x: 1, y: -2, direccion: "arriba" },
+      { nombre: "L+", x: 0, y: 2, direccion: "abajo" },
+      { nombre: "M", x: 1, y: 2, direccion: "abajo" },
+    ]),
+    prefijoEtiqueta: "G",
+    cargas: [["L", "N"]],
+    salida: { "L+": "fase", M: "neutro" },
+  };
+
+  it("acepta una fuente con entrada L-N y salida L+ y M", () => {
+    expect(validarDefinicion(FUENTE)).toEqual([]);
+  });
+
+  it("rechaza cargas con bornes repetidos o que no existen", () => {
+    expect(validarDefinicion({ ...FUENTE, cargas: [["L", "L"]] })).toEqual(["La carga L-L tiene que unir dos bornes distintos.", 'Borne "L" en dos cargas.']);
+    expect(validarDefinicion({ ...FUENTE, cargas: [["L", "X"]] })).toEqual(['La carga L-X nombra un borne que no existe: "X".']);
+  });
+
+  it("rechaza una salida vacía, con un borne que no existe, en una carga o con otro papel", () => {
+    expect(validarDefinicion({ ...FUENTE, salida: {} })).toEqual(["La salida está vacía."]);
+    expect(validarDefinicion({ ...FUENTE, salida: { X: "fase" } })).toEqual(['La salida nombra un borne que no existe: "X".']);
+    expect(validarDefinicion({ ...FUENTE, salida: { L: "fase" } })).toEqual(['Borne "L" de salida en una carga o un polo.']);
+    expect(validarDefinicion({ ...FUENTE, salida: { M: "tierra" as never } })).toEqual(['Borne "M" de salida con papel "tierra": fase o neutro.']);
+  });
+
+  it("la salida pide un titular con prefijo: una fuente no la lleva", () => {
+    const { prefijoEtiqueta: _, ...sinPrefijo } = FUENTE;
+    expect(validarDefinicion({ ...sinPrefijo, elemento: "fuente" } as DefinicionSimbolo)).toEqual(["Solo un titular (con prefijo) lleva salida."]);
+    expect(validarDefinicion(sinPrefijo as DefinicionSimbolo)).toEqual(["Falta el prefijo de etiqueta: el símbolo se numera al colocarlo."]);
+  });
+});

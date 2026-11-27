@@ -20,6 +20,32 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Fuentes propias y trafos (biblioteca 2, T39) — 2026-11-27
+
+**Criterio escrito antes de medir** (`docs/plan-T39.md`, «Medición»): ABBA en WebView2 (`probar-webview2.mjs --fase6 --base-fase6`, 3 bloques, fría + caliente) contra `8a1a695` (mismo código que `5f8a529`, solo docs encima), en una sesión. B1–B16 con D6b-C; F por tope; S1–S6 por tope y no regresión (S1 y S4 solo tope); **P1 solo por tope (D-B13):** mediana ≤ 9,1, máx. ≤ 10,1; P2: A ≤ B + máx(1 ms, 10 %). **`netlist-node` (ajuste 2):** no regresión del máximo, A ≤ B + máx(1 ms, 10 %); el tope de 5 ms solo informa. Si una fila falla, se frena sin volver a medir.
+
+**Cómo se midió:** enchufada (CA), «Mejor rendimiento» (`ded574b5…`), sin Opera, Perplexity ni otra Bornera (verificado antes de medir). A `0.1.6-t39.0` (T39 sin commit, `tauri build --no-bundle`, versión solo en `package.json`, revertida); B `0.1.6-t39b.0`, de un worktree temporal en `8a1a695` con `npm ci` y `svelte-kit sync` (borrado al cerrar). Edge 158. **Primer intento cortado:** en la apertura 6 (B) una corrida pasó los 240 s y el script se detuvo («no terminó a tiempo»), sin ninguna fila juzgada; no quedó ninguna Bornera abierta. Se repitió el ABBA entero una vez: las 12 aperturas terminaron (38–41 s).
+
+**Resultado: pasa.** B1–B16 «nada sube» (B5 2.º baja), F, S1–S6, P1 y P2 pasan; `netlist-node` pasa la no regresión.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| P1 | máx. (38 miniaturas) | 9,1 (máx. 10,1) | **0,5** | 0,6 | 0,4 | solo tope (D-B13) |
+| P2 | una por apertura | no regresión | **143,3** | 155,0 | 141,6 | pasa (≤ 155,8) |
+| S6 | máx. | 54,5 (máx. 60,0) | 18,3 | 20,2 | 18,0 | pasa (≤ 19,7) |
+| S1 | máx. | 54,5 | 18,0 | 21,4 | 19,5 | informa (R-A) |
+| S2 | mediana / máx. | 1,7 / 5,3 | 0,2 / 0,4 | 0,3 / 0,5 | 0,2 / 0,3 | pasa |
+| S3 | máx. | 16,7 | 3,0 | 3,2 | 2,9 | pasa (≤ 3,9) |
+| S4 | cuadro / gesto | 6,0 / 18,2 | 2,0 / 2,3 | 2,2 / 2,5 | 2,1 / 2,4 | informa (R-A) |
+| S5 | máx. | 100,0 | 47,3 | 48,3 | 47,0 | pasa (≤ 51,8) |
+
+- **P1:** calientes 0,5 · 0,5 · 0,4 · 0,4 · 0,4 · 0,6 ms; las 38 miniaturas siguen lejos del tope de la netbook (50 ms).
+- **P2:** A 155,0 · 145,0 · 142,0 · 140,0 · 144,5 · 138,6 ms; los 6 canvas nuevos se montan después del primer cuadro.
+- S1, desglose (mediana): R4 0,8 · netlist 3,2 · iniciar 1,3 · cuadro 14,2. S6: R4 0,8 · netlist 4,4 · iniciar 1,7 · cuadro 12,5.
+- **B2 1.º (decide): 10,6 → 9,9, igual. B2 2.º (informa): 10,9 → 10,3, igual.** B10 22,4 → 22,3.
+- F1 2,9–3,2 ms (≤ 9); F2 y F3 ≤ 66,9 ms (≤ 1 s). Medianas de las calientes: F1 2,7 · F2 41,6 · F3 52,1.
+- **`netlist-node`** (PC, 3 procesos × 5 vueltas, orden A B B A): máx. de `armarNetlist` A 7,6 y 5,4 ms, B 7,1 y 5,3 ms; A 7,6 ≤ B 7,1 + 1 = 8,1: **pasa**. Medianas A 4,1 / 4,5, B 4,8 / 4,3. El tope de 5 ms (informa) no se cumple, tampoco en B.
+
 ## Netbook y PC el mismo día (fase 6, C3) — 2026-11-27
 
 **Criterio escrito antes de medir** (`docs/plan-fase6.md` §4 y §5; hoja `docs/netbook-fase6.md`): `.msi` de `v0.1.6-alpha.1` (tag sobre `f2e1e28`) en las dos máquinas, «Probar la fase 6», 3 aperturas × (fría + caliente). S2–S6 y P1: mediana de las 3 calientes ≤ tope y máx. ≤ tope + máx(1 ms, 10 %); netbook con sus topes, PC con los de C1. S1 informa (contra 300 / 54,5). F1–F3 por su tope. B1–B16 contra los topes de la 3b: por fila, la mediana de las calientes; las corridas sueltas que fallan informan; B10 informa (regla de C3 de la fase 5). P2 informa. Las frías informan (rango de las calientes + 1 ms). K no se recalcula (K1 = 3, K2 = 5,5).

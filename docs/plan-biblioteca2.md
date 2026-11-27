@@ -16,6 +16,8 @@ Una por sesión; cierran con `bornera-cierre`, humo `tNN-*.mjs` y test de bornes
 | T40 | 11: diferencial 3P (polos 1-2, 3-4, 5-6, siempre cerrado), 3 sensores, presostato y termostato NA/NC (copia del final), EV mono y bi, motor DC. **Netlist:** sensor = carga BN-BU + polo NA BN-BK (`cargas` de T39); EV bi = dos cargas; motor DC = carga de 2 bornes. **Motor:** posición de la EV bi (la última con tensión; persiste entre pulsar y soltar) y aviso «Y1 con las dos bobinas»; sensor sin cambios (sección 3). **Dibujo (D-B12):** EV accionada; `primitivasAccionado` también en EV. R5 suma B e Y. Subgrupos `sensores` y `actuadores`. ABBA contra `5f8a529` | xhigh |
 | C1 | Cierre: circuito de la sección 0 a mano y base `biblioteca2`; ABBA final contra `5f8a529`; `arquitectura.md`, `ideas.md` (Herramientas, regulador de continua; sistemas y secundario condicionado en 6b) y Obsidian. Sin `.msi`: la netbook mide con 6b | alto |
 
+**Avance:** T39 hecha (2026-11-27; `docs/plan-T39.md`, decisiones D-T39-1 a D-T39-3 A y ajuste 4 B; ABBA contra `8a1a695` pasa). Siguen T40 y C1.
+
 ## 2. Bornes, prefijos y paleta
 - Continua `L+` `M` (EN 60445); variable `V+` `V−`; conmutada `L N PE` / `+V −V` (un borne de cada uno; la real trae dos puenteados); trafo mono y variac `1U1 1U2` / `2U1 2U2`; trifásico `1U 1V 1W` / `2U 2V 2W 2N`; sensores `BN BU BK`; EV mono `A1 A2`, bi `A1 A2` (14) y `B1 B2` (12).
 - Prefijos: G continua, variable y conmutada; T trafos y variac; Q diferencial; B sensores, presostato y termostato; Y EV; M motor DC.

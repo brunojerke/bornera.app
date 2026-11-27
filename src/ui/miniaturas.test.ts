@@ -6,7 +6,7 @@ import { Miniaturas } from "./miniaturas";
 beforeEach(() => vi.stubGlobal("Path2D", Path2DFalso));
 afterEach(() => vi.unstubAllGlobals());
 
-/** Las 32 registradas, con un entorno falso de tema y dpr que se puede cambiar. */
+/** Las 38 registradas, con un entorno falso de tema y dpr que se puede cambiar. */
 function armar() {
   const entorno = { color: "#111", dpr: 1 };
   const contextos = new Map<HTMLCanvasElement, ContextoFalso>();
@@ -29,14 +29,14 @@ function armar() {
 describe("Miniaturas (D29-A)", () => {
   it("antes del arranque no dibuja nada al registrar", () => {
     const { m, dibujos } = armar();
-    expect(m.cantidad).toBe(32);
+    expect(m.cantidad).toBe(38);
     expect(m.arrancada).toBe(false);
     expect(dibujos().every((n) => n === 0)).toBe(true);
   });
 
-  it("al arrancar dibuja las 32 una vez; sin tema ni dpr nuevo no redibuja", () => {
+  it("al arrancar dibuja las 38 una vez; sin tema ni dpr nuevo no redibuja", () => {
     const { m, dibujos } = armar();
-    expect(m.actualizar()).toBe(32);
+    expect(m.actualizar()).toBe(38);
     const primera = dibujos();
     expect(primera.every((n) => n > 0)).toBe(true);
     expect(m.actualizar()).toBe(0);
@@ -47,18 +47,18 @@ describe("Miniaturas (D29-A)", () => {
     const { m, entorno, contextos, canvases } = armar();
     m.actualizar();
     entorno.color = "#eee";
-    expect(m.actualizar()).toBe(32);
+    expect(m.actualizar()).toBe(38);
     expect(contextos.get(canvases[0]!)!.llamadas).toContainEqual(["=strokeStyle", "#eee"]);
     entorno.dpr = 2;
-    expect(m.actualizar()).toBe(32);
+    expect(m.actualizar()).toBe(38);
     expect(contextos.get(canvases[0]!)!.canvas.width).toBe(72);
   });
 
-  it("rehacer (P1) dibuja las 32 de cero aunque nada cambie", () => {
+  it("rehacer (P1) dibuja las 38 de cero aunque nada cambie", () => {
     const { m, dibujos } = armar();
     m.actualizar();
     const antes = dibujos();
-    expect(m.rehacer()).toBe(32);
+    expect(m.rehacer()).toBe(38);
     expect(dibujos().every((n, i) => n > antes[i]!)).toBe(true);
   });
 
@@ -66,11 +66,11 @@ describe("Miniaturas (D29-A)", () => {
     const { m, canvases, contextos } = armar();
     m.actualizar();
     m.quitar(canvases[0]!);
-    expect(m.cantidad).toBe(31);
+    expect(m.cantidad).toBe(37);
     const nuevo = {} as HTMLCanvasElement;
     contextos.set(nuevo, contextoFalso());
     m.registrar(nuevo, SIMBOLOS[0]!);
     expect(llamadasA(contextos.get(nuevo)!.llamadas, "setTransform").length).toBeGreaterThan(0);
-    expect(m.rehacer()).toBe(32);
+    expect(m.rehacer()).toBe(38);
   });
 });

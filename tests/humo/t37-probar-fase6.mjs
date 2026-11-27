@@ -34,7 +34,8 @@ function celdas(texto, letra) {
     .map((l) => l.split("|").slice(1, -1).map((c) => c.trim()));
 }
 
-export default async function (p, comprobar) {
+export default async function (p, comprobar, { cargar }) {
+  const { SIMBOLOS } = await cargar("/src/core/symbols/index.ts");
   const documento = () => p.evaluar("JSON.parse(JSON.stringify(bornera.editor.documento))");
   const pasos = () => p.evaluar("bornera.editor.historial.hechos.length");
   const titulo = () => p.evaluar("document.title");
@@ -84,7 +85,7 @@ export default async function (p, comprobar) {
   const s6 = s.find((c) => c[0] === "S6") ?? [];
   comprobar("S6 con el tope de la netbook (≤ 300 ms, máx.), lo medido («X / Y ms») y «pasa» o «no pasa»", s6[3] === "≤ 300 ms (máx.)" && /^\d+,\d \/ \d+,\d ms$/.test(s6[4] ?? "") && ["pasa", "no pasa"].includes(s6[5]), JSON.stringify(s6));
   const p1 = pp.find((c) => c[0] === "P1") ?? [];
-  comprobar("P1 (T38): las 32 miniaturas, tope de la netbook (≤ 50 ms, máx.), «X / Y ms», sin K", p1[1] === "Dibujar las 32 miniaturas de la paleta de cero" && p1[3] === "≤ 50 ms (máx.)" && /^\d+,\d \/ \d+,\d ms$/.test(p1[4] ?? "") && ["pasa", "no pasa"].includes(p1[5]) && p1[6] === "—", JSON.stringify(p1));
+  comprobar(`P1 (T38): las ${SIMBOLOS.length} miniaturas, tope de la netbook (≤ 50 ms, máx.), «X / Y ms», sin K`, p1[1] === `Dibujar las ${SIMBOLOS.length} miniaturas de la paleta de cero` && p1[3] === "≤ 50 ms (máx.)" && /^\d+,\d \/ \d+,\d ms$/.test(p1[4] ?? "") && ["pasa", "no pasa"].includes(p1[5]) && p1[6] === "—", JSON.stringify(p1));
   const p2 = pp.find((c) => c[0] === "P2") ?? [];
   const p2ms = Number((/^([\d,]+) ms$/.exec(p2[4] ?? "")?.[1] ?? "").replace(",", "."));
   comprobar("P2 trae los ms de la marca de arranque y «se anota»", p2[5] === "se anota" && Math.abs(p2ms - (marca[0] ?? NaN)) <= 0.05, `${p2[4]} contra ${marca[0]}`);

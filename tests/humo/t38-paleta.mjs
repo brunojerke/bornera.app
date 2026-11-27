@@ -2,16 +2,16 @@
 // (docs/plan-T38.md), en `npm run dev` a 1024×600.
 //
 // Comprueba:
-//  - las 32 miniaturas, cada una con su canvas dibujado y el nombre en
+//  - las miniaturas, una por símbolo (38 desde T39), cada una con su canvas dibujado y el nombre en
 //    `title`, en `aria-label` y como texto (ajuste 5);
 //  - la marca de las miniaturas, una sola vez y después de la de arranque
 //    (fase 6 §4: no demoran el primer cuadro); desde C1 también la de los
 //    canvas montados, entre las dos (montarlos antes alargaba P2);
-//  - plegar y desplegar un subgrupo, y cambiar el tema, dejan las 32
+//  - plegar y desplegar un subgrupo, y cambiar el tema, dejan todas
 //    dibujadas (C1, ajuste 2); si plegar desmontara el canvas, se redibuja;
 //  - sin scroll horizontal, también con una barra de scroll de 17 px (la de
 //    WebView2; headless puede no tenerla) (ajuste 1);
-//  - Mando › Alimentación … Potencia › Fuentes, en ese orden;
+//  - Mando › Alimentación … Potencia › Transformación (T39), en ese orden;
 //  - se llega a la Lámpara con scroll y con plegado, y se coloca;
 //  - plegar Mando deja ver Potencia; el Motor trifásico se coloca arrastrando;
 //  - «motor» despliega los dos motores y el guardamotor aunque Potencia esté
@@ -41,6 +41,7 @@ const ORDEN = [
   "Potencia › Maniobra",
   "Potencia › Cargas",
   "Potencia › Fuentes",
+  "Potencia › Transformación",
 ];
 
 const info = (texto) => console.log(`  ·   ${texto}`);
@@ -83,7 +84,7 @@ export default async function (p, comprobar, { cargar }) {
     let tinta = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) tinta++;
     return { texto: e.textContent.trim(), titulo: e.title, etiqueta: e.getAttribute("aria-label"), ancho: c.width, alto: c.height, tinta }; })`);
   const nombres = SIMBOLOS.map((s) => s.nombre);
-  comprobar("la paleta tiene 32 ítems, uno por símbolo", items.length === 32 && nombres.every((n) => items.some((i) => i.texto === n)), items.map((i) => i.texto).join(", "));
+  comprobar(`la paleta tiene ${SIMBOLOS.length} ítems, uno por símbolo`, items.length === SIMBOLOS.length && nombres.every((n) => items.some((i) => i.texto === n)), items.map((i) => i.texto).join(", "));
   comprobar(
     "cada ítem lleva el nombre en title, en aria-label y como texto (ajuste 5)",
     items.every((i) => i.titulo === i.texto && i.etiqueta === i.texto),
@@ -124,7 +125,7 @@ export default async function (p, comprobar, { cargar }) {
   await plegar("Entradas");
   await plegar("Entradas");
   const trasPlegar = await dibujadas();
-  comprobar("plegar y desplegar Entradas deja las 32 dibujadas", trasPlegar.length === 32 && enBlanco(trasPlegar).length === 0, JSON.stringify(enBlanco(trasPlegar)));
+  comprobar(`plegar y desplegar Entradas deja las ${SIMBOLOS.length} dibujadas`, trasPlegar.length === SIMBOLOS.length && enBlanco(trasPlegar).length === 0, JSON.stringify(enBlanco(trasPlegar)));
   const desmontadas = trasPlegar.filter((i) => !i.mismo).map((i) => i.nombre);
   info(desmontadas.length === 0 ? "plegar no desmonta los canvas (el <details> conserva el DOM)" : `plegar desmontó ${desmontadas.length} canvas y se redibujaron: ${desmontadas.join(", ")}`);
   const porTema = {};
@@ -133,7 +134,7 @@ export default async function (p, comprobar, { cargar }) {
       await p.cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: tema }] });
       await esperar(150);
       porTema[tema] = await dibujadas();
-      comprobar(`en ${tema === "light" ? "claro" : "oscuro"}, las 32 siguen dibujadas`, porTema[tema].length === 32 && enBlanco(porTema[tema]).length === 0, JSON.stringify(enBlanco(porTema[tema])));
+      comprobar(`en ${tema === "light" ? "claro" : "oscuro"}, las ${SIMBOLOS.length} siguen dibujadas`, porTema[tema].length === SIMBOLOS.length && enBlanco(porTema[tema]).length === 0, JSON.stringify(enBlanco(porTema[tema])));
     }
     comprobar(
       "al pasar a oscuro se redibujan con el trazo del tema (más claro)",
@@ -146,7 +147,7 @@ export default async function (p, comprobar, { cargar }) {
     await esperar(150);
   }
   const deVuelta = await dibujadas();
-  comprobar("al volver al tema de la máquina, las 32 siguen dibujadas", deVuelta.length === 32 && enBlanco(deVuelta).length === 0, JSON.stringify(enBlanco(deVuelta)));
+  comprobar(`al volver al tema de la máquina, las ${SIMBOLOS.length} siguen dibujadas`, deVuelta.length === SIMBOLOS.length && enBlanco(deVuelta).length === 0, JSON.stringify(enBlanco(deVuelta)));
 
   // ── 2. Ancho: sin scroll horizontal, también con la barra de WebView2 ──
   const ancho = await p.evaluar(`(() => { const l = document.querySelector(".lista"), cs = getComputedStyle(l);
@@ -212,7 +213,7 @@ export default async function (p, comprobar, { cargar }) {
     JSON.stringify(encontrados),
   );
   comprobar("Mando no se ve buscando «motor»", (await resumen("Mando"))?.visible === false);
-  await buscar("transformador");
+  await buscar("osciloscopio");
   comprobar("sin coincidencias, avisa", (await p.evaluar(`document.querySelector(".vacio")?.textContent.trim() ?? ""`)) === "Ningún componente coincide.");
   await buscar("");
   comprobar("al borrar la búsqueda, Potencia vuelve a quedar plegada", (await resumen("Potencia"))?.abierto === false && (await resumen("Mando"))?.abierto === true);

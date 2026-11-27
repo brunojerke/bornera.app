@@ -12,11 +12,18 @@
 //   En una fuente de varios bornes (T34, la trifásica), cada borne da el suyo:
 //   papel del borne (tabla por tipo y borne, D3-A) más su nombre; la etiqueta
 //   no cuenta (D1-A). Su L1 es la misma red que una Fase «L1».
+// - Salida propia (T39; D-B2, D-B8, D-B10): fuentes de continua, conmutada,
+//   trafos y variac. Cada borne de `salida` da papel del borne más etiqueta +
+//   borne («G1.L+», «T1.2U1»): dos fuentes no se unen entre sí ni con la red,
+//   y una Fase «T1.2U1» es la misma red que esa salida (D-T39-2 A). Siempre
+//   activa: no depende de la entrada (hasta 6b). Sin etiqueta no da
+//   potencial (R3 avisa; ajuste 4 B de T39: entra igual a Simular).
 // - Corto por cables (D10-A): una red con dos potenciales o más. Acá solo se
 //   anota (`enCorto`); el motor lo ve en reposo, se detiene y avisa (T30).
 // - Contactos (NA o NC, con su accionamiento), uno por polo (T34: los 3 de
 //   un contactor principal, con la etiqueta y el accionamiento del símbolo), y
-//   cargas (bobina, lámpara, bocina), cada uno con la red de sus dos bornes.
+//   cargas (bobina, lámpara, bocina; T39: los pares de `cargas`, como la
+//   entrada L-N de la conmutada), cada uno con la red de sus dos bornes.
 //   Las protecciones y el seccionador (T36, D17-A) son contactos NA sin
 //   accionamiento (`null`), un polo por par: el motor los da cerrados (6b les
 //   suma abierta y disparada). Un símbolo desconocido no conduce ni es carga;
@@ -26,7 +33,7 @@
 //
 // Solo la hoja que se recibe (la app muestra la primera). Sin DOM.
 
-import { buscarSimbolo, polosDe, type Accionamiento } from "../symbols";
+import { buscarSimbolo, cargasDe, polosDe, SIMBOLOS, type Accionamiento, type DefinicionSimbolo } from "../symbols";
 import type { Hoja } from "../model/documento";
 import { normalizarEtiqueta } from "../model/etiquetas";
 import { redes, type BorneRed } from "../model/redes";
@@ -51,6 +58,9 @@ const PAPEL_POR_BORNE: Readonly<Record<string, Readonly<Record<string, Papel>>>>
 };
 // Las claves de borne de esta tabla ya están normalizadas (mayúsculas, sin
 // espacios): el nombre del borne es el de la red tal cual, sin normalizar.
+
+/** Los símbolos con salida propia (T39), por tipo: armado una vez. */
+const CON_SALIDA: ReadonlyMap<string, DefinicionSimbolo> = new Map(SIMBOLOS.filter((d) => d.salida !== undefined).map((d) => [d.tipo, d]));
 
 /** Un potencial: papel y nombre de red (etiqueta normalizada, no vacía). */
 export interface Potencial {
@@ -183,7 +193,19 @@ export function armarNetlist(hoja: Hoja): Netlist {
   for (const c of hoja.componentes) {
     const papel = PAPEL[c.tipo];
     const porBorne = papel ? undefined : PAPEL_POR_BORNE[c.tipo];
-    if (!papel && !porBorne) continue;
+    if (!papel && !porBorne) {
+      const conSalida = CON_SALIDA.get(c.tipo);
+      if (!conSalida) continue;
+      const etiqueta = normalizarEtiqueta(c.etiqueta);
+      if (etiqueta === "") continue;
+      const delComp = redCables.get(c.id);
+      const salidaDe = conSalida.salida!;
+      for (const b of conSalida.bornes) {
+        const p = salidaDe[b.nombre];
+        if (p) sumarFuente(fuentes, p, `${etiqueta}.${b.nombre}`, delComp?.get(b.nombre));
+      }
+      continue;
+    }
     const def = buscarSimbolo(c.tipo);
     if (!def) continue;
     const delComp = redCables.get(c.id);
@@ -277,11 +299,17 @@ export function armarNetlist(hoja: Hoja): Netlist {
         if (a === undefined || b === undefined) continue;
         contactos.push({ comp: c.id, polo, etiqueta, na, accionamiento, a, b });
       }
-    } else if ((def.elemento === "bobina" || def.elemento === "carga") && def.bornes.length === 2) {
-      const a = redDe(c.id, def.bornes[0]!.nombre);
-      const b = redDe(c.id, def.bornes[1]!.nombre);
-      if (a === undefined || b === undefined) continue;
-      cargas.push({ comp: c.id, etiqueta: normalizarEtiqueta(c.etiqueta), tipo: def.elemento, a, b });
+    } else {
+      const pares = cargasDe(def);
+      if (pares.length === 0) continue;
+      const etiqueta = normalizarEtiqueta(c.etiqueta);
+      const tipo = def.elemento === "bobina" ? "bobina" : "carga";
+      for (const [x, y] of pares) {
+        const a = redDe(c.id, x);
+        const b = redDe(c.id, y);
+        if (a === undefined || b === undefined) continue;
+        cargas.push({ comp: c.id, etiqueta, tipo, a, b });
+      }
     }
   }
 

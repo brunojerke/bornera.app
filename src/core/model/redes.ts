@@ -18,7 +18,8 @@
 // (`unirPorNombre`), como etiquetas de red; `porNombre` anota qué redes se
 // unirían. En las fuentes de varios bornes (la trifásica, T34 D2-A), cada
 // borne nombra su red con su propio nombre (L1, L2, L3, N); la etiqueta del
-// componente no cuenta.
+// componente no cuenta. En los bornes de `salida` (fuentes propias y trafos,
+// T39 D-B10), etiqueta + «.» + borne («G1.L+»); sin etiqueta, sin nombre.
 //
 // Se calcula del documento y no se guarda. Recorre la hoja entera: es para
 // entrar a simular y para los tests, no para cada cuadro.
@@ -101,11 +102,15 @@ export function redes(hoja: Hoja, opciones: OpcionesRedes = {}): Red[] {
     if (!def) continue;
     const nombre = nombreDeFuente(c) ?? "";
     const porBorne = def.elemento === "fuente" && def.bornes.length > 1;
+    // Salida propia (T39, D-B10): etiqueta + «.» + borne («G1.L+»); sin etiqueta, sin nombre.
+    const salida = def.salida;
+    const etiqueta = salida ? normalizarEtiqueta(c.etiqueta) : "";
     let delComp = bornes.get(c.id);
     if (!delComp) bornes.set(c.id, (delComp = new Map()));
     for (const b of def.bornes) {
       // Los nombres de borne de la biblioteca ya están normalizados (L1, N): no se normalizan otra vez.
-      if (!delComp.has(b.nombre)) delComp.set(b.nombre, nuevo({ tipo: "borne", comp: c.id, borne: b.nombre, nombre: porBorne ? b.nombre : nombre }));
+      const deRed = porBorne ? b.nombre : salida ? (etiqueta !== "" && salida[b.nombre] ? `${etiqueta}.${b.nombre}` : "") : nombre;
+      if (!delComp.has(b.nombre)) delComp.set(b.nombre, nuevo({ tipo: "borne", comp: c.id, borne: b.nombre, nombre: deRed }));
     }
   }
 

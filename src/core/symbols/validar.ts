@@ -146,5 +146,33 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     errores.push(`${quien} de ${def.bornes.length} bornes necesita polos.`);
   }
 
+  // Cargas y salida (T39, D-B7 A): pares de bornes distintos que existen, cada
+  // borne en una sola carga; la salida, bornes que existen, fuera de cargas y
+  // polos, y solo en un titular (con prefijo): una fuente o un seguidor no.
+  const enCarga = new Set<string>();
+  if (def.cargas !== undefined) {
+    for (const par of def.cargas) {
+      const [a, b] = par;
+      if (par.length !== 2 || a === b) errores.push(`La carga ${par.join("-")} tiene que unir dos bornes distintos.`);
+      for (const n of par) {
+        if (!nombres.has(n)) errores.push(`La carga ${par.join("-")} nombra un borne que no existe: "${n}".`);
+        else if (enCarga.has(n)) errores.push(`Borne "${n}" en dos cargas.`);
+        enCarga.add(n);
+      }
+    }
+  }
+  if (def.salida !== undefined) {
+    if (esFuente(def) || esSeguidor(def)) errores.push("Solo un titular (con prefijo) lleva salida.");
+    const claves = Object.keys(def.salida);
+    if (claves.length === 0) errores.push("La salida está vacía.");
+    const enPolo = new Set(def.polos?.flat() ?? []);
+    for (const n of claves) {
+      const papel = def.salida[n];
+      if (!nombres.has(n)) errores.push(`La salida nombra un borne que no existe: "${n}".`);
+      if (enCarga.has(n) || enPolo.has(n)) errores.push(`Borne "${n}" de salida en una carga o un polo.`);
+      if (papel !== "fase" && papel !== "neutro") errores.push(`Borne "${n}" de salida con papel "${String(papel)}": fase o neutro.`);
+    }
+  }
+
   return errores;
 }

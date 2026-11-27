@@ -16,13 +16,13 @@ describe("agruparSimbolos (T38, D26-A)", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("cada uno de los 32 queda en un solo subgrupo, con el orden y la ubicación del plan", () => {
-    expect(SIMBOLOS).toHaveLength(32);
+  it("cada uno de los 38 queda en un solo subgrupo, con el orden y la ubicación del plan", () => {
+    expect(SIMBOLOS).toHaveLength(38);
     const tipos = agruparSimbolos(SIMBOLOS).flatMap((g) => g.subgrupos.flatMap((s) => s.simbolos.map((x) => x.tipo)));
-    expect(tipos).toHaveLength(32);
-    expect(new Set(tipos).size).toBe(32);
+    expect(tipos).toHaveLength(38);
+    expect(new Set(tipos).size).toBe(38);
     expect(lugares()).toEqual({
-      "Mando › Alimentación": ["Fase (L)", "Neutro (N)", "Fusible"],
+      "Mando › Alimentación": ["Fase (L)", "Neutro (N)", "Fusible", "Fuente de continua 12/24 V", "Fuente variable", "Fuente conmutada (riel)"],
       "Mando › Entradas": ["Pulsador NA", "Pulsador NC", "Selector NA", "Seta NC", "Final de carrera NA", "Final de carrera NC"],
       "Mando › Contactos": ["Contacto auxiliar NA", "Contacto auxiliar NC", "Contacto del térmico NC", "Contacto del térmico NA"],
       "Mando › Bobinas": ["Bobina de contactor"],
@@ -41,10 +41,11 @@ describe("agruparSimbolos (T38, D26-A)", () => {
       "Potencia › Maniobra": ["Contactos principales", "Seccionador"],
       "Potencia › Cargas": ["Motor trifásico", "Motor estrella-triángulo"],
       "Potencia › Fuentes": ["Fuente trifásica", "Fuente trifásica con neutro", "Tierra (PE)"],
+      "Potencia › Transformación": ["Transformador monofásico", "Transformador trifásico", "Variac"],
     });
     // El orden de las claves es el de la paleta.
     expect(Object.keys(lugares())[0]).toBe("Mando › Alimentación");
-    expect(Object.keys(lugares()).at(-1)).toBe("Potencia › Fuentes");
+    expect(Object.keys(lugares()).at(-1)).toBe("Potencia › Transformación");
   });
 
   it("buscar «termo» deja solo las 4 termomagnéticas, en su subgrupo", () => {
@@ -62,7 +63,7 @@ describe("agruparSimbolos (T38, D26-A)", () => {
   });
 
   it("sin coincidencias, no hay grupos", () => {
-    expect(agruparSimbolos(SIMBOLOS, "transformador")).toEqual([]);
+    expect(agruparSimbolos(SIMBOLOS, "osciloscopio")).toEqual([]);
   });
 });
 
