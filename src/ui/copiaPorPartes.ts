@@ -16,7 +16,10 @@
 // Editando sin parar, cada paso podría encontrar un cambio. Después de 5
 // reinicios seguidos, el intento siguiente es «de una vez»: espera un ocio
 // largo (≥ 40 ms) y hace todos los pasos en esa misma tarea, sin ceder. Cada
-// trozo sigue con su `put`. Siempre termina, y se informa aparte de F1.
+// trozo sigue con su `put`. Si en 1 s (reloj `ahora`, desde que entra en ese
+// modo) no hubo un ocio largo, copia igual en el ocio siguiente, sea como sea:
+// con la pantalla a 144 Hz y algo que pide cuadros, los ocios son de 0 a 7 ms
+// y la espera no terminaba nunca. Siempre termina, y se informa aparte de F1.
 //
 // Todo llega de afuera (almacén, ocio, reloj, el documento), así se prueba
 // sin DOM.
@@ -31,6 +34,8 @@ export const PRESUPUESTO_PASO_MS = 2;
 export const REINICIOS_DE_UNA_VEZ = 5;
 /** Ocio que hace falta para la copia de una vez (ms). */
 export const OCIO_LARGO_MS = 40;
+/** Espera máxima de un ocio largo para la copia de una vez (ms); pasada, copia igual. */
+export const PLAZO_DE_UNA_VEZ_MS = 1000;
 /** Cada cuántas piezas se mira el reloj. */
 const PIEZAS_POR_VISTAZO = 8;
 
@@ -73,6 +78,7 @@ export interface OpcionesCopia {
   presupuestoMs?: number;
   reiniciosDeUnaVez?: number;
   ocioLargoMs?: number;
+  plazoDeUnaVezMs?: number;
 }
 
 export type ResultadoCopia =
@@ -91,6 +97,8 @@ export type ResultadoCopia =
       deUnaVez: boolean;
       /** Esa tarea, si salió de una vez (ms); si no, 0. */
       deUnaVezMs: number;
+      /** Salió de una vez sin ocio largo, porque se cumplió el plazo. */
+      porPlazo: boolean;
       /** Del primer paso a la escritura del registro (ms). */
       duracionMs: number;
     }
@@ -117,10 +125,14 @@ export async function copiarPorPartes(op: OpcionesCopia): Promise<ResultadoCopia
   const presupuesto = op.presupuestoMs ?? PRESUPUESTO_PASO_MS;
   const maxReinicios = op.reiniciosDeUnaVez ?? REINICIOS_DE_UNA_VEZ;
   const ocioLargo = op.ocioLargoMs ?? OCIO_LARGO_MS;
+  const plazo = op.plazoDeUnaVezMs ?? PLAZO_DE_UNA_VEZ_MS;
   const pasos: number[] = [];
   let reinicios = 0;
   let inicio: number | null = null;
   let deUnaVezMs = 0;
+  /** Desde cuándo se espera el ocio largo (ms). */
+  let esperaDesde: number | null = null;
+  let porPlazo = false;
 
   /** Empieza un intento con lo que da la fuente. */
   const empezar = (f: { documento: Documento; cambios: number }): Intento => ({
@@ -161,10 +173,14 @@ export async function copiarPorPartes(op: OpcionesCopia): Promise<ResultadoCopia
     let it: Intento | null = null;
     while (!it?.terminado) {
       if (reinicios >= maxReinicios) {
-        // De una vez: un ocio largo y todos los pasos en esa tarea.
+        // De una vez: un ocio largo (o el que venga, pasado el plazo) y todos los pasos en esa tarea.
+        esperaDesde ??= op.ahora();
         const ocio = await esperarOcio(pedir);
-        if (ocio.didTimeout || ocio.timeRemaining() < ocioLargo) continue;
         const t = op.ahora();
+        if (ocio.didTimeout || ocio.timeRemaining() < ocioLargo) {
+          if (t - esperaDesde < plazo) continue;
+          porPlazo = true;
+        }
         const f = op.fuente();
         if (!f) return { ok: false, cancelada: true, reinicios };
         inicio ??= t;
@@ -221,6 +237,7 @@ export async function copiarPorPartes(op: OpcionesCopia): Promise<ResultadoCopia
       reinicios,
       deUnaVez: reinicios >= maxReinicios,
       deUnaVezMs,
+      porPlazo,
       duracionMs: op.ahora() - (inicio ?? t0),
     };
   } catch (error) {

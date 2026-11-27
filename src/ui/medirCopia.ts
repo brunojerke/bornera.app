@@ -49,6 +49,8 @@ export interface MuestraCopia {
   reinicios: number;
   /** Si salió de una vez (salida de emergencia), lo que tardó esa tarea; si no, 0. */
   deUnaVezMs: number;
+  /** Salió de una vez sin ocio largo, por el plazo (copiaPorPartes). */
+  porPlazo?: boolean;
 }
 
 /** Mediana, máximo y el de la primera copia (la fría). */
@@ -69,7 +71,7 @@ export interface ResumenF1 {
   duracion: Estadistica;
   reinicios: number;
   /** La salida de emergencia (copias de una vez): aparte, no decide. */
-  emergencia: { veces: number; maximo: number };
+  emergencia: { veces: number; maximo: number; porPlazo: number };
   /** El paso síncrono más largo de las copias por partes (sin la salida de emergencia). */
   f1: number;
   pasa: boolean;
@@ -102,7 +104,11 @@ export function resumirF1(todas: readonly MuestraCopia[]): ResumenF1 {
       primera: primera?.duracion ?? 0,
     },
     reinicios: todas.reduce((s, m) => s + m.reinicios, 0),
-    emergencia: { veces: emergencias.length, maximo: maximo(emergencias.map((m) => m.deUnaVezMs)) },
+    emergencia: {
+      veces: emergencias.length,
+      maximo: maximo(emergencias.map((m) => m.deUnaVezMs)),
+      porPlazo: emergencias.filter((m) => m.porPlazo).length,
+    },
     f1,
     pasa: muestras.length > 0 && f1 <= TOPE_F1_PC_MS,
   };
@@ -150,7 +156,7 @@ export function textoF1(muestras: readonly MuestraCopia[], datos: DatosF1): stri
     `Se informa, no decide: ${r.pasosPorCopia} pasos por copia (mediana) · duración total: mediana ${ms(r.duracion.mediana)} ms, ` +
       `máx. ${ms(r.duracion.maximo)} ms · reinicios: ${r.reinicios}`,
     `Salida de emergencia (la copia de una vez; aparte, no decide): ${r.emergencia.veces} veces` +
-      (r.emergencia.veces > 0 ? `, máx. ${ms(r.emergencia.maximo)} ms` : ""),
+      (r.emergencia.veces > 0 ? `, máx. ${ms(r.emergencia.maximo)} ms, ${r.emergencia.porPlazo} por plazo` : ""),
     `Lectura: la última copia, releída, ${datos.igual ? "es igual a serializar" : "NO es igual a serializar (MAL)"}`,
     `Paso más largo por copia (ms): ${muestras
       .filter((m) => m.deUnaVezMs <= 0)
@@ -199,6 +205,7 @@ export async function medirCopias(
         duracion: r.duracionMs,
         reinicios: r.reinicios,
         deUnaVezMs: r.deUnaVez ? r.deUnaVezMs : 0,
+        porPlazo: r.porPlazo,
       });
     }
     const leida = await almacen.leer(id);

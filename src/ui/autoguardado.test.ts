@@ -29,6 +29,8 @@ function entorno(opciones: { almacen?: AlmacenCopias & ReturnType<typeof almacen
     avisos: [] as string[],
     ocupado: false,
     ocios: 0,
+    /** Lo que da cada ocio (ms). */
+    ocioMs: 50,
     antesDeOcio: (() => {}) as () => void,
     ed: { documento: docPrueba(), cambios: 0, modificado: false },
     get ahora() {
@@ -93,7 +95,8 @@ function entorno(opciones: { almacen?: AlmacenCopias & ReturnType<typeof almacen
       proximaTarea(() => {
         e.ocios++;
         e.antesDeOcio();
-        cb({ didTimeout: false, timeRemaining: () => 50 });
+        const ms = e.ocioMs;
+        cb({ didTimeout: false, timeRemaining: () => ms });
       }),
   };
   const ag = new Autoguardado(deps);
@@ -307,5 +310,19 @@ describe("Autoguardado: fallos y salida de emergencia", () => {
     expect(ag.estado.emergencias).toBe(1);
     expect(ag.estado.ultima?.copia.deUnaVez).toBe(true);
     expect(ag.estado.ultima?.copia.reinicios).toBe(5);
+    expect(ag.estado.ultima?.copia.porPlazo).toBe(false);
+  });
+
+  it("editando sin parar y sin ningún ocio largo, la salida de emergencia igual termina (por el plazo)", async () => {
+    const { e, ag } = entorno({ relojQueAvanza: 0.5 });
+    e.ed.documento = documentoBancoCables(100);
+    e.ocioMs = 5;
+    e.editar();
+    e.antesDeOcio = () => e.editar();
+    await ag.copiarYa();
+    expect(ag.estado.emergencias).toBe(1);
+    expect(ag.estado.ultima?.copia.deUnaVez).toBe(true);
+    expect(ag.estado.ultima?.copia.porPlazo).toBe(true);
+    expect(await e.texto()).toBe(serializar(ag.estado.ultima!.copia.documento));
   });
 });

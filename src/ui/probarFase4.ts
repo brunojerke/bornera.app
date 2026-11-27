@@ -121,7 +121,7 @@ export async function medirFase4(progreso: (paso: string) => void = () => {}): P
     `lienzo ${b.ancho}×${b.alto} fuera de pantalla · ${disco.conDisco ? "con disco" : "sin disco"}`;
   const notas = [
     `F1, F2 y F3: escena de ${SIMBOLOS_BANCO_CABLES} símbolos + ${cables} cables (texto de ${serializar(doc).length} caracteres).`,
-    `F1: ${r1.copias} copias por partes; después, ${r1.emergencia.veces} de una vez (salida de emergencia, no decide: máx. ${ms(r1.emergencia.maximo)} ms). ` +
+    `F1: ${r1.copias} copias por partes; después, ${r1.emergencia.veces} de una vez (salida de emergencia, no decide: máx. ${ms(r1.emergencia.maximo)} ms, ${r1.emergencia.porPlazo} por plazo). ` +
       `La última copia, releída, ${copia.igual ? "es igual a serializar" : "NO es igual a serializar (MAL)"}.`,
     `F2 y F3: ${VUELTAS_ARCHIVO} vueltas sin los comandos Guardar ni Abrir, ` +
       `${disco.conDisco ? "en un .brn temporal (borrado al terminar)" : "sin disco (en memoria)"}, ${archivo.bytes} bytes con gzip. ` +

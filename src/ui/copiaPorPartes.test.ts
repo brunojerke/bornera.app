@@ -3,7 +3,7 @@ import { serializar } from "../core/io";
 import { documentosDePrueba } from "../core/io/prueba-documentos";
 import type { Documento } from "../core/model/documento";
 import { documentoBancoCables } from "../editor/banco";
-import { copiarPorPartes, PRESUPUESTO_PASO_MS, REINICIOS_DE_UNA_VEZ, type OpcionesCopia, type Ocio } from "./copiaPorPartes";
+import { copiarPorPartes, PLAZO_DE_UNA_VEZ_MS, PRESUPUESTO_PASO_MS, REINICIOS_DE_UNA_VEZ, type OpcionesCopia, type Ocio } from "./copiaPorPartes";
 import { almacenMemoria } from "./respaldo";
 
 const BANCO = documentoBancoCables(2000);
@@ -172,6 +172,7 @@ describe("copiarPorPartes (T23, 1b)", () => {
     expect(r.deUnaVez).toBe(true);
     expect(r.deUnaVezMs).toBeGreaterThan(0);
     expect(e.ocios).toBe(1);
+    expect(r.porPlazo).toBe(false);
     expect(r.trozos).toBeGreaterThan(5);
     expect(await textoCopiado(e.almacen)).toBe(serializar(BANCO));
   });
@@ -187,7 +188,73 @@ describe("copiarPorPartes (T23, 1b)", () => {
     if (!r.ok) throw new Error("no copió");
     expect(e.ocios).toBe(30);
     expect(r.deUnaVez).toBe(true);
+    expect(r.porPlazo).toBe(false);
     expect(await textoCopiado(e.almacen)).toBe(serializar(doc));
+  });
+
+  /**
+   * Ocios que nunca llegan al largo, como con la pantalla a 144 Hz y algo que
+   * pide cuadros: el reloj avanza `entreOcios` ms en cada espera, y 0,25 ms
+   * cada vez que se lo mira.
+   */
+  function ocioSiempreCorto(e: ReturnType<typeof entorno>, ocio: Ocio, entreOcios = 7) {
+    let reloj = 0;
+    return {
+      reloj: () => reloj,
+      opciones: e.opciones({
+        reiniciosDeUnaVez: 0,
+        pedirOcio: (cb) =>
+          proximaTarea(() => {
+            e.ocios++;
+            reloj += entreOcios;
+            cb(ocio);
+          }),
+        ahora: () => (reloj += 0.25),
+      }),
+    };
+  }
+
+  it.each([
+    ["ocios de 7 ms", { didTimeout: false, timeRemaining: () => 7 }],
+    ["siempre por timeout", { didTimeout: true, timeRemaining: () => 0 }],
+  ])(`sin ocio largo (%s), pasado el plazo (${PLAZO_DE_UNA_VEZ_MS} ms) copia igual`, async (_, ocio) => {
+    const e = entorno(BANCO);
+    const c = ocioSiempreCorto(e, ocio);
+    const r = await copiarPorPartes(c.opciones);
+    if (!r.ok) throw new Error("no copió");
+    expect(r.deUnaVez).toBe(true);
+    expect(r.porPlazo).toBe(true);
+    // Esperó el plazo y no más: la primera espera con el plazo cumplido copia
+    // (cada espera son 7 ms más la mirada al reloj).
+    expect(e.ocios).toBe(Math.ceil(PLAZO_DE_UNA_VEZ_MS / 7.25));
+    expect(r.trozos).toBeGreaterThan(5);
+    expect(await textoCopiado(e.almacen)).toBe(serializar(BANCO));
+  });
+
+  it("el plazo se puede cambiar: en 0, copia en el primer ocio aunque sea corto", async () => {
+    const e = entorno(BANCO);
+    const c = ocioSiempreCorto(e, { didTimeout: false, timeRemaining: () => 3 });
+    const r = await copiarPorPartes({ ...c.opciones, plazoDeUnaVezMs: 0 });
+    if (!r.ok) throw new Error("no copió");
+    expect(e.ocios).toBe(1);
+    expect(r.porPlazo).toBe(true);
+  });
+
+  it("si llega un ocio largo antes del plazo, sale por él y no por el plazo", async () => {
+    const e = entorno(BANCO);
+    let ms = 7;
+    const c = ocioSiempreCorto(e, { didTimeout: false, timeRemaining: () => ms });
+    const pedir = c.opciones.pedirOcio!;
+    const r = await copiarPorPartes({
+      ...c.opciones,
+      pedirOcio: (cb) => pedir((o) => {
+        if (e.ocios === 100) ms = 50;
+        cb(o);
+      }),
+    });
+    if (!r.ok) throw new Error("no copió");
+    expect(e.ocios).toBe(100);
+    expect(r.porPlazo).toBe(false);
   });
 
   it("si la fuente da null, se cancela sin registro", async () => {
