@@ -2,7 +2,7 @@
 // (docs/plan-T38.md), en `npm run dev` a 1024×600.
 //
 // Comprueba:
-//  - las miniaturas, una por símbolo (38 desde T39), cada una con su canvas dibujado y el nombre en
+//  - las miniaturas, una por símbolo (49 desde T40), cada una con su canvas dibujado y el nombre en
 //    `title`, en `aria-label` y como texto (ajuste 5);
 //  - la marca de las miniaturas, una sola vez y después de la de arranque
 //    (fase 6 §4: no demoran el primer cuadro); desde C1 también la de los
@@ -14,7 +14,7 @@
 //  - Mando › Alimentación … Potencia › Transformación (T39), en ese orden;
 //  - se llega a la Lámpara con scroll y con plegado, y se coloca;
 //  - plegar Mando deja ver Potencia; el Motor trifásico se coloca arrastrando;
-//  - «motor» despliega los dos motores y el guardamotor aunque Potencia esté
+//  - «motor» despliega los tres motores y el guardamotor aunque Potencia esté
 //    plegada; al borrar la búsqueda, Potencia vuelve a quedar plegada;
 //  (Lo visible se mira con `checkVisibility`: el contenido de un <details>
 //  cerrado sigue teniendo cajas en Chrome.)
@@ -34,8 +34,10 @@ const BARRA_WEBVIEW2 = 17;
 const ORDEN = [
   "Mando › Alimentación",
   "Mando › Entradas",
+  "Mando › Sensores",
   "Mando › Contactos",
   "Mando › Bobinas",
+  "Mando › Actuadores",
   "Mando › Señalización",
   "Potencia › Protección",
   "Potencia › Maniobra",
@@ -208,8 +210,8 @@ export default async function (p, comprobar, { cargar }) {
   await buscar("motor");
   const encontrados = await p.evaluar(`[...document.querySelectorAll(".item")].filter((e) => e.checkVisibility()).map((e) => e.getAttribute("aria-label"))`);
   comprobar(
-    "«motor» despliega los dos motores y el guardamotor, con Potencia plegada",
-    JSON.stringify(encontrados) === JSON.stringify(["Guardamotor", "Motor trifásico", "Motor estrella-triángulo"]) && (await resumen("Potencia"))?.abierto === true,
+    "«motor» despliega los tres motores y el guardamotor, con Potencia plegada",
+    JSON.stringify(encontrados) === JSON.stringify(["Guardamotor", "Motor trifásico", "Motor estrella-triángulo", "Motor de continua"]) && (await resumen("Potencia"))?.abierto === true,
     JSON.stringify(encontrados),
   );
   comprobar("Mando no se ve buscando «motor»", (await resumen("Mando"))?.visible === false);

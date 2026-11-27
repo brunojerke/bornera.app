@@ -5,6 +5,7 @@ import { corto, oscilante } from "../core/circuitos/sim";
 import { marchaParada } from "../core/circuitos/marchaParada";
 import { serializar } from "../core/io";
 import * as motor from "../core/sim/motor";
+import type { Hoja } from "../core/model/documento";
 import type { Simulacion } from "../core/sim/motor";
 import { unirCajas, type Caja } from "../render/camara";
 import { DETALLE_COMPLETO } from "../render/detalle";
@@ -273,5 +274,56 @@ describe("dibujoDe: mando y protecciones (T36)", () => {
     const d = dibujoDe(e.sim);
     expect(d.componentes.get("q")?.accionado).toBe(true);
     expect(d.componentes.get("t")?.accionado).toBe(true);
+  });
+});
+
+describe("dibujoDe: sensor y electroválvulas (T40, D-T40-1 A)", () => {
+  /** Componentes [id, tipo, etiqueta] y nodos "id:borne" unidos por cables, sin geometría. */
+  const circuito = (comps: [string, string, string][], nodos: string[][]): Hoja => {
+    const extremo = (s: string) => {
+      const [comp, borne] = s.split(":") as [string, string];
+      return { tipo: "borne" as const, comp, borne };
+    };
+    const cables = nodos.flatMap((nodo, k) => nodo.slice(1).map((b, i) => ({ id: `w${k}_${i}`, desde: extremo(nodo[i]!), hasta: extremo(b), codos: [] })));
+    return { nombre: "Hoja 1", componentes: comps.map(([id, tipo, etiqueta]) => ({ id, tipo, x: 0, y: 0, rot: 0 as const, espejado: false, etiqueta, params: {} })), cables };
+  };
+  // B1 (sensor) alimentado entre L1 y N lleva L1 a Y1 (biestable, A1) y a Y2 (monoestable); S1 a B1 de Y1.
+  const h = circuito(
+    [
+      ["l", "fuente.fase", "L1"],
+      ["n", "fuente.neutro", "N"],
+      ["b", "sensor.inductivo", "B1"],
+      ["y", "valvula.biestable", "Y1"],
+      ["z", "valvula.monoestable", "Y2"],
+      ["s", "pulsador.na", "S1"],
+      ["m", "motor.continua", "M1"],
+    ],
+    [
+      ["l:L", "b:BN", "s:13"],
+      ["b:BK", "y:A1", "z:A1", "m:A1"],
+      ["s:14", "y:B1"],
+      ["n:N", "b:BU", "y:A2", "y:B2", "z:A2", "m:A2"],
+    ],
+  );
+
+  it("en 14 la válvula va accionada y sin relleno; vuelta a 12, en reposo; el sensor, accionado y relleno", () => {
+    const e = motor.entrarSimulacion(h);
+    if (!e.ok) throw new Error("no entra");
+    let s = e.sim;
+    expect(dibujoDe(s).componentes.get("b")).toEqual({ accionado: false, encendido: true, marcado: false });
+    expect(dibujoDe(s).componentes.has("y")).toBe(false);
+    s = motor.pulsar(s, "b");
+    const d = dibujoDe(s).componentes;
+    expect(d.get("b")).toEqual({ accionado: true, encendido: true, marcado: false });
+    expect(d.get("y")).toEqual({ accionado: true, encendido: false, marcado: false });
+    expect(d.get("z")).toEqual({ accionado: true, encendido: false, marcado: false });
+    // El motor de continua es una carga más: relleno.
+    expect(d.get("m")).toEqual({ accionado: false, encendido: true, marcado: false });
+    // Liberado el sensor, la biestable queda en 14 y la monoestable vuelve.
+    s = motor.soltar(s, "b");
+    expect(dibujoDe(s).componentes.get("y")).toEqual({ accionado: true, encendido: false, marcado: false });
+    expect(dibujoDe(s).componentes.has("z")).toBe(false);
+    s = motor.pulsar(s, "s");
+    expect(dibujoDe(s).componentes.has("y")).toBe(false);
   });
 });

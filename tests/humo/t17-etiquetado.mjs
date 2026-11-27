@@ -89,7 +89,7 @@ export default async function (p, comprobar) {
       if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, deshabilitado: b.disabled }; })()`);
   const itemPaleta = (nombreItem) =>
     p.evaluar(`(() => { const e = [...document.querySelectorAll(".item")].find((x) => x.textContent.trim() === ${JSON.stringify(nombreItem)});
-      if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      if (!e) return null; e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   /** Clic en la paleta: deja la herramienta en modo clic. */
   const elegir = async (nombreItem) => {
     const item = await itemPaleta(nombreItem);

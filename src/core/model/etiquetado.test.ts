@@ -98,6 +98,17 @@ describe("titular y prefijo", () => {
       ["transformador.monofasico", true, "T"],
       ["transformador.trifasico", true, "T"],
       ["transformador.variac", true, "T"],
+      ["proteccion.diferencial_tripolar", true, "Q"],
+      ["sensor.inductivo", true, "B"],
+      ["sensor.capacitivo", true, "B"],
+      ["sensor.fotoelectrico", true, "B"],
+      ["sensor.presostato_na", true, "B"],
+      ["sensor.presostato_nc", true, "B"],
+      ["sensor.termostato_na", true, "B"],
+      ["sensor.termostato_nc", true, "B"],
+      ["valvula.monoestable", true, "Y"],
+      ["valvula.biestable", true, "Y"],
+      ["motor.continua", true, "M"],
     ]);
   });
 
@@ -131,6 +142,17 @@ describe("titular y prefijo", () => {
       ["transformador.monofasico", 1],
       ["transformador.trifasico", 1],
       ["transformador.variac", 1],
+      ["proteccion.diferencial_tripolar", 1],
+      ["sensor.inductivo", 1],
+      ["sensor.capacitivo", 1],
+      ["sensor.fotoelectrico", 1],
+      ["sensor.presostato_na", 1],
+      ["sensor.presostato_nc", 1],
+      ["sensor.termostato_na", 1],
+      ["sensor.termostato_nc", 1],
+      ["valvula.monoestable", 1],
+      ["valvula.biestable", 1],
+      ["motor.continua", 1],
     ]);
     expect(primerNumeroDe(buscarSimbolo(DESCONOCIDO))).toBe(1);
   });

@@ -1,0 +1,40 @@
+formato-v1/alpha1-inversion.brn
+0 1c12bfb1b58f851f
+formato-v1/cables-t-libres.brn.json
+0 0d4709ccbc1d0822
+formato-v1/girado-con-comandos.brn.json
+0 9f64316f138a52ed
+formato-v1/inversion.brn.json
+0 09e7ad860a50160c
+formato-v1/marcha-parada-dos-n.brn.json
+0 9c4a35df6af30bb1
+formato-v1/marcha-parada.brn.json
+0 51617656f543c668
+formato-v1/rotados-y-espejados.brn.json
+0 b8868f9718120681
+formato-v1/simbolo-desconocido.brn.json
+0 50fc1d5dbb2a63d7
+formato-v1/textos-raros.brn.json
+0 6c5aa77d757bdb9f
+formato-v1/vacio.brn.json
+0 5810e3fdb759be6f
+formato-v1/varias-hojas.brn.json
+0 80bb559611a78cb4
+1 0899760eab2ab2f8
+2 5810e3fdb759be6f
+avisos-fase5.brn
+0 078dd9d18d07fc07
+cadena.brn
+0 53f7eff981151d4b
+carrera.brn
+0 c5bb70c72a9c9015
+corto.brn
+0 9552a75c0b22ae4e
+inversion-potencia.brn
+0 4f8bbca8dceb4ba6
+inversion.brn
+0 09e7ad860a50160c
+marcha-parada.brn
+0 51617656f543c668
+oscilante.brn
+0 c8e01c8c538943d6

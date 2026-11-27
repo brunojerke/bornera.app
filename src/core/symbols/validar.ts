@@ -73,12 +73,13 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
     }
   }
 
-  // Dibujo accionado (T33): solo contactos y protecciones (T36, D20-B), dentro
-  // de la caja. Un texto solo si el reposo tiene uno igual (la «N» del neutro,
-  // «IΔ»): así la caja de dibujo es la misma en los dos estados.
+  // Dibujo accionado (T33): solo contactos, protecciones (T36, D20-B) y
+  // electroválvulas (T40, D-B12 A), dentro de la caja. Un texto solo si el
+  // reposo tiene uno igual (la «N» del neutro, «IΔ»): así la caja de dibujo es
+  // la misma en los dos estados.
   const accionado = def.primitivasAccionado;
   if (accionado !== undefined) {
-    if (!tienePolos(def)) errores.push("Solo un contacto o una protección lleva dibujo accionado.");
+    if (!tienePolos(def) && def.valvula === undefined) errores.push("Solo un contacto, una protección o una electroválvula lleva dibujo accionado.");
     for (const p of accionado) {
       if (p.forma === "texto") {
         if (!def.primitivas.some((q) => q.forma === "texto" && mismoTexto(p, q))) errores.push("El dibujo accionado solo lleva los textos del reposo.");
@@ -140,7 +141,9 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
         enPolo.add(n);
       }
     }
-    if (esContacto) for (const b of def.bornes) if (!enPolo.has(b.nombre)) errores.push(`Borne "${b.nombre}" sin polo.`);
+    // Un borne que no está en un polo tiene que estar en una carga (T40: el BU del sensor).
+    const enCargas = new Set(def.cargas?.flat() ?? []);
+    if (esContacto) for (const b of def.bornes) if (!enPolo.has(b.nombre) && !enCargas.has(b.nombre)) errores.push(`Borne "${b.nombre}" sin polo.`);
   } else if (esContacto && def.bornes.length > 0 && def.bornes.length !== 2) {
     const quien = def.elemento === "proteccion" ? "Una protección" : "Un contacto";
     errores.push(`${quien} de ${def.bornes.length} bornes necesita polos.`);
@@ -172,6 +175,17 @@ export function validarDefinicion(def: DefinicionSimbolo): string[] {
       if (enCarga.has(n) || enPolo.has(n)) errores.push(`Borne "${n}" de salida en una carga o un polo.`);
       if (papel !== "fase" && papel !== "neutro") errores.push(`Borne "${n}" de salida con papel "${String(papel)}": fase o neutro.`);
     }
+  }
+
+  // Electroválvula (T40, D-T40-2 A): una carga con `cargas`, una en la
+  // monoestable y dos en la biestable, y con dibujo accionado.
+  const valvula = def.valvula;
+  if (valvula !== undefined) {
+    if (valvula !== "monoestable" && valvula !== "biestable") errores.push(`Electroválvula "${String(valvula)}": monoestable o biestable.`);
+    if (def.elemento !== "carga") errores.push("Solo una carga es electroválvula.");
+    const cuantas = valvula === "biestable" ? 2 : 1;
+    if (def.cargas?.length !== cuantas) errores.push(`Una electroválvula ${valvula} lleva ${cuantas === 1 ? "una carga" : "dos cargas"}.`);
+    if (def.primitivasAccionado === undefined) errores.push("Una electroválvula lleva dibujo accionado.");
   }
 
   return errores;

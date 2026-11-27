@@ -28,6 +28,11 @@
 //   accionamiento (`null`), un polo por par: el motor los da cerrados (6b les
 //   suma abierta y disparada). Un símbolo desconocido no conduce ni es carga;
 //   tampoco los motores, cargas de 3 o 6 bornes (hasta 6b, D14-A).
+// - Sensor (T40, D-B3 A): un contacto que también tiene `cargas`, la BN-BU; BN
+//   es del polo y de la carga (`enPolo`). Cada polo y cada carga lleva sus
+//   `bornes`: el par de su definición, sin copiar.
+// - Electroválvulas (T40): `valvulas`, en el orden de la hoja, con sus cargas;
+//   el motor da su posición (D-B5 A). Una carga de una válvula es "carga".
 // - Bobinas por etiqueta, en orden natural (K1, K2, K10): el orden de D2. Una
 //   etiqueta repetida en dos bobinas no se resuelve acá (R4 impide entrar).
 //
@@ -87,6 +92,8 @@ export interface ContactoNetlist {
   etiqueta: string;
   /** NA (true) o NC (false). Una protección es NA. */
   na: boolean;
+  /** Los bornes del polo, como en su definición (T40): el par de `polosDe`, sin copiar. */
+  bornes: readonly [string, string];
   /** El del símbolo; null en una protección o un seccionador, que en 6a conducen siempre (T36, D17-A). */
   accionamiento: Accionamiento | null;
   /** Redes del primer y el segundo borne del polo, como en su definición. */
@@ -101,9 +108,31 @@ export interface CargaNetlist {
   etiqueta: string;
   /** La bobina mueve contactos; la carga (lámpara) solo se enciende. */
   tipo: "bobina" | "carga";
+  /** Los bornes de la carga, como en su definición (T40): el par de `cargasDe`, sin copiar. */
+  bornes: readonly [string, string];
+  /** Por extremo: el borne también es de un polo de su componente (T40: el BN del sensor). */
+  enPolo: readonly [boolean, boolean];
   a: number;
   b: number;
 }
+
+/**
+ * Una electroválvula (T40, D-B5 A): sus cargas en `Netlist.cargas`, -1 si esa
+ * bobina no tiene sus dos bornes en redes. La monoestable no tiene `b`.
+ */
+export interface ValvulaNetlist {
+  comp: string;
+  /** Etiqueta normalizada ("" sin etiqueta). */
+  etiqueta: string;
+  biestable: boolean;
+  /** A1-A2: lleva a 14 (accionada). */
+  a: number;
+  /** B1-B2 de la biestable: lleva a 12 (reposo); -1 en la monoestable. */
+  b: number;
+}
+
+/** Ningún extremo en un polo: el mismo par en cada carga que no es de un contacto. */
+const SIN_POLO: readonly [boolean, boolean] = [false, false];
 
 export interface Netlist {
   /** En el orden de su primera red por cables en `redes(hoja)`. */
@@ -120,6 +149,8 @@ export interface Netlist {
   cargas: CargaNetlist[];
   /** Bobinas con etiqueta, agrupadas por ella, en orden natural; `cargas` son índices en `Netlist.cargas`. */
   bobinas: { etiqueta: string; cargas: number[] }[];
+  /** Electroválvulas (T40), en el orden de la hoja. */
+  valvulas: ValvulaNetlist[];
 }
 
 /** Orden por unidades de código: el mismo en cualquier idioma del sistema. */
@@ -285,32 +316,42 @@ export function armarNetlist(hoja: Hoja): Netlist {
   // Contactos y cargas, en el orden de la hoja.
   const contactos: ContactoNetlist[] = [];
   const cargas: CargaNetlist[] = [];
+  const valvulas: ValvulaNetlist[] = [];
   for (const c of hoja.componentes) {
     const def = buscarSimbolo(c.tipo);
     if (!def) continue;
-    if (def.elemento === "contacto_na" || def.elemento === "contacto_nc" || def.elemento === "proteccion") {
+    const contacto = def.elemento === "contacto_na" || def.elemento === "contacto_nc" || def.elemento === "proteccion";
+    if (contacto) {
       const etiqueta = normalizarEtiqueta(c.etiqueta);
       const polos = polosDe(def);
       const na = def.elemento !== "contacto_nc";
       const accionamiento = def.accionamiento ?? null;
       for (let polo = 0; polo < polos.length; polo++) {
-        const a = redDe(c.id, polos[polo]![0]);
-        const b = redDe(c.id, polos[polo]![1]);
+        const bornes = polos[polo]!;
+        const a = redDe(c.id, bornes[0]);
+        const b = redDe(c.id, bornes[1]);
         if (a === undefined || b === undefined) continue;
-        contactos.push({ comp: c.id, polo, etiqueta, na, accionamiento, a, b });
-      }
-    } else {
-      const pares = cargasDe(def);
-      if (pares.length === 0) continue;
-      const etiqueta = normalizarEtiqueta(c.etiqueta);
-      const tipo = def.elemento === "bobina" ? "bobina" : "carga";
-      for (const [x, y] of pares) {
-        const a = redDe(c.id, x);
-        const b = redDe(c.id, y);
-        if (a === undefined || b === undefined) continue;
-        cargas.push({ comp: c.id, etiqueta, tipo, a, b });
+        contactos.push({ comp: c.id, polo, etiqueta, na, accionamiento, bornes, a, b });
       }
     }
+    // Cargas: las de una bobina o una carga y, en un contacto, las de `cargas` (el sensor, T40).
+    const pares = cargasDe(def);
+    if (pares.length === 0) continue;
+    const etiqueta = normalizarEtiqueta(c.etiqueta);
+    const tipo = def.elemento === "bobina" ? "bobina" : "carga";
+    const valvula = def.valvula;
+    const indices = valvula ? [-1, -1] : undefined;
+    for (let i = 0; i < pares.length; i++) {
+      const bornes = pares[i]!;
+      const a = redDe(c.id, bornes[0]);
+      const b = redDe(c.id, bornes[1]);
+      if (a === undefined || b === undefined) continue;
+      const polos = contacto ? polosDe(def) : undefined;
+      const enPolo: readonly [boolean, boolean] = polos ? [polos.some((p) => p.includes(bornes[0])), polos.some((p) => p.includes(bornes[1]))] : SIN_POLO;
+      if (indices) indices[i] = cargas.length;
+      cargas.push({ comp: c.id, etiqueta, tipo, bornes, enPolo, a, b });
+    }
+    if (indices) valvulas.push({ comp: c.id, etiqueta, biestable: valvula === "biestable", a: indices[0]!, b: indices[1]! });
   }
 
   // Bobinas con etiqueta, agrupadas, en orden natural.
@@ -323,5 +364,5 @@ export function armarNetlist(hoja: Hoja): Netlist {
   });
   const bobinas = [...grupos].sort(([x], [y]) => compararEtiquetas(x, y)).map(([etiqueta, ids]) => ({ etiqueta, cargas: ids }));
 
-  return { redes: salida, potenciales, redDeBorne, enCorto, contactos, cargas, bobinas };
+  return { redes: salida, potenciales, redDeBorne, enCorto, contactos, cargas, bobinas, valvulas };
 }

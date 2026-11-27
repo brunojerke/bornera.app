@@ -480,11 +480,11 @@ const Y_TOROIDE = 1.45;
 /**
  * Diferencial: NA con enlace arriba, el toroide que abraza los conductores
  * abajo y el bloque «IΔ» a la izquierda, unido al enlace y al toroide. Mide 6
- * de alto: con 4, la banda pisaba los nombres de los bornes de abajo. El
- * último polo es el de neutro, con su «N» (D8-A): 3-4 en el bipolar, 7-8 en
- * el tetrapolar.
+ * de alto: con 4, la banda pisaba los nombres de los bornes de abajo. Con
+ * `neutro`, el último polo es el de neutro, con su «N» (D8-A): 3-4 en el
+ * bipolar, 7-8 en el tetrapolar. El tripolar (T40) va sin neutro.
  */
-function diferencial(tipo: string, nombre: string, xs: readonly number[]): DefinicionSimbolo {
+function diferencial(tipo: string, nombre: string, xs: readonly number[], neutro = true): DefinicionSimbolo {
   const n = xs.length;
   const izq = xs[0]!;
   const der = xs[n - 1]!;
@@ -500,7 +500,7 @@ function diferencial(tipo: string, nombre: string, xs: readonly number[]): Defin
     { forma: "rectangulo", x: izq - 0.5, y: Y_TOROIDE - 0.175, ancho: der - izq + 1, alto: 0.35 },
     linea(cx, yc + 0.4, cx, Y_TOROIDE),
     linea(cx, Y_TOROIDE, izq - 0.5, Y_TOROIDE),
-    marcaNeutro(der, yc + 0.5),
+    ...(neutro ? [marcaNeutro(der, yc + 0.5)] : []),
   ];
   return {
     tipo,
@@ -523,6 +523,8 @@ function diferencial(tipo: string, nombre: string, xs: readonly number[]): Defin
 
 export const DIFERENCIAL_BIPOLAR = diferencial("proteccion.diferencial_bipolar", "Diferencial bipolar", POLOS_2);
 export const DIFERENCIAL_TETRAPOLAR = diferencial("proteccion.diferencial_tetrapolar", "Diferencial tetrapolar", POLOS_4);
+/** Diferencial tripolar sin neutro (T40): polos 1-2, 3-4 y 5-6, que conducen siempre (como el resto en 6a). */
+export const DIFERENCIAL_TRIPOLAR = diferencial("proteccion.diferencial_tripolar", "Diferencial tripolar", POLOS_X, false);
 
 /** X del bloque de disparo del guardamotor (térmico arriba, magnético abajo). */
 const X_DISPARO_GUARDAMOTOR = -3.5;
@@ -1123,6 +1125,302 @@ export const TRAFO_TRIFASICO: DefinicionSimbolo = {
   salida: { "2U": "fase", "2V": "fase", "2W": "fase", "2N": "neutro" },
 };
 
+// ── Sensores, electroválvulas y motor de continua (T40, biblioteca 2) ──────
+// - Sensor PNP (D-B3 A): BN (+) arriba, BK (salida) abajo a la derecha y BU
+//   (−) abajo a la izquierda. Es un contacto NA enclavado (un clic lo acciona
+//   y otro lo libera) con el polo BN-BK, más la carga BN-BU: BN está en los
+//   dos. El cuerpo se rellena con la carga encendida y el contacto se dibuja
+//   cerrado accionado. Conmuta aunque BU esté suelto (límite hasta 6b).
+// - Presostato y termostato NA y NC (D-B4 A): como el final de carrera, con
+//   la cabeza de presión («p») o de temperatura («θ») en un recuadro.
+// - Electroválvula (D-B5 A, D-B12 A, D-T40-5 A): 5/2 sin vías numeradas. Dos
+//   cuadros (14 a la izquierda, 12 a la derecha) sobre las vías fijas; en
+//   reposo está en 12 y accionada la válvula corre un cuadro a la derecha y
+//   queda en 14. Monoestable: bobina A1-A2 a la izquierda y resorte a la
+//   derecha. Biestable: A1-A2 (14) a la izquierda y B1-B2 (12) a la derecha.
+// - Motor de continua: carga A1-A2 (giro y polaridad, en 6b).
+
+/** Las primitivas corridas `dx` en horizontal. */
+function corridoX(ps: readonly Primitiva[], dx: number): Primitiva[] {
+  return ps.map((p): Primitiva => {
+    switch (p.forma) {
+      case "linea":
+        return linea(p.x1 + dx, p.y1, p.x2 + dx, p.y2);
+      case "rectangulo":
+      case "texto":
+        return { ...p, x: p.x + dx };
+      case "circulo":
+      case "arco":
+        return { ...p, cx: p.cx + dx };
+    }
+  });
+}
+
+/** X del contacto del sensor (BN arriba, BK abajo) y del BU. */
+const X_CONTACTO_SENSOR = 1;
+const X_BU = -1;
+/** Cuerpo del sensor: su primer rectángulo, el que se rellena con la carga encendida. */
+const CUERPO_SENSOR = { forma: "rectangulo" as const, x: -1.9, y: -1.2, ancho: 1.8, alto: 2.2 };
+/** Centro del rombo de proximidad (07-20-01), dentro del cuerpo. */
+const CX_SENSOR = -1;
+const CY_SENSOR = -0.1;
+
+/** Rombo de proximidad centrado en el cuerpo. */
+const ROMBO_SENSOR: Linea[] = [
+  linea(CX_SENSOR, CY_SENSOR - 0.85, CX_SENSOR + 0.75, CY_SENSOR),
+  linea(CX_SENSOR + 0.75, CY_SENSOR, CX_SENSOR, CY_SENSOR + 0.85),
+  linea(CX_SENSOR, CY_SENSOR + 0.85, CX_SENSOR - 0.75, CY_SENSOR),
+  linea(CX_SENSOR - 0.75, CY_SENSOR, CX_SENSOR, CY_SENSOR - 0.85),
+];
+
+/** Lo que el sensor dibuja igual en los dos estados: cuerpo, rombo, marca, la alimentación por BN y el BU. */
+function fijoSensor(marca: Primitiva[]): Primitiva[] {
+  return [
+    CUERPO_SENSOR,
+    ...ROMBO_SENSOR,
+    ...marca,
+    // BN alimenta el cuerpo desde el contacto fijo de arriba, con el punto de unión.
+    linea(X_CONTACTO_SENSOR, -1.6, CX_SENSOR, -1.6),
+    linea(CX_SENSOR, -1.6, CX_SENSOR, -1.2),
+    { forma: "circulo", cx: X_CONTACTO_SENSOR, cy: -1.6, r: 0.1, relleno: true },
+    // BU sale del cuerpo hacia abajo.
+    linea(X_BU, CUERPO_SENSOR.y + CUERPO_SENSOR.alto, X_BU, 2),
+  ];
+}
+
+/** Sensor PNP con la marca de su tipo dentro del rombo. */
+function sensor(tipo: string, nombre: string, marca: Primitiva[]): DefinicionSimbolo {
+  const borde = CUERPO_SENSOR.x + CUERPO_SENSOR.ancho;
+  return {
+    tipo,
+    nombre,
+    subgrupo: "sensores",
+    elemento: "contacto_na",
+    accionamiento: "manual_enclavado",
+    prefijoEtiqueta: "B",
+    tamano: { ancho: 4, alto: 4 },
+    primitivas: [...fijoSensor(marca), ...corridoX(contactoNA(), X_CONTACTO_SENSOR), ...discontinua(X_CONTACTO_SENSOR + X_EN_NA, 0, borde, 0)],
+    primitivasAccionado: [...fijoSensor(marca), ...corridoX(contactoNACerrado(), X_CONTACTO_SENSOR), ...discontinua(X_CONTACTO_SENSOR + X_EN_NA_CERRADO, 0, borde, 0)],
+    ladoNombresBornes: "derecha",
+    bornes: [
+      { nombre: "BN", x: X_CONTACTO_SENSOR, y: -2, direccion: "arriba" },
+      { nombre: "BU", x: X_BU, y: 2, direccion: "abajo" },
+      { nombre: "BK", x: X_CONTACTO_SENSOR, y: 2, direccion: "abajo" },
+    ],
+    polos: [["BN", "BK"]],
+    cargas: [["BN", "BU"]],
+  };
+}
+
+/** Flecha chica, de punta corta, para dentro del rombo. */
+function flechaCorta(x1: number, y1: number, x2: number, y2: number): Linea[] {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  const punta = (d: number) => linea(x2, y2, x2 - 0.18 * Math.cos(a + d), y2 - 0.18 * Math.sin(a + d));
+  return [linea(x1, y1, x2, y2), punta(0.5), punta(-0.5)];
+}
+
+/** Sensor inductivo: «Fe» en el rombo (detecta metal). */
+export const SENSOR_INDUCTIVO = sensor("sensor.inductivo", "Sensor inductivo PNP", [
+  { forma: "texto", x: CX_SENSOR, y: CY_SENSOR, texto: "Fe", alto: 0.45, alineacion: "centro" },
+]);
+
+/** Sensor capacitivo: las dos placas de un capacitor en el rombo. */
+export const SENSOR_CAPACITIVO = sensor("sensor.capacitivo", "Sensor capacitivo PNP", [
+  linea(CX_SENSOR - 0.12, CY_SENSOR - 0.3, CX_SENSOR - 0.12, CY_SENSOR + 0.3),
+  linea(CX_SENSOR + 0.12, CY_SENSOR - 0.3, CX_SENSOR + 0.12, CY_SENSOR + 0.3),
+  linea(CX_SENSOR - 0.4, CY_SENSOR, CX_SENSOR - 0.12, CY_SENSOR),
+  linea(CX_SENSOR + 0.12, CY_SENSOR, CX_SENSOR + 0.4, CY_SENSOR),
+]);
+
+/** Sensor fotoeléctrico: dos flechas de luz que entran al rombo. */
+export const SENSOR_FOTOELECTRICO = sensor("sensor.fotoelectrico", "Sensor fotoeléctrico PNP", [
+  ...flechaCorta(CX_SENSOR - 0.45, CY_SENSOR - 0.4, CX_SENSOR - 0.05, CY_SENSOR),
+  ...flechaCorta(CX_SENSOR - 0.25, CY_SENSOR - 0.55, CX_SENSOR + 0.15, CY_SENSOR - 0.15),
+]);
+
+/** X del recuadro de la cabeza del presostato y del termostato, a la izquierda del contacto. */
+const X_CABEZA = -1.55;
+
+/** Cabeza de presostato o termostato: el recuadro con su letra. */
+function cabeza(texto: string): Primitiva[] {
+  return [
+    { forma: "rectangulo", x: X_CABEZA - 0.4, y: -0.4, ancho: 0.8, alto: 0.8 },
+    { forma: "texto", x: X_CABEZA, y: 0, texto, alto: 0.55, alineacion: "centro" },
+  ];
+}
+
+/** Presostato o termostato, como el final de carrera (D-B4 A): momentáneo, 13-14 o 11-12. */
+function comoFinal(tipo: string, nombre: string, na: boolean, letra: string): DefinicionSimbolo {
+  return {
+    tipo,
+    nombre,
+    subgrupo: "sensores",
+    elemento: na ? "contacto_na" : "contacto_nc",
+    accionamiento: "manual_momentaneo",
+    prefijoEtiqueta: "B",
+    tamano: { ancho: 4, alto: 4 },
+    ...conAccionamiento(na, X_CABEZA + 0.4, cabeza(letra)),
+    ladoNombresBornes: na ? "derecha" : "izquierda",
+    bornes: na ? dosBornes("13", "14") : dosBornes("11", "12"),
+  };
+}
+
+export const PRESOSTATO_NA = comoFinal("sensor.presostato_na", "Presostato NA", true, "p");
+export const PRESOSTATO_NC = comoFinal("sensor.presostato_nc", "Presostato NC", false, "p");
+export const TERMOSTATO_NA = comoFinal("sensor.termostato_na", "Termostato NA", true, "θ");
+export const TERMOSTATO_NC = comoFinal("sensor.termostato_nc", "Termostato NC", false, "θ");
+
+/** Lado de un cuadro de la válvula; los cuadros van de y −0,75 a 0,75. */
+const LADO_VALVULA = 1.5;
+const Y_VALVULA = -LADO_VALVULA / 2;
+/** X del borde izquierdo del cuadro que está sobre las vías: el 12 en reposo. */
+const X_VIAS = -1;
+
+/** Flecha de paso dentro de un cuadro, de (x1, y1) a (x2, y2). */
+function paso(x1: number, y1: number, x2: number, y2: number): Linea[] {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  const punta = (d: number) => linea(x2, y2, x2 - 0.25 * Math.cos(a + d), y2 - 0.25 * Math.sin(a + d));
+  return [linea(x1, y1, x2, y2), punta(0.45), punta(-0.45)];
+}
+
+/** Vía cerrada abajo (la «T»): un trazo desde el borde de abajo hacia adentro y la barra. */
+function cerrada(x: number): Linea[] {
+  const y1 = -Y_VALVULA - 0.3;
+  return [linea(x, -Y_VALVULA, x, y1), linea(x - 0.15, y1, x + 0.15, y1)];
+}
+
+/** X de las vías de un cuadro que empieza en `x0`: arriba 4 y 2; abajo 5, 1 y 3. */
+function vias(x0: number) {
+  return { v4: x0 + 0.45, v2: x0 + 1.05, v5: x0 + 0.3, v1: x0 + 0.75, v3: x0 + 1.2 };
+}
+
+/** Cuadro 14 (1 → 4 y 2 → 3; 5 cerrada) desde `x0`. */
+function cuadro14(x0: number): Primitiva[] {
+  const v = vias(x0);
+  return [
+    { forma: "rectangulo", x: x0, y: Y_VALVULA, ancho: LADO_VALVULA, alto: LADO_VALVULA },
+    ...paso(v.v1, -Y_VALVULA, v.v4, Y_VALVULA),
+    ...paso(v.v2, Y_VALVULA, v.v3, -Y_VALVULA),
+    ...cerrada(v.v5),
+  ];
+}
+
+/** Cuadro 12 (1 → 2 y 4 → 5; 3 cerrada) desde `x0`. */
+function cuadro12(x0: number): Primitiva[] {
+  const v = vias(x0);
+  return [
+    { forma: "rectangulo", x: x0, y: Y_VALVULA, ancho: LADO_VALVULA, alto: LADO_VALVULA },
+    ...paso(v.v1, -Y_VALVULA, v.v2, Y_VALVULA),
+    ...paso(v.v4, Y_VALVULA, v.v5, -Y_VALVULA),
+    ...cerrada(v.v3),
+  ];
+}
+
+/** Las vías fijas, del cuadro que está sobre ellas hacia afuera: 4 y 2 arriba; 5, 1 y 3 abajo. */
+function viasFijas(): Linea[] {
+  const v = vias(X_VIAS);
+  return [
+    linea(v.v4, Y_VALVULA - 0.5, v.v4, Y_VALVULA),
+    linea(v.v2, Y_VALVULA - 0.5, v.v2, Y_VALVULA),
+    linea(v.v5, -Y_VALVULA, v.v5, -Y_VALVULA + 0.5),
+    linea(v.v1, -Y_VALVULA, v.v1, -Y_VALVULA + 0.5),
+    linea(v.v3, -Y_VALVULA, v.v3, -Y_VALVULA + 0.5),
+  ];
+}
+
+/** Ancho del recuadro de la bobina de la válvula (accionamiento por solenoide). */
+const ANCHO_SOLENOIDE = 1;
+
+/** Bobina de la válvula: el recuadro con la diagonal, desde `x0`. */
+function solenoide(x0: number): Primitiva[] {
+  return [{ forma: "rectangulo", x: x0, y: -0.5, ancho: ANCHO_SOLENOIDE, alto: 1 }, linea(x0 + 0.25, 0.5, x0 + 0.75, -0.5)];
+}
+
+/** Cables de una bobina: de sus bornes en `xBorne` (arriba y abajo) al recuadro centrado en `xCentro`. */
+function cablesSolenoide(xBorne: number, xCentro: number): Linea[] {
+  return xBorne === xCentro
+    ? [linea(xBorne, -2, xBorne, -0.5), linea(xBorne, 0.5, xBorne, 2)]
+    : [linea(xBorne, -2, xBorne, -1.6), linea(xBorne, -1.6, xCentro, -0.5), linea(xBorne, 2, xBorne, 1.6), linea(xBorne, 1.6, xCentro, 0.5)];
+}
+
+/** Resorte de retorno (zigzag) desde `x`, hacia la derecha. */
+function resorte(x: number): Linea[] {
+  const ys = [0, -0.35, 0.35, -0.35, 0.35, 0];
+  return ys.slice(1).map((y, i) => linea(x + i * 0.2, ys[i]!, x + (i + 1) * 0.2, y));
+}
+
+/**
+ * La válvula corrida `dx` (0 en 12, un cuadro en 14): la bobina de 14 a la
+ * izquierda, los dos cuadros y a la derecha el resorte o la bobina de 12.
+ */
+function bloqueValvula(dx: number, biestable: boolean): Primitiva[] {
+  const x14 = X_VIAS - LADO_VALVULA + dx;
+  const x12 = X_VIAS + dx;
+  const derecha = x12 + LADO_VALVULA;
+  return [...solenoide(x14 - ANCHO_SOLENOIDE), ...cuadro14(x14), ...cuadro12(x12), ...(biestable ? solenoide(derecha) : resorte(derecha))];
+}
+
+/** X de los bornes de cada bobina: el centro de su recuadro en reposo (12). */
+const X_BOBINA_14 = X_VIAS - LADO_VALVULA - ANCHO_SOLENOIDE / 2;
+const X_BOBINA_12 = X_VIAS + LADO_VALVULA + ANCHO_SOLENOIDE / 2;
+
+/** Electroválvula 5/2 monoestable o biestable. */
+function electrovalvula(biestable: boolean): DefinicionSimbolo {
+  const dibujo = (dx: number): Primitiva[] => [
+    ...bloqueValvula(dx, biestable),
+    ...viasFijas(),
+    ...cablesSolenoide(X_BOBINA_14, X_BOBINA_14 + dx),
+    ...(biestable ? cablesSolenoide(X_BOBINA_12, X_BOBINA_12 + dx) : []),
+  ];
+  const a: DefinicionSimbolo["bornes"] = [
+    { nombre: "A1", x: X_BOBINA_14, y: -2, direccion: "arriba" },
+    { nombre: "A2", x: X_BOBINA_14, y: 2, direccion: "abajo" },
+  ];
+  const b: DefinicionSimbolo["bornes"] = [
+    { nombre: "B1", x: X_BOBINA_12, y: -2, direccion: "arriba" },
+    { nombre: "B2", x: X_BOBINA_12, y: 2, direccion: "abajo" },
+  ];
+  return {
+    tipo: biestable ? "valvula.biestable" : "valvula.monoestable",
+    nombre: biestable ? "Electroválvula biestable" : "Electroválvula monoestable",
+    subgrupo: "actuadores",
+    elemento: "carga",
+    prefijoEtiqueta: "Y",
+    tamano: { ancho: 8, alto: 4 },
+    primitivas: dibujo(0),
+    primitivasAccionado: dibujo(LADO_VALVULA),
+    ladoNombresBornes: "izquierda",
+    bornes: biestable ? [...a, ...b] : a,
+    cargas: biestable
+      ? [
+          ["A1", "A2"],
+          ["B1", "B2"],
+        ]
+      : [["A1", "A2"]],
+    valvula: biestable ? "biestable" : "monoestable",
+  };
+}
+
+export const ELECTROVALVULA_MONOESTABLE = electrovalvula(false);
+export const ELECTROVALVULA_BIESTABLE = electrovalvula(true);
+
+/** Motor de continua (06-04-01, «M» con el signo de continua): carga A1-A2. */
+export const MOTOR_CONTINUA: DefinicionSimbolo = {
+  tipo: "motor.continua",
+  nombre: "Motor de continua",
+  subgrupo: "cargas",
+  elemento: "carga",
+  prefijoEtiqueta: "M",
+  tamano: { ancho: 4, alto: 4 },
+  primitivas: [
+    ...conexiones(R_MOTOR),
+    { forma: "circulo", cx: 0, cy: 0, r: R_MOTOR },
+    { forma: "texto", x: 0, y: -0.3, texto: "M", alto: 1, alineacion: "centro" },
+    ...signoContinua(0.55),
+  ],
+  bornes: dosBornes("A1", "A2"),
+};
+
 /** Todos los símbolos de la biblioteca. */
 export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   FASE,
@@ -1163,6 +1461,17 @@ export const SIMBOLOS: readonly DefinicionSimbolo[] = [
   TRAFO_MONOFASICO,
   TRAFO_TRIFASICO,
   VARIAC,
+  DIFERENCIAL_TRIPOLAR,
+  SENSOR_INDUCTIVO,
+  SENSOR_CAPACITIVO,
+  SENSOR_FOTOELECTRICO,
+  PRESOSTATO_NA,
+  PRESOSTATO_NC,
+  TERMOSTATO_NA,
+  TERMOSTATO_NC,
+  ELECTROVALVULA_MONOESTABLE,
+  ELECTROVALVULA_BIESTABLE,
+  MOTOR_CONTINUA,
 ];
 
 const POR_TIPO = new Map(SIMBOLOS.map((s) => [s.tipo, s]));

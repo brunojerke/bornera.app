@@ -20,8 +20,10 @@ export const GRUPOS: readonly { id: Grupo; nombre: string }[] = [
 export const SUBGRUPOS_PALETA = {
   alimentacion: { grupo: "mando", nombre: "Alimentación" },
   entradas: { grupo: "mando", nombre: "Entradas" },
+  sensores: { grupo: "mando", nombre: "Sensores" },
   contactos: { grupo: "mando", nombre: "Contactos" },
   bobinas: { grupo: "mando", nombre: "Bobinas" },
+  actuadores: { grupo: "mando", nombre: "Actuadores" },
   senalizacion: { grupo: "mando", nombre: "Señalización" },
   proteccion: { grupo: "potencia", nombre: "Protección" },
   maniobra: { grupo: "potencia", nombre: "Maniobra" },

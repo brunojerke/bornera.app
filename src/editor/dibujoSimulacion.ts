@@ -4,7 +4,8 @@
 // - Cables por potencial (D9-B, C-A): la clase de cada red. Una red sin
 //   potencial va con el color de Editar (ajuste 3); la red en corto de la
 //   detención, en `--conflicto` (M-A).
-// - Componentes: el contacto accionado (NA que conduce, NC que no), la carga
+// - Componentes: el contacto accionado (NA que conduce, NC que no), la
+//   electroválvula en 14 (T40) con la válvula corrida y sin relleno, la carga
 //   encendida (lámpara o bobina con tensión) y, con la simulación detenida
 //   por oscilación, las bobinas que oscilan (M-A).
 // - Cada cambio toca solo lo que cambió (D8-A): `aplicarDibujo` compara el
@@ -57,8 +58,14 @@ export function dibujoDe(sim: Simulacion): DibujoSimulacion {
   n.contactos.forEach((c, i) => {
     if (sim.conducen[i] === c.na) estado(c.comp).accionado = true;
   });
+  // Electroválvulas (T40, D-T40-1 A): accionadas según su posición y sin relleno; la bobina con
+  // tensión se ve en el color de sus cables.
+  const deValvula = n.valvulas.length > 0 ? new Set(n.valvulas.flatMap((v) => [v.a, v.b])) : null;
   n.cargas.forEach((c, i) => {
-    if (sim.encendidas[i]) estado(c.comp).encendido = true;
+    if (sim.encendidas[i] && !deValvula?.has(i)) estado(c.comp).encendido = true;
+  });
+  n.valvulas.forEach((v, i) => {
+    if (sim.posiciones[i]) estado(v.comp).accionado = true;
   });
   if (d?.tipo === "oscila") {
     const oscilan = new Set(d.etiquetas);

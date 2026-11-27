@@ -3,6 +3,9 @@
 // union-find, sin tablas armadas de antemano y con conjuntos. Mismo criterio
 // que `motor.ts` (docs/plan-T30.md), para comparar resultados en los tests.
 // Con polos (T34): cada polo es un contacto; los de un componente se accionan juntos.
+// T40: un borne es de una carga o de un polo por su nombre (el BN del sensor,
+// de los dos), y las electroválvulas tienen su posición (la biestable, la
+// última bobina con tensión en un estado estable).
 // Solo lo importan los tests: el código de la app no lo usa.
 import type { Netlist } from "./netlist";
 
@@ -11,6 +14,7 @@ export interface FotoLenta {
   tension: boolean[];
   conducen: boolean[];
   encendidas: boolean[];
+  posiciones: boolean[];
   potencialDeRed: (number | null)[];
   detenida: unknown;
   avisos: unknown[];
@@ -20,6 +24,7 @@ export interface FotoLenta {
 export class SimulacionLenta {
   private pulsados = new Set<string>();
   private tension: boolean[];
+  private posiciones: boolean[];
   private detenida: unknown = null;
   private avisos: unknown[] = [];
   private nuevos: unknown[] = [];
@@ -31,6 +36,7 @@ export class SimulacionLenta {
     private readonly tope: number = 2 * n.bobinas.length + 50,
   ) {
     this.tension = n.bobinas.map(() => false);
+    this.posiciones = n.valvulas.map(() => false);
     this.ultimo = { conducen: [], encendidas: [], potencialDeRed: [] };
     this.correr();
   }
@@ -58,6 +64,7 @@ export class SimulacionLenta {
       tension: [...this.tension],
       conducen: this.ultimo.conducen,
       encendidas: this.ultimo.encendidas,
+      posiciones: [...this.posiciones],
       potencialDeRed: this.ultimo.potencialDeRed,
       detenida: this.detenida,
       avisos: [...this.avisos],
@@ -66,7 +73,8 @@ export class SimulacionLenta {
   }
 
   private avisar(a: { tipo: string; [k: string]: unknown }): void {
-    const k = a.tipo === "carrera" ? `c:${JSON.stringify(a["etiquetas"])}` : a.tipo === "serie" ? `s:${JSON.stringify(a["cargas"])}` : a.tipo;
+    const k =
+      a.tipo === "carrera" ? `c:${JSON.stringify(a["etiquetas"])}` : a.tipo === "serie" ? `s:${JSON.stringify(a["cargas"])}` : a.tipo === "dos_bobinas" ? `d:${String(a["comp"])}` : a.tipo;
     if (this.dados.has(k)) return;
     this.dados.add(k);
     this.avisos.push(a);
@@ -150,12 +158,11 @@ export class SimulacionLenta {
           const cargas = new Set<number>();
           let soloCargas = true;
           for (const b of bornes) {
-            const k = n.cargas.findIndex((x) => x.comp === b.comp);
-            // Con polos (T34), el contacto de este borne es el polo de su componente que toca esta red.
-            const c = n.contactos.findIndex((x) => x.comp === b.comp && (x.a === b.red || x.b === b.red));
-            if (k >= 0) cargas.add(k);
-            else if (c >= 0 && r.conducen[c]) continue;
-            else soloCargas = false;
+            // Por el nombre del borne (T40): el BN del sensor es de su carga y de su polo.
+            const ks = n.cargas.flatMap((x, i) => (x.comp === b.comp && x.bornes.includes(b.borne) ? [i] : []));
+            const cs = n.contactos.flatMap((x, i) => (x.comp === b.comp && x.bornes.includes(b.borne) ? [i] : []));
+            for (const k of ks) cargas.add(k);
+            if (cs.some((c) => !r.conducen[c]) || (ks.length === 0 && cs.length === 0)) soloCargas = false;
           }
           if (!soloCargas || cargas.size < 2) return;
           const otros = new Set<number>();
@@ -195,6 +202,19 @@ export class SimulacionLenta {
       r = this.recalcular();
     }
     if (this.detenida) this.avisar(this.detenida as { tipo: string });
+    // Electroválvulas (T40): la monoestable sigue a su carga; la biestable cambia solo en un estado estable.
+    n.valvulas.forEach((v, i) => {
+      const a = v.a >= 0 && r.encendidas[v.a]!;
+      if (!v.biestable) {
+        this.posiciones[i] = a;
+        return;
+      }
+      if (this.detenida) return;
+      const b = v.b >= 0 && r.encendidas[v.b]!;
+      if (a && b) this.avisar({ tipo: "dos_bobinas", comp: v.comp, etiqueta: v.etiqueta });
+      else if (a) this.posiciones[i] = true;
+      else if (b) this.posiciones[i] = false;
+    });
     this.ultimo = { conducen: r.conducen, encendidas: r.encendidas, potencialDeRed: n.redes.map((_, i) => r.unico(i)) };
   }
 }

@@ -8,7 +8,10 @@ import {
   CONTACTOR_PRINCIPAL,
   DIFERENCIAL_BIPOLAR,
   DIFERENCIAL_TETRAPOLAR,
+  DIFERENCIAL_TRIPOLAR,
   discontinua,
+  ELECTROVALVULA_BIESTABLE,
+  ELECTROVALVULA_MONOESTABLE,
   FASE,
   FINAL_NA,
   FINAL_NC,
@@ -22,18 +25,26 @@ import {
   FUSIBLE_TRIPOLAR,
   GUARDAMOTOR,
   LAMPARA,
+  MOTOR_CONTINUA,
   MOTOR_ESTRELLA_TRIANGULO,
   MOTOR_TRIFASICO,
   NEUTRO,
+  PRESOSTATO_NA,
+  PRESOSTATO_NC,
   PULSADOR_NA,
   PULSADOR_NC,
   SECCIONADOR,
+  SENSOR_CAPACITIVO,
+  SENSOR_FOTOELECTRICO,
+  SENSOR_INDUCTIVO,
   SELECTOR,
   SETA,
   SIMBOLOS,
   TERMICO,
   TERMICO_NA,
   TERMICO_NC,
+  TERMOSTATO_NA,
+  TERMOSTATO_NC,
   TERMOMAGNETICA_BIPOLAR,
   TERMOMAGNETICA_TETRAPOLAR,
   TERMOMAGNETICA_TRIPOLAR,
@@ -93,8 +104,8 @@ function extremos(p: Primitiva): [number, number][] {
 }
 
 describe("biblioteca de símbolos", () => {
-  it("tiene los 38 símbolos, con tipos únicos", () => {
-    expect(SIMBOLOS).toHaveLength(38);
+  it("tiene los 49 símbolos, con tipos únicos", () => {
+    expect(SIMBOLOS).toHaveLength(49);
     expect(new Set(SIMBOLOS.map((s) => s.tipo)).size).toBe(SIMBOLOS.length);
   });
 
@@ -190,12 +201,25 @@ describe("contactos accionados (T33, D9-B)", () => {
     DIFERENCIAL_TETRAPOLAR,
     GUARDAMOTOR,
     SECCIONADOR,
+    DIFERENCIAL_TRIPOLAR,
+  ];
+  /** T40: sensores, presostato y termostato (contactos) y las electroválvulas (la válvula corrida, D-B12 A). */
+  const DE_T40 = [
+    SENSOR_INDUCTIVO,
+    SENSOR_CAPACITIVO,
+    SENSOR_FOTOELECTRICO,
+    PRESOSTATO_NA,
+    PRESOSTATO_NC,
+    TERMOSTATO_NA,
+    TERMOSTATO_NC,
+    ELECTROVALVULA_MONOESTABLE,
+    ELECTROVALVULA_BIESTABLE,
   ];
   /** La cuchilla: la línea que sale de la bisagra (0, 1) hacia arriba. */
   const cuchilla = (ps: readonly Primitiva[]) => ps.find((p) => p.forma === "linea" && p.x1 === 0 && p.y1 === 1 && p.y2 < 1);
 
-  it("los 11 contactos y las 8 protecciones de cuchilla (T36, D20-B) tienen dibujo accionado; los demás símbolos no", () => {
-    for (const s of SIMBOLOS) expect(s.primitivasAccionado !== undefined, s.tipo).toBe(CONTACTOS.includes(s) || CERRADAS.includes(s));
+  it("los 11 contactos, las 9 protecciones de cuchilla (T36, D20-B; T40 el diferencial 3P) y los 9 de T40 tienen dibujo accionado; los demás símbolos no", () => {
+    for (const s of SIMBOLOS) expect(s.primitivasAccionado !== undefined, s.tipo).toBe(CONTACTOS.includes(s) || CERRADAS.includes(s) || DE_T40.includes(s));
   });
 
   it.each(CONTACTOS.map((s) => [s.tipo, s] as const))("%s accionado: dentro de su caja, sin textos y con una línea hasta cada borne", (_, s) => {
@@ -259,7 +283,7 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
     expect(clases).toHaveLength(1);
   });
 
-  it("K en la bobina, S en los dos pulsadores, H en la lámpara; Q, F y M en potencia (T35, D9-A); G y T (T39)", () => {
+  it("K en la bobina, S en los dos pulsadores, H en la lámpara; Q, F y M en potencia (T35, D9-A); G y T (T39); B e Y (T40)", () => {
     expect(SIMBOLOS.filter((s) => s.prefijoEtiqueta !== undefined).map((s) => [s.tipo, s.prefijoEtiqueta])).toEqual([
       ["pulsador.na", "S"],
       ["pulsador.nc", "S"],
@@ -289,6 +313,17 @@ describe("etiquetado: fuente, seguidor o prefijo (T17)", () => {
       ["transformador.monofasico", "T"],
       ["transformador.trifasico", "T"],
       ["transformador.variac", "T"],
+      ["proteccion.diferencial_tripolar", "Q"],
+      ["sensor.inductivo", "B"],
+      ["sensor.capacitivo", "B"],
+      ["sensor.fotoelectrico", "B"],
+      ["sensor.presostato_na", "B"],
+      ["sensor.presostato_nc", "B"],
+      ["sensor.termostato_na", "B"],
+      ["sensor.termostato_nc", "B"],
+      ["valvula.monoestable", "Y"],
+      ["valvula.biestable", "Y"],
+      ["motor.continua", "M"],
     ]);
   });
 
@@ -691,8 +726,8 @@ describe("fuentes propias y trafos (T39, D-B7 A)", () => {
     for (const b of s.bornes) expect(b.nombre).toMatch(/^[A-Z0-9+-]+$/);
   });
 
-  it("los 6 van al final de SIMBOLOS, en el orden del plan", () => {
-    expect(SIMBOLOS.slice(-6)).toEqual([FUENTE_CONTINUA, FUENTE_VARIABLE, FUENTE_CONMUTADA, TRAFO_MONOFASICO, TRAFO_TRIFASICO, VARIAC]);
+  it("los 6 van después de los 32 de antes, en el orden del plan (T40 suma los suyos detrás)", () => {
+    expect(SIMBOLOS.slice(32, 38)).toEqual([FUENTE_CONTINUA, FUENTE_VARIABLE, FUENTE_CONMUTADA, TRAFO_MONOFASICO, TRAFO_TRIFASICO, VARIAC]);
   });
 
   it("el variac es el trafo mono con la flecha: mismos bornes, cargas y salida, y más trazos", () => {
@@ -707,5 +742,126 @@ describe("fuentes propias y trafos (T39, D-B7 A)", () => {
     expect(cargasDe(MOTOR_TRIFASICO)).toEqual([]);
     expect(cargasDe(PULSADOR_NA)).toEqual([]);
     expect(cargasDe(FASE)).toEqual([]);
+  });
+});
+
+describe("sensores, presostato, termostato, electroválvulas, motor de continua y diferencial 3P (T40)", () => {
+  type Caso = [DefinicionSimbolo, string, string, string, readonly (readonly [string, string, string])[], readonly (readonly [string, string])[], readonly (readonly [string, string])[]];
+  // [símbolo, elemento, subgrupo, prefijo, bornes (nombre, x,y, dirección), polos, cargas]
+  const SENSOR = [["BN", "1,-2", "arriba"], ["BU", "-1,2", "abajo"], ["BK", "1,2", "abajo"]] as const;
+  const NA = [["13", "0,-2", "arriba"], ["14", "0,2", "abajo"]] as const;
+  const NC = [["11", "0,-2", "arriba"], ["12", "0,2", "abajo"]] as const;
+  const CASOS: Caso[] = [
+    [SENSOR_INDUCTIVO, "contacto_na", "sensores", "B", SENSOR, [["BN", "BK"]], [["BN", "BU"]]],
+    [SENSOR_CAPACITIVO, "contacto_na", "sensores", "B", SENSOR, [["BN", "BK"]], [["BN", "BU"]]],
+    [SENSOR_FOTOELECTRICO, "contacto_na", "sensores", "B", SENSOR, [["BN", "BK"]], [["BN", "BU"]]],
+    [PRESOSTATO_NA, "contacto_na", "sensores", "B", NA, [["13", "14"]], []],
+    [PRESOSTATO_NC, "contacto_nc", "sensores", "B", NC, [["11", "12"]], []],
+    [TERMOSTATO_NA, "contacto_na", "sensores", "B", NA, [["13", "14"]], []],
+    [TERMOSTATO_NC, "contacto_nc", "sensores", "B", NC, [["11", "12"]], []],
+    [ELECTROVALVULA_MONOESTABLE, "carga", "actuadores", "Y", [["A1", "-3,-2", "arriba"], ["A2", "-3,2", "abajo"]], [], [["A1", "A2"]]],
+    [
+      ELECTROVALVULA_BIESTABLE,
+      "carga",
+      "actuadores",
+      "Y",
+      [["A1", "-3,-2", "arriba"], ["A2", "-3,2", "abajo"], ["B1", "1,-2", "arriba"], ["B2", "1,2", "abajo"]],
+      [],
+      [["A1", "A2"], ["B1", "B2"]],
+    ],
+    [MOTOR_CONTINUA, "carga", "cargas", "M", [["A1", "0,-2", "arriba"], ["A2", "0,2", "abajo"]], [], [["A1", "A2"]]],
+    [
+      DIFERENCIAL_TRIPOLAR,
+      "proteccion",
+      "proteccion",
+      "Q",
+      [["1", "-2,-3", "arriba"], ["2", "-2,3", "abajo"], ["3", "0,-3", "arriba"], ["4", "0,3", "abajo"], ["5", "2,-3", "arriba"], ["6", "2,3", "abajo"]],
+      [["1", "2"], ["3", "4"], ["5", "6"]],
+      [],
+    ],
+  ];
+
+  it.each(CASOS.map((c) => [c[0].tipo, ...c] as const))("%s: bornes, polos, cargas, prefijo y subgrupo", (_, s, elemento, subgrupo, prefijo, bornes, polos, cargas) => {
+    expect(validarDefinicion(s)).toEqual([]);
+    expect(s.bornes.map((b) => [b.nombre, `${b.x},${b.y}`, b.direccion])).toEqual(bornes);
+    expect(s).toMatchObject({ elemento, subgrupo, prefijoEtiqueta: prefijo });
+    expect(polosDe(s)).toEqual(polos);
+    expect(cargasDe(s)).toEqual(cargas);
+    expect(s.salida).toBeUndefined();
+    expect(esFuente(s)).toBe(false);
+    expect(esSeguidor(s)).toBe(false);
+  });
+
+  it("los 11 van al final de SIMBOLOS, en el orden del plan", () => {
+    expect(SIMBOLOS.slice(-11)).toEqual([
+      DIFERENCIAL_TRIPOLAR,
+      SENSOR_INDUCTIVO,
+      SENSOR_CAPACITIVO,
+      SENSOR_FOTOELECTRICO,
+      PRESOSTATO_NA,
+      PRESOSTATO_NC,
+      TERMOSTATO_NA,
+      TERMOSTATO_NC,
+      ELECTROVALVULA_MONOESTABLE,
+      ELECTROVALVULA_BIESTABLE,
+      MOTOR_CONTINUA,
+    ]);
+  });
+
+  it("los sensores se enclavan (un clic acciona y otro libera, D-B3 A); presostato y termostato son momentáneos, como el final (D-B4 A)", () => {
+    for (const s of [SENSOR_INDUCTIVO, SENSOR_CAPACITIVO, SENSOR_FOTOELECTRICO]) expect(s.accionamiento, s.tipo).toBe("manual_enclavado");
+    for (const s of [PRESOSTATO_NA, PRESOSTATO_NC, TERMOSTATO_NA, TERMOSTATO_NC]) expect(s.accionamiento, s.tipo).toBe(FINAL_NA.accionamiento);
+  });
+
+  it("presostato y termostato son el final de carrera con otra cabeza: mismo contacto, bornes y caja", () => {
+    // El contacto: las líneas fuera de y = 0 (ahí van los trazos hasta la cabeza, que es otra) a la derecha de x = −1,1.
+    const contacto = (ps: readonly Primitiva[]) => ps.filter((p) => p.forma === "linea" && !(p.y1 === 0 && p.y2 === 0) && Math.min(p.x1, p.x2) > -1.1);
+    for (const [s, final] of [
+      [PRESOSTATO_NA, FINAL_NA],
+      [PRESOSTATO_NC, FINAL_NC],
+      [TERMOSTATO_NA, FINAL_NA],
+      [TERMOSTATO_NC, FINAL_NC],
+    ] as const) {
+      expect(s.bornes, s.tipo).toEqual(final.bornes);
+      expect(s.tamano, s.tipo).toEqual(final.tamano);
+      expect(s.ladoNombresBornes, s.tipo).toBe(final.ladoNombresBornes);
+      expect(contacto(s.primitivas), s.tipo).toEqual(contacto(final.primitivas));
+      expect(contacto(s.primitivasAccionado!), s.tipo).toEqual(contacto(final.primitivasAccionado!));
+    }
+    expect(PRESOSTATO_NA.primitivas).toContainEqual(expect.objectContaining({ forma: "texto", texto: "p" }));
+    expect(TERMOSTATO_NA.primitivas).toContainEqual(expect.objectContaining({ forma: "texto", texto: "θ" }));
+  });
+
+  it("el sensor: el cuerpo es su primer rectángulo (se rellena con BN-BU encendida) y accionado el contacto queda cerrado", () => {
+    for (const s of [SENSOR_INDUCTIVO, SENSOR_CAPACITIVO, SENSOR_FOTOELECTRICO]) {
+      expect(s.primitivas.find((p) => p.forma === "rectangulo" || p.forma === "circulo"), s.tipo).toMatchObject({ forma: "rectangulo", x: -1.9 });
+      const cuchilla1 = (ps: readonly Primitiva[]) => ps.find((p) => p.forma === "linea" && p.x1 === 1 && p.y1 === 1 && p.y2 < 1);
+      expect(cuchilla1(s.primitivasAccionado!), s.tipo).toMatchObject({ x2: 1, y2: -1 });
+      expect(cuchilla1(s.primitivas), s.tipo).not.toMatchObject({ x2: 1, y2: -1 });
+    }
+  });
+
+  it("la electroválvula (D-B12 A, D-T40-5 A): accionada corre la válvula un cuadro a la derecha; las vías no se mueven", () => {
+    for (const s of [ELECTROVALVULA_MONOESTABLE, ELECTROVALVULA_BIESTABLE]) {
+      const cuadros = (ps: readonly Primitiva[]) => ps.filter((p) => p.forma === "rectangulo" && p.ancho === 1.5).map((p) => (p as Extract<Primitiva, { forma: "rectangulo" }>).x);
+      expect(cuadros(s.primitivas), s.tipo).toEqual([-2.5, -1]);
+      expect(cuadros(s.primitivasAccionado!), s.tipo).toEqual([-1, 0.5]);
+      const largo = (p: Extract<Primitiva, { forma: "linea" }>) => [Math.abs(p.y1), Math.abs(p.y2)].sort().join();
+      const vias = (ps: readonly Primitiva[]) => ps.filter((p) => p.forma === "linea" && p.x1 === p.x2 && largo(p) === "0.75,1.25");
+      expect(vias(s.primitivas).length, s.tipo).toBe(5);
+      expect(vias(s.primitivasAccionado!), s.tipo).toEqual(vias(s.primitivas));
+      expect(s.primitivasAccionado!.some((p) => p.forma === "texto"), s.tipo).toBe(false);
+    }
+    expect(ELECTROVALVULA_MONOESTABLE.valvula).toBe("monoestable");
+    expect(ELECTROVALVULA_BIESTABLE.valvula).toBe("biestable");
+  });
+
+  it("el diferencial 3P no lleva «N»; el 2P y el 4P, sí (el resto del dibujo, como el de ellos)", () => {
+    const n = (s: DefinicionSimbolo) => s.primitivas.filter((p) => p.forma === "texto" && p.texto === "N").length;
+    expect(n(DIFERENCIAL_TRIPOLAR)).toBe(0);
+    expect(n(DIFERENCIAL_BIPOLAR)).toBe(1);
+    expect(n(DIFERENCIAL_TETRAPOLAR)).toBe(1);
+    expect(DIFERENCIAL_TRIPOLAR.primitivas).toContainEqual(expect.objectContaining({ forma: "texto", texto: "IΔ" }));
+    expect(DIFERENCIAL_TRIPOLAR.tamano).toEqual({ ancho: 8, alto: 6 });
   });
 });

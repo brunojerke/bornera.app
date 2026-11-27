@@ -20,6 +20,14 @@
 // - Cargas en serie (M1-B), en cada estado estable.
 // - Carrera y cargas en serie avisan una vez por par o por grupo en cada
 //   entrada a Simular; las detenciones, una vez (después no se recalcula).
+// - Electroválvulas (T40, D-B5 A): `posiciones`, una por válvula de la
+//   netlist (true: accionada, en 14). La monoestable sigue a su carga. La
+//   biestable queda en la última bobina con tensión: con A1-A2 sola pasa a 14
+//   y con B1-B2 sola a 12; sin ninguna queda donde estaba, y con las dos
+//   también, con el aviso «Y1 con las dos bobinas» (D-T40-4 A). Solo se toma
+//   de un estado estable: detenida (oscila, tope o corto) queda la última
+//   estable (ajuste 2 de Bruno). Cada entrada arranca en 12 (D-T40-3 A). No
+//   mueve contactos: no entra en el estado de bobinas ni en la iteración.
 //
 // No lee el reloj: el límite es la cantidad de cambios. Sin DOM.
 
@@ -36,6 +44,8 @@ export type AvisoSim =
   /** `etiquetas`: las bobinas que cambian en el ciclo, en orden natural. */
   | { readonly tipo: "oscila"; readonly etiquetas: readonly string[] }
   | { readonly tipo: "tope"; readonly pasos: number }
+  /** Electroválvula biestable con las dos bobinas con tensión (T40, D-B5 A); `etiqueta` normalizada, "" sin etiqueta. */
+  | { readonly tipo: "dos_bobinas"; readonly comp: string; readonly etiqueta: string }
   /** `redes`: índices en `netlist.redes`; `potenciales`: en `netlist.potenciales`; `nombres`: los suyos, como se muestran. */
   | { readonly tipo: "corto"; readonly redes: readonly number[]; readonly potenciales: readonly number[]; readonly nombres: readonly string[] };
 
@@ -54,6 +64,8 @@ export interface Simulacion {
   readonly conducen: readonly boolean[];
   /** Por carga de `netlist.cargas`. */
   readonly encendidas: readonly boolean[];
+  /** Por válvula de `netlist.valvulas` (T40): accionada (en 14). */
+  readonly posiciones: readonly boolean[];
   /** Por red de `netlist.redes`: índice en `netlist.potenciales`, o null sin potencial o en corto. */
   readonly potencialDeRed: readonly (number | null)[];
   readonly detenida: Detencion | null;
@@ -132,8 +144,9 @@ function preparar(n: Netlist): Pre {
   n.cargas.forEach((k, i) => {
     cargasEnRed[k.a]!.push(i);
     cargasEnRed[k.b]!.push(i);
-    otrosEnRed[k.a]!--;
-    otrosEnRed[k.b]!--;
+    // Por borne: el BN del sensor (T40) es de la carga y del polo, y ya se restó con el polo.
+    if (!k.enPolo[0]) otrosEnRed[k.a]!--;
+    if (!k.enPolo[1]) otrosEnRed[k.b]!--;
   });
   n.contactos.forEach((c, i) => {
     contactosEnRed[c.a]!.push(i);
@@ -277,6 +290,8 @@ function claveAviso(a: AvisoSim): string {
       return `carrera\u0000${a.etiquetas.join("\u0000")}`;
     case "serie":
       return `serie\u0000${a.cargas.join("\u0000")}`;
+    case "dos_bobinas":
+      return `dos_bobinas\u0000${a.comp}`;
     default:
       return a.tipo;
   }
@@ -342,6 +357,16 @@ function resolver(base: Simulacion, pulsados: ReadonlySet<string>, tension0: rea
   }
   if (detenida) avisar(detenida);
 
+  const posiciones = n.valvulas.map((v, i) => {
+    const antes = base.posiciones[i] ?? false;
+    const conA = v.a >= 0 && calc.encendidas[v.a]!;
+    if (!v.biestable) return conA;
+    if (detenida) return antes;
+    const conB = v.b >= 0 && calc.encendidas[v.b]!;
+    if (conA && conB) avisar({ tipo: "dos_bobinas", comp: v.comp, etiqueta: v.etiqueta });
+    return conA === conB ? antes : conA;
+  });
+
   return {
     netlist: n,
     tope: base.tope,
@@ -349,6 +374,7 @@ function resolver(base: Simulacion, pulsados: ReadonlySet<string>, tension0: rea
     tension,
     conducen: calc.conducen,
     encendidas: calc.encendidas,
+    posiciones,
     potencialDeRed: n.redes.map((_, i) => {
       const p = calc.potG[calc.raiz[i]!]!;
       return p >= 0 ? p : null;
@@ -374,6 +400,7 @@ export function iniciar(n: Netlist, opciones: OpcionesSimulacion = {}): Simulaci
     tension: [],
     conducen: [],
     encendidas: [],
+    posiciones: n.valvulas.map(() => false),
     potencialDeRed: [],
     detenida: null,
     avisos: [],
@@ -450,5 +477,7 @@ export function textoAvisoSim(a: AvisoSim): string {
       return `No se estabilizó en ${a.pasos} pasos`;
     case "corto":
       return a.nombres.length > 0 ? `Cortocircuito entre ${listaY(a.nombres)}` : "Cortocircuito";
+    case "dos_bobinas":
+      return `${a.etiqueta || "Electroválvula sin etiqueta"} con las dos bobinas`;
   }
 }

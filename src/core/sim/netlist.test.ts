@@ -198,7 +198,7 @@ describe("netlist: circuitos de referencia", () => {
 
 describe("netlist: bordes", () => {
   it("hoja vacía", () => {
-    expect(armarNetlist(hoja([]))).toEqual({ redes: [], potenciales: [], redDeBorne: new Map(), enCorto: [], contactos: [], cargas: [], bobinas: [] });
+    expect(armarNetlist(hoja([]))).toEqual({ redes: [], potenciales: [], redDeBorne: new Map(), enCorto: [], contactos: [], cargas: [], bobinas: [], valvulas: [] });
   });
 
   it("símbolo desconocido: sin bornes, ni contacto ni carga", () => {
@@ -212,7 +212,7 @@ describe("netlist: bordes", () => {
   it("carga sin cables: cada borne en su red, sin potencial", () => {
     const n = armarNetlist(hoja([comp("c1", "senalizacion.lampara", "H1")]));
     expect(n.redes).toHaveLength(2);
-    expect(n.cargas).toEqual([{ comp: "c1", etiqueta: "H1", tipo: "carga", a: 0, b: 1 }]);
+    expect(n.cargas).toEqual([{ comp: "c1", etiqueta: "H1", tipo: "carga", bornes: ["X1", "X2"], enPolo: [false, false], a: 0, b: 1 }]);
     expect(n.redes.every((r) => r.potenciales.length === 0)).toBe(true);
   });
 
@@ -250,7 +250,7 @@ describe("netlist: polos (T34)", () => {
 
   it("un contacto de dos bornes es el polo 0", () => {
     const n = armarNetlist(hoja([comp("s", "pulsador.na", "S1")]));
-    expect(n.contactos).toEqual([{ comp: "s", polo: 0, etiqueta: "S1", na: true, accionamiento: "manual_momentaneo", a: red(n, "s", "13"), b: red(n, "s", "14") }]);
+    expect(n.contactos).toEqual([{ comp: "s", polo: 0, etiqueta: "S1", na: true, accionamiento: "manual_momentaneo", bornes: ["13", "14"], a: red(n, "s", "13"), b: red(n, "s", "14") }]);
   });
 
   it("los polos siguen el orden de la hoja: los del primer componente antes que el siguiente", () => {

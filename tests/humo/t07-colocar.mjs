@@ -27,7 +27,7 @@ const componentes = (p) => p.evaluar("bornera.editor.documento.hojas[0].componen
 export default async function (p, comprobar, { cargar }) {
   const { SIMBOLOS } = await cargar("/src/core/symbols/index.ts");
   const lista = await items(p);
-  comprobar(`la paleta muestra los ${SIMBOLOS.length} símbolos (38 desde T39)`, lista.length === SIMBOLOS.length && SIMBOLOS.length === 38, lista.map((i) => i.texto).join(", "));
+  comprobar(`la paleta muestra los ${SIMBOLOS.length} símbolos (49 desde T40)`, lista.length === SIMBOLOS.length && SIMBOLOS.length === 49, lista.map((i) => i.texto).join(", "));
   comprobar("están los 10 de T34", DE_T34.every((t) => lista.some((i) => i.texto === t)), lista.map((i) => i.texto).join(", "));
   const lienzo = await p.caja("canvas[aria-label^=Lienzo]");
 

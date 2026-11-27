@@ -118,7 +118,8 @@ function esFemenino(nombre: string): boolean {
  * prefijo: el R5 de un componente dependería de otros grupos de etiqueta, y
  * el editor lo recalcula por grupo. K y H dicen lo de antes; S, «aparato de
  * mando» (T36, D19-A: pulsador, selector, seta y final); G, «fuente», y T,
- * «transformador» (T39). Todo prefijo de la biblioteca está acá (test).
+ * «transformador» (T39); B, «sensor» (sensores, presostato y termostato), e
+ * Y, «electroválvula» (T40). Todo prefijo de la biblioteca está acá (test).
  */
 export const NOMBRES_PREFIJO: ReadonlyMap<string, string> = new Map([
   ["K", "bobina"],
@@ -129,6 +130,8 @@ export const NOMBRES_PREFIJO: ReadonlyMap<string, string> = new Map([
   ["M", "motor"],
   ["G", "fuente"],
   ["T", "transformador"],
+  ["B", "sensor"],
+  ["Y", "electroválvula"],
 ]);
 
 /** El tipo de la Fase (R10). */

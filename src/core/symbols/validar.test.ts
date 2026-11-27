@@ -184,9 +184,9 @@ describe("validarDefinicion: dibujo accionado (T33)", () => {
     expect(validarDefinicion({ ...PULSADOR, primitivasAccionado: [cuchilla] })).toEqual([]);
   });
 
-  it("solo un contacto o una protección lo lleva (T36, D20-B)", () => {
+  it("solo un contacto, una protección (T36, D20-B) o una electroválvula (T40) lo lleva", () => {
     const bobina = { ...PULSADOR, elemento: "bobina", accionamiento: undefined } as const;
-    expect(validarDefinicion({ ...bobina, primitivasAccionado: [cuchilla] })).toEqual(["Solo un contacto o una protección lleva dibujo accionado."]);
+    expect(validarDefinicion({ ...bobina, primitivasAccionado: [cuchilla] })).toEqual(["Solo un contacto, una protección o una electroválvula lleva dibujo accionado."]);
     const proteccion = { ...PULSADOR, elemento: "proteccion", accionamiento: undefined, prefijoEtiqueta: "Q" } as const;
     expect(validarDefinicion({ ...proteccion, primitivasAccionado: [cuchilla] })).toEqual([]);
   });
@@ -323,5 +323,64 @@ describe("validarDefinicion: cargas y salida (T39, D-B7 A)", () => {
     const { prefijoEtiqueta: _, ...sinPrefijo } = FUENTE;
     expect(validarDefinicion({ ...sinPrefijo, elemento: "fuente" } as DefinicionSimbolo)).toEqual(["Solo un titular (con prefijo) lleva salida."]);
     expect(validarDefinicion(sinPrefijo as DefinicionSimbolo)).toEqual(["Falta el prefijo de etiqueta: el símbolo se numera al colocarlo."]);
+  });
+});
+
+describe("validarDefinicion: sensor y electroválvula (T40)", () => {
+  /** Sensor de prueba: polo BN-BK y carga BN-BU (BN en los dos). */
+  const SENSOR: DefinicionSimbolo = {
+    ...PULSADOR,
+    tipo: "prueba.sensor",
+    accionamiento: "manual_enclavado",
+    prefijoEtiqueta: "B",
+    bornes: [
+      { nombre: "BN", x: 0, y: -2, direccion: "arriba" },
+      { nombre: "BU", x: -1, y: 2, direccion: "abajo" },
+      { nombre: "BK", x: 0, y: 2, direccion: "abajo" },
+    ],
+    polos: [["BN", "BK"]],
+    cargas: [["BN", "BU"]],
+  };
+  const cuchilla = { forma: "linea", x1: 0, y1: 1, x2: 0, y2: -1 } as const;
+  /** Electroválvula de prueba: una carga A1-A2 con dibujo accionado. */
+  const EV: DefinicionSimbolo = {
+    tipo: "prueba.ev",
+    nombre: "EV de prueba",
+    subgrupo: "actuadores",
+    elemento: "carga",
+    prefijoEtiqueta: "Y",
+    tamano: { ancho: 2, alto: 4 },
+    primitivas: [cuchilla],
+    primitivasAccionado: [cuchilla],
+    bornes: [
+      { nombre: "A1", x: 0, y: -2, direccion: "arriba" },
+      { nombre: "A2", x: 0, y: 2, direccion: "abajo" },
+    ],
+    cargas: [["A1", "A2"]],
+    valvula: "monoestable",
+  };
+
+  it("un borne puede estar en un polo y en una carga (BN); el que no está en un polo tiene que estar en una carga (BU)", () => {
+    expect(validarDefinicion(SENSOR)).toEqual([]);
+    expect(validarDefinicion({ ...SENSOR, cargas: [] })).toEqual(['Borne "BU" sin polo.']);
+  });
+
+  it("acepta la electroválvula; la biestable lleva dos cargas", () => {
+    expect(validarDefinicion(EV)).toEqual([]);
+    expect(validarDefinicion({ ...EV, valvula: "biestable" })).toEqual(["Una electroválvula biestable lleva dos cargas."]);
+    expect(validarDefinicion({ ...EV, cargas: [["A1", "A2"], ["A2", "A1"]] })).toContain("Una electroválvula monoestable lleva una carga.");
+  });
+
+  it("rechaza una electroválvula sin dibujo accionado, sin `cargas` o que no es carga", () => {
+    const { primitivasAccionado: _, ...sinAccionado } = EV;
+    expect(validarDefinicion(sinAccionado)).toEqual(["Una electroválvula lleva dibujo accionado."]);
+    const { cargas: __, ...sinCargas } = EV;
+    expect(validarDefinicion(sinCargas)).toEqual(["Una electroválvula monoestable lleva una carga."]);
+    expect(validarDefinicion({ ...EV, elemento: "bobina" })).toEqual(["Solo una carga es electroválvula."]);
+  });
+
+  it("una carga sin `valvula` no lleva dibujo accionado (la lámpara)", () => {
+    const { valvula: _, ...lampara } = EV;
+    expect(validarDefinicion(lampara)).toEqual(["Solo un contacto, una protección o una electroválvula lleva dibujo accionado."]);
   });
 });

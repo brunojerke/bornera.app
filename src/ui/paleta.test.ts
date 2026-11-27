@@ -16,16 +16,26 @@ describe("agruparSimbolos (T38, D26-A)", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("cada uno de los 38 queda en un solo subgrupo, con el orden y la ubicación del plan", () => {
-    expect(SIMBOLOS).toHaveLength(38);
+  it("cada uno de los 49 queda en un solo subgrupo, con el orden y la ubicación del plan", () => {
+    expect(SIMBOLOS).toHaveLength(49);
     const tipos = agruparSimbolos(SIMBOLOS).flatMap((g) => g.subgrupos.flatMap((s) => s.simbolos.map((x) => x.tipo)));
-    expect(tipos).toHaveLength(38);
-    expect(new Set(tipos).size).toBe(38);
+    expect(tipos).toHaveLength(49);
+    expect(new Set(tipos).size).toBe(49);
     expect(lugares()).toEqual({
       "Mando › Alimentación": ["Fase (L)", "Neutro (N)", "Fusible", "Fuente de continua 12/24 V", "Fuente variable", "Fuente conmutada (riel)"],
       "Mando › Entradas": ["Pulsador NA", "Pulsador NC", "Selector NA", "Seta NC", "Final de carrera NA", "Final de carrera NC"],
+      "Mando › Sensores": [
+        "Sensor inductivo PNP",
+        "Sensor capacitivo PNP",
+        "Sensor fotoeléctrico PNP",
+        "Presostato NA",
+        "Presostato NC",
+        "Termostato NA",
+        "Termostato NC",
+      ],
       "Mando › Contactos": ["Contacto auxiliar NA", "Contacto auxiliar NC", "Contacto del térmico NC", "Contacto del térmico NA"],
       "Mando › Bobinas": ["Bobina de contactor"],
+      "Mando › Actuadores": ["Electroválvula monoestable", "Electroválvula biestable"],
       "Mando › Señalización": ["Lámpara", "Bocina"],
       "Potencia › Protección": [
         "Termomagnética unipolar",
@@ -37,9 +47,10 @@ describe("agruparSimbolos (T38, D26-A)", () => {
         "Guardamotor",
         "Fusible tripolar",
         "Relé térmico",
+        "Diferencial tripolar",
       ],
       "Potencia › Maniobra": ["Contactos principales", "Seccionador"],
-      "Potencia › Cargas": ["Motor trifásico", "Motor estrella-triángulo"],
+      "Potencia › Cargas": ["Motor trifásico", "Motor estrella-triángulo", "Motor de continua"],
       "Potencia › Fuentes": ["Fuente trifásica", "Fuente trifásica con neutro", "Tierra (PE)"],
       "Potencia › Transformación": ["Transformador monofásico", "Transformador trifásico", "Variac"],
     });
@@ -48,16 +59,17 @@ describe("agruparSimbolos (T38, D26-A)", () => {
     expect(Object.keys(lugares()).at(-1)).toBe("Potencia › Transformación");
   });
 
-  it("buscar «termo» deja solo las 4 termomagnéticas, en su subgrupo", () => {
-    expect(Object.keys(lugares("termo"))).toEqual(["Potencia › Protección"]);
+  it("buscar «termo» deja las 4 termomagnéticas y los 2 termostatos (T40), cada uno en su subgrupo", () => {
+    expect(Object.keys(lugares("termo"))).toEqual(["Mando › Sensores", "Potencia › Protección"]);
+    expect(lugares("termo")["Mando › Sensores"]).toEqual(["Termostato NA", "Termostato NC"]);
     expect(lugares("termo")["Potencia › Protección"]).toHaveLength(4);
   });
 
   it("filtra por nombre sin distinguir tildes ni mayúsculas, y omite grupos y subgrupos vacíos", () => {
     expect(lugares("LAMPARA")).toEqual({ "Mando › Señalización": ["Lámpara"] });
     expect(lugares(" pulsador ")).toEqual({ "Mando › Entradas": ["Pulsador NA", "Pulsador NC"] });
-    // «motor»: los dos motores y el guardamotor, en dos subgrupos.
-    expect(lugares("motor")).toEqual({ "Potencia › Protección": ["Guardamotor"], "Potencia › Cargas": ["Motor trifásico", "Motor estrella-triángulo"] });
+    // «motor»: los tres motores y el guardamotor, en dos subgrupos.
+    expect(lugares("motor")).toEqual({ "Potencia › Protección": ["Guardamotor"], "Potencia › Cargas": ["Motor trifásico", "Motor estrella-triángulo", "Motor de continua"] });
     // «fusible»: uno en cada grupo.
     expect(lugares("fusible")).toEqual({ "Mando › Alimentación": ["Fusible"], "Potencia › Protección": ["Fusible tripolar"] });
   });

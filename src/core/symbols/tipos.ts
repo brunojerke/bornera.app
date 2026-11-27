@@ -105,6 +105,8 @@ export const SUBGRUPOS = [
   "cargas",
   "fuentes",
   "transformacion",
+  "sensores",
+  "actuadores",
 ] as const;
 
 export type Subgrupo = (typeof SUBGRUPOS)[number];
@@ -134,7 +136,8 @@ export type DefinicionSimbolo = Comportamiento & {
   /**
    * Dibujo del contacto accionado (T33, D9-B): el NA cerrado y el NC abierto.
    * El lienzo lo usa en Simular mientras el contacto está accionado; si no,
-   * `primitivas`. Solo en contactos, sin textos y dentro de `tamano`, así la
+   * `primitivas`. Solo en contactos, protecciones y electroválvulas (T40, la
+   * válvula corrida), con los textos del reposo y dentro de `tamano`, así la
    * caja de dibujo es la misma en los dos estados (`validarDefinicion`).
    */
   primitivasAccionado?: Primitiva[];
@@ -150,7 +153,9 @@ export type DefinicionSimbolo = Comportamiento & {
   /**
    * Cargas del símbolo (T39, D-B7 A): pares de bornes, cada uno una carga que
    * se enciende con potenciales distintos en sus dos bornes, como la entrada
-   * L-N de una fuente conmutada o el primario 1U1-1U2 de un trafo. Sin
+   * L-N de una fuente conmutada o el primario 1U1-1U2 de un trafo. Un contacto
+   * también puede llevarlas (T40, D-B3 A): el sensor es la carga BN-BU y el
+   * polo BN-BK, con BN en los dos. Sin
    * `cargas`, una bobina o una carga de 2 bornes es una carga y el resto
    * ninguna; con `cargas` (vacío vale), solo esos pares (`cargasDe`).
    */
@@ -162,6 +167,15 @@ export type DefinicionSimbolo = Comportamiento & {
    * lleva es titular, con prefijo, y no es fuente (`validarDefinicion`).
    */
   salida?: Readonly<Record<string, PapelSalida>>;
+  /**
+   * Electroválvula (T40, D-T40-2 A): una carga con dibujo accionado, la
+   * válvula corrida (D-B12 A). La monoestable (una carga, A1-A2) se dibuja
+   * accionada mientras su bobina tiene tensión; la biestable (dos cargas: la
+   * primera, A1-A2, lleva a 14 y la accionada; la segunda, B1-B2, a 12 y el
+   * reposo) queda en la última con tensión (D-B5 A). Solo en una carga con
+   * `cargas` y dibujo accionado (`validarDefinicion`).
+   */
+  valvula?: "monoestable" | "biestable";
   /**
    * De qué lado de las conexiones van los nombres de los bornes, en coordenadas
    * locales (gira y se espeja con el símbolo). Por defecto, "izquierda".
