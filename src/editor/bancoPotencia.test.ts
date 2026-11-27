@@ -61,7 +61,9 @@ describe("bancoPotencia", () => {
     expect(serializar(bancoPotencia().doc)).toBe(serializar(banco.doc));
   });
 
-  it("está tendida como W: problemasTrazado da 0 en cada cable y no hay conexiones aparentes", () => {
+  // Tope propio: 3519 cables, cada uno con consultas de consultaHoja sin índice
+  // por zona. Tarda 8,5–10,8 s solo y llegó a 22 s con la PC cargada; 60 s le deja ×5.
+  it("está tendida como W: problemasTrazado da 0 en cada cable y no hay conexiones aparentes", { timeout: 60_000 }, () => {
     const indice = indexarHoja(hoja);
     const base = consultaHoja(hoja, indice);
     expect(validarHoja(hoja)).toEqual([]);
