@@ -2,6 +2,41 @@
 
 Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una fase, se planea ahí (`docs/plan-...`). El orden de las fases está en `docs/arquitectura.md`, «Hoja de ruta por fases».
 
+## Orden de la hoja de ruta
+- **Orden** (Bruno, 2026-11-27): 6a (cerrada) → biblioteca 2 → 6b → temporizadores → Automatización industrial → instrumentos y analógicos.
+- Las fases 7 (Exportación) y 8 (Distribución) quedan sin ubicar.
+- Versiones (D12 de `docs/plan-fase6.md`, cambiada el 2026-11-27): `0.1.6` estable sale al cerrar 6a y 6b sale como `0.1.7`.
+
+## Biblioteca 2
+- **Fuentes y transformación:** fuente DC 12/24 V, fuente de corriente AC/DC, fuente variable, trafo monofásico, trafo trifásico, regulador.
+- **Protección:** diferencial 3P (sin N).
+- **Sensores:** inductivo, capacitivo, fotoeléctrico, presostato, termostato.
+- **Cargas:** electroválvula monoestable y biestable.
+- **Cuándo:** después de 6a y antes de 6b.
+
+## 6b: simular la potencia
+Se suma a lo ya anotado en `docs/plan-fase6.md`, sección 6.
+- El motor como carga muestra si gira y en qué sentido (secuencia U-V-W).
+- Un clic en el térmico de potencia lo dispara (abre 95-96, cierra 97-98 y corta el mando), con rearme.
+- Abrir y cerrar a mano las termomagnéticas y los diferenciales (todos los polos).
+- **A decidir:** guardamotor, seccionador, fusibles y botón de prueba del diferencial.
+- Relé de control de fases y relé de sobrecorriente.
+- Variador y arrancador como símbolo.
+
+## Temporizadores (fase propia)
+- **Qué:** temporizadores en la simulación. El motor de simulación necesita un reloj (D3-A de `docs/plan-fase6.md`).
+- **Cuándo:** después de 6b.
+
+## Automatización industrial
+- **Qué:** PLC, módulos DI/DO, ciclo de scan y ladder; las rampas del variador y del arrancador.
+- **Cuándo:** después de los temporizadores. Ver las dos entradas de PLC, más abajo.
+
+## Instrumentos y analógicos
+- **Instrumentos:** voltímetro, amperímetro, multímetro, vatímetro, frecuencímetro y osciloscopio. Necesitan un motor de simulación con valores.
+- **Paso intermedio posible:** un «voltímetro lógico» que muestre la tensión nominal de la red.
+- **Analógicos:** AI/AO, PT100, termopar, presión, humedad y encoder.
+- **Cuándo:** al final de este orden, después de Automatización industrial.
+
 ## Rótulo o cajetín del plano
 - **Qué:** el cuadro de datos del plano dibujado en la hoja, con título, autor, fecha, revisión y hoja.
 - **Relación:** la fase 7 (Exportación) ya pide el PDF «con rótulo y marco». El `.brn` ya guarda título, autor y fecha.
@@ -13,7 +48,7 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 
 ## PLC simulado con ladder básico (fase propia)
 - **Qué:** programar el PLC en escalera y simularlo junto con el circuito. Contactos NA y NC, bobina, set/reset, temporizador TON, contador y ciclo de scan.
-- **Cuándo:** una fase propia después de la fase 5 (simulación de mando). Lo eligió Bruno el 2026-11-16.
+- **Cuándo:** una fase propia después de la fase 5 (simulación de mando). Lo eligió Bruno el 2026-11-16. Desde el 2026-11-27 es parte de «Automatización industrial», después de los temporizadores.
 - **Relación:** `docs/arquitectura.md` lo tiene en «Después del MVP» («a largo plazo, PLC en escalera»). La hoja de ruta se actualiza cuando se planee la fase.
 
 ## Abaratar `ReferenciasHoja.reflejar` al borrar y deshacer
@@ -51,5 +86,5 @@ Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una 
 - **Cuándo:** al final, después de lo demás.
 
 ## Menú de configuración de la app
-- **Qué:** configuración de la app (no del `.brn`): prender o apagar el etiquetado, y elegir los prefijos y el número inicial.
+- **Qué:** un menú de configuración de la app (no del `.brn`): prender o apagar el etiquetado, y elegir los prefijos y el número inicial.
 - **Cuándo:** después de la fase 5 (Bruno, 2026-11-17).

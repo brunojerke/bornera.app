@@ -356,6 +356,9 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
      - Netbook y PC pasan todo con el `.msi` de la alpha.1 (`docs/netbook-fase5.md`, C3). Sin fusible, térmico, trifásica ni motores: son de la fase 6.
 6. **Potencia:** fuente trifásica, contactos principales, térmico, fusible, motores, cortocircuito.
    - Pasa cuando: la inversión de giro con enclavamiento eléctrico simula bien ambos sentidos.
+   - Nota (2026-11-27, C4): **6a cerrada** (plan en `docs/plan-fase6.md`; netbook y PC pasan con el `.msi` de `0.1.6-alpha.1`, `docs/netbook-fase6.md`). El criterio de arriba queda para el cierre de 6b. Versiones (D12, cambiada por Bruno el 2026-11-27): `0.1.6` estable sale al cerrar 6a, porque profes y compañeros quieren probarla (todavía sin publicar), y 6b sale como `0.1.7`.
+     - **Simula 6a:** la trifásica (con N) da potencial por borne; los contactos principales siguen a su bobina; selector y seta alternan con un clic y el final de carrera va como el pulsador; la bocina se enciende como la lámpara; termomagnéticas, diferenciales, guardamotor, seccionador, fusibles y el térmico conducen siempre (95-96 y 97-98 en reposo); un corto entre fases detiene la simulación.
+     - **Queda para 6b:** el motor como carga (hoy no conduce ni es carga), abrir y disparar protecciones y térmico, y que un corto dispare la protección. El diferencial y PE, en 6b o después. Lo anotado para 6b está en `docs/ideas.md`.
 7. **Exportación:** PDF vectorial con rótulo y marco, SVG y PNG.
    - Pasa cuando: el PDF de un circuito de prueba se imprime correcto en A4.
 8. **Distribución:** instalador Tauri (Windows y Linux) y versión PWA.
@@ -364,6 +367,8 @@ Ocho fases en orden; cada una termina con algo que funciona y un criterio concre
 **Después del MVP:** temporizadores, relés auxiliares, finales de carrera, varias hojas, más símbolos, advertencias de tensión, importador `.cad` y, a largo plazo, PLC en escalera.
 
 > Nota (2026-11-16): Bruno eligió el PLC simulado con ladder básico como fase propia, después de la fase 5. El PLC genérico como símbolo iría después de la fase 4. Esas ideas, el rótulo del plano y el hardware real por USB están en `docs/ideas.md`. La hoja de ruta se actualiza cuando se planeen.
+
+> Nota (2026-11-27): orden elegido por Bruno desde acá: 6a → biblioteca 2 → 6b → temporizadores → Automatización industrial (PLC y ladder) → instrumentos y analógicos. Las fases 7 (Exportación) y 8 (Distribución) quedan **sin ubicar**. El detalle de cada una está en `docs/ideas.md`.
 
 ## Prompts de arranque: fase 1
 
