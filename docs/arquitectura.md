@@ -237,7 +237,7 @@ Acá va con sangría para leerlo. En el archivo, `serializar` lo escribe en form
 - **Autoguardado** (fase 4, D2 de `docs/plan-fase4.md`):
   - La copia de recuperación va en IndexedDB del webview, una por instancia abierta.
   - Sale a los 10 s sin comandos o a los 60 s del primer cambio sin copia, nunca durante un gesto.
-  - Se escribe por partes, en ocio: trozos de hasta 2 ms, cada uno con su `put`, y al final un registro de copia completa (`src/ui/autoguardado.ts`, `src/ui/respaldo.ts`). Si el documento cambia en el medio, la copia vuelve a empezar. Cada instancia retiene su copia con un candado de Web Locks.
+  - Se escribe por partes, en ocio: trozos de hasta 2 ms, cada uno con su `put`, y al final un registro de copia completa (`src/ui/autoguardado.ts`, `src/ui/respaldo.ts`). Si el documento cambia en el medio, la copia vuelve a empezar; después de 5 reinicios sale de una vez, en una sola tarea, en un ocio de al menos 40 ms o, pasado 1 s sin uno, en el ocio siguiente (`copiaPorPartes.ts`; el plazo es de 2026-11-27, antes podía esperar sin fin). Cada instancia retiene su copia con un candado de Web Locks.
   - Al arrancar después de un corte, Bornera ofrece Recuperar o Descartar («Bornera no se cerró bien»), una fila por copia si hay varias.
   - La copia se borra al guardar, al cerrar bien (también con «No guardar») y al reemplazar el documento con Nuevo o Abrir. Nunca sola al arrancar.
 - **Alcance de archivos y Abrir reciente** (fase 4, D8-A de `docs/plan-fase4.md`, T24):

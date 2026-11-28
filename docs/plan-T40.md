@@ -60,3 +60,5 @@ En `Simulacion.posiciones` (motor, no documento: sin Comando ni historial). Se t
 
 ## Estado (2026-11-27)
 Checkpoint sin banco: tests y check en verde. El ABBA se cortó dos veces («Probar la fase 6» no terminó a tiempo), sin filas juzgadas. Diagnóstico aparte (no es medición): de 23 corridas visibles, 4 quedaron en «F1: copia de una vez 1 de 3», en A y en B; `copiarPorPartes` espera un ocio ≥ 40 ms sin tope y los ratos de ocio eran de 0 a 7 ms (pantalla de 144 Hz). El arreglo va como tarea aparte; después, el ABBA y `netlist-node` con las reglas de arriba.
+
+**Cerrada (2026-11-27).** Arreglo en `8ad3886` (plazo de 1 s). ABBA `--fase6 --base-fase6`: A = `8ad3886`, B = `5aeec6a` + cherry-pick del arreglo; las 12 aperturas terminaron sin repetición. **Pasa:** B1–B16 igual (B2 2.º sube e informa: decide B2 1.º, 10,2 → 11,1); F, S1–S6, P1 (mediana 0,5, máx. 0,7) y P2 (143,4 ≤ 155,6). `netlist-node`: máx. A 6,31 ≤ B 5,76 + 1. Detalle en `docs/bench.md`. Pendiente que informa: en 3 aperturas de B la copia de una vez salió por plazo y esas corridas tardaron unos 100 s más; no se explicó.

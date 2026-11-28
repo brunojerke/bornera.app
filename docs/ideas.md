@@ -88,3 +88,7 @@ Se suma a lo ya anotado en `docs/plan-fase6.md`, sección 6.
 ## Menú de configuración de la app
 - **Qué:** un menú de configuración de la app (no del `.brn`): prender o apagar el etiquetado, y elegir los prefijos y el número inicial.
 - **Cuándo:** después de la fase 5 (Bruno, 2026-11-17).
+
+## El banco limpia sus copias viejas al arrancar
+- **Qué:** las copias `medicion-…` (de «Medir la copia» y F1) que quedan en la base `bornera` del webview cuando una medición se corta (cuelgue, cierre a la fuerza) no se borran nunca. La recuperación ya las ignora, pero ocupan lugar. Que la app, al arrancar, borre las `medicion-…` viejas (registro y trozos), sin tocar las copias de recuperación.
+- **Cuándo:** sin fecha (Bruno, 2026-11-27, en la tarea aparte del cuelgue de la copia de una vez).
