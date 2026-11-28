@@ -997,16 +997,17 @@ export const FUENTE_CONMUTADA: DefinicionSimbolo = {
   elemento: "carga",
   prefijoEtiqueta: "G",
   tamano: { ancho: 6, alto: 4 },
+  // Caja de y −1 a 1 (C1: con ±1,2 los nombres de los bornes tocaban el borde).
   primitivas: [
-    { forma: "rectangulo", x: -2.6, y: -1.2, ancho: 5.2, alto: 2.4 },
-    linea(-2.6, 1.2, 2.6, -1.2),
-    { forma: "texto", x: -1.5, y: -0.45, texto: "~", alto: 0.8, alineacion: "centro" },
-    ...signoContinua(0.3).map((l) => linea(l.x1 + 1.5, l.y1, l.x2 + 1.5, l.y2)),
-    linea(-2, -2, -2, -1.2),
-    linea(0, -2, 0, -1.2),
-    linea(2, -2, 2, -1.2),
-    linea(-1, 1.2, -1, 2),
-    linea(1, 1.2, 1, 2),
+    { forma: "rectangulo", x: -2.6, y: -1, ancho: 5.2, alto: 2 },
+    linea(-2.6, 1, 2.6, -1),
+    { forma: "texto", x: -1.5, y: -0.4, texto: "~", alto: 0.8, alineacion: "centro" },
+    ...signoContinua(0.25).map((l) => linea(l.x1 + 1.5, l.y1, l.x2 + 1.5, l.y2)),
+    linea(-2, -2, -2, -1),
+    linea(0, -2, 0, -1),
+    linea(2, -2, 2, -1),
+    linea(-1, 1, -1, 2),
+    linea(1, 1, 1, 2),
   ],
   ladoNombresBornes: "derecha",
   bornes: [
@@ -1072,9 +1073,14 @@ export const VARIAC: DefinicionSimbolo = {
   salida: { "2U1": "fase", "2U2": "neutro" },
 };
 
-/** Radio y centros de los círculos del trafo trifásico. */
-const R_TRAFO_3 = 1.3;
+/**
+ * Radio y centros de los círculos del trafo trifásico. Con r 1,15 (antes 1,3), 1V y 2V
+ * no tocan el círculo (C1).
+ */
+const R_TRAFO_3 = 1.15;
 const CY_TRAFO_3 = 0.9;
+/** Y del codo de los bornes de los lados (en ±): de ahí van en diagonal al círculo, sin tocar 1U ni 2U (C1; antes ±2,4). */
+const Y_CODO_TRAFO_3 = 2.1;
 
 /** Punto del círculo de centro (0, cy) a `grados` de +x (y crece hacia abajo, así que −90 es arriba). */
 function enCirculo(cy: number, grados: number): [number, number] {
@@ -1103,17 +1109,17 @@ export const TRAFO_TRIFASICO: DefinicionSimbolo = {
       { forma: "circulo", cx: 0, cy: arriba, r: R_TRAFO_3 },
       { forma: "circulo", cx: 0, cy: CY_TRAFO_3, r: R_TRAFO_3 },
       { forma: "texto", x: 0, y: arriba, texto: "3~", alto: 0.6, alineacion: "centro" },
-      linea(-2, -3, -2, -2.4),
-      linea(-2, -2.4, xa, ya),
+      linea(-2, -3, -2, -Y_CODO_TRAFO_3),
+      linea(-2, -Y_CODO_TRAFO_3, xa, ya),
       linea(0, -3, 0, arriba - R_TRAFO_3),
-      linea(2, -3, 2, -2.4),
-      linea(2, -2.4, -xa, ya),
-      linea(-3, 3, -3, 2.4),
-      linea(-3, 2.4, xb, yb),
+      linea(2, -3, 2, -Y_CODO_TRAFO_3),
+      linea(2, -Y_CODO_TRAFO_3, -xa, ya),
+      linea(-3, 3, -3, Y_CODO_TRAFO_3),
+      linea(-3, Y_CODO_TRAFO_3, xb, yb),
       linea(-1, yMedio, -1, 3),
       linea(1, yMedio, 1, 3),
-      linea(3, 3, 3, 2.4),
-      linea(3, 2.4, -xb, yb),
+      linea(3, 3, 3, Y_CODO_TRAFO_3),
+      linea(3, Y_CODO_TRAFO_3, -xb, yb),
     ];
   })(),
   ladoNombresBornes: "derecha",
@@ -1336,11 +1342,26 @@ function solenoide(x0: number): Primitiva[] {
   return [{ forma: "rectangulo", x: x0, y: -0.5, ancho: ANCHO_SOLENOIDE, alto: 1 }, linea(x0 + 0.25, 0.5, x0 + 0.75, -0.5)];
 }
 
+/**
+ * Y del tramo horizontal del cable de una bobina corrida (en ±): entre el nombre del borne
+ * (y ±1,5) y el cuadro (y ±0,75), sin tocar ninguno (C1: antes iba en diagonal desde ±1,6 y
+ * pisaba B1 y B2, que van a la derecha).
+ */
+const Y_CODO_SOLENOIDE = 1;
+
 /** Cables de una bobina: de sus bornes en `xBorne` (arriba y abajo) al recuadro centrado en `xCentro`. */
 function cablesSolenoide(xBorne: number, xCentro: number): Linea[] {
+  const c = Y_CODO_SOLENOIDE;
   return xBorne === xCentro
     ? [linea(xBorne, -2, xBorne, -0.5), linea(xBorne, 0.5, xBorne, 2)]
-    : [linea(xBorne, -2, xBorne, -1.6), linea(xBorne, -1.6, xCentro, -0.5), linea(xBorne, 2, xBorne, 1.6), linea(xBorne, 1.6, xCentro, 0.5)];
+    : [
+        linea(xBorne, -2, xBorne, -c),
+        linea(xBorne, -c, xCentro, -c),
+        linea(xCentro, -c, xCentro, -0.5),
+        linea(xBorne, 2, xBorne, c),
+        linea(xBorne, c, xCentro, c),
+        linea(xCentro, c, xCentro, 0.5),
+      ];
 }
 
 /** Resorte de retorno (zigzag) desde `x`, hacia la derecha. */
@@ -1376,9 +1397,10 @@ function electrovalvula(biestable: boolean): DefinicionSimbolo {
     { nombre: "A1", x: X_BOBINA_14, y: -2, direccion: "arriba" },
     { nombre: "A2", x: X_BOBINA_14, y: 2, direccion: "abajo" },
   ];
+  // B1 y B2 con el nombre a la derecha: a la izquierda pisaría las vías (C1).
   const b: DefinicionSimbolo["bornes"] = [
-    { nombre: "B1", x: X_BOBINA_12, y: -2, direccion: "arriba" },
-    { nombre: "B2", x: X_BOBINA_12, y: 2, direccion: "abajo" },
+    { nombre: "B1", x: X_BOBINA_12, y: -2, direccion: "arriba", ladoNombre: "derecha" },
+    { nombre: "B2", x: X_BOBINA_12, y: 2, direccion: "abajo", ladoNombre: "derecha" },
   ];
   return {
     tipo: biestable ? "valvula.biestable" : "valvula.monoestable",
@@ -1404,6 +1426,12 @@ function electrovalvula(biestable: boolean): DefinicionSimbolo {
 export const ELECTROVALVULA_MONOESTABLE = electrovalvula(false);
 export const ELECTROVALVULA_BIESTABLE = electrovalvula(true);
 
+/**
+ * Radio del círculo del motor de continua: más chico que el trifásico para que A1 y A2
+ * (en y ±1,5, junto a la conexión) no toquen el contorno (C1; antes, R_MOTOR).
+ */
+const R_MOTOR_CONTINUA = 1;
+
 /** Motor de continua (06-04-01, «M» con el signo de continua): carga A1-A2. */
 export const MOTOR_CONTINUA: DefinicionSimbolo = {
   tipo: "motor.continua",
@@ -1413,10 +1441,10 @@ export const MOTOR_CONTINUA: DefinicionSimbolo = {
   prefijoEtiqueta: "M",
   tamano: { ancho: 4, alto: 4 },
   primitivas: [
-    ...conexiones(R_MOTOR),
-    { forma: "circulo", cx: 0, cy: 0, r: R_MOTOR },
-    { forma: "texto", x: 0, y: -0.3, texto: "M", alto: 1, alineacion: "centro" },
-    ...signoContinua(0.55),
+    ...conexiones(R_MOTOR_CONTINUA),
+    { forma: "circulo", cx: 0, cy: 0, r: R_MOTOR_CONTINUA },
+    { forma: "texto", x: 0, y: -0.25, texto: "M", alto: 0.8, alineacion: "centro" },
+    ...signoContinua(0.3),
   ],
   bornes: dosBornes("A1", "A2"),
 };

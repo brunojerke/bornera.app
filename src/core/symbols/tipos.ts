@@ -65,6 +65,12 @@ export interface Borne {
   x: number;
   y: number;
   direccion: Direccion;
+  /**
+   * Lado del nombre de este borne, si no es el del símbolo (`ladoNombresBornes`),
+   * en coordenadas locales. Solo dibujo: no mueve el borne (C1 de la biblioteca 2,
+   * B1 y B2 de la electroválvula biestable, a la derecha de su solenoide).
+   */
+  ladoNombre?: Direccion;
 }
 
 // ── Comportamiento ─────────────────────────────────────────────────────────

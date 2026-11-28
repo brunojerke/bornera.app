@@ -9,6 +9,7 @@ import {
   transformarBornes,
   transformarDireccion,
   transformarPunto,
+  type Borne,
   type DefinicionSimbolo,
   type Direccion,
   type Texto,
@@ -149,13 +150,20 @@ export function posicionReferencias(
 }
 
 /**
+ * Lado del nombre del borne `b` en pantalla: el suyo (`ladoNombre`) o el del
+ * símbolo, transformado. `transformarBornes` copia `ladoNombre` sin girarlo.
+ */
+function ladoNombre(def: DefinicionSimbolo, b: Borne, t: Transformacion): Direccion {
+  return transformarDireccion(b.ladoNombre ?? def.ladoNombresBornes ?? "izquierda", t);
+}
+
+/**
  * Cajas de los nombres de los bornes, relativas al centro del símbolo, con la
  * letra más ancha (por exceso): la lista nunca los pisa.
  */
 function cajasNombresBornes(def: DefinicionSimbolo, t: Transformacion): Caja[] {
-  const lado = transformarDireccion(def.ladoNombresBornes ?? "izquierda", t);
   return transformarBornes(def.bornes, t).map((b) => {
-    const n = posicionNombreBorne(b.x, b.y, b.direccion, lado);
+    const n = posicionNombreBorne(b.x, b.y, b.direccion, ladoNombre(def, b, t));
     const ancho = b.nombre.length * ALTO_BORNE * ANCHO_LETRA_MAXIMO;
     const x = n.alineacion === "izquierda" ? n.x : n.alineacion === "derecha" ? n.x - ancho : n.x - ancho / 2;
     return { x, y: n.y - ALTO_BORNE / 2, ancho, alto: ALTO_BORNE };
@@ -315,9 +323,8 @@ export function dibujarSimbolo(
   }
 
   if ((opciones.nombresBornes ?? true) && def.mostrarNombresBornes !== false) {
-    const lado = transformarDireccion(def.ladoNombresBornes ?? "izquierda", c);
     for (const b of transformarBornes(def.bornes, c)) {
-      const n = posicionNombreBorne(b.x, b.y, b.direccion, lado);
+      const n = posicionNombreBorne(b.x, b.y, b.direccion, ladoNombre(def, b, c));
       r.texto(c.x + n.x, c.y + n.y, b.nombre, ALTO_BORNE, n.alineacion);
     }
   }

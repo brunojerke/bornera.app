@@ -20,6 +20,35 @@ Resultados de `npm run bench`: tiempo de dibujado de las escenas de prueba con 1
 - Al final, el banco mide la copia de recuperación con 2000 + 3030 cables (F1 de T23), con la misma medición que «Medir la copia (F1)». En Chrome es informativa: F1 se juzga en WebView2 (`tests/bench/f1-webview2.mjs`).
 - **Escena oficial nueva desde `codosBanco` (2026-11-22).** La escena con cables (2000 + 3030) se tiende entera como W: 0 conexiones aparentes (antes 10 250) y ningún cable entra por el cuerpo (antes 1670). La usan B1–B14, B16, F1–F3 y S5, `npm run bench` (escenarios con cables), F1 de T23 y los `*-node.mjs`. **Un ABBA de un commit desde este contra uno anterior no compara la misma escena: se juzga con el criterio J-A** (`docs/plan-codosBanco.md`): B15 y S1–S4 con la regla de siempre (son el control); las filas con la escena, solo por su tope en A, y A − B informa.
 
+## Cierre de la biblioteca 2 (C1): ABBA final contra 0.1.6 — 2026-11-28
+
+**Criterio escrito antes de medir** (`docs/plan-C1-biblioteca2.md`, «Medición»; las reglas de `docs/plan-T40.md`, sin cambios): ABBA en WebView2 (`probar-webview2.mjs --fase6 --base-fase6`, 3 bloques, fría + caliente). B1–B16 con D6b-C (B2: decide 1.º); F por tope; S1–S6 por tope y no regresión (S1 y S4 solo tope); **P1 solo por tope** (mediana ≤ 9,1, máx. ≤ 10,1; B dibuja 32); P2 y `netlist-node`: A ≤ B + máx(1 ms, 10 %), el tope de 5 ms solo informa. Frías informan. Timeout o fila que falla: «no pasa» y se consulta, sin repetir.
+
+**Cómo se midió:** A = `a4400f9` (biblioteca 2 completa: T39 + T40 + el plazo de la copia de una vez), `0.1.6-c1a.1` solo en `package.json` durante el build (`tauri build --no-bundle`), revertida y árbol limpio verificado antes de seguir; se midió antes de programar la base de C1 (D-C1-2 A). B = `5f8a529` (la 0.1.6 publicada) + cherry-pick de `8ad3886` (`6fe5600`, entró limpio), `0.1.6-c1b.1`, en un worktree temporal con `npm ci` (borrado después de medir). Así se mide la biblioteca 2 entera contra la 0.1.6, con el arreglo en los dos. Edge 158, de 07:14 a 07:23 (hora local). Condiciones confirmadas por Bruno antes de medir (enchufada, «Mejor rendimiento», LegionSpace en Performance; cerrados Administrador de tareas, Configuración y Edge; LegionSpace y el overlay de NVIDIA abiertos); antes de medir se leyó CA, el modo `ded574b5…` (Mejor rendimiento) y ninguna Bornera abierta. Las 12 aperturas terminaron (39–43 s), sin timeout ni repetición.
+
+**Resultado: pasa.** B1–B16 «igual», salvo B2 2.º, que sube e informa (regla de B2: decide B2 1.º, igual); F, S1–S6, P1 y P2 pasan; `netlist-node` pasa la no regresión.
+
+**El exe medido no incluye el ajuste de dibujo de C1**, hecho después de medir (Bruno, sin ABBA nuevo): motor de continua, EV biestable y monoestable (cables de la bobina corrida), conmutada y trafo trifásico, más el campo `ladoNombre` de un borne (`docs/plan-C1-biblioteca2.md`, «Ajuste de dibujo»). Toca primitivas y el lado de dos nombres; no la netlist ni el motor.
+
+| Fila | Número | Tope PC | Mediana A | Máx. A | Mediana B | No regresión |
+|---|---|---|---|---|---|---|
+| P1 | máx. (49 miniaturas; B 32) | 9,1 (máx. 10,1) | **0,5** | 0,6 | 0,4 | solo tope (D-B13) |
+| P2 | una por apertura | no regresión | **143,6** | 160,6 | 145,8 | pasa (≤ 160,3) |
+| S6 | máx. | 54,5 (máx. 60,0) | 18,4 | 22,3 | 17,4 | pasa (≤ 19,2) |
+| S1 | máx. | 54,5 | 17,3 | 18,9 | 17,3 | informa (R-A) |
+| S2 | mediana / máx. | 1,7 / 5,3 | 0,2 / 0,3 | 0,3 / 0,4 | 0,3 / 0,4 | pasa |
+| S3 | máx. | 16,7 | 3,2 | 3,4 | 3,0 | pasa (≤ 4,0) |
+| S4 | cuadro / gesto | 6,0 / 18,2 | 2,0 / 2,3 | 2,1 / 2,4 | 2,2 / 2,5 | informa (R-A) |
+| S5 | máx. | 100,0 | 48,3 | 50,5 | 48,0 | pasa (≤ 52,9) |
+
+- **P1:** calientes 0,6 · 0,5 · 0,4 · 0,5 · 0,6 · 0,5 ms; frías 0,5–0,7.
+- **P2:** A 160,6 · 143,7 · 144,8 · 142,4 · 143,5 · 142,2 ms (la primera apertura, la más alta).
+- S1, desglose (mediana): R4 0,7 · netlist 2,8 · iniciar 1,1 · cuadro 13,3. S6: R4 0,8 · netlist 3,9 · iniciar 1,6 · cuadro 13,1. S5, pared 166,9 ms (informa).
+- **B2 1.º (decide): 10,3 → 11,0, igual (+0,7 ms). B2 2.º (informa): 10,7 → 12,9, sube.** B1 53,0 → 54,0; B10 21,9 → 22,0. Frías fuera de rango: 6 en B, 3 en A (informan).
+- F1 2,9–3,2 ms (≤ 9); F2 y F3 ≤ 95,1 ms (≤ 1 s). Medianas de las calientes: F1 2,7 · F2 43,3 · F3 53,4.
+- **Copia de una vez (salida de emergencia de F1, informa):** 0 por plazo en las 24 corridas (A y B); máx. 8,9–13,2 ms. Las corridas tardaron 24–27 s (fría) y 8–9 s (caliente): no apareció la demora de T40.
+- **`netlist-node`** (PC, Node v26.12.0, 3 procesos × 5 vueltas, orden A B B A; A en `a4400f9`, B en `6fe5600`): máx. de `armarNetlist` A 5,25 y 6,07 ms, B 5,44 y 5,55 ms; A 6,07 ≤ B 5,55 + 1 = 6,55: **pasa**. Medianas A 4,41 / 4,08, B 4,24 / 4,24; `redes()` máx. A 4,17 / 4,90, B 2,65 / 2,62. El tope de 5 ms (informa) no se cumple, tampoco en B.
+
 ## Sensores, presostato, termostato, EV, motor DC y diferencial 3P (biblioteca 2, T40) — 2026-11-27
 
 **Criterio escrito antes de medir** (`docs/plan-T40.md`, «Medición»): ABBA en WebView2 (`probar-webview2.mjs --fase6 --base-fase6`, 3 bloques, fría + caliente). B1–B16 con D6b-C (B2 a mano: decide 1.º, `docs/plan-T37.md`); F por tope; S1–S6 por tope y no regresión (S1 y S4 solo tope); **P1 con 49 miniaturas solo por tope (D-B13):** mediana ≤ 9,1, máx. ≤ 10,1; P2 y `netlist-node`: A ≤ B + máx(1 ms, 10 %), el tope de 5 ms solo informa. Frías informan.

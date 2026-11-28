@@ -208,10 +208,19 @@ describe("no regresión de T40: los 38 símbolos de antes, como en 5aeec6a", () 
       ...(readdirSync(AQUI) as string[]).filter((n) => n.endsWith(".brn")).sort().map((n) => [n, new URL(n, AQUI)] as const),
     ];
     const salida: string[] = [];
+    // Un .brn con tipos de T40 o posteriores no existía en `5aeec6a`: queda afuera (C1 suma biblioteca2.brn).
+    // Un tipo desconocido (`simbolo-desconocido.brn.json`) sí entra: es del corpus.
+    const nuevo = (tipo: string) => buscarSimbolo(tipo) !== undefined && !TIPOS_38.includes(tipo);
+    const afuera: string[] = [];
     for (const [nombre, url] of nombres) {
       const doc = await abrir(url);
+      if (doc.hojas.some((h) => h.componentes.some((c) => nuevo(c.tipo)))) {
+        afuera.push(nombre);
+        continue;
+      }
       salida.push(`${nombre}\n${lineas(doc.hojas.map((h) => correr(h)))}`);
     }
+    expect(afuera).toEqual(["biblioteca2.brn"]);
     await expect(salida.join("")).toMatchFileSnapshot("./__snapshots__/no-regresion-T40-corpus.txt");
   });
 

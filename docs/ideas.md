@@ -3,16 +3,37 @@
 Ideas anotadas por Bruno. No son tareas ni tienen plan: cuando una entra en una fase, se planea ahí (`docs/plan-...`). El orden de las fases está en `docs/arquitectura.md`, «Hoja de ruta por fases».
 
 ## Orden de la hoja de ruta
-- **Orden** (Bruno, 2026-11-27): 6a (cerrada) → biblioteca 2 → 6b → temporizadores → Automatización industrial → instrumentos y analógicos.
+- **Orden** (Bruno, 2026-11-27): 6a (cerrada) → biblioteca 2 (cerrada, 2026-11-28) → 6b → temporizadores → Automatización industrial → instrumentos y analógicos.
 - Las fases 7 (Exportación) y 8 (Distribución) quedan sin ubicar.
 - Versiones (D12 de `docs/plan-fase6.md`, cambiada el 2026-11-27): `0.1.6` estable sale al cerrar 6a y 6b sale como `0.1.7`.
 
-## Biblioteca 2
-- **Fuentes y transformación:** fuente DC 12/24 V, fuente de corriente AC/DC, fuente variable, trafo monofásico, trafo trifásico, regulador.
-- **Protección:** diferencial 3P (sin N).
-- **Sensores:** inductivo, capacitivo, fotoeléctrico, presostato, termostato.
-- **Cargas:** electroválvula monoestable y biestable.
-- **Cuándo:** después de 6a y antes de 6b.
+## Biblioteca 2 (cerrada, 2026-11-28)
+- **Hecha:** T39, T40 y C1 (`docs/plan-biblioteca2.md`): 49 símbolos. Lo que quedó afuera va en las entradas de abajo y en 6b.
+
+## Notas para la release 0.1.7
+De la fila C1 de `docs/plan-biblioteca2.md`, tal como están:
+- (a) «0.1.6 rechaza un .brn con G o T cableados; con los tipos de T40 se supone igual (mismo mecanismo, no verificado)»
+- (b) «Arreglo: la copia de una vez podía colgarse sin fin (plazo de 1 s, 8ad3886); el bug está en la 0.1.6»
+
+## Ocios cortos de la copia por partes en WebView2
+- **Qué:** en T40, en WebView2, las copias por partes tardaron unos 5 s cada una: los ratos de ocio eran cortos (de 0 a 7 ms, pantalla de 144 Hz). Averiguar la causa y si la copia por partes necesita un plazo propio (la de una vez ya tiene el de 1 s, `8ad3886`).
+- **Cuándo:** antes de la `0.1.7` (Bruno, 2026-11-28).
+
+## Rótulos pegados en 6 símbolos de la 0.1.6 (antes de la 0.1.7)
+- **Qué:** «Rótulos pegados en 6 símbolos de la 0.1.6 (los números 1, 3, 5 y 7 tocan la cruz de seccionamiento en las TM y el guardamotor; la W toca la diagonal en el motor trifásico). Tarea chica: arreglar sin mover bornes y sacar las excepciones del test». El test es `src/render/rotulos.test.ts` (`EXCEPCIONES`).
+- **Cuándo:** antes de la `0.1.7` (Bruno, 2026-11-28).
+
+## Regulador de continua
+- **Qué:** el regulador de la lista original de la biblioteca 2 (fuentes y transformación); quedó afuera.
+- **Cuándo:** sin fecha (`docs/plan-biblioteca2.md`, sección 0).
+
+## Electroválvula 3/2 como símbolo aparte
+- **Qué:** la EV de la biblioteca 2 es 5/2 sin vías numeradas (D-T40-5 A). La 3/2 va como símbolo propio, no como variante de la 5/2.
+- **Cuándo:** sin fecha (T40, ajuste 4).
+
+## Herramientas: instrumentos en la paleta
+- **Qué:** voltímetro, amperímetro, multímetro, vatímetro, frecuencímetro, osciloscopio y telurímetro, en un apartado «Herramientas» de la paleta, aparte de los componentes. Ver «Instrumentos y analógicos».
+- **Cuándo:** en la fase de instrumentos (`docs/plan-biblioteca2.md`, sección 0).
 
 ## 6b: simular la potencia
 Se suma a lo ya anotado en `docs/plan-fase6.md`, sección 6.
@@ -22,6 +43,9 @@ Se suma a lo ya anotado en `docs/plan-fase6.md`, sección 6.
 - **A decidir:** guardamotor, seccionador, fusibles y botón de prueba del diferencial.
 - Relé de control de fases y relé de sobrecorriente.
 - Variador y arrancador como símbolo.
+- **Sistemas y secundario condicionado (biblioteca 2, D-B2 y D-B9 B):** hoy la salida de una G o de un trafo es una fuente propia siempre activa, y una carga entre L+ de una G (o un secundario) y el N de la red enciende: no hay aislamiento entre fuentes. En 6b, cada fuente con su sistema y la salida condicionada a la entrada; también el primario trifásico como carga (D-B11).
+- **El sensor conmuta solo alimentado** (sección 3 de `docs/plan-biblioteca2.md`): hoy conmuta BN-BK aunque BU no esté cableado; pide un modo nuevo en el motor.
+- **Sensor PNP en continua:** un sensor PNP real es de continua; hoy funciona con alterna porque el motor no distingue AC de DC (Bruno, 2026-11-28).
 
 ## Temporizadores (fase propia)
 - **Qué:** temporizadores en la simulación. El motor de simulación necesita un reloj (D3-A de `docs/plan-fase6.md`).

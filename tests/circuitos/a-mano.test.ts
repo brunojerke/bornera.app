@@ -6,7 +6,8 @@
 // sección 5:
 //   $env:BORNERA_BRN = "C:\ruta\marcha-parada.brn"; npm run circuito; Remove-Item Env:BORNERA_BRN
 // La base va en BORNERA_BASE (cierre 3b): "marcha-parada" (sin la variable,
-// como en T15), "inversion" o "inversion-potencia" (fase 6, T36). Con otro
+// como en T15), "inversion", "inversion-potencia" (fase 6, T36) o
+// "biblioteca2" (sección 0 de docs/plan-biblioteca2.md, C1). Con otro
 // valor, falla y dice cuáles hay. Para la
 // inversión, docs/netbook-fase3b.md, sección E:
 //   $env:BORNERA_BRN = "C:\ruta\inversion.brn"; $env:BORNERA_BASE = "inversion"; npm run circuito; Remove-Item Env:BORNERA_BRN, Env:BORNERA_BASE
@@ -17,6 +18,7 @@ import { resolve } from "node:path";
 // @ts-expect-error sin el paquete @types/node
 import process from "node:process";
 import { describe, expect, it } from "vitest";
+import { biblioteca2 } from "../../src/core/circuitos/biblioteca2";
 import { compararRedes } from "../../src/core/circuitos/compararRedes";
 import { inversion } from "../../src/core/circuitos/inversion";
 import { inversionPotencia } from "../../src/core/circuitos/inversionPotencia";
@@ -34,6 +36,7 @@ const BASES = new Map<string, () => Documento>([
   ["marcha-parada", () => marchaParada().doc],
   ["inversion", () => inversion().doc],
   ["inversion-potencia", () => inversionPotencia().doc],
+  ["biblioteca2", () => biblioteca2().doc],
 ]);
 
 describe.skipIf(ruta === "")(`circuito dibujado a mano (BORNERA_BRN) contra «${nombreBase}» (BORNERA_BASE)`, () => {

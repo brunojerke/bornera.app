@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BOBINA_CONTACTOR,
   cajaCuerpo,
+  ELECTROVALVULA_BIESTABLE,
   SIMBOLOS,
   FASE,
   LAMPARA,
@@ -124,6 +125,19 @@ describe("dibujarSimbolo", () => {
     };
     expect(nombreA1(false)).toEqual(["texto", 0.25, -1.5, "A1", ALTO_BORNE, "izquierda"]);
     expect(nombreA1(true)).toEqual(["texto", -0.25, -1.5, "A1", ALTO_BORNE, "derecha"]);
+  });
+
+  it("ladoNombre de un borne gana sobre el del símbolo y también gira (C1: B1 y B2 de la EV biestable)", () => {
+    const nombres = (rotacion: 0 | 90, espejado: boolean) => {
+      const { r, llamadas } = grabador();
+      dibujarSimbolo(r, ELECTROVALVULA_BIESTABLE, { x: 0, y: 0, rotacion, espejado });
+      return Object.fromEntries(llamadas.filter((l) => l[0] === "texto" && /^[AB][12]$/.test(String(l[3]))).map((l) => [l[3], l.slice(1, 3).concat(l[5])]));
+    };
+    // A1 en (−3, −2), a la izquierda (el símbolo); B1 en (1, −2), a la derecha (el borne).
+    expect(nombres(0, false)).toMatchObject({ A1: [-3.25, -1.5, "derecha"], B1: [1.25, -1.5, "izquierda"] });
+    expect(nombres(0, true)).toMatchObject({ A1: [3.25, -1.5, "izquierda"], B1: [-1.25, -1.5, "derecha"] });
+    // 90° horario: B1 (1, −2) → (2, 1); «derecha» pasa a abajo.
+    expect(nombres(90, false)).toMatchObject({ B1: [1.5, 1.6, "centro"] });
   });
 
   it("si el lado es paralelo a la conexión, usa izquierda o arriba", () => {
